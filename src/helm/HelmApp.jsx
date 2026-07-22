@@ -1,0 +1,279 @@
+// HELM — shell principal. Marca propia (no APEX). Limpio, claro, simple.
+// Se monta en /admin. Gestiona un perfil (cliente) a la vez, con selector arriba.
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Blocks, Settings, Plus } from 'lucide-react'
+import { listClients, createProfile, slugify, CLIENT_TYPES } from './lib'
+import { Modal, Field, Input, Select } from './ui'
+import Informe from './views/Informe'
+import Crm from './views/Crm'
+import Ventas from './views/Ventas'
+import Diario from './views/Diario'
+import Finanzas from './views/Finanzas'
+import Chat from './views/Chat'
+import Plugins from './views/Plugins'
+import Ajustes from './views/Ajustes'
+import { PLUGINS, PLUGIN_MAP, loadEnabled, saveEnabled } from './plugins/registry'
+import './theme.css'
+
+const NAV = [
+  { key: 'informe', label: 'Informe', icon: LayoutDashboard, title: 'Informe', sub: 'Resumen del negocio', C: Informe },
+  { key: 'crm', label: 'CRM', icon: Users, title: 'CRM', sub: 'Tus contactos y pipeline', C: Crm },
+  { key: 'ventas', label: 'Ventas', icon: TrendingUp, title: 'Ventas', sub: 'Reporte de ventas', C: Ventas },
+  { key: 'diario', label: 'Diario', icon: ClipboardList, title: 'Diario', sub: 'Reportes de closer y setter', C: Diario },
+  { key: 'finanzas', label: 'Finanzas', icon: Wallet, title: 'Finanzas', sub: 'Ingresos, gastos y balance', C: Finanzas },
+  { key: 'chat', label: 'Chat', icon: MessageSquare, title: 'Chat', sub: 'Tu copywriter con la memoria de este perfil', C: Chat },
+  { key: 'plugins', label: 'Plugins', icon: Blocks, title: 'Plugins', sub: 'Amplía tu HELM', C: Plugins },
+  { key: 'ajustes', label: 'Ajustes', icon: Settings, title: 'Ajustes', sub: 'Integraciones y IA de este perfil', C: Ajustes },
+]
+
+const LAST_CLIENT_KEY = 'helm_last_client'
+
+function Mark() {
+  return (
+    <svg viewBox="0 0 32 32" width="30" height="30" aria-label="HELM">
+      <defs>
+        <linearGradient id="helmg" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#00D4FF" /><stop offset="1" stopColor="#7C3AED" />
+        </linearGradient>
+      </defs>
+      <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#helmg)" />
+      <path d="M10 22V10M22 22V10M10 16h12" stroke="#06060B" strokeWidth="2.4" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+const EMPTY_FORM = { name: '', slug: '', slugTouched: false, client_type: 'growth', withAccess: false, admin_email: '', admin_password: '' }
+
+// Modal de creación de perfil (cliente + pipeline + acceso opcional).
+function NewProfileModal({ onClose, onCreated }) {
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const effSlug = form.slugTouched ? form.slug : slugify(form.name)
+
+  async function submit(e) {
+    e.preventDefault()
+    setError(null)
+    if (!form.name.trim()) return setError('El nombre del perfil es obligatorio')
+    if (effSlug.length < 3) return setError('La URL debe tener al menos 3 caracteres')
+    if (form.withAccess) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.admin_email)) return setError('Email de acceso inválido')
+      if (form.admin_password.length < 6) return setError('La contraseña de acceso debe tener al menos 6 caracteres')
+    }
+    setSaving(true)
+    try {
+      const client = await createProfile({
+        name: form.name.trim(),
+        slug: effSlug,
+        client_type: form.client_type,
+        admin: form.withAccess ? { email: form.admin_email, password: form.admin_password } : undefined,
+      })
+      onCreated(client)
+    } catch (err) {
+      setError(err.message || 'No se pudo crear el perfil')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal title="Nuevo perfil de negocio" onClose={onClose}>
+      <form onSubmit={submit}>
+        <Field label="Nombre del negocio">
+          <Input value={form.name} onChange={e => set('name', e.target.value)} placeholder="Acme Growth" autoFocus />
+        </Field>
+        <Field label="URL del perfil">
+          <Input value={effSlug} onChange={e => { set('slug', slugify(e.target.value)); set('slugTouched', true) }} placeholder="acme-growth" />
+        </Field>
+        <Field label="Tipo">
+          <Select value={form.client_type} onChange={e => set('client_type', e.target.value)}>
+            {CLIENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </Select>
+        </Field>
+
+        <label className="helm-checkline">
+          <input type="checkbox" checked={form.withAccess} onChange={e => set('withAccess', e.target.checked)} />
+          Crear un acceso (login) para este cliente
+        </label>
+        {form.withAccess && (
+          <>
+            <Field label="Email de acceso">
+              <Input type="email" value={form.admin_email} onChange={e => set('admin_email', e.target.value)} placeholder="cliente@empresa.com" />
+            </Field>
+            <Field label="Contraseña">
+              <Input type="password" value={form.admin_password} onChange={e => set('admin_password', e.target.value)} placeholder="Mínimo 6 caracteres" />
+            </Field>
+          </>
+        )}
+
+        {error && <div className="helm-formerror">{error}</div>}
+
+        <div className="helm-modal-actions">
+          <button type="button" className="helm-btn" onClick={onClose}>Cancelar</button>
+          <button type="submit" className="helm-btn primary" disabled={saving}>
+            {saving ? 'Creando…' : 'Crear perfil'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+export default function HelmApp() {
+  const navigate = useNavigate()
+  const [view, setView] = useState('informe')
+  const [clients, setClients] = useState([])
+  const [clientId, setClientId] = useState(null)
+  const [loadingClients, setLoadingClients] = useState(true)
+  const [enabled, setEnabled] = useState({})
+  const [showNew, setShowNew] = useState(false)
+
+  const email = (typeof localStorage !== 'undefined' && localStorage.getItem('bw_superadmin')) || 'silvestreIA'
+
+  // Selecciona un perfil: fija el id, persiste y carga sus plugins activos.
+  function selectClient(id) {
+    setClientId(id)
+    if (id) {
+      localStorage.setItem(LAST_CLIENT_KEY, id)
+      setEnabled(loadEnabled(id))
+    }
+  }
+
+  // Carga la lista de perfiles y restaura el último seleccionado.
+  async function refreshClients(preferId) {
+    const cs = await listClients()
+    setClients(cs)
+    setLoadingClients(false)
+    const saved = preferId || localStorage.getItem(LAST_CLIENT_KEY)
+    const pick = cs.find(c => c.id === saved) || cs[0]
+    selectClient(pick ? pick.id : null)
+    return cs
+  }
+
+  // Carga inicial de perfiles al montar (guard de auth + fetch). Solo debe
+  // correr una vez; refreshClients es estable en la práctica.
+  useEffect(() => {
+    if (!localStorage.getItem('bw_superadmin')) { navigate('/login'); return }
+    refreshClients()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigate])
+
+  function togglePlugin(key) {
+    setEnabled(prev => {
+      const next = { ...prev, [key]: !prev[key] }
+      saveEnabled(clientId, next)
+      return next
+    })
+  }
+
+  function logout() {
+    localStorage.removeItem('bw_superadmin')
+    localStorage.removeItem('bw_admin_jwt')
+    navigate('/login')
+  }
+
+  function onCreated(client) {
+    setShowNew(false)
+    refreshClients(client.id)
+    setView('informe')
+  }
+
+  // Plugins activos y disponibles → entradas de menú extra.
+  const pluginNav = useMemo(
+    () => PLUGINS.filter(p => p.available && enabled[p.key]),
+    [enabled],
+  )
+
+  // La vista activa puede ser del núcleo o de un plugin.
+  const coreCurrent = NAV.find(n => n.key === view)
+  const pluginCurrent = !coreCurrent ? PLUGIN_MAP[view] : null
+  const current = coreCurrent || (pluginCurrent && pluginNav.includes(pluginCurrent) ? pluginCurrent : null) || NAV[0]
+  const isPlugin = !NAV.includes(current)
+  const View = isPlugin ? current.View : current.C
+  const title = isPlugin ? current.name : current.title
+  const sub = isPlugin ? current.desc : current.sub
+
+  return (
+    <div className="helm">
+      <div className="helm-shell">
+        <aside className="helm-side">
+          <div className="helm-brand">
+            <Mark />
+            <div><b>HELM</b><span>OPERATING LAYER</span></div>
+          </div>
+          <div className="helm-navlabel">NEGOCIO</div>
+          {NAV.map(n => {
+            const Icon = n.icon
+            return (
+              <div key={n.key} className={'helm-nav' + (view === n.key ? ' active' : '')} onClick={() => setView(n.key)}>
+                <Icon /> {n.label}
+              </div>
+            )
+          })}
+          {pluginNav.length > 0 && (
+            <>
+              <div className="helm-navlabel">PLUGINS</div>
+              {pluginNav.map(p => {
+                const Icon = p.icon
+                return (
+                  <div key={p.key} className={'helm-nav' + (view === p.key ? ' active' : '')} onClick={() => setView(p.key)}>
+                    <Icon /> {p.name}
+                  </div>
+                )
+              })}
+            </>
+          )}
+          <div className="helm-side-foot">
+            <div className="helm-user">
+              <div className="helm-avatar">{email[0]?.toUpperCase()}</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis' }}>{email.split('@')[0]}</div>
+                <small>Administrador</small>
+              </div>
+            </div>
+            <div className="helm-logout" onClick={logout}>Cerrar sesión</div>
+          </div>
+        </aside>
+
+        <main className="helm-main">
+          <header className="helm-top">
+            <div>
+              <h1>{title}</h1>
+              <p>{sub}</p>
+            </div>
+            <div className="helm-top-actions">
+              {clients.length > 0 && (
+                <select className="helm-select" value={clientId || ''} onChange={e => selectClient(e.target.value)}>
+                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              )}
+              <button className="helm-btn" onClick={() => setShowNew(true)}>
+                <Plus size={16} /> Nuevo perfil
+              </button>
+            </div>
+          </header>
+          <div className="helm-body">
+            {loadingClients ? (
+              <div className="helm-empty">Cargando perfiles…</div>
+            ) : !clientId ? (
+              <div className="helm-empty-cta">
+                <h2>Aún no tienes ningún perfil de negocio</h2>
+                <p>Crea el primero para empezar a gestionar su CRM, ventas y finanzas.</p>
+                <button className="helm-btn primary" onClick={() => setShowNew(true)}>
+                  <Plus size={16} /> Crear tu primer perfil
+                </button>
+              </div>
+            ) : current.key === 'plugins' ? (
+              <Plugins key={clientId} enabled={enabled} onToggle={togglePlugin} />
+            ) : (
+              <View key={clientId + view} clientId={clientId} />
+            )}
+          </div>
+        </main>
+      </div>
+
+      {showNew && <NewProfileModal onClose={() => setShowNew(false)} onCreated={onCreated} />}
+    </div>
+  )
+}

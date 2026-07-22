@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancela jobs viejos del mismo PR cuando empuja un commit nuevo.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: ESLint
+    runs-on: ubuntu-latest
+    # Soft-fail mientras existan errors pre-existentes del repo (~1006 al
+    # cierre del Sprint Arreglos / [testing]). El job sigue corriendo y
+    # muestra el output, pero no bloquea merges. El bloque [dx] del sprint
+    # va arreglando errors progresivamente — cuando el contador llegue a 0,
+    # quitar `continue-on-error` y el lint pasa a hard-fail.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+      - name: Lint
+        run: npm run lint
+
+
+  build:
+    name: Build (vite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+      - name: Build
+        # Validamos que el bundle compile. No hace deploy — Vercel se
+        # encarga de eso vía su propia integración. Esto es defensa en
+        # profundidad por si falla algún import.
+        run: npm run build
+

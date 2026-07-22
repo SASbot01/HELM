@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+Allow: /solutions
+Allow: /notes
+
+# Internal & operational routes — keep out of search indexes
+Disallow: /admin
+Disallow: /employee
+Disallow: /erp
+Disallow: /api
+Disallow: /onboarding
+Disallow: /signup
+Disallow: /accept-invite
+Disallow: /book
+Disallow: /login
+
+Sitemap: https://apexoperations.ai/sitemap.xml

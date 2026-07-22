@@ -1,0 +1,16 @@
+{
+  "name": "HELM",
+  "short_name": "HELM",
+  "description": "HELM — el puesto de mando de tu negocio",
+  "start_url": "/admin",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#06060B",
+  "theme_color": "#06060B",
+  "orientation": "any",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/assets/logos/apex-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/logos/apex-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

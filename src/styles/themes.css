@@ -1,0 +1,108 @@
+/* ============================================================
+   THEME SYSTEM - Global CSS Variables
+   Dark Mode + Light Mode Support
+   ============================================================ */
+
+/* ─── DARK MODE (Default) ─── */
+:root,
+html.theme-dark,
+body.theme-dark,
+[data-theme="dark"] {
+  /* Primary Colors */
+  --orange: #FF6B00;
+  --yellow: #FFB800;
+  
+  /* Backgrounds */
+  --bg: #050510;
+  --bg-card: rgba(255, 255, 255, 0.02);
+  --bg-card-hover: rgba(255, 255, 255, 0.05);
+  --bg-card-solid: #0a0a14;
+  --bg-card-light: rgba(255, 255, 255, 0.04);
+  --bg-sidebar: rgba(5, 5, 16, 0.95);
+  --bg-elevated: rgba(10, 10, 20, 0.98);
+  --bg-overlay: rgba(0, 0, 0, 0.7);
+  
+  /* Borders & Dividers */
+  --border: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.12);
+  --border-focus: rgba(255, 255, 255, 0.2);
+  --border-strong: rgba(255, 255, 255, 0.15);
+  
+  /* Text Colors */
+  --text: #E4E4E7;
+  --text-secondary: rgba(255, 255, 255, 0.5);
+  --text-tertiary: rgba(255, 255, 255, 0.35);
+  --text-muted: rgba(255, 255, 255, 0.25);
+  --text-dark: #000000;
+  --text-inverted: #FFFFFF;
+  
+  /* Semantic Colors */
+  --success: #22C55E;
+  --danger: #EF4444;
+  --warning: #F59E0B;
+  --info: #3B82F6;
+  --error: #DC2626;
+
+  /* Toast Colors */
+  --toast-bg-error: #2a0f10;
+  --toast-bg-success: #0b2516;
+  --toast-bg-warning: #2a1f05;
+  --toast-bg-info: #0d1b2b;
+  --toast-text-error: #fecaca;
+  --toast-text-success: #bbf7d0;
+  --toast-text-warning: #fde68a;
+  --toast-text-info: #dbeafe;
+  --toast-border-error: #7f1d1d;
+  --toast-border-success: #14532d;
+  --toast-border-warning: #78350f;
+  --toast-border-info: #1e3a8a;
+
+  /* Tooltip Colors */
+  --tooltip-bg: #0f172a;
+  --tooltip-text: #ffffff;
+  --tooltip-border: rgba(255, 255, 255, 0.12);
+  
+  /* Accent Colors */
+  --accent-purple: #8B5CF6;
+  --accent-green: #22C55E;
+  --accent-red: #EF4444;
+  
+  /* Message Colors */
+  --msg-user-bg: rgba(255, 107, 0, 0.1);
+  --msg-user-text: #FF6B00;
+  --msg-assistant-bg: rgba(139, 92, 246, 0.1);
+  --msg-assistant-text: #E4E4E7;
+  
+  /* UI Elements */
+  --gradient: linear-gradient(135deg, #FF6B00, color-mix(in srgb, #FF6B00 70%, #000));
+  --glow: rgba(245, 245, 245, 0.08);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --shadow-focus: 0 0 0 3px rgba(255, 107, 0, 0.2);
+  
+  /* Radius */
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-lg: 20px;
+  --radius-xs: 6px;
+  --radius-pill: 9999px;
+  
+  /* Transitions */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-base: 0.25s var(--ease-out-expo);
+  --transition-fast: 0.15s var(--ease-out-expo);
+  --transition-slow: 0.4s var(--ease-out-expo);
+  
+  /* Input & Form */
+  --input-bg: rgba(255, 255, 255, 0.03);
+  --input-border: rgba(255, 255, 255, 0.08);
+  --input-border-focus: rgba(255, 107, 0, 0.5);
+  --input-text: #E4E4E7;
+  --input-placeholder: rgba(255, 255, 255, 0.3);
+  
+  /* Disabled State */
+  --disabled-bg: rgba(255, 255, 255, 0.02);
+  --disabled-border: rgba(255, 255, 255, 0.04);
+  --disabled-text: rgba(255, 255, 255, 0.15);
+}

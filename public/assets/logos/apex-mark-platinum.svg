@@ -1,0 +1,33 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="APEX">
+  <title>APEX — Flow Platinum</title>
+  <defs>
+    <!-- Top-left face: brightest, light source from upper-left -->
+    <linearGradient id="platFace1" x1="20" y1="20" x2="50" y2="70" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FAFBFE"/>
+      <stop offset="55%" stop-color="#D5DAE3"/>
+      <stop offset="100%" stop-color="#9AA3B2"/>
+    </linearGradient>
+    <!-- Top-right face: mid-tone, partial shadow with iridescent shift -->
+    <linearGradient id="platFace2" x1="50" y1="8" x2="92" y2="88" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#B8C0CC"/>
+      <stop offset="50%" stop-color="#7A8494"/>
+      <stop offset="100%" stop-color="#4A5260"/>
+    </linearGradient>
+    <!-- Bottom dart: deepest shadow with subtle ambient glow -->
+    <linearGradient id="platFace3" x1="50" y1="55" x2="50" y2="88" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3A4250"/>
+      <stop offset="60%" stop-color="#1E232C"/>
+      <stop offset="100%" stop-color="#0E1218"/>
+    </linearGradient>
+    <!-- Specular edge highlight along the apex ridge -->
+    <linearGradient id="platSpec" x1="50" y1="8" x2="50" y2="55" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <path d="M 50 8 L 8 88 L 50 55 Z" fill="url(#platFace1)"/>
+  <path d="M 50 8 L 50 55 L 92 88 Z" fill="url(#platFace2)"/>
+  <path d="M 50 55 L 8 88 L 50 70 L 92 88 Z" fill="url(#platFace3)"/>
+  <!-- Hairline highlight on the apex-to-center ridge -->
+  <path d="M 50 8 L 50 55" stroke="url(#platSpec)" stroke-width="0.6" fill="none" stroke-linecap="round"/>
+</svg>
