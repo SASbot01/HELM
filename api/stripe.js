@@ -10,7 +10,8 @@
 //   POST   ?action=sync    { clientId, days }  → importa pagos recientes a ventas + CRM
 //   DELETE ?action=unlink  &clientId=
 import { supabase } from './lib/supabase.js'
-import { applyCors, rateLimit, getClientIp, requireSuperAdmin, writeAudit } from './_lib/auth.js'
+import { applyCors, rateLimit, getClientIp, writeAudit } from './_lib/auth.js'
+import { requireProfileAccess } from './_lib/access.js'
 import { stripeFor, getStripeConfig, saveStripeConfig, maskKey } from './_lib/stripe.js'
 import { registerStripePayment } from './_lib/stripe-ingest.js'
 
@@ -67,12 +68,6 @@ export default async function handler(req, res) {
   const action = req.query.action
   const ip = getClientIp(req)
 
-  try {
-    await requireSuperAdmin(req)
-  } catch (err) {
-    return res.status(err.statusCode || 401).json({ error: err.message })
-  }
-
   const gate = rateLimit({ key: `stripe:${ip}`, max: 40, windowMs: 60_000 })
   if (!gate.ok) {
     res.setHeader('Retry-After', String(gate.retryAfter))
@@ -81,6 +76,12 @@ export default async function handler(req, res) {
 
   const clientId = req.query.clientId || req.body?.clientId
   if (!clientId) return res.status(400).json({ error: 'clientId requerido' })
+
+  try {
+    await requireProfileAccess(req, clientId)
+  } catch (err) {
+    return res.status(err.statusCode || 401).json({ error: err.message })
+  }
 
   const { data: client } = await supabase
     .from('clients').select('id, name, slug').eq('id', clientId).maybeSingle()

@@ -14,7 +14,8 @@
 //   DELETE ?action=knowledge &id=                    → borra un bloque
 //   DELETE ?action=history   &clientId=              → vacía la conversación
 import { supabase } from './lib/supabase.js'
-import { applyCors, rateLimit, getClientIp, requireSuperAdmin } from './_lib/auth.js'
+import { applyCors, rateLimit, getClientIp, validateAuth } from './_lib/auth.js'
+import { requireProfileAccess } from './_lib/access.js'
 import { COPY_KNOWLEDGE } from './_lib/copy-knowledge.js'
 import { llmChat, llmHealth, llmInfo } from './_lib/llm.js'
 
@@ -157,8 +158,13 @@ export default async function handler(req, res) {
   const action = req.query.action
   const ip = getClientIp(req)
 
+  // Sesión válida y con permiso sobre el perfil que se pide. `health` y
+  // `commands` no tocan datos de nadie, así que solo exigen estar logueado.
+  const reqClientId = req.query.clientId || req.body?.clientId || null
+  const isPublicAction = action === 'health' || action === 'commands'
   try {
-    await requireSuperAdmin(req)
+    if (isPublicAction) await validateAuth(req, { required: true })
+    else await requireProfileAccess(req, reqClientId)
   } catch (err) {
     return res.status(err.statusCode || 401).json({ error: err.message })
   }
@@ -177,9 +183,10 @@ export default async function handler(req, res) {
   // DELETE ?action=history|knowledge
   if (req.method === 'DELETE') {
     if (action === 'knowledge') {
-      const { id } = req.body || req.query || {}
-      if (!id) return res.status(400).json({ error: 'id requerido' })
-      const { error } = await supabase.from('helm_knowledge').delete().eq('id', id)
+      const id = req.query.id || req.body?.id
+      if (!id || !reqClientId) return res.status(400).json({ error: 'id y clientId requeridos' })
+      const { error } = await supabase.from('helm_knowledge')
+        .delete().eq('id', id).eq('client_id', reqClientId)
       if (error) return res.status(500).json({ error: error.message })
       return res.status(200).json({ success: true })
     }

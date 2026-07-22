@@ -29,7 +29,7 @@ export default function SuperAdminLogin() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    if (localStorage.getItem('bw_superadmin')) navigate('/admin')
+    if (localStorage.getItem('bw_superadmin') || localStorage.getItem('bw_client')) navigate('/admin')
   }, [navigate])
 
   async function handleSubmit(e) {
@@ -42,7 +42,18 @@ export default function SuperAdminLogin() {
     setLoading(true)
     const sa = await loginSuperAdmin(email, password)
     if (sa.ok) {
-      localStorage.setItem('bw_superadmin', sa.user.email)
+      // Dos tipos de sesión: superadmin (ve todos los perfiles) y acceso de
+      // cliente (entra solo al suyo, sin selector ni creación de perfiles).
+      if (sa.user.role === 'client') {
+        localStorage.setItem('bw_client', JSON.stringify({
+          email: sa.user.email, name: sa.user.name,
+          clientId: sa.user.clientId, clientName: sa.user.clientName,
+        }))
+        localStorage.removeItem('bw_superadmin')
+      } else {
+        localStorage.setItem('bw_superadmin', sa.user.email)
+        localStorage.removeItem('bw_client')
+      }
       if (sa.token) {
         localStorage.setItem('bw_admin_jwt', sa.token)
       } else {

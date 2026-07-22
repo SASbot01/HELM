@@ -45,49 +45,52 @@ export default async function handler(req, res) {
     let row = data?.[0]
     let source = 'superadmins'
 
-    // 2) Fallback: BlackWolf team leadership.
-    // Si superadmins no acepta (no existe el email o password inválido), aceptar
-    // miembros del team del tenant Black Wolf cuyo `role` intersecte con la
-    // lista de leadership (ceo/cto/director/ops_director/central). Esto evita
-    // duplicar credenciales en `superadmins` para cada nuevo director y hace
-    // que añadir/quitar acceso a /admin sea simplemente editar el role en team.
+    // 2) Fallback: acceso de cliente. Si el email no está en `superadmins`,
+    // se busca en `team` (que es donde aterrizan los accesos creados con
+    // "Nuevo perfil" → "Crear un acceso"). Ese usuario entra a HELM pero
+    // bloqueado a SU perfil: el JWT lleva clientId y la API lo comprueba.
+    let teamRow = null
     if (!row || !verifyPassword(password, row)) {
-      const BW_CLIENT_ID = 'd7d83ca3-7e18-498d-89e1-c6da252675dc'
-      const LEADERSHIP_ROLES = new Set(['ceo', 'cto', 'director', 'ops_director', 'central'])
-
       const { data: teamData, error: teamErr } = await supabase
         .from('team')
-        .select('*')
-        .eq('client_id', BW_CLIENT_ID)
-        .eq('email', email)
+        .select('id, client_id, name, email, role, password, password_hash, active')
+        .eq('email', String(email).trim().toLowerCase())
         .eq('active', true)
-        .limit(1)
+        .limit(2)
 
       if (teamErr) {
         await writeAudit({ action: 'login.error', req, statusCode: 500, errorMessage: teamErr.message, metadata: { email } })
         return res.status(500).json({ error: 'Auth service error' })
       }
 
-      const teamRow = teamData?.[0]
-      if (!teamRow || !verifyPassword(password, teamRow)) {
+      teamRow = (teamData || []).find(t => verifyPassword(password, t))
+      if (!teamRow) {
         await writeAudit({ action: 'login.failed', req, statusCode: 401, metadata: { email } })
         return res.status(401).json({ error: 'Invalid credentials' })
       }
-
-      const userRoles = (teamRow.role || '').split(',').map(s => s.trim().toLowerCase())
-      const hasLeadership = userRoles.some(r => LEADERSHIP_ROLES.has(r))
-      if (!hasLeadership) {
-        await writeAudit({ action: 'login.forbidden_role', req, statusCode: 403, metadata: { email, role: teamRow.role } })
-        return res.status(403).json({ error: 'Tu rol no autoriza acceso al panel admin' })
-      }
-
       row = teamRow
-      source = 'team_leadership'
+      source = 'team'
     }
 
-    const user = source === 'superadmins'
+    // Nombre del perfil al que pertenece el acceso de cliente.
+    let clientInfo = null
+    if (source === 'team') {
+      const { data } = await supabase
+        .from('clients').select('id, name, slug').eq('id', teamRow.client_id).maybeSingle()
+      if (!data) {
+        await writeAudit({ action: 'login.orphan_team', req, statusCode: 403, metadata: { email } })
+        return res.status(403).json({ error: 'Este acceso no tiene un perfil asociado' })
+      }
+      clientInfo = data
+    }
+
+    const isSuperadmin = source === 'superadmins'
+    const user = isSuperadmin
       ? toAppFormat(row, 'superadmins')
-      : { id: row.id, email: row.email, name: row.name, role: row.role, source: 'team_bw' }
+      : {
+          id: row.id, email: row.email, name: row.name, role: 'client',
+          clientId: clientInfo.id, clientName: clientInfo.name, clientSlug: clientInfo.slug,
+        }
     delete user.password
     delete user.passwordHash
 
@@ -96,8 +99,10 @@ export default async function handler(req, res) {
       token = await signJwt({
         sub: row.id,
         email: row.email,
-        role: 'superadmin',
-        superadmin: true,
+        role: isSuperadmin ? 'superadmin' : 'client',
+        superadmin: isSuperadmin,
+        clientId: isSuperadmin ? null : clientInfo.id,
+        clientSlug: isSuperadmin ? null : clientInfo.slug,
         via: source,
       }, { expiresIn: 60 * 60 * 12 }) // 12h
     } catch (err) {
@@ -106,7 +111,7 @@ export default async function handler(req, res) {
 
     await writeAudit({
       action: 'login.success',
-      actor: { userId: row.id, email: row.email, role: 'superadmin', superadmin: true, via: source },
+      actor: { userId: row.id, email: row.email, role: isSuperadmin ? 'superadmin' : 'client', superadmin: isSuperadmin, via: source },
       req, statusCode: 200, metadata: { email, source },
     })
 

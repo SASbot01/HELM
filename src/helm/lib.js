@@ -149,6 +149,7 @@ async function apiFetch(path, { method = 'GET', body } = {}) {
     // colgada con un error que el usuario no puede resolver.
     localStorage.removeItem('bw_admin_jwt')
     localStorage.removeItem('bw_superadmin')
+    localStorage.removeItem('bw_client')
     if (typeof window !== 'undefined') window.location.href = '/login'
     throw new Error('Tu sesión ha caducado. Vuelve a iniciar sesión.')
   }
@@ -161,7 +162,7 @@ export const chatApi = {
   knowledge: (clientId) => apiFetch(`/api/chat?action=knowledge&clientId=${clientId}`),
   send: (clientId, message) => apiFetch('/api/chat?action=send', { method: 'POST', body: { clientId, message } }),
   clearHistory: (clientId) => apiFetch(`/api/chat?action=history&clientId=${clientId}`, { method: 'DELETE' }),
-  forget: (id) => apiFetch(`/api/chat?action=knowledge&id=${id}`, { method: 'DELETE', body: { id } }),
+  forget: (clientId, id) => apiFetch(`/api/chat?action=knowledge&id=${id}&clientId=${clientId}`, { method: 'DELETE' }),
   health: () => apiFetch('/api/chat?action=health'),
 }
 

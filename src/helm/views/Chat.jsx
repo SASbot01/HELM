@@ -107,7 +107,7 @@ export default function Chat({ clientId }) {
 
   async function forget(id) {
     if (!confirm('¿Borrar este bloque de la memoria?')) return
-    await chatApi.forget(id)
+    await chatApi.forget(clientId, id)
     setKnowledge(k => k.filter(x => x.id !== id))
   }
 

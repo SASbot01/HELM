@@ -123,7 +123,13 @@ export default function HelmApp() {
   const [enabled, setEnabled] = useState({})
   const [showNew, setShowNew] = useState(false)
 
-  const email = (typeof localStorage !== 'undefined' && localStorage.getItem('bw_superadmin')) || 'silvestreIA'
+  // Sesión de cliente: entra solo a su perfil. Sin selector, sin crear perfiles.
+  const clientSession = useMemo(() => {
+    try { return JSON.parse(localStorage.getItem('bw_client') || 'null') } catch { return null }
+  }, [])
+  const isClient = Boolean(clientSession && !localStorage.getItem('bw_superadmin'))
+  const email = (typeof localStorage !== 'undefined' && localStorage.getItem('bw_superadmin'))
+    || clientSession?.email || 'silvestreIA'
 
   // Selecciona un perfil: fija el id, persiste y carga sus plugins activos.
   function selectClient(id) {
@@ -136,11 +142,13 @@ export default function HelmApp() {
 
   // Carga la lista de perfiles y restaura el último seleccionado.
   async function refreshClients(preferId) {
-    const cs = await listClients()
+    const all = await listClients()
+    // El cliente solo ve el suyo, pase lo que pase.
+    const cs = isClient ? all.filter(c => c.id === clientSession.clientId) : all
     setClients(cs)
     setLoadingClients(false)
     const saved = preferId || localStorage.getItem(LAST_CLIENT_KEY)
-    const pick = cs.find(c => c.id === saved) || cs[0]
+    const pick = isClient ? cs[0] : (cs.find(c => c.id === saved) || cs[0])
     selectClient(pick ? pick.id : null)
     return cs
   }
@@ -148,7 +156,7 @@ export default function HelmApp() {
   // Carga inicial de perfiles al montar (guard de auth + fetch). Solo debe
   // correr una vez; refreshClients es estable en la práctica.
   useEffect(() => {
-    if (!localStorage.getItem('bw_superadmin')) { navigate('/login'); return }
+    if (!localStorage.getItem('bw_superadmin') && !localStorage.getItem('bw_client')) { navigate('/login'); return }
     refreshClients()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate])
@@ -163,6 +171,7 @@ export default function HelmApp() {
 
   function logout() {
     localStorage.removeItem('bw_superadmin')
+    localStorage.removeItem('bw_client')
     localStorage.removeItem('bw_admin_jwt')
     navigate('/login')
   }
@@ -223,7 +232,7 @@ export default function HelmApp() {
               <div className="helm-avatar">{email[0]?.toUpperCase()}</div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis' }}>{email.split('@')[0]}</div>
-                <small>Administrador</small>
+                <small>{isClient ? 'Cliente' : 'Administrador'}</small>
               </div>
             </div>
             <div className="helm-logout" onClick={logout}>Cerrar sesión</div>
@@ -237,14 +246,20 @@ export default function HelmApp() {
               <p>{sub}</p>
             </div>
             <div className="helm-top-actions">
-              {clients.length > 0 && (
-                <select className="helm-select" value={clientId || ''} onChange={e => selectClient(e.target.value)}>
-                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+              {isClient ? (
+                <span className="helm-badge">{clientSession.clientName}</span>
+              ) : (
+                <>
+                  {clients.length > 0 && (
+                    <select className="helm-select" value={clientId || ''} onChange={e => selectClient(e.target.value)}>
+                      {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  )}
+                  <button className="helm-btn" onClick={() => setShowNew(true)}>
+                    <Plus size={16} /> Nuevo perfil
+                  </button>
+                </>
               )}
-              <button className="helm-btn" onClick={() => setShowNew(true)}>
-                <Plus size={16} /> Nuevo perfil
-              </button>
             </div>
           </header>
           <div className="helm-body">
@@ -252,7 +267,7 @@ export default function HelmApp() {
               <div className="helm-empty">Cargando perfiles…</div>
             ) : !clientId ? (
               <div className="helm-empty-cta">
-                <h2>Aún no tienes ningún perfil de negocio</h2>
+                <h2>{isClient ? 'Tu perfil ya no está disponible' : 'Aún no tienes ningún perfil de negocio'}</h2>
                 <p>Crea el primero para empezar a gestionar su CRM, ventas y finanzas.</p>
                 <button className="helm-btn primary" onClick={() => setShowNew(true)}>
                   <Plus size={16} /> Crear tu primer perfil
