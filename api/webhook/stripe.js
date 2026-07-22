@@ -6,8 +6,14 @@
 // de Stripe apunta a SU propia URL y no hay ambigüedad posible.
 //
 // Eventos que procesa:
-//   checkout.session.completed → venta + contacto en CRM + actividad + producto
-//   invoice.paid               → venta recurrente + actividad
+//   checkout.session.completed              → venta + contacto CRM + actividad + producto
+//   checkout.session.async_payment_succeeded → el pago diferido que sí cuajó
+//   invoice.paid                            → venta recurrente + actividad
+//
+// El async hace falta para métodos de pago que no confirman al instante (SEPA,
+// transferencia, Bancontact…): ahí `completed` llega con payment_status
+// 'unpaid' y el cobro real se confirma minutos u horas después. Sin este
+// evento esas ventas se quedarían registradas como lead y nunca como venta.
 //
 // La firma es obligatoria: sin `webhookSecret` configurado, se rechaza.
 import { supabase } from '../lib/supabase.js'
@@ -94,7 +100,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    if (event.type === 'checkout.session.completed') {
+    if (event.type === 'checkout.session.completed' ||
+        event.type === 'checkout.session.async_payment_succeeded') {
       const outcome = await registerStripePayment({
         supabase, clientId: client.id, apiKey: cfg.apiKey, session: event.data.object,
       })
