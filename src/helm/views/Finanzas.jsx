@@ -6,11 +6,46 @@ import { Panel, Empty, Modal, Field, Input, Kpi } from '../ui'
 
 export default function Finanzas({ clientId }) {
   const [rows, setRows] = useState(null)
+  const [products, setProducts] = useState(null)
+  const [sales, setSales] = useState(null)
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ date: todayISO(), kind: 'ingreso', category: '', description: '', amount: '' })
 
   const load = () => fetchRows('ceo_finance_entries', clientId, { order: 'date' }).then(setRows)
-  useEffect(() => { load() }, [clientId])
+  const loadCatalog = () => Promise.all([
+    fetchRows('products', clientId, { order: 'created_at' }),
+    fetchRows('sales', clientId, { order: 'date' }),
+  ]).then(([p, v]) => { setProducts(p); setSales(v) })
+  useEffect(() => { load(); loadCatalog() }, [clientId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Qué se está vendiendo de verdad: catálogo activo cruzado con las ventas.
+  const catalogo = useMemo(() => {
+    if (!products || !sales) return null
+    const vendido = {}
+    for (const v of sales) {
+      const k = (v.product || '').trim()
+      if (!k) continue
+      vendido[k] = vendido[k] || { unidades: 0, importe: 0 }
+      vendido[k].unidades++
+      vendido[k].importe += Number(v.revenue) || 0
+    }
+    const filas = products.filter(p => p.active !== false).map(p => ({
+      id: p.id,
+      name: p.name,
+      price: Number(p.price) || 0,
+      currency: p.currency || 'EUR',
+      interval: p.billing_interval,
+      fromStripe: Boolean(p.stripe_product_id),
+      ...(vendido[p.name] || { unidades: 0, importe: 0 }),
+    }))
+    // Productos vendidos que no están en el catálogo (venta suelta o manual).
+    for (const [name, d] of Object.entries(vendido)) {
+      if (!filas.some(f => f.name === name)) {
+        filas.push({ id: 'x-' + name, name, price: 0, currency: 'EUR', interval: null, fromStripe: false, ...d })
+      }
+    }
+    return filas.sort((a, b) => b.importe - a.importe)
+  }, [products, sales])
 
   const t = useMemo(() => {
     const r = rows || []
@@ -40,6 +75,33 @@ export default function Finanzas({ clientId }) {
         <Kpi label="Ingresos" value={money(t.income)} />
         <Kpi label="Gastos" value={money(t.expense)} />
       </div>
+      <Panel title="Productos activos">
+        {catalogo == null ? <Empty>Cargando…</Empty> : catalogo.length === 0 ? (
+          <Empty>Sin productos. Se dan de alta solos al importar Stripe o al registrar una venta.</Empty>
+        ) : (
+          <div className="helm-tablewrap">
+            <table className="helm-table">
+              <thead>
+                <tr>
+                  <th>Producto</th><th>Precio</th><th>Vendidos</th><th>Facturado</th><th>Origen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {catalogo.map(p => (
+                  <tr key={p.id}>
+                    <td>{p.name}</td>
+                    <td>{p.price ? money(p.price) : '—'}{p.interval ? ` / ${p.interval}` : ''}</td>
+                    <td>{p.unidades || '—'}</td>
+                    <td>{p.importe ? money(p.importe) : '—'}</td>
+                    <td><span className="helm-badge">{p.fromStripe ? 'Stripe' : 'Manual'}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
       <Panel title="Movimientos" action={<button className="helm-btn primary" onClick={() => setOpen(true)}><Plus size={15} />Nuevo movimiento</button>}>
         {rows == null ? <Empty>Cargando…</Empty> : rows.length === 0 ? (
           <Empty>Sin movimientos registrados.</Empty>

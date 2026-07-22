@@ -48,8 +48,10 @@ function StripeCard({ clientId }) {
     try {
       await stripeApi.link(clientId, apiKey.trim(), secret.trim() || undefined)
       setApiKey(''); setSecret('')
-      setMsg('Stripe enlazado.')
+      setMsg('Stripe enlazado. Importando los últimos 60 días…')
       await load()
+      // Nada más enlazar, se reconstruye el histórico reciente y la IA lo analiza.
+      await sync()
     } catch (err) { setError(err.message) }
     setBusy(false)
   }
@@ -65,8 +67,16 @@ function StripeCard({ clientId }) {
   async function sync() {
     setBusy(true); setError(null); setMsg(null)
     try {
-      const r = await stripeApi.sync(clientId, 30)
-      setMsg(`Últimos ${r.days} días: ${r.imported} ventas nuevas, ${r.duplicated} ya estaban, ${r.skipped} sin pagar.`)
+      const r = await stripeApi.sync(clientId, 60)
+      setMsg([
+        `Últimos ${r.days} días:`,
+        `· ${r.ventas.nuevas} ventas nuevas (${r.ventas.yaEstaban} ya estaban)`,
+        `· ${r.finanzas.apuntes} apuntes de ingreso en Finanzas`,
+        `· ${r.leads.nuevos} leads nuevos en el CRM (${r.leads.yaEstaban} ya existían)`,
+        `· ${r.productos.nuevos} productos nuevos, ${r.productos.actualizados} actualizados`,
+        r.analysis ? '· Análisis de la IA guardado en el Chat de este perfil' : null,
+        ...(r.errores || []).map(e => `· ⚠ ${e}`),
+      ].filter(Boolean).join('\n'))
     } catch (err) { setError(err.message) }
     setBusy(false)
   }
@@ -107,7 +117,7 @@ function StripeCard({ clientId }) {
               </div>
               <div className="helm-settings-actions">
                 <button className="helm-btn" onClick={sync} disabled={busy}>
-                  <RefreshCw size={15} /> Importar 30 días
+                  <RefreshCw size={15} /> {busy ? 'Importando…' : 'Importar y analizar 60 días'}
                 </button>
                 <button className="helm-btn" onClick={unlink} disabled={busy}>
                   <Unlink size={15} /> Desenlazar
@@ -174,7 +184,7 @@ function StripeCard({ clientId }) {
           </>
         )}
 
-        {msg && <div className="helm-settings-ok">{msg}</div>}
+        {msg && <div className="helm-settings-ok" style={{ whiteSpace: 'pre-line' }}>{msg}</div>}
         {error && <div className="helm-formerror">{error}</div>}
       </div>
     </Panel>

@@ -13,7 +13,7 @@ import { supabase } from './lib/supabase.js'
 import { applyCors, rateLimit, getClientIp, writeAudit } from './_lib/auth.js'
 import { requireProfileAccess } from './_lib/access.js'
 import { stripeFor, getStripeConfig, saveStripeConfig, maskKey } from './_lib/stripe.js'
-import { registerStripePayment } from './_lib/stripe-ingest.js'
+import { importStripeWindow, analyzeStripeWindow } from './_lib/stripe-import.js'
 
 /**
  * ¿La SUPABASE_SERVICE_KEY del servidor es realmente de servicio?
@@ -157,35 +157,46 @@ export default async function handler(req, res) {
   }
 
   // ── POST ?action=sync ────────────────────────────────────────────────────
-  // Trae los checkouts pagados de los últimos N días y los registra igual que
-  // haría el webhook. Sirve para recuperar lo de antes de enlazar el webhook.
+  // Reconstruye la ventana entera (60 días por defecto): ventas, apuntes en
+  // Finanzas, leads en el CRM, catálogo de productos y un análisis escrito por
+  // la IA local, que se deja en el chat del perfil y en su memoria.
   if (req.method === 'POST' && action === 'sync') {
     const row = await getStripeConfig(supabase, clientId)
     const apiKey = row?.config?.apiKey
     if (!apiKey) return res.status(400).json({ error: 'Esta cuenta no tiene Stripe enlazado' })
 
-    const days = Math.min(Math.max(Number(req.body?.days) || 30, 1), 365)
-    const since = Math.floor(Date.now() / 1000) - days * 86400
-    const stripe = stripeFor(apiKey)
+    const days = Math.min(Math.max(Number(req.body?.days) || 60, 1), 365)
 
-    let sessions
+    let summary
     try {
-      sessions = await stripe.checkoutSessions.list({ limit: 100, created: { gte: since } })
+      summary = await importStripeWindow({ supabase, clientId, apiKey, days })
     } catch (err) {
       return res.status(err.statusCode || 502).json({ error: `Stripe: ${err.message}` })
     }
 
-    const results = { imported: 0, duplicated: 0, skipped: 0 }
-    for (const session of sessions.data || []) {
-      if (session.payment_status !== 'paid') { results.skipped++; continue }
-      const outcome = await registerStripePayment({
-        supabase, clientId, apiKey, session, source: 'sync',
-      })
-      results[outcome === 'created' ? 'imported' : outcome === 'duplicate' ? 'duplicated' : 'skipped']++
+    // Análisis con el modelo local. Si el modelo no está disponible, el import
+    // ya está hecho: no se tira todo por esto.
+    let analysis = null
+    if (req.body?.analyze !== false) {
+      const { data: knowledge } = await supabase
+        .from('helm_knowledge').select('title, content')
+        .eq('client_id', clientId).limit(6)
+      analysis = await analyzeStripeWindow({ clientName: client.name, summary, knowledge: knowledge || [] })
+
+      if (analysis) {
+        const titulo = `Análisis Stripe · últimos ${days} días`
+        await supabase.from('helm_chat_messages').insert([
+          { client_id: clientId, role: 'user', content: `Analiza los últimos ${days} días de Stripe`, command: '/stripe-analisis' },
+          { client_id: clientId, role: 'assistant', content: analysis, command: '/stripe-analisis' },
+        ])
+        await supabase.from('helm_knowledge').insert({
+          client_id: clientId, kind: 'analisis', title: titulo, content: analysis, source: 'stripe-sync',
+        })
+      }
     }
 
-    await writeAudit({ clientId, action: 'stripe.sync', req, metadata: results })
-    return res.status(200).json({ ...results, days })
+    await writeAudit({ clientId, action: 'stripe.sync', req, metadata: summary })
+    return res.status(200).json({ ...summary, analysis })
   }
 
   return res.status(405).json({ error: 'Method not allowed' })
