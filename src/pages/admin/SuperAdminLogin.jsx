@@ -29,7 +29,11 @@ export default function SuperAdminLogin() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    if (localStorage.getItem('bw_superadmin') || localStorage.getItem('bw_client')) navigate('/admin')
+    if (localStorage.getItem('bw_superadmin')) { navigate('/admin'); return }
+    try {
+      const c = JSON.parse(localStorage.getItem('bw_client') || 'null')
+      if (c?.clientSlug) navigate('/' + c.clientSlug)
+    } catch { /* sesión corrupta: se queda en el login */ }
   }, [navigate])
 
   async function handleSubmit(e) {
@@ -48,8 +52,12 @@ export default function SuperAdminLogin() {
         localStorage.setItem('bw_client', JSON.stringify({
           email: sa.user.email, name: sa.user.name,
           clientId: sa.user.clientId, clientName: sa.user.clientName,
+          clientSlug: sa.user.clientSlug,
         }))
         localStorage.removeItem('bw_superadmin')
+        if (sa.token) localStorage.setItem('bw_admin_jwt', sa.token)
+        navigate('/' + sa.user.clientSlug)
+        return
       } else {
         localStorage.setItem('bw_superadmin', sa.user.email)
         localStorage.removeItem('bw_client')

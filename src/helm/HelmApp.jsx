@@ -1,7 +1,7 @@
 // HELM — shell principal. Marca propia (no APEX). Limpio, claro, simple.
 // Se monta en /admin. Gestiona un perfil (cliente) a la vez, con selector arriba.
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Blocks, Settings, Plus } from 'lucide-react'
 import { listClients, createProfile, slugify } from './lib'
 import { Modal, Field, Input } from './ui'
@@ -116,6 +116,9 @@ function NewProfileModal({ onClose, onCreated }) {
 
 export default function HelmApp() {
   const navigate = useNavigate()
+  // La URL manda: /<slug> abre ese perfil. /admin entra sin slug y redirige
+  // al último usado, para que la barra de direcciones siempre diga dónde estás.
+  const { slug: urlSlug } = useParams()
   const [view, setView] = useState('informe')
   const [clients, setClients] = useState([])
   const [clientId, setClientId] = useState(null)
@@ -140,6 +143,13 @@ export default function HelmApp() {
     }
   }
 
+  // Cambiar de perfil desde el selector = cambiar de URL.
+  function goToClient(id) {
+    const c = clients.find(x => x.id === id)
+    if (c) navigate('/' + c.slug)
+    else selectClient(id)
+  }
+
   // Carga la lista de perfiles y restaura el último seleccionado.
   async function refreshClients(preferId) {
     const all = await listClients()
@@ -147,9 +157,20 @@ export default function HelmApp() {
     const cs = isClient ? all.filter(c => c.id === clientSession.clientId) : all
     setClients(cs)
     setLoadingClients(false)
+
+    // Un cliente que se cuele en el slug de otro perfil vuelve al suyo.
+    if (isClient && urlSlug && cs[0] && urlSlug !== cs[0].slug) {
+      navigate('/' + cs[0].slug, { replace: true })
+      selectClient(cs[0].id)
+      return cs
+    }
+
+    const bySlug = urlSlug ? cs.find(c => c.slug === urlSlug) : null
     const saved = preferId || localStorage.getItem(LAST_CLIENT_KEY)
-    const pick = isClient ? cs[0] : (cs.find(c => c.id === saved) || cs[0])
+    const pick = bySlug || (isClient ? cs[0] : (cs.find(c => c.id === saved) || cs[0]))
     selectClient(pick ? pick.id : null)
+    // Sin slug en la URL (o con uno que no existe): la fijamos al perfil elegido.
+    if (pick && urlSlug !== pick.slug) navigate('/' + pick.slug, { replace: true })
     return cs
   }
 
@@ -159,7 +180,7 @@ export default function HelmApp() {
     if (!localStorage.getItem('bw_superadmin') && !localStorage.getItem('bw_client')) { navigate('/login'); return }
     refreshClients()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigate])
+  }, [navigate, urlSlug])
 
   function togglePlugin(key) {
     setEnabled(prev => {
@@ -178,8 +199,8 @@ export default function HelmApp() {
 
   function onCreated(client) {
     setShowNew(false)
-    refreshClients(client.id)
     setView('informe')
+    navigate('/' + client.slug)
   }
 
   // Plugins activos y disponibles → entradas de menú extra.
@@ -251,7 +272,7 @@ export default function HelmApp() {
               ) : (
                 <>
                   {clients.length > 0 && (
-                    <select className="helm-select" value={clientId || ''} onChange={e => selectClient(e.target.value)}>
+                    <select className="helm-select" value={clientId || ''} onChange={e => goToClient(e.target.value)}>
                       {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   )}

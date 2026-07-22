@@ -32,8 +32,11 @@ createRoot(document.getElementById('root')).render(
         <Routes>
           <Route path="/" element={<Navigate to="/admin" replace />} />
           <Route path="/login" element={<SuperAdminLogin />} />
-          {/* HELM — app limpia (CRM · Ventas · Diario · Finanzas · Informe · Plugins). */}
+          {/* HELM — app limpia (CRM · Ventas · Diario · Finanzas · Chat · Ajustes).
+              /admin entra sin perfil fijado (redirige al último usado) y
+              /<slug> abre directamente ese perfil: /silvestre, /enformaconhugo… */}
           <Route path="/admin/*" element={<HelmApp />} />
+          <Route path="/:slug/*" element={<HelmApp />} />
           {/* Cualquier otra ruta vuelve al login. */}
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
