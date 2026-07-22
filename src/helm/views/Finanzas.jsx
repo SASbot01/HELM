@@ -4,6 +4,24 @@ import { Plus, Trash2 } from 'lucide-react'
 import { fetchRows, insertRow, deleteRow, money, fmtDate, todayISO } from '../lib'
 import { Panel, Empty, Modal, Field, Input, Kpi } from '../ui'
 
+// Cómo se clasifica cada movimiento. `sign` decide si suma o resta, y
+// `recurring` marca los que se repiten mes a mes (los fijos).
+const TIPOS = [
+  { key: 'ingreso',  label: 'Ingreso',        category: 'Ingreso',        sign: 1,  recurring: false },
+  { key: 'fijo',     label: 'Gasto fijo',     category: 'Gasto fijo',     sign: -1, recurring: true },
+  { key: 'puntual',  label: 'Gasto puntual',  category: 'Gasto puntual',  sign: -1, recurring: false },
+  { key: 'comision', label: 'Comisión',       category: 'Comisión',       sign: -1, recurring: false },
+]
+const TIPO_POR_CATEGORIA = Object.fromEntries(TIPOS.map(t => [t.category, t]))
+
+// Movimientos antiguos (o importados) que no traen una de nuestras categorías:
+// se clasifican por el signo del importe.
+function tipoDe(row) {
+  const t = TIPO_POR_CATEGORIA[row.category]
+  if (t) return t
+  return Number(row.amount) >= 0 ? TIPOS[0] : TIPOS[2]
+}
+
 export default function Finanzas({ clientId }) {
   const [rows, setRows] = useState(null)
   const [products, setProducts] = useState(null)
@@ -49,19 +67,32 @@ export default function Finanzas({ clientId }) {
 
   const t = useMemo(() => {
     const r = rows || []
-    const income = r.filter(x => Number(x.amount) > 0).reduce((a, x) => a + Number(x.amount), 0)
-    const expense = r.filter(x => Number(x.amount) < 0).reduce((a, x) => a + Number(x.amount), 0)
-    return { income, expense, balance: income + expense }
+    const sum = (f) => r.filter(f).reduce((a, x) => a + Number(x.amount), 0)
+    const income = sum(x => Number(x.amount) > 0)
+    const expense = sum(x => Number(x.amount) < 0)
+    return {
+      income,
+      expense,
+      balance: income + expense,
+      fijos: sum(x => tipoDe(x).key === 'fijo'),
+      puntuales: sum(x => tipoDe(x).key === 'puntual'),
+      comisiones: sum(x => tipoDe(x).key === 'comision'),
+    }
   }, [rows])
 
   async function save(e) {
     e.preventDefault()
     const raw = Math.abs(Number(form.amount) || 0)
     if (!raw) return
-    const amount = form.kind === 'gasto' ? -raw : raw
+    const tipo = TIPOS.find(x => x.key === form.kind) || TIPOS[0]
     await insertRow('ceo_finance_entries', {
-      client_id: clientId, date: form.date, category: form.category.trim() || (form.kind === 'gasto' ? 'gasto' : 'ingreso'),
-      description: form.description.trim() || null, amount,
+      client_id: clientId, date: form.date,
+      // La categoría marca el tipo; si escriben una propia se guarda como
+      // detalle dentro de la descripción, para no romper la clasificación.
+      category: tipo.category,
+      description: [form.category.trim(), form.description.trim()].filter(Boolean).join(' · ') || null,
+      amount: raw * tipo.sign,
+      recurring: tipo.recurring,
     })
     setForm({ date: todayISO(), kind: 'ingreso', category: '', description: '', amount: '' })
     setOpen(false); load()
@@ -73,7 +104,10 @@ export default function Finanzas({ clientId }) {
       <div className="helm-grid helm-kpis">
         <Kpi label="Balance" value={money(t.balance)} accent sub="ingresos − gastos" />
         <Kpi label="Ingresos" value={money(t.income)} />
-        <Kpi label="Gastos" value={money(t.expense)} />
+        <Kpi label="Gastos" value={money(t.expense)} sub="todos los tipos" />
+        <Kpi label="Gastos fijos" value={money(t.fijos)} sub="se repiten cada mes" />
+        <Kpi label="Gastos puntuales" value={money(t.puntuales)} sub="una sola vez" />
+        <Kpi label="Comisiones" value={money(t.comisiones)} sub="closers, setters, afiliados" />
       </div>
       <Panel title="Productos activos">
         {catalogo == null ? <Empty>Cargando…</Empty> : catalogo.length === 0 ? (
@@ -108,14 +142,15 @@ export default function Finanzas({ clientId }) {
         ) : (
           <div className="helm-tablewrap">
             <table className="helm-table">
-              <thead><tr><th>Fecha</th><th>Categoría</th><th>Descripción</th><th>Importe</th><th></th></tr></thead>
+              <thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Importe</th><th></th></tr></thead>
               <tbody>
                 {rows.map(r => {
                   const pos = Number(r.amount) >= 0
+                  const tipo = tipoDe(r)
                   return (
                     <tr key={r.id}>
                       <td>{fmtDate(r.date)}</td>
-                      <td>{r.category || '—'}</td>
+                      <td><span className={'helm-badge tipo-' + tipo.key}>{tipo.label}</span></td>
                       <td>{r.description || '—'}</td>
                       <td className="helm-num" style={{ color: pos ? 'var(--green)' : 'var(--red)' }}>{pos ? '+' : ''}{money(r.amount)}</td>
                       <td><Trash2 size={15} className="helm-x" onClick={() => remove(r.id)} /></td>
@@ -133,12 +168,11 @@ export default function Finanzas({ clientId }) {
           <form onSubmit={save}>
             <Field label="Tipo">
               <select className="helm-input" value={form.kind} onChange={e => setForm({ ...form, kind: e.target.value })}>
-                <option value="ingreso">Ingreso</option>
-                <option value="gasto">Gasto</option>
+                {TIPOS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
               </select>
             </Field>
             <Field label="Fecha"><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></Field>
-            <Field label="Categoría"><Input value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} placeholder="ventas, nómina, software…" /></Field>
+            <Field label="Concepto"><Input value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} placeholder="nómina, software, comisión de Juan…" /></Field>
             <Field label="Descripción"><Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></Field>
             <Field label="Importe (€)"><Input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} autoFocus /></Field>
             <button type="submit" className="helm-btn primary" style={{ width: '100%', justifyContent: 'center' }}>Guardar movimiento</button>

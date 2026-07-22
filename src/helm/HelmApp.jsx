@@ -2,7 +2,7 @@
 // Se monta en /admin. Gestiona un perfil (cliente) a la vez, con selector arriba.
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Blocks, Settings, Plus } from 'lucide-react'
+import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Link2, Blocks, Settings, Plus } from 'lucide-react'
 import { listClients, createProfile, slugify } from './lib'
 import { Modal, Field, Input } from './ui'
 import Informe from './views/Informe'
@@ -11,6 +11,7 @@ import Ventas from './views/Ventas'
 import Diario from './views/Diario'
 import Finanzas from './views/Finanzas'
 import Chat from './views/Chat'
+import Enlaces from './views/Enlaces'
 import Plugins from './views/Plugins'
 import Ajustes from './views/Ajustes'
 import { PLUGINS, PLUGIN_MAP, loadEnabled, saveEnabled } from './plugins/registry'
@@ -23,6 +24,7 @@ const NAV = [
   { key: 'diario', label: 'Diario', icon: ClipboardList, title: 'Diario', sub: 'Reportes de closer y setter', C: Diario },
   { key: 'finanzas', label: 'Finanzas', icon: Wallet, title: 'Finanzas', sub: 'Ingresos, gastos y balance', C: Finanzas },
   { key: 'chat', label: 'Chat', icon: MessageSquare, title: 'Chat', sub: 'Tu copywriter con la memoria de este perfil', C: Chat },
+  { key: 'enlaces', label: 'Enlaces', icon: Link2, title: 'Enlaces', sub: 'Las URLs del negocio, a mano', C: Enlaces },
   { key: 'plugins', label: 'Plugins', icon: Blocks, title: 'Plugins', sub: 'Amplía tu HELM', C: Plugins },
   { key: 'ajustes', label: 'Ajustes', icon: Settings, title: 'Ajustes', sub: 'Integraciones y IA de este perfil', C: Ajustes },
 ]

@@ -436,3 +436,62 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-badge.green { color: var(--green); border-color: rgba(52,211,153,.35); }
 .helm-badge.amber { color: var(--amber); border-color: rgba(251,191,36,.35); }
 .helm-badge.red   { color: var(--red);   border-color: rgba(248,113,113,.35); }
+
+/* Filtros del informe ------------------------------------------------------ */
+.helm-filters {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap; padding: 0 2px;
+}
+.helm-chips { display: flex; gap: 7px; flex-wrap: wrap; }
+.helm-chip {
+  cursor: pointer; font-size: 12.5px; border-radius: 999px; padding: 6px 13px;
+  background: var(--panel); border: 1px solid var(--border); color: var(--text-dim);
+}
+.helm-chip:hover { background: var(--hover); color: var(--text); }
+.helm-chip.active {
+  background: linear-gradient(90deg, var(--cyan), var(--violet));
+  border-color: transparent; color: #06060B; font-weight: 500;
+}
+
+/* Barra de cuota en tablas */
+.helm-bar {
+  height: 5px; border-radius: 999px; background: var(--bg-1);
+  overflow: hidden; min-width: 70px; margin-bottom: 3px;
+}
+.helm-bar span {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, var(--cyan), var(--violet));
+}
+.helm-table tr.active { background: var(--hover); }
+
+/* Tipos de movimiento en Finanzas */
+.helm-badge.tipo-ingreso  { color: var(--green);  border-color: rgba(52,211,153,.35); }
+.helm-badge.tipo-fijo     { color: var(--cyan);   border-color: rgba(0,212,255,.3); }
+.helm-badge.tipo-puntual  { color: var(--amber);  border-color: rgba(251,191,36,.3); }
+.helm-badge.tipo-comision { color: var(--violet); border-color: rgba(124,58,237,.45); }
+
+/* Enlaces ------------------------------------------------------------------ */
+.helm-links { padding: 6px 0 12px; }
+.helm-link-group + .helm-link-group { margin-top: 6px; }
+.helm-link-cat {
+  padding: 12px 18px 6px; font-size: 11px; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--text-mut);
+}
+.helm-link {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 18px; border-top: 1px solid var(--border);
+}
+.helm-link:hover { background: var(--panel-2); }
+.helm-link-main { min-width: 0; }
+.helm-link-main a {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--text); text-decoration: none; font-size: 13.5px; font-weight: 500;
+}
+.helm-link-main a:hover { color: var(--cyan); }
+.helm-link-main a svg { opacity: .45; }
+.helm-link-main small {
+  display: block; margin-top: 2px; color: var(--text-mut); font-size: 12px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.helm-link-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.helm-link-actions .helm-btn { padding: 6px 9px; }
