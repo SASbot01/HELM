@@ -88,6 +88,16 @@ function StripeCard({ clientId }) {
         : <Badge>Sin enlazar</Badge>}
     >
       <div className="helm-settings-body">
+        {status.serverKeyOk === false && (
+          <div className="helm-settings-warn">
+            <AlertTriangle size={15} />
+            El servidor no tiene la clave de servicio de Supabase
+            ({status.serverKeyKind === 'missing' ? 'no hay ninguna' : `es de tipo "${status.serverKeyKind}"`}).
+            Sin ella no se puede leer ni guardar la configuración de Stripe, y esta tarjeta
+            aparecerá siempre como "sin enlazar" aunque no lo esté. Arréglalo en
+            <code> .env.server</code> → <code>SUPABASE_SERVICE_KEY</code>.
+          </div>
+        )}
         {status.linked ? (
           <>
             <div className="helm-settings-row">

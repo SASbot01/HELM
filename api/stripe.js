@@ -14,6 +14,33 @@ import { applyCors, rateLimit, getClientIp, requireSuperAdmin, writeAudit } from
 import { stripeFor, getStripeConfig, saveStripeConfig, maskKey } from './_lib/stripe.js'
 import { registerStripePayment } from './_lib/stripe-ingest.js'
 
+/**
+ * ¿La SUPABASE_SERVICE_KEY del servidor es realmente de servicio?
+ *
+ * Importa porque `user_integrations` (donde viven las claves de Stripe) tiene
+ * RLS que niega al rol anónimo: con una clave anon las consultas no fallan,
+ * devuelven cero filas — y Stripe parece "sin enlazar" cuando sí lo está.
+ * Esto lo detecta leyendo la propia clave, sin tocar la base.
+ *
+ * @returns {'service'|'anon'|'missing'|'unknown'}
+ */
+function serviceKeyKind() {
+  const k = process.env.SUPABASE_SERVICE_KEY || ''
+  if (!k) return 'missing'
+  if (k.startsWith('sb_secret_')) return 'service'
+  if (k.startsWith('sb_publishable_')) return 'anon'
+  const parts = k.split('.')
+  if (parts.length === 3) {
+    try {
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString())
+      if (payload.role === 'service_role') return 'service'
+      if (payload.role === 'anon') return 'anon'
+      return 'unknown'
+    } catch { return 'unknown' }
+  }
+  return 'unknown'
+}
+
 // La URL pública que hay que pegar en Stripe. Detrás de un proxy (vite en
 // local, Vercel en producción) `host` es el del backend, no el que ve el
 // navegador — por eso miramos primero la config explícita y luego el referer.
@@ -63,8 +90,13 @@ export default async function handler(req, res) {
   if (req.method === 'GET' && action === 'status') {
     const row = await getStripeConfig(supabase, clientId)
     const cfg = row?.config || {}
+    const keyKind = serviceKeyKind()
     return res.status(200).json({
       linked: Boolean(row?.enabled && cfg.apiKey),
+      // Si el servidor no tiene clave de servicio, lo de arriba no es fiable:
+      // el RLS devuelve cero filas y todo parece "sin enlazar".
+      serverKeyOk: keyKind === 'service',
+      serverKeyKind: keyKind,
       key: maskKey(cfg.apiKey),
       accountName: cfg.accountName || null,
       accountId: cfg.accountId || null,
