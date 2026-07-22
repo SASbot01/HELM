@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Blocks, Settings, Plus } from 'lucide-react'
-import { listClients, createProfile, slugify, CLIENT_TYPES } from './lib'
-import { Modal, Field, Input, Select } from './ui'
+import { listClients, createProfile, slugify } from './lib'
+import { Modal, Field, Input } from './ui'
 import Informe from './views/Informe'
 import Crm from './views/Crm'
 import Ventas from './views/Ventas'
@@ -86,12 +86,6 @@ function NewProfileModal({ onClose, onCreated }) {
         <Field label="URL del perfil">
           <Input value={effSlug} onChange={e => { set('slug', slugify(e.target.value)); set('slugTouched', true) }} placeholder="acme-growth" />
         </Field>
-        <Field label="Tipo">
-          <Select value={form.client_type} onChange={e => set('client_type', e.target.value)}>
-            {CLIENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </Select>
-        </Field>
-
         <label className="helm-checkline">
           <input type="checkbox" checked={form.withAccess} onChange={e => set('withAccess', e.target.checked)} />
           Crear un acceso (login) para este cliente

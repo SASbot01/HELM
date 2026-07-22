@@ -31,11 +31,10 @@ export async function listClients() {
 
 // ── Perfiles (clientes) ────────────────────────────────────────────────────
 
+// Un solo tipo de perfil: Growth. Los demás (consultoría, manufactura,
+// logística) eran de la plataforma antigua y ya no se usan.
 export const CLIENT_TYPES = [
   { value: 'growth', label: 'Growth' },
-  { value: 'consultoria', label: 'Consultoría' },
-  { value: 'manufactura', label: 'Manufactura' },
-  { value: 'logistica', label: 'Logística' },
 ]
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])?$/
