@@ -328,6 +328,12 @@ export default function HelmApp() {
     return permitidas.length ? permitidas : [NAV[0]]
   }, [puede])
 
+  // Ajustes se pinta abajo, junto a la cuenta, pero sigue estando en `coreNav`
+  // para que la vista se resuelva igual: sacarlo de ahí haría que entrar por
+  // /ajustes cayera en el Informe.
+  const navAjustes = useMemo(() => coreNav.find(n => n.key === 'ajustes'), [coreNav])
+  const navNegocio = useMemo(() => coreNav.filter(n => n.key !== 'ajustes'), [coreNav])
+
   // La vista activa puede ser del núcleo o de un plugin. Una sección que no le
   // corresponde no se abre ni escribiendo la URL: cae en la primera que sí.
   const coreCurrent = coreNav.find(n => n.key === view)
@@ -349,7 +355,7 @@ export default function HelmApp() {
             <button className="helm-side-close" onClick={() => setMenuOpen(false)} aria-label="Cerrar menú"><X size={18} /></button>
           </div>
           <div className="helm-navlabel">NEGOCIO</div>
-          {coreNav.map(n => {
+          {navNegocio.map(n => {
             const Icon = n.icon
             return (
               <div key={n.key} className={'helm-nav' + (view === n.key ? ' active' : '')} onClick={() => go(n.key)}>
@@ -371,6 +377,15 @@ export default function HelmApp() {
             </>
           )}
           <div className="helm-side-foot">
+            {/* Ajustes va con la cuenta, no con el negocio: es lo que se toca de
+                uvas a peras y estorbaba al final de una lista de 17 secciones.
+                Encima de Usuarios, y encima del nombre en las cuentas de cliente,
+                que no ven Usuarios. */}
+            {navAjustes && (
+              <div className={'helm-nav' + (view === navAjustes.key ? ' active' : '')} onClick={() => go(navAjustes.key)}>
+                <navAjustes.icon /> {navAjustes.label}
+              </div>
+            )}
             {!isClient && (
               <div className="helm-nav" onClick={() => navigate('/usersadmin')}>
                 <Users /> Usuarios

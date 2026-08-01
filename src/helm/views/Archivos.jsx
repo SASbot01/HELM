@@ -14,7 +14,7 @@ import {
   Film, File, Search, Sparkles, Rocket, Hand,
 } from 'lucide-react'
 import {
-  fetchRowsOrError, insertRow, deleteRow, uploadFile, deleteFile,
+  fetchRowsOrError, insertRow, deleteRow, uploadFile, deleteFile, publicUrl,
   humanSize, fmtDate, MAX_UPLOAD_MB, MISSING_TABLE,
 } from '../lib'
 import { Panel, Empty, Input, FormNote, Kpi } from '../ui'
@@ -124,8 +124,12 @@ export default function Archivos({ clientId }) {
     } catch (err) { setError('No se pudo borrar: ' + err.message); load() }
   }
 
+  // Siempre desde la ruta: la `url` guardada puede venir del servidor, donde
+  // Supabase se ve a sí mismo en 127.0.0.1 y ese enlace no abre desde fuera.
+  const enlaceDe = (f) => publicUrl(f.path) || f.url
+
   function copiar(f) {
-    navigator.clipboard?.writeText(f.url)
+    navigator.clipboard?.writeText(enlaceDe(f))
     setCopiado(f.id)
     setTimeout(() => setCopiado(c => (c === f.id ? null : c)), 1600)
   }
@@ -204,7 +208,7 @@ export default function Archivos({ clientId }) {
                 <div key={f.id} className="helm-arch-item">
                   <Icon size={16} />
                   <div className="helm-arch-main">
-                    <a href={f.url} target="_blank" rel="noreferrer">
+                    <a href={enlaceDe(f)} target="_blank" rel="noreferrer">
                       {f.name} <ExternalLink size={12} />
                     </a>
                     <small>

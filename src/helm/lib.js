@@ -208,6 +208,18 @@ export async function uploadFile(clientId, folder, file) {
   return { name: file.name, url: data.publicUrl, path, type: file.type || '', size: file.size }
 }
 
+// URL pública a partir de la ruta en el bucket.
+//
+// Hace falta porque no todo lo que hay en el almacén lo sube el navegador: el
+// chat y el onboarding escriben archivos desde el servidor, y allí Supabase se
+// llama a sí mismo por su dirección interna (127.0.0.1). Esa URL guardada no
+// abre desde fuera. Con la ruta, que sí es estable, el enlace se reconstruye
+// aquí para el origen desde el que se esté mirando el panel.
+export function publicUrl(path) {
+  if (!path) return ''
+  return supabase.storage.from('helm').getPublicUrl(path).data.publicUrl
+}
+
 export async function deleteFile(path) {
   if (!path) return
   const { error } = await supabase.storage.from('helm').remove([path])
