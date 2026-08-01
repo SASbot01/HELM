@@ -142,3 +142,39 @@ export async function savePermisos(clientId, matrix, visible) {
     .upsert(fila, { onConflict: 'client_id' })
   if (error) throw error
 }
+
+// ── Secciones encendidas y apagadas ────────────────────────────────────────
+// Distinto de `visible`, aunque se parezcan: `visible` es por ROL (a un closer
+// no le enseñamos Finanzas), y esto es por NEGOCIO (este negocio no usa Diario,
+// así que no le sale a nadie). Se aplican los dos: una sección tiene que estar
+// encendida en el negocio Y permitida para tu rol.
+//
+// Solo se guardan las apagadas. Lo que no está en el objeto, está encendido:
+// así una sección nueva de HELM sale sola en todos los perfiles.
+
+// Las que no se pueden apagar. Sin Ajustes no hay forma de volver a entrar a la
+// configuración, y sin Secciones no hay forma de volver a encender nada.
+export const SECCIONES_FIJAS = ['ajustes', 'secciones']
+
+export const seccionEncendida = (sections, key) =>
+  SECCIONES_FIJAS.includes(key) || sections?.[key] !== false
+
+export async function loadSecciones(clientId) {
+  const { data, error } = await supabase
+    .from('helm_permissions').select('sections').eq('client_id', clientId).maybeSingle()
+  if (error) {
+    // Sin la columna (falta helm_secciones.sql) se trabaja con todo encendido,
+    // que es exactamente como se comportaba HELM antes de que esto existiera.
+    console.warn('[helm] loadSecciones', error.message)
+    return {}
+  }
+  return data?.sections || {}
+}
+
+export async function saveSecciones(clientId, sections) {
+  const { error } = await supabase.from('helm_permissions').upsert(
+    { client_id: clientId, sections, updated_at: new Date().toISOString() },
+    { onConflict: 'client_id' },
+  )
+  if (error) throw error
+}

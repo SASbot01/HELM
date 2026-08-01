@@ -2,7 +2,7 @@
 // Se monta en /admin. Gestiona un perfil (cliente) a la vez, con selector arriba.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Link2, Blocks, Settings, Plus, Rocket, CalendarDays, Menu, X, Package, UserCog, PhoneCall, MessagesSquare, GraduationCap, FolderOpen } from 'lucide-react'
+import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Link2, Blocks, Settings, Plus, Rocket, CalendarDays, Menu, X, Package, UserCog, PhoneCall, MessagesSquare, GraduationCap, FolderOpen, Layers } from 'lucide-react'
 import { listClients, createProfile, slugify, usersApi, brandOf } from './lib'
 import { Modal, Field, Input } from './ui'
 import Guia from './Guia'
@@ -22,9 +22,10 @@ import Chat from './views/Chat'
 import Enlaces from './views/Enlaces'
 import Archivos from './views/Archivos'
 import Plugins from './views/Plugins'
+import Secciones from './views/Secciones'
 import Ajustes from './views/Ajustes'
 import { PLUGINS, PLUGIN_MAP, loadEnabled, saveEnabled } from './plugins/registry'
-import { loadPermisos, puedeVer, accesoTotal, DEFAULT_VISIBLE } from './permisos'
+import { loadPermisos, puedeVer, accesoTotal, DEFAULT_VISIBLE, loadSecciones, saveSecciones, seccionEncendida } from './permisos'
 import { useHelmTheme } from './theme'
 import './theme.css'
 
@@ -45,6 +46,7 @@ const NAV = [
   { key: 'enlaces', label: 'Enlaces', icon: Link2, title: 'Enlaces', sub: 'Las URLs del negocio, a mano', C: Enlaces },
   { key: 'archivos', label: 'Archivos', icon: FolderOpen, title: 'Archivos', sub: 'Lo que subes, lo que escribe la IA y las Biblias', C: Archivos },
   { key: 'plugins', label: 'Plugins', icon: Blocks, title: 'Plugins', sub: 'Amplía tu HELM', C: Plugins },
+  { key: 'secciones', label: 'Secciones', icon: Layers, title: 'Secciones', sub: 'Qué partes del panel usa este negocio', C: Secciones },
   { key: 'ajustes', label: 'Ajustes', icon: Settings, title: 'Ajustes', sub: 'Integraciones y IA de este perfil', C: Ajustes },
 ]
 
@@ -148,6 +150,10 @@ export default function HelmApp() {
   const [clientId, setClientId] = useState(null)
   const [loadingClients, setLoadingClients] = useState(true)
   const [enabled, setEnabled] = useState({})
+  // Secciones apagadas en este negocio. {} = todo encendido, que es como se
+  // comportaba HELM antes de que esto existiera.
+  const [secciones, setSecciones] = useState({})
+  const [guardandoSecciones, setGuardandoSecciones] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)   // menú lateral en móvil
   const [theme] = useHelmTheme()                    // verde | blanco | negro
@@ -286,12 +292,27 @@ export default function HelmApp() {
   useEffect(() => {
     if (!clientId) return
     loadPermisos(clientId).then(({ visible: v }) => setVisible(v)).catch(() => {})
+    loadSecciones(clientId).then(setSecciones).catch(() => setSecciones({}))
   }, [clientId])
 
+  // Apagar una sección es del negocio; el permiso es del rol. Se aplican los
+  // dos, y lo apagado manda: si el negocio no usa Diario, no le sale a nadie
+  // por mucho permiso que tenga.
   const puede = useCallback(
-    (key) => puedeVer(visible, clientSession?.teamRole, key, clientSession?.level),
-    [visible, clientSession],
+    (key) => seccionEncendida(secciones, key)
+      && puedeVer(visible, clientSession?.teamRole, key, clientSession?.level),
+    [secciones, visible, clientSession],
   )
+
+  async function toggleSeccion(key) {
+    const siguiente = { ...secciones }
+    if (siguiente[key] === false) delete siguiente[key]   // encender = quitarla del objeto
+    else siguiente[key] = false
+    setSecciones(siguiente)                               // optimista: el menú responde ya
+    setGuardandoSecciones(true)
+    try { await saveSecciones(clientId, siguiente) } catch { setSecciones(secciones) }
+    setGuardandoSecciones(false)
+  }
 
   // Plugins activos y disponibles → entradas de menú extra, filtradas igual.
   const pluginNav = useMemo(
@@ -405,6 +426,10 @@ export default function HelmApp() {
               </div>
             ) : current.key === 'plugins' ? (
               <Plugins key={clientId} enabled={enabled} onToggle={togglePlugin} />
+            ) : current.key === 'secciones' ? (
+              <Secciones
+                key={clientId} secciones={secciones} catalogo={NAV}
+                onToggle={toggleSeccion} guardando={guardandoSecciones} />
             ) : (
               <View
                 key={clientId + view}
