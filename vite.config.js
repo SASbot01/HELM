@@ -57,6 +57,16 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     allowedHosts: ['.trycloudflare.com', 'dev.apex-closers.com', '.loca.lt', '.pinggy.link', '.serveo.net', '.ngrok-free.app', '.s4sf.net'],
+    // Vite 7 rechaza por defecto todo lo que venga de un origen que no sea
+    // localhost, y lo hace ANTES del proxy: el preflight de las landings moría
+    // aquí sin llegar nunca a api/formularios.js (que sí responde con CORS
+    // abierto). Las webs que mandan formularios al CRM van en esta lista.
+    cors: {
+      origin: [
+        'https://detrasdecamara.org', 'https://www.detrasdecamara.org',
+        'https://web.enformaconhugo.com', 'https://enformaconhugo.com',
+      ],
+    },
     proxy: {
       '/api': 'http://localhost:5182',
       '/sb': {
