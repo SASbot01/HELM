@@ -6,9 +6,21 @@ import { Send, Sparkles, Brain, Trash2, Loader2 } from 'lucide-react'
 import { chatApi } from '../lib'
 import { Empty } from '../ui'
 
+// Espejo de la lista de api/chat.js: es solo el autocompletado, el que manda es
+// el backend. Si cambia allí, cambia aquí.
 const COMMANDS = [
   { cmd: '/reel-guion', args: '<tema o ángulo>', desc: 'Guion completo: hooks, ganas/pierdes, bullets, autoridad y CTA' },
+  { cmd: '/programar-guion', args: '<fecha> <tema>', desc: 'Escribe el guion y lo agenda en el calendario de Contenido' },
   { cmd: '/reel-estudio', args: '<guion o transcripción>', desc: 'Estudia un reel ajeno y guarda su patrón' },
+  { cmd: '/estudiar', args: '<tema o URL>', desc: 'Busca en internet, lee las fuentes y aprende lo que sirva' },
+  { cmd: '/descripcion', args: '<bio de perfil | vídeo sobre…>', desc: 'Tu bio de redes o la descripción de un vídeo, con lo que sé de ti' },
+  { cmd: '/guion-setting', args: '<a quién escribes y desde dónde>', desc: 'Guion de DMs: apertura, cualificación, llamada y objeciones' },
+  { cmd: '/continuar-conversacion', args: '<pega la conversación>', desc: 'Lee el chat con el lead y escribe la siguiente respuesta' },
+  { cmd: '/memoria-setter', args: '<info>', desc: 'Entrena al setter: oferta, objeciones, tono y chats que funcionaron' },
+  { cmd: '/añadir', args: '<pieza y día>', desc: 'Añade piezas al calendario de Contenido' },
+  { cmd: '/reporteventa', args: '<persona y números>', desc: 'Reporte del día de un closer, en Diario' },
+  { cmd: '/reportesetting', args: '<persona y números>', desc: 'Reporte del día de un setter, en Diario' },
+  { cmd: '/creacionequipo', args: '<nombre, rol y condiciones>', desc: 'Da de alta a una persona en Equipo' },
   { cmd: '/conocimiento', args: '<info>', desc: 'Guarda información en la memoria del perfil' },
   { cmd: '/email', args: '<tema>', desc: 'Email de marketing con UTMs' },
   { cmd: '/memoria', args: '', desc: 'Lista lo que la IA sabe de este perfil' },
@@ -140,6 +152,13 @@ export default function Chat({ clientId }) {
                 Escribe <code>/help</code> para ver los comandos, o cuéntame de qué va el
                 contenido y empezamos. Todo lo que guardes con <code>/conocimiento</code> lo
                 usaré en cada guion.
+              </p>
+              {/* Lo que el chat HACE, no lo que escribe. Sin decirlo aquí, nadie
+                  descubre que puede pedirlo: no hay comando que lo delate. */}
+              <p>
+                Y puedo hacerte cosas en el panel: «<i>prográmame un reel sobre precios para
+                mañana</i>», «<i>apunta el reporte de hoy de Marta, setter: 40 conversaciones,
+                12 efectivas, 5 agendadas</i>» o «<i>crea a Juan en el equipo como closer</i>».
               </p>
               <div className="helm-chat-chips">
                 {COMMANDS.slice(0, 4).map(c => (

@@ -1,37 +1,191 @@
 /* ============================================================================
    HELM CORE — sistema de diseño limpio
    Concepto: la capa operativa. Palantir en potencia, Linear en limpieza.
-   Paleta OLED + acentos cyan/violeta. Clean, claro, simple. Sin locuras.
+   Clean, claro, simple. Sin locuras.
+
+   CINCO TEMAS, un solo juego de variables:
+     verde  (por defecto)  — OLED con acento esmeralda
+     azul                  — OLED con acento azul eléctrico
+     rojo                  — OLED con acento carmesí
+     negro                 — monocromo puro: el acento es blanco/gris
+     blanco                — fondo claro, acento verde oscurecido para contraste
+
+   Los cuatro oscuros siguen la misma escalera de luminosidad (bg → bg-1 →
+   panel → panel-2 → hover): lo único que cambia es el tinte. Así un tema nuevo
+   se hace copiando el bloque y girando el matiz, sin retocar ni una regla.
+
+   Regla de oro: ninguna regla de más abajo escribe un color a pelo. Todo pasa
+   por estas variables, así añadir un tema es rellenar un bloque y nada más.
+     --on-accent  color del texto ENCIMA del degradado de acento
+     --scrim      terna RGB del velo de los overlays (se usa con rgba(...))
+     --glow-1/2   los dos halos del fondo (transparentes en los temas planos)
+     --shadow     elevación de tarjetas y capas. En los temas oscuros la
+                  elevación se ve por luminosidad (el panel es más claro que el
+                  fondo) y sobra: por eso vale `none`. En el claro, sin sombra
+                  las tarjetas blancas sobre fondo blanco desaparecían.
    ============================================================================ */
 @import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
-.helm {
-  --bg:        #06060B;
-  --bg-1:      #0B0B12;
-  --panel:     #0E0F16;
-  --panel-2:   #14151F;
-  --hover:     #1A1B26;
+/* Las variables se declaran también en .helm-swatch (la miniatura del selector
+   de tema en Ajustes), que necesita la paleta de OTRO tema sin heredar el
+   layout de .helm. Por eso paleta y layout van en bloques separados. */
+.helm, .helm-swatch {
+  --bg:        #05100A;
+  --bg-1:      #081711;
+  --panel:     #0C1B13;
+  --panel-2:   #112619;
+  --hover:     #16311F;
   --border:    rgba(255,255,255,0.07);
-  --border-2:  rgba(255,255,255,0.12);
-  --text:      #F4F5FA;
-  --text-dim:  #9AA0AE;
-  --text-mut:  #5C616F;
-  --cyan:      #00D4FF;
-  --violet:    #7C3AED;
+  --border-2:  rgba(255,255,255,0.13);
+  --text:      #F0F5F1;
+  --text-dim:  #9DB2A4;
+  --text-mut:  #607567;
+  /* Acento principal ahora es verde esmeralda. Se mantienen los nombres
+     --cyan/--violet (usados en decenas de sitios) pero apuntando a verdes,
+     así todos los degradados "cyan→violet" pasan a verde de golpe. */
+  --cyan:      #2FCB6A;
+  --violet:    #11A257;
   --pink:      #EC4899;
-  --green:     #34D399;
+  --green:     #34D07A;
   --red:       #F87171;
   --amber:     #FBBF24;
-  --radius:    14px;
-  --radius-sm: 9px;
+  --on-accent: #06060B;
+  --scrim:     3,3,7;
+  --glow-1:    rgba(34,197,94,0.30);
+  --glow-2:    rgba(15,120,70,0.22);
+  --shadow:    none;
+  --radius:    18px;
+  --radius-sm: 12px;
+}
 
+.helm {
   font-family: 'Inter Tight', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  background: var(--bg);
+  background:
+    radial-gradient(1100px 680px at 100% -8%, var(--glow-1), transparent 58%),
+    radial-gradient(820px 560px at -8% 108%, var(--glow-2), transparent 55%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--text);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
 .helm *, .helm *::before, .helm *::after { box-sizing: border-box; }
+
+/* ── Tema AZUL ──────────────────────────────────────────────────────────────
+   El mismo OLED que el verde con el matiz girado al azul. El acento va claro y
+   el texto de encima oscuro, igual que en verde: un azul oscuro con letra
+   blanca queda apagado en los botones pequeños. */
+.helm[data-theme="azul"], .helm-swatch[data-theme="azul"] {
+  --bg:        #050A16;
+  --bg-1:      #07101F;
+  --panel:     #0A172B;
+  --panel-2:   #0F2039;
+  --hover:     #162B4B;
+  --border:    rgba(255,255,255,0.08);
+  --border-2:  rgba(255,255,255,0.15);
+  --text:      #EEF3FA;
+  --text-dim:  #9CB0CA;
+  --text-mut:  #5F7594;
+  --cyan:      #4DA6FF;
+  --violet:    #2B74E8;
+  --green:     #34D07A;
+  --red:       #F87171;
+  --amber:     #FBBF24;
+  --on-accent: #04101F;
+  --scrim:     3,6,14;
+  --glow-1:    rgba(59,130,246,0.30);
+  --glow-2:    rgba(29,78,216,0.22);
+}
+
+/* ── Tema ROJO ──────────────────────────────────────────────────────────────
+   Base casi neutra con un punto cálido: si el fondo se tiñe de rojo, el acento
+   deja de destacar. Y ojo con --red, que aquí NO es decoración: es la señal de
+   error y de saldo negativo. Se deja más claro que el acento a propósito, para
+   que un aviso no se confunda con un botón primario. */
+.helm[data-theme="rojo"], .helm-swatch[data-theme="rojo"] {
+  --bg:        #0E0709;
+  --bg-1:      #160A0D;
+  --panel:     #1C0E12;
+  --panel-2:   #27141A;
+  --hover:     #341C23;
+  --border:    rgba(255,255,255,0.08);
+  --border-2:  rgba(255,255,255,0.16);
+  --text:      #F8EFF1;
+  --text-dim:  #C3A9AE;
+  --text-mut:  #8B7076;
+  --cyan:      #FF6B7A;
+  --violet:    #E23B54;
+  --green:     #34D07A;
+  --red:       #FF9B9B;
+  --amber:     #FBBF24;
+  --on-accent: #16060A;
+  --scrim:     14,7,9;
+  --glow-1:    rgba(239,68,68,0.28);
+  --glow-2:    rgba(190,18,60,0.20);
+}
+
+/* ── Tema BLANCO ────────────────────────────────────────────────────────────
+   El claro necesita lo contrario que los oscuros. Allí la tarjeta se ve porque
+   es MÁS clara que el fondo; aquí la tarjeta es blanca, así que si el fondo
+   también lo es no hay tarjeta que valga — que es lo que pasaba antes: todo
+   plano, los bordes al 10 % casi invisibles y los campos de formulario
+   indistinguibles del papel.
+
+   La solución es la de siempre en interfaces claras: el fondo baja a un gris
+   templado, el panel se queda blanco puro, y se añade una sombra suave. Los
+   campos usan --bg-1, que ahora sí es más oscuro que el panel y se hunden.
+   El acento verde va oscurecido: el #2FCB6A del tema OLED sobre blanco no
+   llega al contraste mínimo. */
+.helm[data-theme="blanco"], .helm-swatch[data-theme="blanco"] {
+  --bg:        #EFF2F0;
+  --bg-1:      #E7ECE9;
+  --panel:     #FFFFFF;
+  --panel-2:   #F4F7F5;
+  --hover:     #E3E9E5;
+  --border:    rgba(12,27,19,0.13);
+  --border-2:  rgba(12,27,19,0.22);
+  --text:      #0B1710;
+  --text-dim:  #45564C;
+  --text-mut:  #69796F;
+  --cyan:      #12A35A;
+  --violet:    #0A7C42;
+  --green:     #15803D;
+  --red:       #DC2626;
+  --amber:     #B45309;
+  --on-accent: #FFFFFF;
+  --scrim:     12,27,19;
+  /* Casi imperceptibles: en claro, un halo de color se lee como una mancha. */
+  --glow-1:    rgba(34,197,94,0.07);
+  --glow-2:    rgba(15,120,70,0.05);
+  --shadow:    0 1px 2px rgba(12,27,19,0.05), 0 10px 26px -14px rgba(12,27,19,0.22);
+}
+
+/* ── Tema NEGRO ─────────────────────────────────────────────────────────────
+   Monocromo de verdad: el acento pasa a blanco→gris, así los degradados
+   "cyan→violet" repartidos por toda la app se vuelven blanco y negro sin
+   tocar ni una regla. Rojo, ámbar y verde se quedan en color a propósito:
+   son señal (saldo negativo, error, etapa ganada), no decoración. */
+.helm[data-theme="negro"], .helm-swatch[data-theme="negro"] {
+  --bg:        #000000;
+  --bg-1:      #070707;
+  --panel:     #0B0B0B;
+  --panel-2:   #141414;
+  --hover:     #1D1D1D;
+  --border:    rgba(255,255,255,0.09);
+  --border-2:  rgba(255,255,255,0.18);
+  --text:      #FAFAFA;
+  --text-dim:  #A6A6A6;
+  --text-mut:  #6E6E6E;
+  --cyan:      #FFFFFF;
+  --violet:    #9A9A9A;
+  --green:     #4ADE80;
+  --red:       #F87171;
+  --amber:     #FBBF24;
+  --on-accent: #000000;
+  --scrim:     0,0,0;
+  --glow-1:    transparent;
+  --glow-2:    transparent;
+}
 
 /* Layout ------------------------------------------------------------------- */
 .helm-shell { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
@@ -40,7 +194,16 @@
   border-right: 1px solid var(--border);
   display: flex; flex-direction: column; padding: 20px 14px; gap: 6px;
   position: sticky; top: 0; height: 100vh;
+  /* Con muchas secciones el menú supera el alto de pantalla: que haga scroll
+     propio en vez de cortar las de abajo o el pie (usuario / cerrar sesión). */
+  overflow-y: auto; overscroll-behavior: contain;
 }
+/* Scrollbar fina y discreta para el menú. */
+.helm-side::-webkit-scrollbar { width: 6px; }
+.helm-side::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 20px; }
+.helm-side { scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
+/* Que los hijos no se compriman: así el menú scrollea en vez de aplastar los ítems. */
+.helm-side > * { flex-shrink: 0; }
 .helm-brand { display: flex; align-items: center; gap: 11px; padding: 4px 8px 20px; }
 .helm-brand img { width: 30px; height: 30px; }
 .helm-brand b { font-size: 18px; font-weight: 700; letter-spacing: 2px; }
@@ -54,18 +217,27 @@
 }
 .helm-nav:hover { background: var(--hover); color: var(--text); }
 .helm-nav.active {
-  background: linear-gradient(90deg, rgba(0,212,255,0.12), rgba(124,58,237,0.08));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cyan) 12%, transparent), color-mix(in srgb, var(--violet) 8%, transparent));
   border-color: var(--border-2); color: var(--text);
 }
-.helm-nav.active svg { color: var(--cyan); }
-.helm-nav svg { width: 17px; height: 17px; flex-shrink: 0; }
+/* Iconos del menú en círculo, estilo dashboard de referencia. */
+.helm-nav svg {
+  width: 30px; height: 30px; padding: 7px; flex-shrink: 0; border-radius: 50%;
+  background: var(--panel-2); border: 1px solid var(--border); color: var(--text-dim);
+  transition: all .14s ease;
+}
+.helm-nav:hover svg { color: var(--text); }
+.helm-nav.active svg {
+  background: linear-gradient(135deg, var(--cyan), var(--violet));
+  border-color: transparent; color: var(--on-accent);
+}
 
 .helm-side-foot { margin-top: auto; border-top: 1px solid var(--border); padding-top: 14px; }
 .helm-user { display: flex; align-items: center; gap: 10px; padding: 6px 8px; }
 .helm-avatar {
   width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
   background: linear-gradient(135deg, var(--cyan), var(--violet));
-  display: grid; place-items: center; font-weight: 700; font-size: 13px; color: #06060B;
+  display: grid; place-items: center; font-weight: 700; font-size: 13px; color: var(--on-accent);
 }
 .helm-user small { color: var(--text-mut); font-size: 11px; }
 .helm-logout { font-size: 12px; color: var(--text-mut); cursor: pointer; padding: 8px; }
@@ -76,7 +248,13 @@
 .helm-top {
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
   padding: 18px 28px; border-bottom: 1px solid var(--border);
-  position: sticky; top: 0; background: rgba(6,6,11,0.82); backdrop-filter: blur(12px); z-index: 5;
+  /* Translúcida sobre el fondo DEL TEMA. Antes era un verde oscuro escrito a
+     mano (rgba(6,17,11,.78)): se quedó del tema único y no cambiaba con nada,
+     así que en azul, rojo y negro teñía la cabecera de verde, y en el tema
+     claro plantaba una banda oscura encima del contenido. */
+  position: sticky; top: 0; z-index: 5;
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  backdrop-filter: blur(12px);
 }
 .helm-top h1 { font-size: 20px; font-weight: 600; margin: 0; }
 .helm-top p { color: var(--text-mut); font-size: 13px; margin: 2px 0 0; }
@@ -102,21 +280,21 @@
 .helm-checkline input { width: 16px; height: 16px; accent-color: var(--cyan); cursor: pointer; }
 .helm-formerror {
   padding: 10px 12px; border-radius: var(--radius-sm); font-size: 13px; margin: 4px 0 14px;
-  background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.4); color: #FCA5A5;
+  background: color-mix(in srgb, var(--red) 12%, transparent); border: 1px solid color-mix(in srgb, var(--red) 40%, transparent); color: var(--red);
 }
 .helm-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
 
 /* Cards / KPIs ------------------------------------------------------------- */
 .helm-grid { display: grid; gap: 14px; }
 .helm-kpis { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
-.helm-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+.helm-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
 .helm-kpi .lbl { color: var(--text-mut); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
 .helm-kpi .val { font-size: 28px; font-weight: 700; margin-top: 8px; letter-spacing: -0.5px; }
 .helm-kpi .sub { color: var(--text-dim); font-size: 12px; margin-top: 4px; }
 .helm-kpi .val.accent { background: linear-gradient(90deg, var(--cyan), var(--violet)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 
 /* Tables ------------------------------------------------------------------- */
-.helm-panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.helm-panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
 .helm-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--border); }
 .helm-panel-head h2 { font-size: 15px; font-weight: 600; margin: 0; }
 .helm-tablewrap { overflow-x: auto; }
@@ -130,14 +308,17 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-table tr:last-child td { border-bottom: none; }
 .helm-table tbody tr:hover { background: var(--hover); }
 .helm-num { font-family: 'JetBrains Mono', monospace; }
+/* Fila anulada (venta cancelada): se ve, pero se lee como "esto no cuenta". */
+.helm-table tr.helm-row-void td { color: var(--text-mut); text-decoration: line-through; }
+.helm-table tr.helm-row-void td:last-child { text-decoration: none; }
 .helm-empty { padding: 44px; text-align: center; color: var(--text-mut); font-size: 14px; }
 
 /* Chips / badges ----------------------------------------------------------- */
 .helm-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 500; border: 1px solid var(--border-2); color: var(--text-dim); }
-.helm-chip.green { color: var(--green); border-color: rgba(52,211,153,0.3); background: rgba(52,211,153,0.08); }
-.helm-chip.cyan  { color: var(--cyan);  border-color: rgba(0,212,255,0.3);  background: rgba(0,212,255,0.08); }
-.helm-chip.amber { color: var(--amber); border-color: rgba(251,191,36,0.3); background: rgba(251,191,36,0.08); }
-.helm-chip.red   { color: var(--red);   border-color: rgba(248,113,113,0.3); background: rgba(248,113,113,0.08); }
+.helm-chip.green { color: var(--green); border-color: color-mix(in srgb, var(--green) 30%, transparent); background: color-mix(in srgb, var(--green) 8%, transparent); }
+.helm-chip.cyan  { color: var(--cyan);  border-color: color-mix(in srgb, var(--cyan) 30%, transparent);  background: color-mix(in srgb, var(--cyan) 8%, transparent); }
+.helm-chip.amber { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 30%, transparent); background: color-mix(in srgb, var(--amber) 8%, transparent); }
+.helm-chip.red   { color: var(--red);   border-color: color-mix(in srgb, var(--red) 30%, transparent); background: color-mix(in srgb, var(--red) 8%, transparent); }
 
 /* Buttons / inputs --------------------------------------------------------- */
 .helm-btn {
@@ -146,7 +327,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   background: var(--panel-2); color: var(--text); transition: all .14s ease; white-space: nowrap;
 }
 .helm-btn:hover { background: var(--hover); border-color: var(--border-2); }
-.helm-btn.primary { background: linear-gradient(90deg, var(--cyan), var(--violet)); color: #06060B; border: none; }
+.helm-btn.primary { background: linear-gradient(90deg, var(--cyan), var(--violet)); color: var(--on-accent); border: none; }
 .helm-btn.primary:hover { opacity: .9; }
 .helm-btn svg { width: 15px; height: 15px; }
 
@@ -155,12 +336,42 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   border-radius: var(--radius-sm); padding: 10px 12px; font-size: 14px; font-family: inherit;
 }
 .helm-input:focus { outline: none; border-color: var(--cyan); }
+.helm-input::placeholder { color: var(--text-mut); }
+.helm-input:disabled { opacity: .55; cursor: not-allowed; }
 .helm-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .helm-field label { font-size: 12px; color: var(--text-dim); }
+/* Campo con error: borde rojo y motivo debajo. La ayuda gris ocupa el mismo
+   sitio cuando no hay error, así el formulario no da saltos al validarse. */
+.helm-field.invalid .helm-input { border-color: color-mix(in srgb, var(--red) 65%, transparent); }
+.helm-field.invalid .helm-input:focus { border-color: var(--red); }
+.helm-field-err  { font-size: 11.5px; color: var(--red); }
+.helm-field-hint { font-size: 11.5px; color: var(--text-mut); }
+.helm-formnote {
+  padding: 10px 12px; border-radius: var(--radius-sm); font-size: 13px; margin: 4px 0 14px;
+  border: 1px solid transparent;
+}
+.helm-formnote.error { background: color-mix(in srgb, var(--red) 12%, transparent); border-color: color-mix(in srgb, var(--red) 40%, transparent); color: var(--red); }
+.helm-formnote.warn  { background: color-mix(in srgb, var(--amber) 12%, transparent); border-color: color-mix(in srgb, var(--amber) 40%, transparent); color: var(--amber); }
+/* Botón compacto: accesos directos de la ficha (llamar, WhatsApp, email…). */
+.helm-btn.sm { padding: 6px 10px; font-size: 12px; gap: 5px; text-decoration: none; }
+.helm-btn.sm svg { width: 13px; height: 13px; }
+.helm-btn:disabled { opacity: .5; cursor: not-allowed; }
+.helm-btn:disabled:hover { background: var(--panel-2); }
+.helm-btn.primary:disabled:hover { opacity: .5; }
+.helm-drawer-links { display: flex; flex-wrap: wrap; gap: 7px; margin: 4px 0 18px; }
+/* Etiquetas del contacto, también en la tarjeta del kanban. */
+.helm-tag {
+  display: inline-block; padding: 2px 7px; border-radius: 6px; font-size: 10.5px;
+  background: var(--panel-2); border: 1px solid var(--border); color: var(--text-dim);
+}
+.helm-kcard-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
 
 /* Modal -------------------------------------------------------------------- */
-.helm-overlay { position: fixed; inset: 0; background: rgba(3,3,7,0.7); backdrop-filter: blur(4px); display: grid; place-items: center; z-index: 50; padding: 20px; }
-.helm-modal { background: var(--panel); border: 1px solid var(--border-2); border-radius: var(--radius); width: 100%; max-width: 460px; max-height: 88vh; overflow-y: auto; }
+.helm-overlay { position: fixed; inset: 0; background: rgba(var(--scrim), 0.7); backdrop-filter: blur(4px); display: grid; place-items: center; z-index: 50; padding: 20px; }
+.helm-modal { background: var(--panel); border: 1px solid var(--border-2); border-radius: var(--radius); width: 100%; max-width: 460px; max-height: 88vh; overflow-y: auto; box-shadow: var(--shadow); }
+/* Formularios con muchos campos (alta de contacto, de venta): a dos columnas
+   necesitan más ancho o cada columna queda inservible. */
+.helm-modal.wide { max-width: 680px; }
 .helm-modal-head { display: flex; justify-content: space-between; align-items: center; padding: 18px 20px; border-bottom: 1px solid var(--border); }
 .helm-modal-head h3 { margin: 0; font-size: 16px; font-weight: 600; }
 .helm-modal-body { padding: 20px; }
@@ -171,7 +382,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-plugins { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
 .helm-plugin { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; display: flex; flex-direction: column; gap: 12px; transition: border-color .14s; }
 .helm-plugin:hover { border-color: var(--border-2); }
-.helm-plugin-ico { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: linear-gradient(135deg, rgba(0,212,255,0.15), rgba(124,58,237,0.15)); color: var(--cyan); }
+.helm-plugin-ico { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: linear-gradient(135deg, color-mix(in srgb, var(--cyan) 15%, transparent), color-mix(in srgb, var(--violet) 15%, transparent)); color: var(--cyan); }
 .helm-plugin h4 { margin: 0; font-size: 15px; font-weight: 600; }
 .helm-plugin p { margin: 0; color: var(--text-dim); font-size: 12.5px; line-height: 1.5; flex: 1; }
 .helm-toggle { display: flex; align-items: center; justify-content: space-between; padding-top: 4px; }
@@ -200,7 +411,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 /* Kanban ------------------------------------------------------------------- */
 .helm-kanban { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(240px, 1fr); gap: 14px; overflow-x: auto; padding-bottom: 8px; align-items: start; }
 .helm-col { background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius); min-height: 120px; transition: border-color .14s, background .14s; }
-.helm-col.over { border-color: var(--cyan); background: rgba(0,212,255,0.04); }
+.helm-col.over { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 4%, transparent); }
 .helm-col-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
 .helm-col-head b { font-weight: 600; }
 .helm-col-count { background: var(--panel-2); border: 1px solid var(--border); border-radius: 20px; padding: 1px 8px; font-size: 11px; color: var(--text-dim); }
@@ -255,7 +466,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-task { display: flex; align-items: center; gap: 12px; padding: 13px 18px; border-bottom: 1px solid var(--border); }
 .helm-task:last-child { border-bottom: none; }
 .helm-task.done .helm-task-title { text-decoration: line-through; color: var(--text-mut); }
-.helm-check { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--border-2); background: transparent; cursor: pointer; display: grid; place-items: center; color: #06060B; flex-shrink: 0; transition: all .14s; }
+.helm-check { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--border-2); background: transparent; cursor: pointer; display: grid; place-items: center; color: var(--on-accent); flex-shrink: 0; transition: all .14s; }
 .helm-check:hover { border-color: var(--cyan); }
 .helm-check.on { background: var(--green); border-color: var(--green); }
 .helm-task-main { flex: 1; min-width: 0; }
@@ -266,11 +477,64 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 
 /* Notes -------------------------------------------------------------------- */
 
+/* Piezas de la navegación móvil (ocultas en escritorio) */
+.helm-burger, .helm-side-close { display: none; }
+.helm-top-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.helm-side-backdrop { display: none; }
+
 @media (max-width: 820px) {
+  /* Una sola columna: el contenido ocupa todo el ancho. */
   .helm-shell { grid-template-columns: 1fr; }
-  .helm-side { display: none; }
+
+  /* La barra lateral pasa a ser un cajón deslizante desde la izquierda. */
+  .helm-side {
+    position: fixed; top: 0; left: 0; z-index: 60;
+    width: 82vw; max-width: 300px; height: 100dvh;
+    transform: translateX(-100%); transition: transform .22s ease;
+    padding-top: max(20px, env(safe-area-inset-top));
+    padding-left: max(14px, env(safe-area-inset-left));
+  }
+  .helm-side.open { transform: translateX(0); box-shadow: 0 0 40px rgba(0,0,0,0.5); }
+  .helm-side-backdrop { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(var(--scrim), 0.6); backdrop-filter: blur(2px); }
+  .helm-side-close {
+    display: grid; place-items: center; margin-left: auto; width: 34px; height: 34px;
+    border-radius: 9px; border: 1px solid var(--border-2); background: var(--panel-2); color: var(--text-dim); cursor: pointer;
+  }
+
+  /* Botón hamburguesa en la cabecera. */
+  .helm-burger {
+    display: grid; place-items: center; width: 38px; height: 38px; flex-shrink: 0;
+    border-radius: var(--radius-sm); border: 1px solid var(--border-2); background: var(--panel-2); color: var(--text); cursor: pointer;
+  }
+
+  /* Cabecera y cuerpo con safe-area (notch / Dynamic Island / home indicator). */
+  .helm-top { padding: 14px 16px; padding-top: max(14px, env(safe-area-inset-top)); gap: 10px; }
+  .helm-top h1 { font-size: 17px; }
+  .helm-top p { display: none; }
+  .helm-body { padding: 16px 16px calc(48px + env(safe-area-inset-bottom)); }
+
+  /* Formularios y rejillas a una columna. */
   .helm-form-2 { grid-template-columns: 1fr; }
-  .helm-drawer { max-width: 100%; }
+  .helm-onb-cards, .helm-plugins { grid-template-columns: 1fr; }
+  .helm-crm-bar, .helm-cal-head { flex-direction: column; align-items: stretch; }
+  .helm-crm-actions { justify-content: space-between; }
+
+  /* Overlays y cajones a pantalla completa, con scroll y safe-area. */
+  .helm-drawer { max-width: 100%; height: 100dvh; }
+  .helm-drawer-body { padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
+  .helm-overlay { padding: 12px; align-items: flex-start; padding-top: max(24px, env(safe-area-inset-top)); }
+  .helm-modal { max-height: 88dvh; }
+
+  /* El chat ocupa el alto disponible real del móvil. */
+  .helm-chat { height: calc(100dvh - 150px); }
+
+  /* Calendario más compacto y con scroll horizontal si hace falta. */
+  .helm-cal-cell { min-height: 84px; }
+
+  /* Onboarding y Biblia sin márgenes laterales grandes. */
+  .helm-onb-form, .helm-biblia { max-width: 100%; }
+  .helm-biblia-doc { padding: 20px 18px; }
+  .helm-onb-submit, .helm-onb-banner, .helm-onb-biblia-cta { flex-direction: column; align-items: stretch; text-align: left; }
 }
 
 /* Chat IA ------------------------------------------------------------------ */
@@ -290,7 +554,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-chat-msg.mine { margin-left: auto; justify-content: flex-end; }
 .helm-chat-avatar {
   flex: 0 0 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
-  background: linear-gradient(135deg, var(--cyan), var(--violet)); color: #06060B; margin-top: 2px;
+  background: linear-gradient(135deg, var(--cyan), var(--violet)); color: var(--on-accent); margin-top: 2px;
 }
 .helm-chat-bubble {
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
@@ -374,9 +638,9 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
   border-radius: 999px; padding: 2px 8px; border: 1px solid var(--border-2); color: var(--text-mut);
 }
-.helm-chat-kind.reel { color: var(--violet); border-color: rgba(124,58,237,.4); }
-.helm-chat-kind.analisis { color: var(--cyan); border-color: rgba(0,212,255,.35); }
-.helm-chat-kind.nota { color: var(--green); border-color: rgba(52,211,153,.35); }
+.helm-chat-kind.reel { color: var(--violet); border-color: color-mix(in srgb, var(--violet) 40%, transparent); }
+.helm-chat-kind.analisis { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 35%, transparent); }
+.helm-chat-kind.nota { color: var(--green); border-color: color-mix(in srgb, var(--green) 35%, transparent); }
 
 @media (max-width: 900px) {
   .helm-chat-memory { display: none; }
@@ -387,6 +651,30 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-settings { display: grid; gap: 18px; padding: 18px; max-width: 860px; }
 .helm-settings-body { padding: 16px 18px; display: grid; gap: 14px; }
 .helm-settings-lead { margin: 0; font-size: 13px; line-height: 1.7; color: var(--text-dim); }
+
+/* Selector de tema (Ajustes → Apariencia) ---------------------------------- */
+.helm-theme-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.helm-theme-opt {
+  display: flex; align-items: center; gap: 12px; text-align: left; cursor: pointer;
+  padding: 12px; border-radius: var(--radius-sm); font-family: inherit;
+  background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+  transition: border-color .14s ease, background .14s ease;
+}
+.helm-theme-opt:hover { background: var(--hover); border-color: var(--border-2); }
+.helm-theme-opt.on { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 8%, transparent); }
+.helm-theme-meta { display: grid; gap: 3px; min-width: 0; }
+.helm-theme-meta b { display: flex; align-items: center; gap: 5px; font-size: 13.5px; font-weight: 600; }
+.helm-theme-meta small { font-size: 11.5px; color: var(--text-mut); line-height: 1.45; }
+/* La miniatura se pinta con las variables del tema que representa: una barra
+   lateral, una cabecera y una tarjeta con su acento. */
+.helm-swatch {
+  display: flex; width: 62px; height: 44px; flex-shrink: 0; overflow: hidden;
+  border-radius: 8px; border: 1px solid var(--border-2); background: var(--bg);
+}
+.helm-swatch .s-side { width: 16px; background: var(--bg-1); border-right: 1px solid var(--border); }
+.helm-swatch .s-main { flex: 1; padding: 5px; display: grid; gap: 4px; align-content: start; }
+.helm-swatch .s-bar { height: 4px; border-radius: 2px; background: var(--text-mut); }
+.helm-swatch .s-card { height: 15px; border-radius: 3px; background: linear-gradient(90deg, var(--cyan), var(--violet)); }
 .helm-settings-note { color: var(--text-mut); font-size: 11.5px; line-height: 1.6; }
 
 .helm-settings-row {
@@ -418,13 +706,13 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 
 .helm-settings-warn {
   display: flex; align-items: flex-start; gap: 9px; font-size: 12.5px; line-height: 1.6;
-  background: rgba(251,191,36,.07); border: 1px solid rgba(251,191,36,.28);
+  background: color-mix(in srgb, var(--amber) 7%, transparent); border: 1px solid color-mix(in srgb, var(--amber) 28%, transparent);
   color: var(--amber); border-radius: var(--radius-sm); padding: 11px 13px;
 }
 .helm-settings-warn svg { flex: 0 0 auto; margin-top: 2px; }
 .helm-settings-ok {
   font-size: 12.5px; color: var(--green);
-  background: rgba(52,211,153,.07); border: 1px solid rgba(52,211,153,.25);
+  background: color-mix(in srgb, var(--green) 7%, transparent); border: 1px solid color-mix(in srgb, var(--green) 25%, transparent);
   border-radius: var(--radius-sm); padding: 10px 13px;
 }
 
@@ -433,9 +721,9 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   border-radius: 999px; padding: 3px 10px;
   border: 1px solid var(--border-2); color: var(--text-mut); background: var(--bg-1);
 }
-.helm-badge.green { color: var(--green); border-color: rgba(52,211,153,.35); }
-.helm-badge.amber { color: var(--amber); border-color: rgba(251,191,36,.35); }
-.helm-badge.red   { color: var(--red);   border-color: rgba(248,113,113,.35); }
+.helm-badge.green { color: var(--green); border-color: color-mix(in srgb, var(--green) 35%, transparent); }
+.helm-badge.amber { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 35%, transparent); }
+.helm-badge.red   { color: var(--red);   border-color: color-mix(in srgb, var(--red) 35%, transparent); }
 
 /* Filtros del informe ------------------------------------------------------ */
 .helm-filters {
@@ -450,7 +738,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-chip:hover { background: var(--hover); color: var(--text); }
 .helm-chip.active {
   background: linear-gradient(90deg, var(--cyan), var(--violet));
-  border-color: transparent; color: #06060B; font-weight: 500;
+  border-color: transparent; color: var(--on-accent); font-weight: 500;
 }
 
 /* Barra de cuota en tablas */
@@ -465,10 +753,10 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-table tr.active { background: var(--hover); }
 
 /* Tipos de movimiento en Finanzas */
-.helm-badge.tipo-ingreso  { color: var(--green);  border-color: rgba(52,211,153,.35); }
-.helm-badge.tipo-fijo     { color: var(--cyan);   border-color: rgba(0,212,255,.3); }
-.helm-badge.tipo-puntual  { color: var(--amber);  border-color: rgba(251,191,36,.3); }
-.helm-badge.tipo-comision { color: var(--violet); border-color: rgba(124,58,237,.45); }
+.helm-badge.tipo-ingreso  { color: var(--green);  border-color: color-mix(in srgb, var(--green) 35%, transparent); }
+.helm-badge.tipo-fijo     { color: var(--cyan);   border-color: color-mix(in srgb, var(--cyan) 30%, transparent); }
+.helm-badge.tipo-puntual  { color: var(--amber);  border-color: color-mix(in srgb, var(--amber) 30%, transparent); }
+.helm-badge.tipo-comision { color: var(--violet); border-color: color-mix(in srgb, var(--violet) 45%, transparent); }
 
 /* Enlaces ------------------------------------------------------------------ */
 .helm-links { padding: 6px 0 12px; }
@@ -495,3 +783,821 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 }
 .helm-link-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 .helm-link-actions .helm-btn { padding: 6px 9px; }
+
+/* ============================================================================
+   ONBOARDING — hub, banner del inicio y formulario que alimenta a la IA
+   ============================================================================ */
+
+/* Banner del inicio (Informe) --------------------------------------------- */
+.helm-onb-banner {
+  display: flex; align-items: center; gap: 16px; padding: 16px 18px; cursor: pointer;
+  border: 1px solid var(--border-2); border-radius: var(--radius);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cyan) 10%, transparent), color-mix(in srgb, var(--violet) 8%, transparent));
+  transition: border-color .14s, transform .14s;
+}
+.helm-onb-banner:hover { border-color: var(--cyan); transform: translateY(-1px); }
+.helm-onb-banner-ico {
+  width: 42px; height: 42px; border-radius: 11px; flex-shrink: 0; display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--cyan), var(--violet)); color: var(--on-accent);
+}
+.helm-onb-banner-x {
+  flex-shrink: 0; display: grid; place-items: center; width: 28px; height: 28px;
+  border: none; background: transparent; color: var(--text-mut); cursor: pointer; border-radius: 8px;
+}
+.helm-onb-banner-x:hover { background: var(--hover); color: var(--text); }
+.helm-onb-banner-txt { flex: 1; min-width: 0; }
+.helm-onb-banner-txt b { display: block; font-size: 14.5px; font-weight: 600; }
+.helm-onb-banner-txt span { display: block; margin-top: 2px; color: var(--text-dim); font-size: 12.5px; line-height: 1.45; }
+
+/* Hub --------------------------------------------------------------------- */
+.helm-onb-hub { display: flex; flex-direction: column; gap: 18px; }
+.helm-onb-toast {
+  display: flex; align-items: flex-start; gap: 11px; padding: 14px 16px; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--green) 8%, transparent); border: 1px solid color-mix(in srgb, var(--green) 30%, transparent); color: var(--text);
+  font-size: 13px; line-height: 1.5;
+}
+.helm-onb-toast svg { color: var(--green); flex-shrink: 0; margin-top: 1px; }
+.helm-onb-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.helm-onb-card {
+  display: flex; flex-direction: column; gap: 9px; padding: 20px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); transition: border-color .14s;
+}
+.helm-onb-card:not(.soon):hover { border-color: var(--border-2); }
+.helm-onb-card.soon { opacity: .6; }
+.helm-onb-card-ico {
+  width: 44px; height: 44px; border-radius: 11px; display: grid; place-items: center;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--cyan) 15%, transparent), color-mix(in srgb, var(--violet) 15%, transparent)); color: var(--cyan);
+}
+.helm-onb-card-tag { font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-mut); margin-top: 4px; }
+.helm-onb-card h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.helm-onb-card p { margin: 0; color: var(--text-dim); font-size: 12.5px; line-height: 1.5; flex: 1; }
+.helm-onb-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; }
+.helm-onb-card-foot .helm-btn { margin-left: auto; }
+.helm-onb-soon { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-mut); }
+
+/* Formulario -------------------------------------------------------------- */
+.helm-onb-form { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.helm-onb-formhead {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  position: sticky; top: 0; z-index: 4; padding: 4px 0 10px;
+  background: linear-gradient(180deg, var(--bg) 70%, transparent);
+}
+.helm-onb-save { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-mut); }
+.helm-onb-save svg { color: var(--green); }
+.helm-onb-progress { display: flex; align-items: center; gap: 12px; }
+.helm-onb-progress-bar { flex: 1; height: 7px; border-radius: 20px; background: var(--panel-2); overflow: hidden; }
+.helm-onb-progress-bar span { display: block; height: 100%; border-radius: 20px; background: linear-gradient(90deg, var(--cyan), var(--violet)); transition: width .3s ease; }
+.helm-onb-progress-txt { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+.helm-onb-intro-card {
+  display: flex; gap: 12px; padding: 16px 18px; border-radius: var(--radius);
+  background: var(--panel); border: 1px solid var(--border);
+}
+.helm-onb-intro-card svg { color: var(--cyan); flex-shrink: 0; }
+.helm-onb-intro-card p { margin: 0; color: var(--text-dim); font-size: 13px; line-height: 1.55; }
+
+.helm-onb-section { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; }
+.helm-onb-section-head { margin-bottom: 18px; }
+.helm-onb-part { font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--cyan); }
+.helm-onb-section-head h3 { margin: 4px 0 0; font-size: 17px; font-weight: 600; }
+.helm-onb-section-head p { margin: 7px 0 0; color: var(--text-mut); font-size: 12.5px; line-height: 1.5; }
+
+.helm-onb-q { display: flex; flex-direction: column; gap: 8px; padding: 16px 0; border-top: 1px solid var(--border); }
+.helm-onb-q:first-of-type { border-top: none; padding-top: 0; }
+.helm-onb-q > label { font-size: 13.5px; font-weight: 500; color: var(--text); line-height: 1.45; }
+.helm-onb-q.done > label { color: var(--text-dim); }
+.helm-onb-area { resize: vertical; line-height: 1.5; }
+
+/* Escala 1-10 */
+.helm-onb-scale { display: flex; flex-direction: column; gap: 6px; }
+.helm-onb-scale-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.helm-onb-scale-n {
+  flex: 1; min-width: 34px; height: 38px; border-radius: var(--radius-sm); cursor: pointer;
+  background: var(--bg-1); border: 1px solid var(--border-2); color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace; font-size: 13px; transition: all .12s;
+}
+.helm-onb-scale-n:hover { border-color: var(--cyan); color: var(--text); }
+.helm-onb-scale-n.on { background: linear-gradient(135deg, var(--cyan), var(--violet)); border-color: transparent; color: var(--on-accent); font-weight: 600; }
+.helm-onb-scale-ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-mut); }
+
+/* Opciones (ejes de tono / arquetipo) */
+.helm-onb-opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.helm-onb-opt {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 13px; border-radius: 20px; cursor: pointer;
+  background: var(--bg-1); border: 1px solid var(--border-2); color: var(--text-dim); font-size: 12.5px;
+  font-family: inherit; transition: all .12s;
+}
+.helm-onb-opt:hover { border-color: var(--cyan); color: var(--text); }
+.helm-onb-opt.on { background: color-mix(in srgb, var(--cyan) 10%, transparent); border-color: var(--cyan); color: var(--text); }
+
+/* Tablas repetibles */
+.helm-onb-table { display: flex; flex-direction: column; gap: 8px; }
+.helm-onb-trow { display: flex; align-items: flex-start; gap: 8px; }
+.helm-onb-tcells { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.helm-onb-trow-del {
+  flex: 0 0 auto; width: 38px; height: 38px; border-radius: var(--radius-sm); cursor: pointer;
+  background: var(--bg-1); border: 1px solid var(--border-2); color: var(--text-mut); display: grid; place-items: center;
+}
+.helm-onb-trow-del:hover { color: var(--red); border-color: var(--red); }
+.helm-onb-addrow { align-self: flex-start; }
+
+/* Cierre */
+.helm-onb-submit {
+  display: flex; align-items: center; gap: 18px; padding: 20px 22px; border-radius: var(--radius);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cyan) 8%, transparent), color-mix(in srgb, var(--violet) 6%, transparent)); border: 1px solid var(--border-2);
+}
+.helm-onb-submit > div { flex: 1; }
+.helm-onb-submit b { font-size: 14.5px; }
+.helm-onb-submit p { margin: 4px 0 0; color: var(--text-dim); font-size: 12.5px; line-height: 1.5; }
+.helm-onb-submit .helm-btn { flex-shrink: 0; }
+
+/* Onboarding · overlay de generación de la Biblia ------------------------- */
+.helm-onb-gen { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(var(--scrim), 0.72); backdrop-filter: blur(6px); }
+.helm-onb-gen-card {
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px;
+  max-width: 380px; padding: 32px 28px; border-radius: var(--radius);
+  background: var(--panel); border: 1px solid var(--border-2);
+}
+.helm-onb-gen-card svg { color: var(--cyan); }
+.helm-onb-gen-card b { font-size: 16px; }
+.helm-onb-gen-card p { margin: 0; color: var(--text-dim); font-size: 13px; line-height: 1.55; }
+
+/* Onboarding · CTA de la Biblia en el hub (reutiliza el banner del inicio) - */
+.helm-onb-biblia-cta {
+  display: flex; align-items: center; gap: 16px; padding: 16px 18px; cursor: pointer;
+  border: 1px solid var(--border-2); border-radius: var(--radius);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cyan) 10%, transparent), color-mix(in srgb, var(--violet) 8%, transparent));
+  transition: border-color .14s, transform .14s;
+}
+.helm-onb-biblia-cta:hover { border-color: var(--cyan); transform: translateY(-1px); }
+.helm-onb-biblia-cta .helm-btn { flex-shrink: 0; }
+
+/* Biblia · lector + editor ------------------------------------------------- */
+.helm-biblia { max-width: 820px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.helm-biblia-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.helm-biblia-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.helm-biblia-actions .helm-btn { padding: 7px 11px; }
+.helm-biblia-doc {
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 30px 34px;
+}
+.helm-biblia-editor {
+  min-height: 60vh; resize: vertical; line-height: 1.6;
+  font-family: 'JetBrains Mono', monospace; font-size: 13px;
+}
+
+/* Tipografía del documento markdown */
+.helm-md { color: var(--text); font-size: 14.5px; line-height: 1.65; }
+.helm-md h2 { font-size: 20px; font-weight: 700; margin: 0 0 14px; letter-spacing: -0.3px; }
+.helm-md h3 {
+  font-size: 15px; font-weight: 600; margin: 26px 0 10px; padding-bottom: 7px;
+  border-bottom: 1px solid var(--border); color: var(--text);
+}
+.helm-md h3::before { content: ''; }
+.helm-md h4 { font-size: 13.5px; font-weight: 600; margin: 18px 0 8px; color: var(--cyan); }
+.helm-md p { margin: 0 0 12px; color: var(--text-dim); }
+.helm-md ul { margin: 0 0 14px; padding-left: 20px; }
+.helm-md li { margin: 5px 0; color: var(--text-dim); }
+.helm-md strong { color: var(--text); font-weight: 600; }
+.helm-md em { color: var(--text-mut); font-style: italic; }
+.helm-md code { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; background: var(--panel-2); padding: 1px 5px; border-radius: 5px; }
+.helm-md > :first-child { margin-top: 0; }
+
+/* Onboarding · filas de conexiones futuras -------------------------------- */
+.helm-conx-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0; border-top: 1px solid var(--border); }
+.helm-conx-row:first-of-type { border-top: none; }
+.helm-conx-info b { display: block; font-size: 14px; font-weight: 600; }
+.helm-conx-info span { display: block; margin-top: 2px; color: var(--text-mut); font-size: 12.5px; }
+
+/* Tareas · kanban mejorado (avatar, checklist, vencida) ------------------- */
+.helm-tcard-desc {
+  color: var(--text-dim); font-size: 12px; margin-top: 4px; line-height: 1.4;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+/* Desplegada: se ve entera, respetando los saltos de línea que escribió el usuario. */
+.helm-tcard-desc.open { display: block; -webkit-line-clamp: none; overflow: visible; }
+.helm-tcard-more {
+  background: none; border: none; padding: 2px 0; cursor: pointer;
+  font-size: 11.5px; font-weight: 600; color: var(--text-mut);
+}
+.helm-tcard-more:hover { color: var(--text); }
+.helm-task-due.over { color: var(--red); }
+.helm-chk { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--text-mut); font-family: 'JetBrains Mono', monospace; }
+.helm-assignee {
+  margin-left: auto; width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+  display: grid; place-items: center; font-size: 10px; font-weight: 700; color: var(--on-accent);
+  background: linear-gradient(135deg, var(--cyan), var(--violet));
+}
+.helm-kcard-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+/* Tareas · vista de calendario ------------------------------------------- */
+.helm-vista-tabs { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 9px; background: var(--panel); }
+.helm-vista-tab {
+  display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border: none;
+  border-radius: 7px; background: transparent; color: var(--text-mut); cursor: pointer;
+  font-size: 12.5px; font-weight: 600; white-space: nowrap;
+}
+.helm-vista-tab:hover { color: var(--text); }
+.helm-vista-tab.active { background: var(--hover); color: var(--text); }
+
+.helm-cal { display: flex; flex-direction: column; gap: 10px; }
+.helm-cal-head { display: flex; align-items: center; gap: 8px; }
+.helm-cal-mes { font-size: 14px; font-weight: 700; text-transform: capitalize; min-width: 160px; }
+.helm-cal-dias {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px;
+  font-size: 11px; font-weight: 700; color: var(--text-mut); text-align: center;
+}
+.helm-cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.helm-cal-dia {
+  display: flex; flex-direction: column; gap: 3px; min-height: 108px; padding: 6px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--panel);
+}
+/* Los días del mes vecino se ven, pero no compiten con el mes que se mira. */
+.helm-cal-dia.fuera { opacity: 0.42; }
+.helm-cal-dia.hoy { border-color: var(--cyan); }
+.helm-cal-dia.over { border-color: var(--cyan); background: var(--hover); }
+.helm-cal-n { font-size: 11.5px; font-weight: 700; color: var(--text-mut); font-family: 'JetBrains Mono', monospace; }
+.helm-cal-dia.hoy .helm-cal-n { color: var(--cyan); }
+.helm-cal-task {
+  display: flex; align-items: center; gap: 5px; width: 100%; padding: 3px 6px; cursor: pointer;
+  border: none; border-left: 3px solid var(--text-mut); border-radius: 5px;
+  background: var(--hover); color: var(--text); font-size: 11.5px; text-align: left;
+}
+.helm-cal-task:hover { filter: brightness(1.18); }
+.helm-cal-task.red { border-left-color: var(--red); }
+.helm-cal-task.amber { border-left-color: var(--amber); }
+.helm-cal-task.cyan { border-left-color: var(--cyan); }
+.helm-cal-task.done { opacity: 0.5; text-decoration: line-through; }
+.helm-cal-task.over:not(.done) .helm-cal-task-t { color: var(--red); }
+.helm-cal-task-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.helm-cal-task-a { flex-shrink: 0; font-size: 9.5px; font-weight: 700; color: var(--text-mut); }
+.helm-cal-mas { font-size: 10.5px; color: var(--text-mut); padding-left: 4px; }
+.helm-cal-sinfecha { border: 1px dashed var(--border); border-radius: 10px; padding: 10px; }
+.helm-cal-sinfecha.over { border-color: var(--cyan); background: var(--hover); }
+.helm-cal-sinfecha b { display: block; font-size: 12px; color: var(--text-mut); margin-bottom: 6px; }
+.helm-cal-sinfecha-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.helm-cal-sinfecha-list .helm-cal-task { width: auto; max-width: 240px; }
+
+/* En móvil una rejilla de 7 columnas no cabe: se scrollea en horizontal. */
+@media (max-width: 720px) {
+  .helm-cal { overflow-x: auto; }
+  .helm-cal-dias, .helm-cal-grid { min-width: 620px; }
+}
+
+/* Drawer de tarea · footer y checklist */
+.helm-drawer-foot-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.helm-chk-block { margin-top: 22px; }
+.helm-chk-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.helm-chk-head b { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; }
+.helm-chk-head span { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-mut); }
+.helm-chk-list { display: flex; flex-direction: column; gap: 6px; }
+.helm-chk-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--bg-1); border: 1px solid var(--border); }
+.helm-chk-item span { flex: 1; font-size: 13px; }
+.helm-chk-item.done span { color: var(--text-mut); text-decoration: line-through; }
+.helm-chk-item .helm-check { width: 18px; height: 18px; }
+.helm-chk-add { display: flex; gap: 8px; margin-top: 10px; }
+.helm-chk-add .helm-input { flex: 1; }
+
+/* Contenido · calendario mensual ----------------------------------------- */
+.helm-cal-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
+.helm-cal-nav { display: flex; align-items: center; gap: 8px; }
+.helm-cal-nav b { min-width: 150px; text-align: center; font-size: 15px; font-weight: 600; text-transform: capitalize; }
+.helm-cal-nav .helm-btn { padding: 8px 10px; }
+.helm-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.helm-cal-dow { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; color: var(--text-mut); text-align: center; padding: 4px 0 8px; }
+/* Alto FIJO, no mínimo. Con min-height, un día con diez piezas estiraba su
+   celda y, con ella, toda la fila de esa semana: el mes dejaba de leerse como
+   una rejilla. Ahora la celda manda sobre el contenido y lo que no cabe se ve
+   pulsando el día. */
+.helm-cal-cell { height: 132px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px; display: flex; flex-direction: column; gap: 5px; overflow: hidden; }
+.helm-cal-cell.empty { background: transparent; border: none; }
+.helm-cal-cell.today { border-color: var(--cyan); }
+.helm-cal-day { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.helm-cal-day span, .helm-cal-daynum { font-size: 12.5px; font-weight: 600; color: var(--text-dim); padding: 0 3px; }
+.helm-cal-daynum {
+  background: none; border: none; font-family: inherit; cursor: pointer;
+  border-radius: 6px; min-width: 22px; text-align: left;
+}
+.helm-cal-daynum:hover { color: var(--cyan); background: var(--hover); }
+.helm-cal-cell.today .helm-cal-day span,
+.helm-cal-cell.today .helm-cal-daynum { color: var(--cyan); }
+
+/* "+7 más": el resto del día, a un clic. */
+.helm-cal-more {
+  text-align: left; font-size: 11px; font-weight: 600; padding: 3px 7px; border-radius: 6px;
+  border: 1px dashed var(--border-2); background: none; color: var(--text-mut);
+  font-family: inherit; cursor: pointer; flex-shrink: 0;
+}
+.helm-cal-more:hover { color: var(--cyan); border-color: var(--cyan); }
+
+/* Lista de un día en el panel lateral. */
+.helm-dia-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 12px 0; border-bottom: 1px solid var(--border);
+}
+.helm-dia-item:last-child { border-bottom: none; }
+.helm-dia-item-main {
+  flex: 1; min-width: 180px; text-align: left; background: none; border: none;
+  font-family: inherit; color: var(--text); cursor: pointer; padding: 0;
+}
+.helm-dia-item-main b { display: block; font-size: 13.5px; font-weight: 600; }
+.helm-dia-item-main small { display: block; margin-top: 2px; color: var(--text-mut); font-size: 11.5px; }
+.helm-dia-item-main:hover b { color: var(--cyan); }
+.helm-cal-add { opacity: 0; width: 20px; height: 20px; border-radius: 6px; border: 1px solid var(--border-2); background: var(--panel-2); color: var(--text-dim); cursor: pointer; display: grid; place-items: center; transition: opacity .12s; }
+.helm-cal-cell:hover .helm-cal-add { opacity: 1; }
+.helm-cal-add:hover { color: var(--cyan); border-color: var(--cyan); }
+.helm-cal-items { display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+.helm-cal-item {
+  text-align: left; font-size: 11.5px; line-height: 1.3; padding: 5px 7px; border-radius: 6px; cursor: pointer;
+  border: 1px solid transparent; font-family: inherit; color: var(--text);
+  background: color-mix(in srgb, var(--cyan) 10%, transparent); border-left: 2px solid var(--cyan);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.helm-cal-item:hover { background: color-mix(in srgb, var(--cyan) 18%, transparent); }
+.helm-cal-item.published { background: color-mix(in srgb, var(--green) 10%, transparent); border-left-color: var(--green); }
+.helm-cal-item.published:hover { background: color-mix(in srgb, var(--green) 18%, transparent); }
+
+/* Guía de bienvenida (modal bloqueante de 15 páginas) -------------------- */
+.helm-guia-overlay { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; background: rgba(var(--scrim), 0.82); backdrop-filter: blur(8px);
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); }
+.helm-guia { width: 100%; max-width: 560px; max-height: 92dvh; background: var(--panel); border: 1px solid var(--border-2); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; }
+.helm-guia-progress { height: 4px; background: var(--panel-2); flex-shrink: 0; }
+.helm-guia-progress span { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--violet)); transition: width .3s ease; }
+.helm-guia-body { padding: 34px 34px 26px; flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.helm-guia-ico { width: 52px; height: 52px; border-radius: 13px; display: grid; place-items: center; background: linear-gradient(135deg, var(--cyan), var(--violet)); color: var(--on-accent); margin-bottom: 18px; }
+.helm-guia-step { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-mut); }
+.helm-guia-body h2 { margin: 6px 0 12px; font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+.helm-guia-lead { color: var(--text-dim); font-size: 14.5px; line-height: 1.6; margin: 0 0 16px; }
+.helm-guia-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.helm-guia-list li { color: var(--text-dim); font-size: 13.5px; line-height: 1.5; }
+.helm-guia-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 22px; border-top: 1px solid var(--border); flex-shrink: 0; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+.helm-guia-dots { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; flex: 1; }
+.helm-guia-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--border-2); }
+.helm-guia-dot.done { background: var(--text-mut); }
+.helm-guia-dot.on { background: var(--cyan); border-color: var(--cyan); transform: scale(1.3); }
+
+/* Panel de usuarios (/usersadmin) ---------------------------------------- */
+.helm-ua { max-width: 980px; margin: 0 auto; padding: 32px 24px; }
+.helm-ua-head { margin-bottom: 22px; }
+.helm-ua-head h1 { font-size: 24px; font-weight: 700; margin: 16px 0 4px; }
+.helm-ua-head p { color: var(--text-mut); font-size: 14px; margin: 0; }
+.helm-ua-user { display: flex; align-items: center; gap: 11px; }
+.helm-avatar.sm { width: 32px; height: 32px; font-size: 13px; border-radius: 9px; }
+.helm-ua-user small { display: block; color: var(--text-mut); font-size: 12px; }
+.helm-ua-actions { text-align: right; }
+.helm-ua-actions .helm-btn { margin-left: auto; }
+.helm-table tr.pending td { background: color-mix(in srgb, var(--amber) 5%, transparent); }
+.helm-chip.cyan svg, .helm-chip.green svg, .helm-chip.amber svg { margin-right: 2px; }
+
+/* Ajustes finos de móvil para la guía y overlays de generación ------------ */
+@media (max-width: 820px) {
+  .helm-guia-body { padding: 26px 20px 20px; }
+  .helm-guia-body h2 { font-size: 19px; }
+  .helm-guia-dots { display: none; }         /* los puntos ocupan mucho; la barra de progreso ya guía */
+  .helm-guia-foot { padding: 14px 16px; }
+  .helm-guia-foot .helm-btn { flex: 1; justify-content: center; }
+  .helm-onb-gen { padding: 16px; }
+}
+
+/* Guía · botón cerrar + FAB "!" para completarla luego -------------------- */
+.helm-guia-close { position: absolute; top: 12px; right: 12px; z-index: 2; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--panel-2); border: 1px solid var(--border-2); color: var(--text-dim); cursor: pointer; }
+.helm-guia-close:hover { color: var(--text); }
+.helm-guia { position: relative; }
+
+.helm-guide-fab {
+  position: fixed; right: max(20px, env(safe-area-inset-right)); bottom: max(20px, env(safe-area-inset-bottom));
+  z-index: 70; width: 56px; height: 56px; border-radius: 50%; border: none; cursor: pointer;
+  font-size: 28px; font-weight: 800; line-height: 1; color: var(--on-accent);
+  /* El halo sale del propio ámbar del tema: cableado en naranja se veía fuera
+     de sitio en cuanto la paleta dejó de ser una sola. */
+  background: linear-gradient(135deg, var(--amber), color-mix(in srgb, var(--amber) 65%, var(--red)));
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--amber) 45%, transparent);
+  display: grid; place-items: center; animation: helm-fab-pulse 2s ease-in-out infinite;
+}
+.helm-guide-fab:hover { transform: scale(1.06); }
+@keyframes helm-fab-pulse {
+  0%, 100% { box-shadow: 0 8px 24px color-mix(in srgb, var(--amber) 45%, transparent); }
+  50% {
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--amber) 45%, transparent),
+                0 0 0 10px color-mix(in srgb, var(--amber) 14%, transparent);
+  }
+}
+
+/* Servicios y Equipo -------------------------------------------------------
+   Las dos secciones nuevas usan la misma rejilla de tarjetas: son fichas con
+   cabecera, metadatos y un pie de acciones. Compartirlas evita que se separen
+   visualmente cuando una de las dos crezca. */
+.helm-svc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 14px; padding: 16px 18px; }
+.helm-svc {
+  display: flex; flex-direction: column; gap: 11px; padding: 16px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+  transition: border-color .14s ease;
+}
+.helm-svc:hover { border-color: var(--border-2); }
+.helm-svc.off { opacity: .55; }
+.helm-svc-head { display: flex; align-items: center; gap: 11px; }
+.helm-svc-head b { display: block; font-size: 14.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.helm-svc-head small { display: block; color: var(--text-mut); font-size: 11.5px; margin-top: 2px; }
+.helm-svc-ico {
+  width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0; display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--cyan), var(--violet)); color: var(--on-accent);
+}
+.helm-svc-price { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.helm-svc-desc { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--text-dim); }
+.helm-svc-meta { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11.5px; color: var(--text-mut); }
+.helm-svc-people { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; color: var(--text-mut); }
+.helm-svc-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.helm-svc-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-top: auto; padding-top: 11px; border-top: 1px solid var(--border);
+}
+.helm-avatar.lg { width: 38px; height: 38px; border-radius: 10px; font-size: 15px; flex-shrink: 0; }
+
+/* Pareja etiqueta/valor de la ficha de una persona. */
+.helm-kv { display: grid; gap: 3px; font-size: 12.5px; }
+.helm-kv > div:first-child { display: flex; align-items: center; gap: 6px; color: var(--text-mut); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; }
+.helm-kv > div:last-child { color: var(--text); }
+.helm-kv small { display: block; color: var(--text-mut); font-family: 'JetBrains Mono', monospace; font-size: 11px; margin-top: 2px; word-break: break-all; }
+
+/* Interruptor de texto (activo / inactivo). */
+.helm-switch { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-dim); cursor: pointer; }
+.helm-switch input { width: 15px; height: 15px; accent-color: var(--cyan); cursor: pointer; }
+
+/* Selector múltiple de personas (responsables de un servicio). */
+.helm-pickers { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
+.helm-pick {
+  display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  padding: 7px 11px; border-radius: var(--radius-sm); cursor: pointer; font-family: inherit;
+  background: var(--panel-2); border: 1px solid var(--border-2); color: var(--text-dim); font-size: 13px;
+  transition: all .14s ease;
+}
+.helm-pick small { font-size: 10.5px; color: var(--text-mut); }
+.helm-pick:hover { background: var(--hover); color: var(--text); }
+.helm-pick.on { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); color: var(--text); }
+
+/* Formularios de tres columnas (plan de pago, setter/closer/CSM). */
+.helm-form-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 720px) { .helm-form-3 { grid-template-columns: 1fr; } }
+
+/* Interruptor de dos opciones excluyentes (pago único / fraccionado). */
+.helm-segmented { display: inline-flex; padding: 3px; gap: 3px; border-radius: var(--radius-sm); background: var(--bg-1); border: 1px solid var(--border-2); }
+.helm-segmented button {
+  padding: 7px 14px; border-radius: 9px; border: none; background: transparent; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 500; color: var(--text-dim); transition: all .14s ease;
+}
+.helm-segmented button:hover { color: var(--text); }
+.helm-segmented button.on { background: linear-gradient(90deg, var(--cyan), var(--violet)); color: var(--on-accent); font-weight: 600; }
+
+/* Buscador con desplegable (SearchSelect). */
+.helm-combo { position: relative; }
+.helm-combo-list {
+  position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; right: 0; max-height: 240px; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--border-2); border-radius: var(--radius-sm);
+  box-shadow: 0 12px 28px rgba(var(--scrim), 0.45); padding: 4px;
+}
+.helm-combo-opt {
+  display: block; width: 100%; text-align: left; padding: 8px 10px; border-radius: 8px;
+  border: none; background: transparent; cursor: pointer; font-family: inherit; color: var(--text);
+}
+.helm-combo-opt:hover { background: var(--hover); }
+.helm-combo-opt b { display: block; font-size: 13px; font-weight: 500; }
+.helm-combo-opt small { display: block; font-size: 11px; color: var(--text-mut); margin-top: 1px; }
+.helm-combo-empty { padding: 10px; font-size: 12px; color: var(--text-mut); }
+
+/* Barra de filtros con totales (Finanzas → Movimientos). */
+.helm-filter-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.helm-filter-total { margin-top: 10px; font-size: 12.5px; color: var(--text-dim); }
+
+/* Editor de etapas del pipeline ------------------------------------------- */
+.helm-stage-edit { padding: 12px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel-2); }
+.helm-stage-edit-row { display: flex; align-items: center; gap: 8px; }
+.helm-stage-edit-row .helm-btn { padding: 9px 10px; }
+.helm-stage-subs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; padding-left: 18px; }
+.helm-stage-sub { display: flex; align-items: center; gap: 6px; }
+.helm-stage-sub .helm-input { width: 170px; padding: 7px 10px; font-size: 13px; }
+.helm-stage-sub .helm-btn { padding: 7px 9px; }
+
+/* Subetapas dentro de la ficha del lead. */
+.helm-substages { margin-bottom: 16px; }
+.helm-substages small { display: block; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-mut); margin-bottom: 8px; }
+
+/* Resumen comercial de un lead: servicio, facturado y cobrado. */
+.helm-lead-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+.helm-lead-summary > div { padding: 11px 12px; border-radius: var(--radius-sm); background: var(--panel-2); border: 1px solid var(--border); min-width: 0; }
+.helm-lead-summary small { display: block; font-size: 10px; letter-spacing: .8px; text-transform: uppercase; color: var(--text-mut); }
+.helm-lead-summary b { display: block; font-size: 14px; font-weight: 600; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.helm-lead-summary span { display: block; font-size: 11px; color: var(--text-mut); margin-top: 2px; }
+@media (max-width: 620px) { .helm-lead-summary { grid-template-columns: 1fr; } }
+
+/* Archivos ---------------------------------------------------------------- */
+.helm-arch-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.helm-arch-grupo { margin-bottom: 6px; }
+.helm-arch-item {
+  display: flex; align-items: center; gap: 11px; padding: 11px 0;
+  border-top: 1px solid var(--border);
+}
+.helm-arch-item > svg { flex-shrink: 0; color: var(--text-mut); }
+.helm-arch-main { flex: 1; min-width: 0; }
+.helm-arch-main a {
+  display: inline-flex; align-items: center; gap: 5px; color: var(--text);
+  text-decoration: none; font-size: 14px; font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+}
+.helm-arch-main a:hover { color: var(--cyan); }
+.helm-arch-main small { display: block; margin-top: 3px; font-size: 11.5px; color: var(--text-mut); }
+/* El origen se lee de un vistazo: lo que ha hecho la IA va en color. */
+.helm-arch-src { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
+.helm-arch-src.chat { color: var(--violet); }
+.helm-arch-src.onboarding { color: var(--cyan); }
+.helm-arch-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+@media (max-width: 620px) {
+  .helm-arch-bar .helm-input { flex: 1 1 100%; max-width: none !important; }
+}
+
+/* Respuestas de un formulario dentro de la ficha del lead ------------------ */
+.helm-form-resp-head { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 4px 0 4px; }
+.helm-form-resp-head > div { padding: 11px 12px; border-radius: var(--radius-sm); background: var(--panel-2); border: 1px solid var(--border); min-width: 0; }
+.helm-form-resp-head small { display: block; font-size: 10px; letter-spacing: .8px; text-transform: uppercase; color: var(--text-mut); }
+.helm-form-resp-head b { display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; margin-top: 5px; }
+.helm-form-resp { display: flex; flex-direction: column; gap: 2px; }
+.helm-form-resp-item { padding: 11px 0; border-top: 1px solid var(--border); }
+.helm-form-resp-item:first-child { border-top: none; }
+.helm-form-resp-item small { display: block; font-size: 12px; color: var(--text-mut); line-height: 1.4; margin-bottom: 5px; }
+/* La respuesta pesa más que la pregunta: es lo que se viene a leer. */
+.helm-form-resp-item > div { font-size: 14.5px; font-weight: 500; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.helm-form-resp-mono { font-family: 'JetBrains Mono', monospace; font-size: 12px !important; font-weight: 400 !important; color: var(--text-dim); }
+
+/* Estado de producción de una pieza de contenido --------------------------- */
+.helm-segmented.estado button.on.todo  { background: var(--panel-2); color: var(--text); border: 1px solid var(--border-2); }
+.helm-segmented.estado button.on.doing { background: linear-gradient(90deg, var(--amber), color-mix(in srgb, var(--amber) 70%, var(--red))); color: #1A1206; }
+.helm-segmented.estado button.on.done  { background: linear-gradient(90deg, var(--green), color-mix(in srgb, var(--green) 70%, var(--cyan))); color: var(--on-accent); }
+.helm-cal-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.helm-chips .helm-chip b { font-weight: 700; margin-left: 3px; }
+/* En el calendario, el color de la píldora dice en qué estado está la pieza. */
+.helm-cal-item.doing { background: color-mix(in srgb, var(--amber) 12%, transparent); border-left-color: var(--amber); }
+.helm-cal-item.doing:hover { background: color-mix(in srgb, var(--amber) 22%, transparent); }
+.helm-cal-item.done { background: color-mix(in srgb, var(--green) 12%, transparent); border-left-color: var(--green); }
+.helm-cal-item.done:hover { background: color-mix(in srgb, var(--green) 22%, transparent); }
+
+/* Adjuntos ----------------------------------------------------------------- */
+.helm-adj { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.helm-adj-list { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.helm-adj-item {
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px; font-size: 12.5px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.helm-adj-item svg { flex-shrink: 0; color: var(--text-mut); }
+.helm-adj-item a { flex: 1; min-width: 0; color: var(--text); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.helm-adj-item a:hover { color: var(--cyan); }
+.helm-adj-item small { color: var(--text-mut); font-size: 11px; white-space: nowrap; }
+.helm-adj-item button { display: grid; place-items: center; border: none; background: transparent; color: var(--text-mut); cursor: pointer; padding: 2px; border-radius: 5px; }
+.helm-adj-item button:hover { background: var(--hover); color: var(--red); }
+/* Alta de un enlace: la dirección manda, el nombre es opcional. */
+.helm-adj-link-form { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; align-items: center; }
+.helm-adj-link-form .helm-input { flex: 1 1 200px; min-width: 0; }
+
+/* Matriz de permisos por rol (Ajustes → Permisos). */
+.helm-perm td, .helm-perm th { white-space: normal; }
+.helm-perm td:first-child { min-width: 200px; }
+.helm-perm .helm-check { border-color: var(--border-2); }
+.helm-perm .helm-check.on { background: linear-gradient(135deg, var(--cyan), var(--violet)); border-color: transparent; }
+
+/* Página pública de un formulario. */
+.helm-public { max-width: 640px; margin: 0 auto; padding: 40px 20px 60px; }
+@media (max-width: 620px) { .helm-public { padding: 24px 14px 40px; } }
+
+/* Varios pipelines ---------------------------------------------------------
+   Pestañas por encima de la barra del CRM: el pipeline es el contexto de todo
+   lo que hay debajo, así que va antes que los filtros y las vistas. */
+.helm-pipe-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.helm-pipe-tab {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; cursor: pointer;
+  border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; font-weight: 500;
+  background: var(--panel); border: 1px solid var(--border); color: var(--text-dim);
+  transition: all .14s ease;
+}
+.helm-pipe-tab:hover { background: var(--hover); color: var(--text); }
+.helm-pipe-tab.on { border-color: var(--cyan); color: var(--text); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
+.helm-pipe-tab span {
+  font-size: 11px; padding: 1px 6px; border-radius: 20px;
+  background: var(--panel-2); border: 1px solid var(--border); color: var(--text-mut);
+}
+.helm-pipe-tab.on span { border-color: transparent; background: var(--cyan); color: var(--on-accent); }
+
+/* Editor: lista de pipelines a la izquierda, etapas a la derecha. */
+.helm-pipe-layout { display: grid; grid-template-columns: 230px 1fr; gap: 20px; align-items: start; }
+@media (max-width: 780px) { .helm-pipe-layout { grid-template-columns: 1fr; } }
+.helm-pipe-list { border-right: 1px solid var(--border); padding-right: 18px; }
+@media (max-width: 780px) { .helm-pipe-list { border-right: none; border-bottom: 1px solid var(--border); padding: 0 0 16px; } }
+.helm-pipe-item {
+  display: flex; align-items: center; gap: 4px; border-radius: var(--radius-sm);
+  border: 1px solid transparent; margin-bottom: 3px;
+}
+.helm-pipe-item:hover { background: var(--panel-2); }
+.helm-pipe-item.on { background: color-mix(in srgb, var(--cyan) 9%, transparent); border-color: var(--border-2); }
+.helm-pipe-name {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 9px 10px;
+  border: none; background: transparent; cursor: pointer; font-family: inherit; font-size: 13px;
+  color: var(--text); text-align: left;
+}
+.helm-pipe-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.helm-pipe-name small { margin-left: auto; color: var(--text-mut); font-size: 11px; }
+.helm-pipe-star { color: var(--amber); flex-shrink: 0; }
+.helm-pipe-acts { display: flex; gap: 8px; padding-right: 9px; opacity: 0; transition: opacity .14s; }
+.helm-pipe-item:hover .helm-pipe-acts, .helm-pipe-item.on .helm-pipe-acts { opacity: 1; }
+.helm-pipe-new { display: flex; gap: 5px; align-items: center; padding: 3px 0; }
+.helm-pipe-new .helm-input { padding: 7px 10px; font-size: 13px; }
+.helm-pipe-detail { min-width: 0; }
+
+/* Nivel de acceso al panel (Equipo → acceso). */
+.helm-niveles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+.helm-nivel {
+  display: grid; gap: 3px; text-align: left; padding: 10px 12px; cursor: pointer;
+  border-radius: var(--radius-sm); font-family: inherit;
+  background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+  transition: all .14s ease;
+}
+.helm-nivel:hover { background: var(--hover); border-color: var(--border-2); }
+.helm-nivel.on { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 9%, transparent); }
+.helm-nivel b { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
+.helm-nivel small { font-size: 11px; color: var(--text-mut); line-height: 1.45; }
+.helm-checkline svg { color: var(--text-mut); }
+
+/* Onboarding: marca de pregunta ya respondida en el diagnóstico y ayuda. */
+.helm-onb-web {
+  margin-left: 8px; padding: 2px 7px; border-radius: 20px; font-size: 9.5px;
+  letter-spacing: .5px; text-transform: uppercase; vertical-align: middle;
+  background: var(--panel-2); border: 1px solid var(--border); color: var(--text-mut);
+}
+.helm-onb-hint { margin: 4px 0 8px; font-size: 12px; color: var(--text-mut); line-height: 1.5; }
+
+/* Botón que parece un enlace. Se usa donde una acción va dentro de una frase
+   (migas de Drive, avisos con "ir a Ajustes") y un botón entero rompería la
+   línea de texto. */
+.helm-linkbtn {
+  background: none; border: none; padding: 0; font: inherit; cursor: pointer;
+  color: var(--cyan); text-decoration: underline; text-underline-offset: 2px;
+}
+.helm-linkbtn:hover { color: var(--text); }
+
+/* Llamadas ----------------------------------------------------------------- */
+/* Los estados repiten el código de color del resto del panel: gris lo que está
+   por pasar, verde lo hecho, ámbar el no-show, rojo lo cancelado. */
+.helm-segmented.estado button.on.agendada  { background: var(--panel-2); color: var(--text); border: 1px solid var(--border-2); }
+.helm-segmented.estado button.on.hecha     { background: linear-gradient(90deg, var(--green), color-mix(in srgb, var(--green) 70%, var(--cyan))); color: var(--on-accent); }
+.helm-segmented.estado button.on.no_show   { background: linear-gradient(90deg, var(--amber), color-mix(in srgb, var(--amber) 70%, var(--red))); color: #1A1206; }
+.helm-segmented.estado button.on.cancelada { background: color-mix(in srgb, var(--red) 75%, black); color: #fff; }
+
+.helm-cal-item.agendada  { background: color-mix(in srgb, var(--cyan) 10%, transparent); border-left-color: var(--cyan); }
+.helm-cal-item.agendada:hover { background: color-mix(in srgb, var(--cyan) 20%, transparent); }
+.helm-cal-item.hecha     { background: color-mix(in srgb, var(--green) 12%, transparent); border-left-color: var(--green); }
+.helm-cal-item.hecha:hover { background: color-mix(in srgb, var(--green) 22%, transparent); }
+.helm-cal-item.no_show   { background: color-mix(in srgb, var(--amber) 12%, transparent); border-left-color: var(--amber); }
+.helm-cal-item.no_show:hover { background: color-mix(in srgb, var(--amber) 22%, transparent); }
+.helm-cal-item.cancelada { background: color-mix(in srgb, var(--red) 10%, transparent); border-left-color: var(--red); text-decoration: line-through; opacity: .75; }
+.helm-cal-item.cancelada:hover { background: color-mix(in srgb, var(--red) 18%, transparent); }
+.helm-cal-item b { font-variant-numeric: tabular-nums; margin-right: 3px; opacity: .8; }
+
+.helm-call-links { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.helm-call-links .helm-btn { text-decoration: none; }
+.helm-call-guests { display: flex; flex-wrap: wrap; gap: 6px; }
+.helm-call-guests .helm-badge { display: inline-flex; align-items: center; gap: 5px; }
+
+/* Google y Drive (Ajustes) ------------------------------------------------- */
+.helm-goog-pic { width: 20px; height: 20px; border-radius: 50%; vertical-align: middle; }
+.helm-drive-search { display: flex; gap: 8px; flex-wrap: wrap; }
+.helm-drive-search .helm-input { flex: 1; min-width: 200px; }
+.helm-drive-crumbs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12.5px; color: var(--text-mut); }
+.helm-drive-crumbs span { display: inline-flex; align-items: center; gap: 4px; }
+.helm-drive-list { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; max-height: 380px; overflow-y: auto; }
+.helm-drive-row {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px; font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.helm-drive-row:last-child { border-bottom: none; }
+.helm-drive-row:hover { background: var(--hover); }
+.helm-drive-row svg { color: var(--text-mut); flex-shrink: 0; }
+.helm-drive-row .grow {
+  flex: 1; min-width: 0; text-align: left; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; color: var(--text); text-decoration: none;
+}
+.helm-drive-row a.grow:hover { color: var(--cyan); }
+
+/* Marca blanca (Ajustes → Marca) ------------------------------------------- */
+.helm-marca { display: flex; gap: 26px; flex-wrap: wrap; align-items: flex-start; }
+.helm-marca-logo { display: flex; gap: 14px; align-items: center; }
+.helm-marca-logo img { width: 64px; height: 64px; border-radius: 14px; object-fit: contain; background: var(--panel-2); border: 1px solid var(--border); }
+.helm-marca-ph {
+  width: 64px; height: 64px; border-radius: 14px; display: grid; place-items: center;
+  background: var(--panel-2); border: 1px dashed var(--border-2); color: var(--text-mut);
+}
+.helm-marca-ph.sm { width: 30px; height: 30px; border-radius: 9px; }
+.helm-marca-logo-acts { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; }
+.helm-marca-preview {
+  flex: 1; min-width: 220px; padding: 14px 16px; border-radius: var(--radius-sm);
+  background: var(--bg-1); border: 1px solid var(--border);
+}
+.helm-marca-preview-lbl {
+  display: block; margin-bottom: 10px; font-size: 10px; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--text-mut);
+}
+
+/* Comunidad ---------------------------------------------------------------- */
+/* Hilo plano y alineado a la izquierda: aquí hablan muchos negocios, y el chat
+   de burbujas a dos lados (que sí vale para hablar con la IA) haría ilegible
+   quién dice qué. */
+.helm-com .helm-chat-bar-info { line-height: 1.5; }
+.helm-com-msg { display: flex; gap: 11px; max-width: 820px; }
+.helm-com-msg.mine .helm-com-body { border-color: var(--border-2); background: var(--panel-2); }
+.helm-com-msg.admin .helm-com-body { border-color: color-mix(in srgb, var(--green) 35%, transparent); }
+.helm-com-avatar { flex: 0 0 32px; width: 32px; height: 32px; border-radius: 10px; object-fit: contain; background: var(--panel-2); border: 1px solid var(--border); }
+.helm-com-avatar.ini {
+  display: grid; place-items: center; font-size: 13px; font-weight: 700;
+  background: linear-gradient(135deg, var(--cyan), var(--violet)); color: var(--on-accent); border: none;
+}
+.helm-com-body { flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; }
+.helm-com-head { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; flex-wrap: wrap; }
+.helm-com-head b { font-size: 13px; font-weight: 600; }
+.helm-com-head small { color: var(--text-mut); font-size: 11.5px; margin-left: auto; }
+.helm-com-who { font-size: 11.5px; color: var(--text-mut); }
+.helm-com-del { background: none; border: none; padding: 0; cursor: pointer; color: var(--text-mut); opacity: 0; transition: opacity .14s; }
+.helm-com-msg:hover .helm-com-del { opacity: 1; }
+.helm-com-del:hover { color: var(--red); }
+.helm-com-text { font-size: 13.5px; line-height: 1.65; color: var(--text); overflow-wrap: anywhere; }
+.helm-com-text p { margin: 0; min-height: 1px; }
+
+/* Memoria del chat: el bloque de setting se distingue del de contenido. */
+.helm-chat-kind.setter { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 40%, transparent); }
+
+/* Comunidad interna: formación en el panel ---------------------------------- */
+.helm-curso { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; }
+.helm-curso + .helm-curso { margin-top: 10px; }
+.helm-curso-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.helm-curso-toggle {
+  display: flex; align-items: center; gap: 8px; flex: 1; min-width: 200px;
+  background: none; border: none; font-family: inherit; color: var(--text); cursor: pointer; text-align: left; padding: 0;
+}
+.helm-curso-toggle b { font-size: 14px; font-weight: 600; }
+.helm-curso-toggle small { color: var(--text-mut); font-size: 11.5px; }
+.helm-curso-toggle:hover b { color: var(--cyan); }
+.helm-curso-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.helm-curso-desc { margin: 8px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--text-dim); }
+
+.helm-leccion-list { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.helm-leccion { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.helm-leccion-main {
+  display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; text-align: left;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 9px 12px; font-family: inherit; color: var(--text); cursor: pointer;
+}
+.helm-leccion-main:hover { border-color: var(--cyan); }
+.helm-leccion-main b { display: block; font-size: 13px; font-weight: 600; }
+.helm-leccion-main small { display: flex; align-items: center; gap: 4px; margin-top: 2px; color: var(--text-mut); font-size: 11.5px; }
+.helm-leccion-n {
+  flex: 0 0 24px; height: 24px; border-radius: 8px; display: grid; place-items: center;
+  background: var(--bg-1); border: 1px solid var(--border-2); font-size: 11.5px; font-weight: 700; color: var(--text-dim);
+}
+.helm-muro { display: flex; flex-direction: column; gap: 14px; max-height: 520px; overflow-y: auto; }
+
+/* Portal público de la comunidad (/c/<slug>) -------------------------------- */
+.helm-portal { display: grid; place-items: center; padding: 24px; min-height: 100vh; }
+.helm-portal-box {
+  width: 100%; max-width: 420px; display: flex; flex-direction: column; align-items: center; gap: 16px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 28px 26px; box-shadow: var(--shadow); text-align: center;
+}
+.helm-portal-box h1 { font-size: 19px; font-weight: 600; margin: 0; }
+.helm-portal-box p { margin: 0; font-size: 13.5px; line-height: 1.65; color: var(--text-dim); }
+.helm-portal-marca { display: flex; align-items: center; gap: 11px; }
+.helm-portal-marca img { width: 38px; height: 38px; border-radius: 11px; object-fit: contain; background: var(--panel-2); }
+.helm-portal-marca > div { text-align: left; }
+.helm-portal-marca b { display: block; font-size: 16px; font-weight: 700; letter-spacing: .5px; }
+.helm-portal-marca span { font-size: 10px; letter-spacing: 1.4px; color: var(--text-mut); text-transform: uppercase; }
+.helm-portal-ini {
+  width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--cyan), var(--violet)); color: var(--on-accent); font-weight: 800; font-size: 17px;
+}
+.helm-portal-bienvenida { font-size: 13.5px; line-height: 1.7; color: var(--text-dim); margin: 0; }
+.helm-portal-form { display: flex; flex-direction: column; gap: 12px; width: 100%; text-align: left; }
+.helm-portal-form label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--text-dim); }
+
+.helm-portal-app { min-height: 100vh; }
+.helm-portal-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  padding: 16px 24px; border-bottom: 1px solid var(--border);
+}
+.helm-portal-top-acts { display: flex; align-items: center; gap: 10px; }
+.helm-portal-tabs { display: flex; gap: 4px; padding: 0 24px; border-bottom: 1px solid var(--border); }
+.helm-portal-main { padding: 22px 24px 60px; max-width: 900px; margin: 0 auto; }
+.helm-portal-cursos { display: flex; flex-direction: column; gap: 16px; }
+
+.helm-leccion-ver h1 { font-size: 22px; font-weight: 600; margin: 14px 0 16px; }
+.helm-video { position: relative; padding-top: 56.25%; border-radius: var(--radius-sm); overflow: hidden; background: #000; }
+.helm-video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.helm-video-file { width: 100%; border-radius: var(--radius-sm); background: #000; }
+.helm-leccion-files { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.helm-leccion-files b { font-size: 13px; }
+.helm-leccion-files .helm-btn { text-decoration: none; }
+
+@media (max-width: 820px) {
+  .helm-portal-top, .helm-portal-tabs, .helm-portal-main { padding-left: 16px; padding-right: 16px; }
+}

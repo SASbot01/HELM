@@ -2,6 +2,12 @@
   "functions": {
     "api/admin.js": {
       "maxDuration": 30
+    },
+    "api/google.js": {
+      "maxDuration": 60
+    },
+    "api/chat.js": {
+      "maxDuration": 60
     }
   },
   "rewrites": [

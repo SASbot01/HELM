@@ -4,7 +4,12 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { ToastProvider } from './components/Toast.jsx'
 import { ThemeProvider } from './contexts/ThemeContext.jsx'
 import SuperAdminLogin from './pages/admin/SuperAdminLogin.jsx'
+import Registro from './pages/Registro.jsx'
+import UsersAdmin from './pages/UsersAdmin.jsx'
 import HelmApp from './helm/HelmApp.jsx'
+import FormularioPublico from './pages/FormularioPublico.jsx'
+import ComunidadPublica from './pages/ComunidadPublica.jsx'
+import PrimerMapa from './pages/PrimerMapa.jsx'
 import './index.css'
 
 // App reducida a HELM: se entra por /login (superadmin) → /admin (Helm).
@@ -32,6 +37,19 @@ createRoot(document.getElementById('root')).render(
         <Routes>
           <Route path="/" element={<Navigate to="/admin" replace />} />
           <Route path="/login" element={<SuperAdminLogin />} />
+          {/* Registro público (crea negocio + acceso pendientes de aprobación). */}
+          <Route path="/registro" element={<Registro />} />
+          {/* Panel de usuarios — solo superadmins (la propia página lo comprueba). */}
+          <Route path="/usersadmin" element={<UsersAdmin />} />
+          {/* Lead magnet público: diagnóstico operativo. Los leads entran al
+              CRM del perfil indicado en primermapa/guardar.js. */}
+          <Route path="/primermap" element={<PrimerMapa />} />
+          {/* Formulario público que rellena el cliente. Va ANTES de /:slug/*,
+              que si no se lo tragaría como si fuese el slug de un perfil. */}
+          <Route path="/f/:formId" element={<FormularioPublico />} />
+          {/* Portal público de la comunidad interna de un perfil. Va ANTES de
+              /:slug/* por lo mismo que /f/: si no, se lo tragaría. */}
+          <Route path="/c/:slug" element={<ComunidadPublica />} />
           {/* HELM — app limpia (CRM · Ventas · Diario · Finanzas · Chat · Ajustes).
               /admin entra sin perfil fijado (redirige al último usado) y
               /<slug> abre directamente ese perfil: /silvestre, /enformaconhugo… */}

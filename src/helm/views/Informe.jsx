@@ -1,7 +1,57 @@
 // HELM — Informe: qué se ha facturado, filtrable por periodo y por programa.
 import { useEffect, useMemo, useState } from 'react'
-import { supabase, money, fmtDate } from '../lib'
+import { Rocket, ArrowRight, X } from 'lucide-react'
+import { supabase, money, fmtDate, getOnboarding, isSaleCancelled, cuotasPendientes } from '../lib'
 import { Kpi, Panel, Empty } from '../ui'
+
+// Banner de arranque: empuja al onboarding de contenido mientras no esté hecho.
+//
+// Una vez completado desaparece. Antes se quedaba fijo arriba diciendo
+// "Onboarding de contenido completado" para siempre, robando la primera franja
+// del informe sin aportar nada: para revisar las respuestas ya está la entrada
+// "Onboarding" del menú. Un banner es un aviso, y un aviso que no se puede
+// cerrar ni caduca deja de ser un aviso.
+//
+// También se puede cerrar a mano mientras está pendiente (la X), y en ese caso
+// no vuelve a salir en toda la sesión.
+function OnboardingBanner({ clientId, onNavigate }) {
+  const [status, setStatus] = useState('loading') // 'loading' | undefined | 'draft' | 'completed'
+  const [cerrado, setCerrado] = useState(false)
+
+  // No hace falta reiniciar `cerrado` al cambiar de perfil: el shell remonta la
+  // vista entera con key={clientId + view}, así que este estado ya nace limpio.
+  useEffect(() => {
+    let alive = true
+    getOnboarding(clientId, 'contenido').then(d => alive && setStatus(d?.status)).catch(() => alive && setStatus(undefined))
+    return () => { alive = false }
+  }, [clientId])
+
+  if (status === 'loading' || status === 'completed' || cerrado || !onNavigate) return null
+
+  return (
+    <div className="helm-onb-banner" onClick={() => onNavigate('onboarding')}>
+      <div className="helm-onb-banner-ico"><Rocket size={20} /></div>
+      <div className="helm-onb-banner-txt">
+        <b>{status === 'draft' ? 'Termina tu onboarding' : 'Inicia tu onboarding'}</b>
+        <span>
+          {status === 'draft'
+            ? 'Tienes un borrador a medias. Termínalo para que la IA aprenda tu marca y escriba tu contenido.'
+            : 'Rellena el formulario de marca y negocio para que la IA aprenda cómo hablas y escriba tu contenido como tú.'}
+        </span>
+      </div>
+      <button className="helm-btn primary">
+        {status === 'draft' ? 'Continuar' : 'Empezar'} <ArrowRight size={15} />
+      </button>
+      <button
+        className="helm-onb-banner-x"
+        aria-label="Ocultar aviso"
+        onClick={e => { e.stopPropagation(); setCerrado(true) }}
+      >
+        <X size={16} />
+      </button>
+    </div>
+  )
+}
 
 // Periodos preajustados. `days: null` = todo el histórico.
 const PERIODOS = [
@@ -21,7 +71,7 @@ function desdeISO(periodo) {
   return new Date(now.getTime() - periodo.days * 86400000).toISOString().slice(0, 10)
 }
 
-export default function Informe({ clientId }) {
+export default function Informe({ clientId, onNavigate }) {
   const [sales, setSales] = useState(null)
   const [finance, setFinance] = useState([])
   const [contacts, setContacts] = useState(0)
@@ -35,15 +85,18 @@ export default function Informe({ clientId }) {
   useEffect(() => {
     let alive = true
     Promise.all([
+      // `status` entra en el select para poder descartar las canceladas: una
+      // venta anulada no puede seguir contando como facturación.
       supabase.from('sales')
-        .select('revenue, cash_collected, date, client_name, product')
+        .select('revenue, cash_collected, date, client_name, product, status, ' +
+          'installments_total, installments_paid, installment_amount, plan_start, plan_end')
         .eq('client_id', clientId).order('date', { ascending: false }).limit(2000),
       supabase.from('ceo_finance_entries')
         .select('amount, category, date').eq('client_id', clientId).limit(2000),
       supabase.from('crm_contacts').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
     ]).then(([s, f, c]) => {
       if (!alive) return
-      setSales(s.data || [])
+      setSales((s.data || []).filter(r => !isSaleCancelled(r)))
       setFinance(f.data || [])
       setContacts(c.count || 0)
     })
@@ -87,6 +140,15 @@ export default function Informe({ clientId }) {
       .map(([name, p]) => ({ name, ...p, cuota: totalPeriodo ? (p.facturado / totalPeriodo) * 100 : 0 }))
       .sort((a, b) => b.facturado - a.facturado)
 
+    // Pagos fraccionados vivos: los que aún tienen cuotas por cobrar. Sin esto
+    // el informe daba por buena toda la facturación aunque estuviera a medias.
+    const planes = filtradas
+      .map(s => ({ ...s, pendientes: cuotasPendientes(s) }))
+      .filter(s => s.pendientes != null)
+      .sort((a, b) => b.pendientes - a.pendientes)
+    const porCobrar = planes.reduce(
+      (a, s) => a + (s.pendientes * (Number(s.installment_amount) || 0)), 0)
+
     const fin = finance.filter(e => enRango(e.date))
     const ingresos = fin.filter(e => Number(e.amount) > 0).reduce((a, e) => a + Number(e.amount), 0)
     const gastos = fin.filter(e => Number(e.amount) < 0).reduce((a, e) => a + Number(e.amount), 0)
@@ -95,6 +157,7 @@ export default function Informe({ clientId }) {
       revenue, cash, ventas: filtradas.length,
       ticket: filtradas.length ? revenue / filtradas.length : 0,
       balance: ingresos + gastos,
+      planes, porCobrar,
       tabla,
       recientes: filtradas.slice(0, 8),
     }
@@ -106,6 +169,8 @@ export default function Informe({ clientId }) {
 
   return (
     <div className="helm-grid" style={{ gap: 20 }}>
+      <OnboardingBanner clientId={clientId} onNavigate={onNavigate} />
+
       <div className="helm-filters">
         <div className="helm-chips">
           {PERIODOS.map(p => (
@@ -130,7 +195,42 @@ export default function Informe({ clientId }) {
         <Kpi label="Ventas" value={d.ventas} sub={`ticket medio ${money(d.ticket)}`} />
         <Kpi label="Balance finanzas" value={money(d.balance)} sub="ingresos − gastos" />
         <Kpi label="Contactos CRM" value={contacts} sub="en pipeline" />
+        {d.planes.length > 0 && (
+          <Kpi label="Pendiente en cuotas" value={money(d.porCobrar)} sub={`${d.planes.length} plan${d.planes.length === 1 ? '' : 'es'} de pago`} />
+        )}
       </div>
+
+      {d.planes.length > 0 && (
+        <Panel title="Pagos fraccionados">
+          <div className="helm-tablewrap">
+            <table className="helm-table">
+              <thead>
+                <tr>
+                  <th>Cliente</th><th>Programa</th><th>Cuotas</th><th>Pendientes</th>
+                  <th>Importe/cuota</th><th>Inicio del plan</th><th>Fin del plan</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.planes.map((s, i) => (
+                  <tr key={i} className={s.pendientes === 0 ? '' : 'pending'}>
+                    <td>{s.client_name || '—'}</td>
+                    <td>{s.product || '—'}</td>
+                    <td className="helm-num">{s.installments_paid || 0}/{s.installments_total}</td>
+                    <td>
+                      <span className={'helm-chip ' + (s.pendientes === 0 ? 'green' : 'amber')}>
+                        {s.pendientes === 0 ? 'Cobrado' : `Faltan ${s.pendientes}`}
+                      </span>
+                    </td>
+                    <td className="helm-num">{s.installment_amount ? money(s.installment_amount) : '—'}</td>
+                    <td>{s.plan_start ? fmtDate(s.plan_start) : '—'}</td>
+                    <td>{s.plan_end ? fmtDate(s.plan_end) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      )}
 
       <Panel title={`Facturación por programa · ${periodo.label.toLowerCase()}`}>
         {d.tabla.length === 0 ? (

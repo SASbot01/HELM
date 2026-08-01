@@ -1,0 +1,144 @@
+// HELM — quién VE qué y quién puede EDITAR qué.
+//
+// Dos matrices, y la diferencia importa:
+//
+//   visible → qué secciones le aparecen en el menú. Lo que no está, no existe
+//             para esa persona: ni en el menú ni entrando por la URL.
+//   matrix  → de lo que ve, qué puede modificar. El resto lo ve en lectura.
+//
+// Al principio solo había la segunda, porque el panel lo usaba el dueño y su
+// mano derecha. Con closers y setters entrando con su cuenta hace falta la
+// primera: un closer no tiene por qué ver las finanzas del negocio, ni el
+// equipo, ni lo que cobra cada compañero.
+//
+// El dueño siempre puede todo y no aparece en las matrices: un sistema donde el
+// dueño puede quedarse sin acceso a su propio negocio es un sistema roto.
+import { supabase } from './lib'
+
+// Las áreas editables. La clave coincide con la de la vista en HelmApp para
+// que la comprobación sea directa.
+export const AREAS = [
+  { key: 'crm', label: 'CRM', desc: 'Contactos, etapas y actividad' },
+  { key: 'servicios', label: 'Servicios', desc: 'El catálogo' },
+  { key: 'equipo', label: 'Equipo', desc: 'Personas, pagos y contratos' },
+  { key: 'ventas', label: 'Ventas', desc: 'Registrar y cancelar ventas' },
+  { key: 'diario', label: 'Diario', desc: 'Reportes diarios' },
+  { key: 'finanzas', label: 'Finanzas', desc: 'Movimientos y comisiones' },
+  { key: 'contenido', label: 'Contenido', desc: 'Calendario y piezas' },
+  { key: 'onboarding', label: 'Onboarding', desc: 'Respuestas y Biblia' },
+  { key: 'enlaces', label: 'Enlaces', desc: 'URLs del negocio' },
+  { key: 'archivos', label: 'Archivos', desc: 'Documentos del negocio' },
+  { key: 'ajustes', label: 'Ajustes', desc: 'Integraciones y permisos' },
+  { key: 'tareas', label: 'Tareas', desc: 'Plugin de tareas' },
+  { key: 'biblioteca', label: 'Biblioteca', desc: 'Documentos de la IA' },
+  { key: 'formularios', label: 'Formularios', desc: 'Constructor y respuestas' },
+]
+
+// Punto de partida razonable: cada rol edita lo suyo. Es lo que se aplica
+// mientras nadie haya tocado la matriz.
+export const DEFAULT_MATRIX = {
+  closer: ['crm', 'ventas', 'diario', 'tareas'],
+  setter: ['crm', 'diario', 'tareas'],
+  csm: ['crm', 'diario', 'tareas', 'formularios', 'biblioteca'],
+  editor: ['contenido', 'tareas'],
+  otro: [],
+}
+
+// ── Visibilidad ────────────────────────────────────────────────────────────
+// Las secciones del menú. La clave es la del NAV de HelmApp, para que la
+// comprobación sea directa. Ajustes NO está en la lista a propósito: es donde se
+// configuran los permisos, así que solo entra quien tiene nivel de acceso total.
+export const SECCIONES = [
+  { key: 'informe', label: 'Informe', desc: 'Resumen y KPIs del negocio' },
+  { key: 'onboarding', label: 'Onboarding', desc: 'Formularios y Biblia' },
+  { key: 'crm', label: 'CRM', desc: 'Contactos y pipeline' },
+  { key: 'servicios', label: 'Servicios', desc: 'Catálogo de servicios' },
+  { key: 'equipo', label: 'Equipo', desc: 'Personas, pagos y contratos' },
+  { key: 'ventas', label: 'Ventas', desc: 'Reporte de ventas' },
+  { key: 'diario', label: 'Diario', desc: 'Reportes diarios' },
+  { key: 'finanzas', label: 'Finanzas', desc: 'Ingresos, gastos y comisiones' },
+  { key: 'chat', label: 'Chat IA', desc: 'El copywriter del perfil' },
+  { key: 'contenido', label: 'Contenido', desc: 'Calendario de contenido' },
+  { key: 'llamadas', label: 'Llamadas', desc: 'Agenda de llamadas' },
+  { key: 'comunidad', label: 'Comunidad', desc: 'El hilo común de HELM' },
+  { key: 'interna', label: 'Comunidad interna', desc: 'Tu comunidad y tu formación' },
+  { key: 'enlaces', label: 'Enlaces', desc: 'URLs del negocio' },
+  { key: 'archivos', label: 'Archivos', desc: 'Documentos del negocio' },
+  { key: 'plugins', label: 'Plugins', desc: 'Catálogo de módulos' },
+  { key: 'tareas', label: 'Tareas', desc: 'Plugin de tareas' },
+  { key: 'biblioteca', label: 'Biblioteca', desc: 'Documentos de la IA' },
+  { key: 'formularios', label: 'Formularios', desc: 'Constructor y respuestas' },
+  { key: 'actividad', label: 'Actividad', desc: 'Timeline del equipo' },
+]
+
+// Lo que ve cada rol si nadie ha tocado nada. Un closer entra a hacer su
+// trabajo: sus contactos y su reporte. Nada de finanzas ni de nóminas ajenas.
+export const DEFAULT_VISIBLE = {
+  closer: ['crm', 'diario', 'tareas'],
+  setter: ['crm', 'diario', 'tareas'],
+  csm: ['crm', 'diario', 'tareas', 'formularios', 'biblioteca'],
+  editor: ['contenido', 'tareas', 'biblioteca'],
+  otro: ['tareas'],
+}
+
+export const OWNER_ROLE = 'dueno'
+
+// Niveles de acceso que mandan sobre todo el perfil, pase lo que pase en la
+// matriz. Vienen de `team.role` (ver api/equipo.js → NIVELES).
+const NIVELES_TOTALES = ['admin,ceo,director', 'admin']
+
+// ¿Este acceso manda sobre todo el perfil? Lo usan las pantallas que solo tienen
+// sentido para quien lleva el negocio (la guía de bienvenida, Ajustes…).
+export const accesoTotal = (nivel) => NIVELES_TOTALES.includes(nivel)
+
+// El dueño no se puede limitar: se contesta antes de mirar la matriz. Un
+// sistema donde el propietario puede quedarse sin acceso a su propio negocio
+// está roto, y esa es una puerta que nunca conviene dejar abierta.
+export function puedeEditar(matrix, role, area, nivelAcceso = null) {
+  if (nivelAcceso && NIVELES_TOTALES.includes(nivelAcceso)) return true
+  if (!role || role === OWNER_ROLE) return true
+  const lista = matrix?.[role] ?? DEFAULT_MATRIX[role] ?? []
+  return lista.includes(area)
+}
+
+/**
+ * ¿Le aparece esta sección a esta persona?
+ *
+ * Igual que puedeEditar, con la misma escalera: nivel de acceso total → dueño →
+ * matriz → defaults. Y sin rol (el acceso "suelto" de un perfil, o una sesión
+ * antigua sin rol guardado) se ve todo: quitar secciones a quien no sabemos
+ * quién es sería dejar fuera al propio dueño.
+ */
+export function puedeVer(visible, role, seccion, nivelAcceso = null) {
+  if (nivelAcceso && NIVELES_TOTALES.includes(nivelAcceso)) return true
+  if (!role || role === OWNER_ROLE) return true
+  const lista = visible?.[role] ?? DEFAULT_VISIBLE[role] ?? []
+  return lista.includes(seccion)
+}
+
+export async function loadPermisos(clientId) {
+  const { data, error } = await supabase
+    .from('helm_permissions').select('matrix, visible').eq('client_id', clientId).maybeSingle()
+  if (error) {
+    console.warn('[helm] loadPermisos', error.message)
+    // Puede faltar la tabla entera (helm_operativa.sql) o solo la columna
+    // `visible` (helm_permisos_ver.sql). En los dos casos se trabaja con los
+    // valores por defecto y la vista avisa de qué migración falta.
+    const falta = /does not exist|schema cache|column/i.test(error.message)
+    return { matrix: DEFAULT_MATRIX, visible: DEFAULT_VISIBLE, missing: falta }
+  }
+  const lleno = (o) => o && Object.keys(o).length > 0
+  return {
+    matrix: lleno(data?.matrix) ? data.matrix : DEFAULT_MATRIX,
+    visible: lleno(data?.visible) ? data.visible : DEFAULT_VISIBLE,
+    missing: false,
+  }
+}
+
+export async function savePermisos(clientId, matrix, visible) {
+  const fila = { client_id: clientId, matrix, updated_at: new Date().toISOString() }
+  if (visible) fila.visible = visible
+  const { error } = await supabase.from('helm_permissions')
+    .upsert(fila, { onConflict: 'client_id' })
+  if (error) throw error
+}

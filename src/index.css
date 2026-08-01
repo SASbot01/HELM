@@ -268,21 +268,24 @@ button {
   justify-content: center;
   position: relative;
   overflow: hidden;
-  background: #050510;
+  background:
+    radial-gradient(1000px 620px at 100% -10%, rgba(34,197,94,0.34), transparent 58%),
+    radial-gradient(760px 520px at -8% 110%, rgba(15,120,70,0.24), transparent 55%),
+    #05100A;
 }
 .admin-login-glow {
   position: absolute;
   width: 600px; height: 600px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255,255,255,0.04) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(47,203,106,0.12) 0%, transparent 70%);
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
 .admin-login-card {
-  background: rgba(5,5,16,0.95);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 16px;
+  background: rgba(8,23,16,0.92);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 20px;
   padding: 48px 40px;
   width: 100%;
   max-width: 420px;
@@ -365,6 +368,42 @@ button {
   box-shadow: 0 8px 30px rgba(255,255,255,0.15);
 }
 .admin-login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.admin-login-alt { margin-top: 18px; text-align: center; font-size: 0.85rem; color: rgba(255,255,255,0.55); }
+.admin-login-alt a { color: #fff; font-weight: 600; text-decoration: none; }
+.admin-login-alt a:hover { text-decoration: underline; }
+.admin-login-ok {
+  background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.3);
+  color: rgba(255,255,255,0.85); padding: 16px; border-radius: 12px;
+  font-size: 0.9rem; line-height: 1.55; margin: 8px 0 20px; text-align: left;
+}
+
+/* Registro → bloque de marca blanca (logo, nombre y subtítulo del negocio). */
+.registro-marca {
+  margin-top: 6px; padding: 16px; border-radius: 12px; text-align: left;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+}
+.registro-marca-head { margin-bottom: 14px; }
+.registro-marca-head b { display: block; font-size: 0.9rem; color: rgba(255,255,255,0.9); }
+.registro-marca-head small { display: block; margin-top: 3px; font-size: 0.75rem; line-height: 1.5; color: rgba(255,255,255,0.45); }
+.registro-logo { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.registro-logo img,
+.registro-logo-ph {
+  width: 56px; height: 56px; border-radius: 14px; flex-shrink: 0;
+  object-fit: contain; background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.registro-logo-ph {
+  display: grid; place-items: center; border-style: dashed;
+  font-size: 0.7rem; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,0.4);
+}
+.registro-logo > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.registro-logo small { flex-basis: 100%; font-size: 0.72rem; color: rgba(255,255,255,0.4); }
+.registro-logo-btn {
+  padding: 7px 12px; border-radius: 9px; cursor: pointer; font-family: inherit; font-size: 0.78rem;
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14); color: rgba(255,255,255,0.85);
+}
+.registro-logo-btn:hover:not(:disabled) { background: rgba(255,255,255,0.12); }
+.registro-logo-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 @media (max-width: 768px) {
   .ceo-quick-cards { grid-template-columns: repeat(2, 1fr); }
   .ceo-team-grid { grid-template-columns: 1fr; }

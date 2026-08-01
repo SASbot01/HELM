@@ -26,7 +26,7 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     // Permite abrir el dev-server tras un túnel Cloudflare (URL provisional)
-    allowedHosts: ['.trycloudflare.com', 'dev.apex-closers.com', '.loca.lt', '.pinggy.link', '.serveo.net', '.ngrok-free.app'],
+    allowedHosts: ['.trycloudflare.com', 'dev.apex-closers.com', '.loca.lt', '.pinggy.link', '.serveo.net', '.ngrok-free.app', '.s4sf.net'],
     // Preview local: reenvía las llamadas del frontend al dev-server de las
     // funciones api/ (Vercel-style) que corre en :5182 contra la Supabase local.
     proxy: {
@@ -56,7 +56,7 @@ export default defineConfig({
     host: true,
     port: 5173,
     strictPort: true,
-    allowedHosts: ['.trycloudflare.com', 'dev.apex-closers.com', '.loca.lt', '.pinggy.link', '.serveo.net', '.ngrok-free.app'],
+    allowedHosts: ['.trycloudflare.com', 'dev.apex-closers.com', '.loca.lt', '.pinggy.link', '.serveo.net', '.ngrok-free.app', '.s4sf.net'],
     proxy: {
       '/api': 'http://localhost:5182',
       '/sb': {

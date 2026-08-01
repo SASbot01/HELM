@@ -14,9 +14,15 @@ const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434'
 const MODEL = process.env.HELM_LLM_MODEL || 'qwen2.5:14b-instruct'
 const NUM_CTX = Number(process.env.HELM_LLM_CTX || 16384)
 
-// Un 14B en GPU tarda del orden de 20-60s en una respuesta larga; el timeout
-// va holgado para que no corte a mitad de un guion.
-const TIMEOUT_MS = Number(process.env.HELM_LLM_TIMEOUT_MS || 180_000)
+// Un 14B en GPU tarda del orden de 20-60s en una respuesta larga. El tope son
+// 85 s y no más porque HELM se sirve detrás de un túnel de Cloudflare, que
+// corta a los 100 s con un 524 — una pantalla de error ajena que no explica
+// nada. Antes de llegar ahí preferimos cortar nosotros y decir qué ha pasado.
+const TIMEOUT_MS = Number(process.env.HELM_LLM_TIMEOUT_MS || 85_000)
+
+// Cuánto se queda el modelo cargado en la VRAM entre peticiones. Por defecto
+// Ollama lo descarga a los 5 minutos y la siguiente petición paga la recarga.
+const KEEP_ALIVE = process.env.HELM_LLM_KEEP_ALIVE || '30m'
 
 export const llmInfo = { url: OLLAMA_URL, model: MODEL, ctx: NUM_CTX }
 
@@ -52,7 +58,42 @@ export async function llmHealth() {
  * @param {number}   [opts.maxTokens]   tope de tokens generados
  * @returns {Promise<string>} texto de la respuesta
  */
-export async function llmChat({ system, messages, temperature = 0.75, maxTokens = 2048 }) {
+export async function llmChat(opts) {
+  const msg = await ollamaChat(opts)
+  const text = (msg?.content || '').trim()
+  if (!text) {
+    const e = new Error('El modelo local ha devuelto una respuesta vacía.')
+    e.statusCode = 502
+    throw e
+  }
+  return text
+}
+
+/**
+ * Igual que llmChat pero con herramientas: el modelo puede pedir que se
+ * ejecuten en vez de contestar texto.
+ *
+ * Devuelve el mensaje crudo porque un turno con herramientas tiene dos salidas
+ * posibles —texto o llamadas— y quien decide qué hacer con ellas es el chat.
+ *
+ * @param {object} opts       lo mismo que llmChat, más:
+ * @param {Array}  opts.tools definiciones en formato OpenAI/Ollama
+ * @returns {Promise<{content: string, toolCalls: Array<{name: string, args: object}>}>}
+ */
+export async function llmChatConHerramientas(opts) {
+  const msg = await ollamaChat(opts)
+  const toolCalls = (msg?.tool_calls || []).map(c => ({
+    name: c?.function?.name,
+    // Ollama devuelve los argumentos ya parseados, pero algunos modelos los
+    // mandan como cadena JSON: se admiten las dos formas.
+    args: typeof c?.function?.arguments === 'string'
+      ? (() => { try { return JSON.parse(c.function.arguments) } catch { return {} } })()
+      : (c?.function?.arguments || {}),
+  })).filter(c => c.name)
+  return { content: (msg?.content || '').trim(), toolCalls }
+}
+
+async function ollamaChat({ system, messages, temperature = 0.75, maxTokens = 2048, tools }) {
   let res
   try {
     res = await fetch(`${OLLAMA_URL}/api/chat`, {
@@ -62,9 +103,14 @@ export async function llmChat({ system, messages, temperature = 0.75, maxTokens 
       body: JSON.stringify({
         model: MODEL,
         stream: false,
+        keep_alive: KEEP_ALIVE,
         messages: [{ role: 'system', content: system }, ...messages],
+        ...(tools?.length ? { tools } : {}),
         options: {
-          temperature,
+          // Decidir qué herramienta usar y con qué argumentos no es escribir
+          // copy: ahí la creatividad estorba. Con herramientas se baja la
+          // temperatura para que no adorne los datos.
+          temperature: tools?.length ? Math.min(temperature, 0.2) : temperature,
           num_ctx: NUM_CTX,
           num_predict: maxTokens,
           // Penaliza repetir el mismo arranque de frase, que es el vicio
@@ -92,11 +138,7 @@ export async function llmChat({ system, messages, temperature = 0.75, maxTokens 
   }
 
   const data = await res.json()
-  const text = (data?.message?.content || '').trim()
-  if (!text) {
-    const e = new Error('El modelo local ha devuelto una respuesta vacía.')
-    e.statusCode = 502
-    throw e
-  }
-  return text
+  // Se devuelve el mensaje entero: en un turno con herramientas `content` viene
+  // vacío y lo que importa está en `tool_calls`.
+  return data?.message || {}
 }

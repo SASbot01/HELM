@@ -67,6 +67,20 @@ export async function validateAuth(req, { required = true } = {}) {
   if (token) {
     try {
       const payload = await verifyJwt(token)
+
+      // Los tokens del PANEL no llevan `kind`. Los de propósito específico sí:
+      // 'community' (sesión de un miembro de la comunidad de un perfil) y
+      // 'google-oauth' (el state de un consentimiento). Todos ellos llevan
+      // clientId dentro, así que sin esta comprobación valdrían como sesión del
+      // panel — un alumno aprobado en una comunidad podría leer el CRM y las
+      // integraciones del negocio con su propio token. No es teórico: se
+      // detectó probándolo.
+      if (payload.kind) {
+        const e = new Error(`Unauthorized: este token es de tipo "${payload.kind}" y no sirve para el panel`)
+        e.statusCode = 401
+        throw e
+      }
+
       return {
         userId: payload.sub || payload.userId || null,
         clientId: payload.clientId || null,
