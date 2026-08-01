@@ -33,62 +33,44 @@ begin
                  where client_id = v_client and kind = 'setter' and title = v_titulo) then
     raise notice '[HELM] Detrás de Cámara ya tiene su guion de setting: no se toca.';
   else
-    v_guion := $g$Guion de setting por DM. Se manda mensaje a mensaje, ESPERANDO RESPUESTA entre cada uno. Nunca se sueltan dos seguidos ni se adelanta el siguiente paso.
+    v_guion := $g$Guion de Setting por DM — Detrás de Cámara
 
-**1 · Apertura**
-¡{Nombre}!
+¡Nombre (persona)!
 
-*(Esperamos respuesta.)*
+Esperamos respuesta.
 
-**2 · Romper el hielo**
 ¿Qué tal? ¿Cómo va todo?
 
-*(Esperamos respuesta.)*
+Esperamos respuesta.
 
-**3 · Situación**
 Me alegro! Oye, por curiosidad, ¿tú ahora mismo estás grabando para clientes o todavía estás en la fase de formarte y buscar tus primeros proyectos?
 
-*(Esperamos respuesta.)*
+Esperamos respuesta.
 
-**4 · Se bifurca según lo que conteste**
-· Ya graba para clientes → Genial, eso es lo más importante, estar en movimiento. ¿Y estás contento con lo que cobras o sientes que deberías estar facturando más?
-· Todavía formándose o buscando → Normal, es la fase más dura. Lo importante es tener un sistema claro para no estar dando palos de ciego.
+Ya graba para clientes: Genial, eso es lo más importante, estar en movimiento. ¿Y estás contento con lo que cobras o sientes que deberías estar facturando más?
+Todavía formándose / buscando: Normal, es la fase más dura. Lo importante es tener un sistema claro para no estar dando palos de ciego.
 
-*(Esperamos respuesta.)*
+Esperamos respuesta.
 
-**5 · El problema, con sus palabras**
 ¿Y qué dirías que es lo que más se te complica ahora mismo? ¿Captar clientes, saber cuánto cobrar, conseguir estabilidad…?
 
-*(Esperamos respuesta.)*
+Esperamos respuesta.
 
-**6 · Se responde a SU problema, no a los tres**
-· Captar clientes → Eso es justamente lo que más cambia cuando tienes un sistema. Mis alumnos pasaron de esperar a que les llegara algo a tener clientes propios cada mes.
-· Cobrar más / precios → Totalmente. El problema casi nunca es tu calidad, es cómo presentas y vendes tu servicio. Ahí está la diferencia entre cobrar 100€ y cobrar 3.000€.
-· Estabilidad → Es lo que más agobia. Un mes bien, otro sin nada. Sin un sistema es imposible predecir ingresos.
+Captar clientes: Eso es justamente lo que más cambia cuando tienes un sistema. Mis alumnos pasaron de esperar a que les llegara algo a tener clientes propios cada mes.
+Cobrar más / precios: Totalmente. El problema casi nunca es tu calidad, es cómo presentas y vendes tu servicio. Ahí está la diferencia entre cobrar 100€ y cobrar 3.000€.
+Estabilidad: Es lo que más agobia. Un mes bien, otro sin nada. Sin un sistema es imposible predecir ingresos.
 
-Y se cierra el bloque pidiendo conformidad: ¿Piensas igual, {Nombre}?
+¿Piensas igual, Nombre?
 
-*(Esperamos respuesta.)*
+Esperamos respuesta.
 
-**7 · La oferta**
 Mira, tengo un sistema que a mí y a mis alumnos nos ha permitido pasar de cobrar 100€ por trabajo a moverse en 3.000-5.000€/mes con clientes propios, sin depender de ninguna agencia y grabando lo que les gusta.
 
 ¿Te parece si le echamos un ojo juntos a tu caso y vemos si te puedo ayudar o darte alguna orientación?
 
-*(Esperamos respuesta.)*
+Esperamos respuesta.
 
-**8 · El cierre**
-Perfecto! Déjame por aquí tu número de teléfono y hablamos ahora.
-
----
-
-REGLAS DE ESTE GUION
-· Un mensaje por turno. Siempre se espera respuesta antes de seguir.
-· El nombre de la persona se usa en la apertura y en el punto 6. No más: cansa.
-· En los pasos que se bifurcan se elige UNA rama, la que encaje con lo que dijo. Nunca se listan las dos.
-· Tono de colega del gremio, no de comercial. Frases cortas, sin usted, sin emojis de más.
-· No se manda info, ni PDFs, ni enlaces antes del punto 8: el objetivo del DM es el teléfono, nada más.
-· Si contesta con evasivas o "mándame info", se devuelve con una pregunta sobre su situación y se vuelve al paso donde estábamos.$g$;
+Perfecto! Déjame por aquí tu número de teléfono y hablamos ahora.$g$;
 
     insert into helm_knowledge (client_id, kind, title, content, source)
     values (v_client, 'setter', v_titulo, v_guion, 'guion oficial');
