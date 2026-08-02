@@ -194,22 +194,40 @@ export default async function handler(req, res) {
         })
       }
 
-      // La formación, ya montada: cursos publicados con sus lecciones dentro.
+      // La formación, ya montada: cursos publicados, con sus módulos dentro y
+      // las clases dentro de cada uno. Las clases sin módulo cuelgan del curso.
       if (req.method === 'GET' && action === 'contenido') {
-        const [{ data: cursos }, { data: lecciones }] = await Promise.all([
+        const [{ data: cursos }, mods, { data: lecciones }] = await Promise.all([
           supabase.from('helm_courses')
             .select('id, title, description, cover_url, position')
             .eq('client_id', miembro.client_id).eq('published', true)
             .order('position').order('created_at'),
+          supabase.from('helm_modules')
+            .select('id, course_id, title, description, position')
+            .eq('client_id', miembro.client_id).eq('published', true)
+            .order('position').order('created_at'),
           supabase.from('helm_lessons')
-            .select('id, course_id, title, body, video_url, attachments, position')
+            .select('id, course_id, module_id, title, body, video_url, attachments, position')
             .eq('client_id', miembro.client_id).eq('published', true)
             .order('position').order('created_at'),
         ])
+        // Si la migración de módulos no está puesta, `mods.error` y aquí no hay
+        // ninguno: la formación se sirve en dos niveles, como antes.
+        const modulos = mods.error ? [] : (mods.data || [])
         return res.status(200).json({
-          cursos: (cursos || []).map(c => ({
-            ...c, lecciones: (lecciones || []).filter(l => l.course_id === c.id),
-          })),
+          cursos: (cursos || []).map(c => {
+            const suyas = (lecciones || []).filter(l => l.course_id === c.id)
+            return {
+              ...c,
+              modulos: modulos.filter(m => m.course_id === c.id).map(m => ({
+                ...m, lecciones: suyas.filter(l => l.module_id === m.id),
+              })),
+              // Solo las sueltas. Una clase de un módulo sin publicar no
+              // aparece por ningún lado: ocultar el módulo se lleva sus clases
+              // por delante, no las suelta en el curso.
+              lecciones: suyas.filter(l => !l.module_id),
+            }
+          }),
         })
       }
 

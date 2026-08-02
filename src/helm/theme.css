@@ -1542,6 +1542,15 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-curso-acts { display: flex; gap: 6px; flex-wrap: wrap; }
 .helm-curso-desc { margin: 8px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--text-dim); }
 
+/* El módulo se marca con una línea a la izquierda en vez de otra caja dentro de
+   la caja: con tres niveles anidados, los bordes completos se comen el ancho. */
+.helm-modulo { margin-top: 12px; padding-left: 12px; border-left: 2px solid var(--border-2); }
+.helm-modulo-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.helm-modulo-tit { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 180px; }
+.helm-modulo-tit b { font-size: 13px; font-weight: 600; }
+.helm-modulo-tit small { color: var(--text-mut); font-size: 11.5px; }
+.helm-modulo .helm-leccion-list { margin-top: 8px; }
+
 .helm-leccion-list { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
 .helm-leccion { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .helm-leccion-main {

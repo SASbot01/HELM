@@ -16,6 +16,17 @@
       "destination": "/api/$1"
     },
     {
+      "source": "/c/:slug",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Ww]hats[Aa]pp|facebookexternalhit|[Ff]acebot|[Tt]witterbot|LinkedInBot|TelegramBot|Slackbot|Discordbot|Googlebot|bingbot|Applebot|[Ee]mbedly|Iframely|redditbot|Pinterest|SkypeUriPreview|vkShare|Mastodon|Bluesky).*"
+        }
+      ],
+      "destination": "/api/portal-meta?slug=:slug"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

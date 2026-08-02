@@ -2,7 +2,7 @@
 //
 // Cuatro pestañas y una idea: esto es tu Discord y tu Skool, dentro de HELM.
 //   Muro      → lo que ven tus miembros al entrar; publicas como la marca.
-//   Formación → cursos con sus lecciones (vídeo, texto y archivos).
+//   Formación → cursos, módulos y clases (vídeo, texto y archivos).
 //   Miembros  → quién se ha registrado por el enlace público y a quién dejas entrar.
 //   Ajustes   → el enlace que le pasas a la gente y cómo se comporta.
 //
@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Users, GraduationCap, MessageSquare, Settings, Plus, Trash2, Check, X, Ban,
   Copy, ChevronRight, ChevronDown, Video, Link2, Send, AlertTriangle, Eye, EyeOff,
+  ChevronUp, Pencil, Layers,
 } from 'lucide-react'
 import {
   supabase, internaApi, fetchRowsOrError, insertRow, updateRow, deleteRow,
@@ -159,24 +160,34 @@ function Muro({ clientId, client }) {
 // ── Formación ──────────────────────────────────────────────────────────────
 function Formacion({ clientId }) {
   const [cursos, setCursos] = useState(null)
+  const [modulos, setModulos] = useState([])
   const [lecciones, setLecciones] = useState([])
+  const [sinModulos, setSinModulos] = useState(false)  // la migración de módulos no está puesta
   const [fatal, setFatal] = useState(null)
   const [abierto, setAbierto] = useState(null)     // curso desplegado
-  const [nuevoCurso, setNuevoCurso] = useState(false)
-  const [edit, setEdit] = useState(null)           // lección en edición
+  const [cursoEdit, setCursoEdit] = useState(null) // curso en edición ({} = nuevo)
+  const [moduloEdit, setModuloEdit] = useState(null)
+  const [edit, setEdit] = useState(null)           // clase en edición
   const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
-    // Las dos consultas a la vez: los cursos y sus lecciones se pintan juntos,
-    // así que esperar una detrás de la otra solo suma latencia.
-    const [{ rows, error: e }, { data }] = await Promise.all([
+    // Las tres consultas a la vez: el árbol entero se pinta junto, así que
+    // esperar una detrás de otra solo suma latencia.
+    const [{ rows, error: e }, mods, lecs] = await Promise.all([
       fetchRowsOrError('helm_courses', clientId, { order: 'position', asc: true }),
+      supabase.from('helm_modules').select('*')
+        .eq('client_id', clientId).order('position').order('created_at'),
       supabase.from('helm_lessons').select('*')
         .eq('client_id', clientId).order('position').order('created_at'),
     ])
     if (e) { setFatal(e); setCursos([]); return }
     setCursos(rows)
-    setLecciones(data || [])
+    // helm_modules es posterior al resto de la formación. Si la migración no
+    // está puesta, esto sigue funcionando en dos niveles en vez de romperse
+    // entero: los módulos se esconden y las clases cuelgan del curso.
+    setSinModulos(!!mods.error)
+    setModulos(mods.error ? [] : (mods.data || []))
+    setLecciones(lecs.data || [])
   }, [clientId])
 
   // El linter marca esto como "setState dentro del efecto", pero los setState de
@@ -186,24 +197,74 @@ function Formacion({ clientId }) {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load() }, [load])
 
-  const porCurso = useMemo(() => {
+  const modsDe = useMemo(() => {
     const map = {}
-    for (const l of lecciones) (map[l.course_id] = map[l.course_id] || []).push(l)
+    for (const m of modulos) (map[m.course_id] = map[m.course_id] || []).push(m)
+    return map
+  }, [modulos])
+
+  // Las clases se agrupan por curso Y módulo. La clave con el módulo vacío es
+  // la de las clases sueltas, las que cuelgan del curso sin pasar por un módulo.
+  const lecsDe = useMemo(() => {
+    const map = {}
+    for (const l of lecciones) {
+      const k = `${l.course_id}:${l.module_id || ''}`
+      ;(map[k] = map[k] || []).push(l)
+    }
     return map
   }, [lecciones])
 
-  async function crearCurso(form) {
-    await insertRow('helm_courses', {
-      client_id: clientId, title: form.title.trim(),
-      description: form.description || '', position: (cursos?.length || 0),
-    })
-    setNuevoCurso(false); load()
+  // Mover reescribe TODAS las posiciones de la lista, no solo las dos filas que
+  // se cruzan. Lo que se creó antes de esto se guardó con position 0 en todo, y
+  // sobre empates un intercambio a pares no mueve nada: por eso "los cursos al
+  // moverlos no se movían". Renumerar 0..n-1 deja el orden real escrito.
+  async function mover(tabla, lista, i, dir) {
+    const j = i + dir
+    if (j < 0 || j >= lista.length) return
+    const orden = [...lista]
+    const [fila] = orden.splice(i, 1)
+    orden.splice(j, 0, fila)
+    setError(null)
+    try {
+      await Promise.all(orden.map((r, n) => updateRow(tabla, r.id, { position: n })))
+      load()
+    } catch (e) { setError(e.message) }
+  }
+
+  async function guardarCurso(form) {
+    const fila = {
+      title: form.title.trim(), description: form.description || '',
+      updated_at: new Date().toISOString(),
+    }
+    if (form.id) await updateRow('helm_courses', form.id, fila)
+    else await insertRow('helm_courses', { ...fila, client_id: clientId, position: (cursos?.length || 0) })
+    setCursoEdit(null); load()
   }
 
   async function borrarCurso(c) {
-    if (!confirm(`¿Borrar el curso "${c.title}" y todas sus lecciones? No se puede deshacer.`)) return
+    if (!confirm(`¿Borrar el curso "${c.title}" con sus módulos y sus clases? No se puede deshacer.`)) return
     setError(null)
     try { await deleteRow('helm_courses', c.id); load() }
+    catch (e) { setError(e.message) }
+  }
+
+  async function guardarModulo(form) {
+    const fila = {
+      title: form.title.trim(), description: form.description || '',
+      updated_at: new Date().toISOString(),
+    }
+    if (form.id) await updateRow('helm_modules', form.id, fila)
+    else await insertRow('helm_modules', {
+      ...fila, client_id: clientId, course_id: form.course_id,
+      position: (modsDe[form.course_id]?.length || 0),
+    })
+    setModuloEdit(null); load()
+  }
+
+  async function borrarModulo(m) {
+    if (!confirm(`¿Borrar el módulo "${m.title}" y las clases que tenga dentro?`)) return
+    setError(null)
+    try { await deleteRow('helm_modules', m.id); load() }
     catch (e) { setError(e.message) }
   }
 
@@ -216,19 +277,32 @@ function Formacion({ clientId }) {
   }
 
   async function guardarLeccion(form) {
+    const destino = form.module_id || ''
     const fila = {
       client_id: clientId, course_id: form.course_id,
       title: form.title.trim(), body: form.body || '',
       video_url: form.video_url.trim(), attachments: form.attachments,
       updated_at: new Date().toISOString(),
     }
-    if (form.id) await updateRow('helm_lessons', form.id, fila)
-    else await insertRow('helm_lessons', { ...fila, position: (porCurso[form.course_id]?.length || 0) })
+    // Sin la migración puesta, helm_lessons no tiene la columna: mandarla sería
+    // un error de Postgres en cada guardado.
+    if (!sinModulos) fila.module_id = form.module_id || null
+    if (form.id) {
+      // Al cambiarla de módulo se va al final del nuevo, que es donde la busca
+      // quien la acaba de mover.
+      const cambiaDeSitio = (form.module_id || '') !== (form.module_original || '')
+      if (cambiaDeSitio) fila.position = (lecsDe[`${form.course_id}:${destino}`]?.length || 0)
+      await updateRow('helm_lessons', form.id, fila)
+    } else {
+      await insertRow('helm_lessons', {
+        ...fila, position: (lecsDe[`${form.course_id}:${destino}`]?.length || 0),
+      })
+    }
     setEdit(null); load()
   }
 
   async function borrarLeccion(l) {
-    if (!confirm(`¿Borrar la lección "${l.title}"?`)) return
+    if (!confirm(`¿Borrar la clase "${l.title}"?`)) return
     await deleteRow('helm_lessons', l.id); load()
   }
 
@@ -239,87 +313,189 @@ function Formacion({ clientId }) {
   return (
     <Panel
       title="Formación"
-      action={<button className="helm-btn primary" onClick={() => setNuevoCurso(true)}><Plus size={15} /> Nuevo curso</button>}
+      action={<button className="helm-btn primary" onClick={() => setCursoEdit({ title: '', description: '' })}><Plus size={15} /> Nuevo curso</button>}
     >
       <div className="helm-settings-body">
         <p className="helm-settings-lead">
-          Tu formación, por cursos y lecciones. Cada lección puede llevar un vídeo, texto y
-          archivos descargables. Lo que esté <b>sin publicar</b> no lo ven los miembros.
+          Tu formación en tres niveles: <b>cursos</b>, <b>módulos</b> dentro de cada curso y{' '}
+          <b>clases</b> dentro de cada módulo. El módulo es opcional — una clase puede colgar
+          directamente del curso. Las flechas cambian el orden y lo que esté <b>sin publicar</b>{' '}
+          no lo ven los miembros.
         </p>
+
+        {sinModulos && (
+          <FormNote tone="warn">
+            Los módulos necesitan la migración <code>migrations/helm_formacion_modulos.sql</code>.
+            Hasta que se pase, la formación funciona con cursos y clases, como antes.
+          </FormNote>
+        )}
 
         {error && <div className="helm-formerror">{error}</div>}
 
         {cursos === null ? <Empty>Cargando…</Empty>
           : cursos.length === 0 ? <Empty>Todavía no hay ningún curso. Crea el primero.</Empty>
-            : cursos.map(c => {
+            : cursos.map((c, ci) => {
               const abiertoEste = abierto === c.id
-              const suyas = porCurso[c.id] || []
+              const mods = modsDe[c.id] || []
+              const sueltas = lecsDe[`${c.id}:`] || []
+              const totalClases = mods.reduce((n, m) => n + (lecsDe[`${c.id}:${m.id}`]?.length || 0), 0) + sueltas.length
               return (
                 <div key={c.id} className="helm-curso">
                   <div className="helm-curso-head">
                     <button className="helm-curso-toggle" onClick={() => setAbierto(abiertoEste ? null : c.id)}>
                       {abiertoEste ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                       <b>{c.title}</b>
-                      <small>{suyas.length === 1 ? '1 lección' : `${suyas.length} lecciones`}</small>
+                      <small>
+                        {mods.length > 0 && `${mods.length === 1 ? '1 módulo' : `${mods.length} módulos`} · `}
+                        {totalClases === 1 ? '1 clase' : `${totalClases} clases`}
+                      </small>
                     </button>
                     <div className="helm-curso-acts">
+                      <Flechas i={ci} total={cursos.length} onMover={d => mover('helm_courses', cursos, ci, d)} />
                       <button className="helm-btn sm" onClick={() => togglePublicado('helm_courses', c)}>
                         {c.published ? <><Eye size={13} /> Publicado</> : <><EyeOff size={13} /> Oculto</>}
                       </button>
-                      <button className="helm-btn sm" onClick={() => setEdit({ course_id: c.id, title: '', body: '', video_url: '', attachments: [] })}>
-                        <Plus size={13} /> Lección
+                      <button className="helm-btn sm" title="Editar el curso" onClick={() => setCursoEdit(c)}>
+                        <Pencil size={13} />
                       </button>
-                      <button className="helm-btn sm" onClick={() => borrarCurso(c)}><Trash2 size={13} /></button>
+                      {!sinModulos && (
+                        <button className="helm-btn sm" onClick={() => setModuloEdit({ course_id: c.id, title: '', description: '' })}>
+                          <Plus size={13} /> Módulo
+                        </button>
+                      )}
+                      <button className="helm-btn sm" onClick={() => setEdit({ course_id: c.id, module_id: '', module_original: '', title: '', body: '', video_url: '', attachments: [] })}>
+                        <Plus size={13} /> Clase
+                      </button>
+                      <button className="helm-btn sm" title="Borrar el curso" onClick={() => borrarCurso(c)}><Trash2 size={13} /></button>
                     </div>
                   </div>
                   {c.description && <p className="helm-curso-desc">{c.description}</p>}
 
                   {abiertoEste && (
-                    suyas.length === 0
-                      ? <Empty>Este curso no tiene lecciones.</Empty>
-                      : (
-                        <div className="helm-leccion-list">
-                          {suyas.map((l, i) => (
-                            <div key={l.id} className="helm-leccion">
-                              <button className="helm-leccion-main" onClick={() => setEdit({ ...l, attachments: Array.isArray(l.attachments) ? l.attachments : [] })}>
-                                <span className="helm-leccion-n">{i + 1}</span>
-                                <span>
-                                  <b>{l.title}</b>
-                                  <small>
-                                    {l.video_url ? <><Video size={11} /> vídeo</> : 'sin vídeo'}
-                                    {l.body ? ' · con texto' : ''}
-                                    {(l.attachments?.length || 0) > 0 ? ` · ${l.attachments.length} archivo(s)` : ''}
-                                  </small>
-                                </span>
-                              </button>
+                    <>
+                      {mods.map((m, mi) => {
+                        const suyas = lecsDe[`${c.id}:${m.id}`] || []
+                        return (
+                          <div key={m.id} className="helm-modulo">
+                            <div className="helm-modulo-head">
+                              <span className="helm-modulo-tit">
+                                <Layers size={14} />
+                                <b>{m.title}</b>
+                                <small>{suyas.length === 1 ? '1 clase' : `${suyas.length} clases`}</small>
+                              </span>
                               <div className="helm-curso-acts">
-                                <button className="helm-btn sm" onClick={() => togglePublicado('helm_lessons', l)}>
-                                  {l.published ? <Eye size={13} /> : <EyeOff size={13} />}
+                                <Flechas i={mi} total={mods.length} onMover={d => mover('helm_modules', mods, mi, d)} />
+                                <button className="helm-btn sm" onClick={() => togglePublicado('helm_modules', m)}>
+                                  {m.published ? <Eye size={13} /> : <EyeOff size={13} />}
                                 </button>
-                                <button className="helm-btn sm" onClick={() => borrarLeccion(l)}><Trash2 size={13} /></button>
+                                <button className="helm-btn sm" title="Editar el módulo" onClick={() => setModuloEdit(m)}>
+                                  <Pencil size={13} />
+                                </button>
+                                <button className="helm-btn sm" onClick={() => setEdit({ course_id: c.id, module_id: m.id, module_original: m.id, title: '', body: '', video_url: '', attachments: [] })}>
+                                  <Plus size={13} /> Clase
+                                </button>
+                                <button className="helm-btn sm" title="Borrar el módulo" onClick={() => borrarModulo(m)}><Trash2 size={13} /></button>
                               </div>
                             </div>
-                          ))}
+                            {m.description && <p className="helm-curso-desc">{m.description}</p>}
+                            <ListaClases
+                              clases={suyas} vacio="Este módulo no tiene clases."
+                              onAbrir={setEdit} onMover={(i, d) => mover('helm_lessons', suyas, i, d)}
+                              onToggle={l => togglePublicado('helm_lessons', l)} onBorrar={borrarLeccion} />
+                          </div>
+                        )
+                      })}
+
+                      {/* Las clases sueltas van al final y solo se anuncian como
+                          "sin módulo" cuando hay módulos con los que confundirse. */}
+                      {(sueltas.length > 0 || mods.length === 0) && (
+                        <div className={mods.length > 0 ? 'helm-modulo' : ''}>
+                          {mods.length > 0 && (
+                            <div className="helm-modulo-head">
+                              <span className="helm-modulo-tit"><b>Sin módulo</b></span>
+                            </div>
+                          )}
+                          <ListaClases
+                            clases={sueltas} vacio="Este curso no tiene clases todavía."
+                            onAbrir={setEdit} onMover={(i, d) => mover('helm_lessons', sueltas, i, d)}
+                            onToggle={l => togglePublicado('helm_lessons', l)} onBorrar={borrarLeccion} />
                         </div>
-                      )
+                      )}
+                    </>
                   )}
                 </div>
               )
             })}
       </div>
 
-      {nuevoCurso && <CursoModal onClose={() => setNuevoCurso(false)} onSave={crearCurso} />}
+      {cursoEdit && <CursoModal curso={cursoEdit} onClose={() => setCursoEdit(null)} onSave={guardarCurso} />}
+      {moduloEdit && <ModuloModal modulo={moduloEdit} onClose={() => setModuloEdit(null)} onSave={guardarModulo} />}
       {edit && (
         <LeccionModal
           clientId={clientId} leccion={edit}
+          modulos={sinModulos ? [] : (modsDe[edit.course_id] || [])}
           onClose={() => setEdit(null)} onSave={guardarLeccion} />
       )}
     </Panel>
   )
 }
 
-function CursoModal({ onClose, onSave }) {
-  const [f, setF] = useState({ title: '', description: '' })
+// Subir y bajar. Dos botones y no arrastrar: esto se toca desde el móvil tanto
+// como desde el escritorio, y un drag&drop dentro de una lista con scroll es
+// justo donde peor funciona.
+function Flechas({ i, total, onMover }) {
+  return (
+    <>
+      <button type="button" className="helm-btn sm" title="Subir" disabled={i === 0} onClick={() => onMover(-1)}>
+        <ChevronUp size={13} />
+      </button>
+      <button type="button" className="helm-btn sm" title="Bajar" disabled={i === total - 1} onClick={() => onMover(1)}>
+        <ChevronDown size={13} />
+      </button>
+    </>
+  )
+}
+
+function ListaClases({ clases, vacio, onAbrir, onMover, onToggle, onBorrar }) {
+  if (clases.length === 0) return <Empty>{vacio}</Empty>
+  return (
+    <div className="helm-leccion-list">
+      {clases.map((l, i) => (
+        <div key={l.id} className="helm-leccion">
+          <button
+            className="helm-leccion-main"
+            onClick={() => onAbrir({
+              ...l,
+              module_id: l.module_id || '',
+              module_original: l.module_id || '',
+              attachments: Array.isArray(l.attachments) ? l.attachments : [],
+            })}
+          >
+            <span className="helm-leccion-n">{i + 1}</span>
+            <span>
+              <b>{l.title}</b>
+              <small>
+                {l.video_url ? <><Video size={11} /> vídeo</> : 'sin vídeo'}
+                {l.body ? ' · con texto' : ''}
+                {(l.attachments?.length || 0) > 0 ? ` · ${l.attachments.length} archivo(s)` : ''}
+              </small>
+            </span>
+          </button>
+          <div className="helm-curso-acts">
+            <Flechas i={i} total={clases.length} onMover={d => onMover(i, d)} />
+            <button className="helm-btn sm" onClick={() => onToggle(l)}>
+              {l.published ? <Eye size={13} /> : <EyeOff size={13} />}
+            </button>
+            <button className="helm-btn sm" title="Borrar la clase" onClick={() => onBorrar(l)}><Trash2 size={13} /></button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function CursoModal({ curso, onClose, onSave }) {
+  const [f, setF] = useState({ ...curso, description: curso.description || '' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -331,7 +507,7 @@ function CursoModal({ onClose, onSave }) {
   }
 
   return (
-    <Modal title="Nuevo curso" onClose={onClose}>
+    <Modal title={f.id ? 'Editar curso' : 'Nuevo curso'} onClose={onClose}>
       <form onSubmit={submit}>
         <Field label="Título *"><Input value={f.title} autoFocus onChange={e => setF({ ...f, title: e.target.value })} placeholder="Fundamentos de entrenamiento" /></Field>
         <Field label="Descripción" hint="Una o dos líneas de qué se aprende aquí.">
@@ -340,14 +516,49 @@ function CursoModal({ onClose, onSave }) {
         <FormNote>{error}</FormNote>
         <div className="helm-modal-actions">
           <button type="button" className="helm-btn" onClick={onClose}>Cancelar</button>
-          <button className="helm-btn primary" disabled={busy}>{busy ? 'Creando…' : 'Crear curso'}</button>
+          <button className="helm-btn primary" disabled={busy}>
+            {busy ? 'Guardando…' : f.id ? 'Guardar curso' : 'Crear curso'}
+          </button>
         </div>
       </form>
     </Modal>
   )
 }
 
-function LeccionModal({ clientId, leccion, onClose, onSave }) {
+function ModuloModal({ modulo, onClose, onSave }) {
+  const [f, setF] = useState({ ...modulo, description: modulo.description || '' })
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function submit(e) {
+    e.preventDefault()
+    if (!f.title.trim()) return setError('Ponle un título')
+    setBusy(true); setError(null)
+    try { await onSave(f) } catch (err) { setError(err.message); setBusy(false) }
+  }
+
+  return (
+    <Modal title={f.id ? 'Editar módulo' : 'Nuevo módulo'} onClose={onClose}>
+      <form onSubmit={submit}>
+        <Field label="Título *" hint="El bloque en el que se agrupan varias clases.">
+          <Input value={f.title} autoFocus onChange={e => setF({ ...f, title: e.target.value })} placeholder="Módulo 1 — Empezar de cero" />
+        </Field>
+        <Field label="Descripción" hint="Opcional. Qué se cubre en este bloque.">
+          <Textarea rows={3} value={f.description} onChange={e => setF({ ...f, description: e.target.value })} />
+        </Field>
+        <FormNote>{error}</FormNote>
+        <div className="helm-modal-actions">
+          <button type="button" className="helm-btn" onClick={onClose}>Cancelar</button>
+          <button className="helm-btn primary" disabled={busy}>
+            {busy ? 'Guardando…' : f.id ? 'Guardar módulo' : 'Crear módulo'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function LeccionModal({ clientId, leccion, modulos, onClose, onSave }) {
   const [f, setF] = useState(leccion)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -355,15 +566,23 @@ function LeccionModal({ clientId, leccion, onClose, onSave }) {
 
   async function submit(e) {
     e.preventDefault()
-    if (!f.title.trim()) return setError('Ponle un título a la lección')
+    if (!f.title.trim()) return setError('Ponle un título a la clase')
     setBusy(true); setError(null)
     try { await onSave(f) } catch (err) { setError(err.message); setBusy(false) }
   }
 
   return (
-    <Modal title={f.id ? 'Editar lección' : 'Nueva lección'} onClose={onClose} wide>
+    <Modal title={f.id ? 'Editar clase' : 'Nueva clase'} onClose={onClose} wide>
       <form onSubmit={submit}>
         <Field label="Título *"><Input value={f.title} autoFocus onChange={e => set('title', e.target.value)} /></Field>
+        {modulos.length > 0 && (
+          <Field label="Módulo" hint="Cambiarlo aquí mueve la clase de bloque, al final del que elijas.">
+            <Select value={f.module_id || ''} onChange={e => set('module_id', e.target.value)}>
+              <option value="">Sin módulo (cuelga del curso)</option>
+              {modulos.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
+            </Select>
+          </Field>
+        )}
         <Field
           label="Vídeo"
           hint="Pega el enlace de YouTube o Vimeo. También vale un MP4 subido más abajo."
@@ -384,7 +603,7 @@ function LeccionModal({ clientId, leccion, onClose, onSave }) {
         <FormNote>{error}</FormNote>
         <div className="helm-modal-actions">
           <button type="button" className="helm-btn" onClick={onClose}>Cancelar</button>
-          <button className="helm-btn primary" disabled={busy}>{busy ? 'Guardando…' : 'Guardar lección'}</button>
+          <button className="helm-btn primary" disabled={busy}>{busy ? 'Guardando…' : 'Guardar clase'}</button>
         </div>
       </form>
     </Modal>

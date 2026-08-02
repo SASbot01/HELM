@@ -49,12 +49,40 @@ function Video({ url }) {
   )
 }
 
+// La pestaña del navegador y el icono también son marca. El index.html es uno
+// solo para toda la app y dice "HELM": si no se reescribe aquí, el alumno abre
+// el enlace de su formador y lo primero que lee es el nombre de otro producto.
+// (La tarjeta que sale al compartir el enlace por WhatsApp no se arregla aquí
+// —el bot no ejecuta JavaScript—, sino en api/portal-meta.js.)
+function useMarcaEnLaPestana(marca) {
+  useEffect(() => {
+    if (!marca?.nombre) return undefined
+    const tituloPrevio = document.title
+    document.title = marca.subtitulo ? `${marca.nombre} — ${marca.subtitulo}` : marca.nombre
+
+    const iconos = [...document.querySelectorAll("link[rel~='icon'], link[rel='apple-touch-icon']")]
+    const previos = iconos.map(l => ({ href: l.getAttribute('href'), type: l.getAttribute('type') }))
+    if (marca.logo) {
+      for (const l of iconos) { l.setAttribute('href', marca.logo); l.removeAttribute('type') }
+    }
+    return () => {
+      document.title = tituloPrevio
+      iconos.forEach((l, i) => {
+        l.setAttribute('href', previos[i].href)
+        if (previos[i].type) l.setAttribute('type', previos[i].type)
+      })
+    }
+  }, [marca])
+}
+
 export default function ComunidadPublica() {
   const { slug } = useParams()
   const [theme] = useHelmTheme()
   const [portal, setPortal] = useState(null)      // { enabled, marca }
   const [sesion, setSesion] = useState(null)      // { miembro, marca }
   const [cargando, setCargando] = useState(true)
+
+  useMarcaEnLaPestana(sesion?.marca || portal?.marca)
 
   // Al abrir: se pregunta por la comunidad y, si ya había sesión guardada, se
   // valida contra el servidor. Un token viejo de alguien a quien le han quitado
@@ -228,6 +256,22 @@ function Entrada({ slug, marca, onDentro }) {
   )
 }
 
+function Clases({ lecciones, onAbrir }) {
+  return (
+    <div className="helm-leccion-list">
+      {lecciones.map((l, i) => (
+        <button key={l.id} className="helm-leccion-main" onClick={() => onAbrir(l)}>
+          <span className="helm-leccion-n">{i + 1}</span>
+          <span>
+            <b>{l.title}</b>
+            <small>{l.video_url ? 'vídeo' : 'lectura'}{l.attachments?.length ? ` · ${l.attachments.length} archivo(s)` : ''}</small>
+          </span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // ── Dentro: formación y muro ───────────────────────────────────────────────
 function Dentro({ slug, sesion, theme, onSalir }) {
   const [tab, setTab] = useState('formacion')
@@ -309,29 +353,35 @@ function Dentro({ slug, sesion, theme, onSalir }) {
             <div className="helm-empty">Todavía no hay formación publicada.</div>
           ) : (
             <div className="helm-portal-cursos">
-              {cursos.map(c => (
-                <section key={c.id} className="helm-panel">
-                  <div className="helm-panel-head"><h2>{c.title}</h2></div>
-                  <div className="helm-settings-body">
-                    {c.description && <p className="helm-settings-lead">{c.description}</p>}
-                    {c.lecciones.length === 0 ? (
-                      <div className="helm-empty">Sin lecciones todavía.</div>
-                    ) : (
-                      <div className="helm-leccion-list">
-                        {c.lecciones.map((l, i) => (
-                          <button key={l.id} className="helm-leccion-main" onClick={() => setLeccion(l)}>
-                            <span className="helm-leccion-n">{i + 1}</span>
-                            <span>
-                              <b>{l.title}</b>
-                              <small>{l.video_url ? 'vídeo' : 'lectura'}{l.attachments?.length ? ` · ${l.attachments.length} archivo(s)` : ''}</small>
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </section>
-              ))}
+              {cursos.map(c => {
+                const modulos = c.modulos || []
+                const sueltas = c.lecciones || []
+                const vacio = modulos.every(m => m.lecciones.length === 0) && sueltas.length === 0
+                return (
+                  <section key={c.id} className="helm-panel">
+                    <div className="helm-panel-head"><h2>{c.title}</h2></div>
+                    <div className="helm-settings-body">
+                      {c.description && <p className="helm-settings-lead">{c.description}</p>}
+                      {vacio ? (
+                        <div className="helm-empty">Sin clases todavía.</div>
+                      ) : (
+                        <>
+                          {modulos.filter(m => m.lecciones.length > 0).map(m => (
+                            <div key={m.id} className="helm-modulo">
+                              <div className="helm-modulo-head">
+                                <span className="helm-modulo-tit"><b>{m.title}</b></span>
+                              </div>
+                              {m.description && <p className="helm-curso-desc">{m.description}</p>}
+                              <Clases lecciones={m.lecciones} onAbrir={setLeccion} />
+                            </div>
+                          ))}
+                          {sueltas.length > 0 && <Clases lecciones={sueltas} onAbrir={setLeccion} />}
+                        </>
+                      )}
+                    </div>
+                  </section>
+                )
+              })}
             </div>
           )
         )}
