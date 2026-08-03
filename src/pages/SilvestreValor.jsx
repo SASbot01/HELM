@@ -14,7 +14,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { visibles, textoDe, ramaCorta } from './silvestreai/preguntas'
 import { PAISES, PAIS_DEFECTO, telefonoValido } from './silvestreai/paises'
-import { getClientId, crearLead, guardarRespuestas } from './silvestreai/guardar'
+import { getClientId, crearLead, guardarRespuestas, origenDeLaUrl } from './silvestreai/guardar'
 import './silvestreai/valor.css'
 
 const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i
@@ -23,7 +23,7 @@ export default function SilvestreValor() {
   const [params] = useSearchParams()
   const leadMagnet = params.get('lm') === '1'
 
-  const [fase, setFase] = useState('puerta')   // puerta | test | fin
+  const [fase, setFase] = useState('intro')    // intro | puerta | test | fin
   const [A, setA] = useState({})
   const [cursor, setCursor] = useState(0)
   const [historia, setHistoria] = useState([])
@@ -93,6 +93,8 @@ export default function SilvestreValor() {
         <main className="sv-main">
           <div className="sv-bar" style={{ width: `${progreso}%` }} />
 
+          {fase === 'intro' && <Intro onEmpezar={() => setFase('puerta')} />}
+
           {fase === 'puerta' && (
             <Puerta onEntrar={(datos) => { setLead(datos); setFase('test') }} />
           )}
@@ -126,6 +128,60 @@ export default function SilvestreValor() {
 
           {fase === 'fin' && <Cierre leadMagnet={leadMagnet} />}
         </main>
+      </div>
+    </div>
+  )
+}
+
+// ── La entrada ──────────────────────────────────────────────────────────────
+// Antes de pedir nada se explica qué es esto, cómo se trabaja y en qué se
+// ayuda. Quien llega de un anuncio o de un enlace suelto no tiene por qué saber
+// nada de Silvestre: pedirle el teléfono en la primera pantalla es pedirle un
+// acto de fe.
+//
+// El texto es un primer borrador — está aquí suelto y a la vista justamente
+// para que se reescriba sin tocar la lógica.
+const PASOS = [
+  {
+    n: '01', t: 'Rellenas esto',
+    d: 'Veintidós preguntas, tres minutos. Solo las que aplican a tu tipo de empresa: eliges el tuyo y el resto del formulario se adapta.',
+  },
+  {
+    n: '02', t: 'Preparamos tu caso',
+    d: 'Antes de hablar contigo miramos qué nos has contado y dónde se pierde tiempo o dinero en un negocio como el tuyo. La llamada no se va en ponernos al día.',
+  },
+  {
+    n: '03', t: 'Te llamamos en 48 h',
+    d: 'Una llamada para contarte qué haríamos, con qué orden y qué esperar. Sin compromiso: si no vemos encaje, te lo decimos.',
+  },
+]
+
+function Intro({ onEmpezar }) {
+  return (
+    <div className="sv-screen">
+      <div className="sv-eyebrow">Silvestre IA</div>
+      <h1 className="sv-h1">Antes de hablar, queremos entender tu negocio</h1>
+      <p className="sv-lead">
+        Ayudamos a empresas a quitarse de encima el trabajo repetitivo: automatizar procesos,
+        conectar las herramientas que ya usan y tener los números a la vista sin perseguirlos.
+        Este formulario es el primer paso.
+      </p>
+
+      <ol className="sv-pasos">
+        {PASOS.map(p => (
+          <li key={p.n}>
+            <span className="sv-paso-n">{p.n}</span>
+            <div>
+              <b>{p.t}</b>
+              <p>{p.d}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      <div className="sv-nav">
+        <button className="sv-cta" onClick={onEmpezar}>Empezar formulario</button>
+        <span className="sv-hint">22 preguntas · 3 minutos</span>
       </div>
     </div>
   )
@@ -165,6 +221,9 @@ function Puerta({ onEntrar }) {
         telefono: `${pais.dial} ${f.tel.trim()}`,
         web: f.web,
         pais: pais.code,
+        // De qué anuncio o enlace viene. Se lee ahora y se arrastra: al
+        // terminar, la URL ya no tiene por qué conservar los parámetros.
+        origen: origenDeLaUrl(),
       }
       const contactId = await crearLead(clientId, datos)
       onEntrar({ clientId, contactId, ...datos })
@@ -244,10 +303,11 @@ function Puerta({ onEntrar }) {
 
 // ── Una pregunta ────────────────────────────────────────────────────────────
 function Pregunta({ q, A, indice, total, onResponder, onAvanzar, onAtras }) {
-  // Todas son de opción única, así que avanzan solas tras un instante: se ve la
-  // selección antes de cambiar de pantalla y no hace falta pulsar "siguiente"
-  // veintidós veces.
+  // Las de opción única avanzan solas tras un instante: se ve la selección
+  // antes de cambiar de pantalla y no hace falta pulsar "siguiente" veintidós
+  // veces. Las de texto libre necesitan su botón, claro.
   const timer = useRef(null)
+  const [texto, setTexto] = useState(A[q.id] || '')
   useEffect(() => () => clearTimeout(timer.current), [])
 
   const elegir = (valor) => {
@@ -261,22 +321,37 @@ function Pregunta({ q, A, indice, total, onResponder, onAvanzar, onAtras }) {
       <h2 className="sv-q">{textoDe(q, A)}</h2>
       {q.help && <p className="sv-help">{q.help}</p>}
 
-      <div className="sv-opts">
-        {q.options.map((o, i) => (
-          <button
-            key={o.value}
-            className={'sv-opt' + (A[q.id] === o.value ? ' sel' : '')}
-            onClick={() => elegir(o.value)}
-          >
-            <span className="k">{String.fromCharCode(65 + i)}</span>
-            <span>{o.label}</span>
-          </button>
-        ))}
-      </div>
+      {q.type === 'text' ? (
+        <textarea
+          className="sv-field sv-textarea" rows={4} value={texto} autoFocus
+          placeholder={q.placeholder || ''} maxLength={600}
+          onChange={e => setTexto(e.target.value)} />
+      ) : (
+        <div className="sv-opts">
+          {q.options.map((o, i) => (
+            <button
+              key={o.value}
+              className={'sv-opt' + (A[q.id] === o.value ? ' sel' : '')}
+              onClick={() => elegir(o.value)}
+            >
+              <span className="k">{String.fromCharCode(65 + i)}</span>
+              <span>{o.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="sv-nav">
+        {q.type === 'text' && (
+          <button
+            className="sv-cta" disabled={!texto.trim()}
+            onClick={() => { onResponder(q.id, texto.trim()); onAvanzar() }}
+          >
+            Continuar
+          </button>
+        )}
         {onAtras && <button className="sv-back" onClick={onAtras}>← Atrás</button>}
-        <span className="sv-hint">Pulsa para responder</span>
+        <span className="sv-hint">{q.type === 'text' ? 'Escribe y continúa' : 'Pulsa para responder'}</span>
       </div>
     </div>
   )

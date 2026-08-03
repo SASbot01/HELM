@@ -70,6 +70,17 @@
 .sv-lead{color:var(--snow-dim);font-size:16px;margin:0 0 28px;max-width:52ch;}
 .sv-help{color:var(--snow-dim);font-size:13.5px;margin:0 0 20px;max-width:56ch;}
 
+/* ---------- pantalla de entrada ---------- */
+.sv-pasos{list-style:none;margin:0 0 34px;padding:0;display:flex;flex-direction:column;gap:2px;max-width:560px;}
+.sv-pasos li{display:flex;gap:16px;padding:18px 0;border-top:1px solid var(--line);}
+.sv-pasos li:last-child{border-bottom:1px solid var(--line);}
+.sv-paso-n{
+  flex:0 0 auto;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.1em;
+  color:var(--lime);padding-top:3px;
+}
+.sv-pasos b{display:block;font-family:var(--display);font-size:16px;font-weight:600;margin-bottom:5px;}
+.sv-pasos p{margin:0;color:var(--snow-dim);font-size:14px;line-height:1.55;}
+
 /* ---------- opciones ---------- */
 .sv-opts{display:flex;flex-direction:column;gap:8px;margin-bottom:26px;}
 .sv-opt{
@@ -100,6 +111,7 @@
 .sv-field::placeholder{color:var(--snow-dim);opacity:.5;}
 .sv-field:focus{border-color:var(--lime);outline:none;}
 .sv-field.bad{border-color:var(--rose);}
+.sv-textarea{display:block;max-width:560px;margin-bottom:26px;resize:vertical;line-height:1.55;font-family:inherit;}
 .sv-tel{display:grid;grid-template-columns:minmax(112px,auto) 1fr;gap:8px;}
 .sv-tel select{
   background:var(--void-2);border:1px solid var(--line);border-radius:10px;

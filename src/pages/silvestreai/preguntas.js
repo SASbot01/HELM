@@ -3,11 +3,12 @@
 // Declarativo igual que el del diagnóstico: la vista lo recorre sin saber nada
 // del contenido, y tocar una pregunta es editar este fichero y nada más.
 //
-// La forma la marca el bloque 2: la P6 elige rama (A, B, C o D) y a partir de
-// ahí solo se ven las 16 preguntas de ESA rama. Nadie contesta 64 preguntas —
+// La forma la marca el bloque 2: la P6 elige rama (A a E) y a partir de ahí
+// solo se ven las 16 preguntas de ESA rama. Nadie contesta 80 preguntas —
 // contesta 16 que le hablan de su negocio, que es lo que hace que se terminen.
 //
 //   rama    si está, la pregunta solo sale para esa rama
+//   type    'text' para respuesta libre; sin poner, opción única
 //   options una sola respuesta por pregunta (así viene el guion: cuando cabe
 //           más de una, la propia lista trae "varias de las anteriores")
 //
@@ -22,6 +23,10 @@ export const RAMAS = [
   { value: 'legal', label: 'Consultora legal / despacho de abogados', corto: 'Despacho legal' },
   { value: 'online', label: 'Infoproducto / formación / servicio online', corto: 'Infoproducto / online' },
   { value: 'infra', label: 'Empresa con infraestructura tecnológica y altos costes en IA o servidores', corto: 'Infraestructura / IA' },
+  // La salida para todo lo demás. Sin esta opción, quien no encaja en las
+  // cuatro anteriores elige la que menos le desencaja y contesta dieciséis
+  // preguntas que no van con su negocio: ese lead llega al CRM contaminado.
+  { value: 'otro', label: 'Otro tipo de empresa', corto: 'Otro' },
 ]
 
 export const ramaCorta = (v) => RAMAS.find(r => r.value === v)?.corto || ''
@@ -417,6 +422,97 @@ export const Q = [
       { label: 'Escalar sin multiplicar costes', value: 'escalar' },
       { label: 'Todo lo anterior', value: 'todo' }] },
   ]),
+
+  /* ═══ RAMA E — OTRO TIPO DE EMPRESA ═════════════════════════════════════ */
+  // Las mismas dieciséis, pero sin dar por hecho el sector. La primera es de
+  // respuesta libre: es la única forma de saber a qué se dedica alguien que no
+  // entra en ninguna de las cuatro ramas de arriba.
+  ...de('otro', [
+    { id: 'actividad', type: 'text', q: '¿A qué se dedica tu empresa?',
+      help: 'Un par de líneas: qué vendéis y a quién. Con eso preparamos el resto.',
+      placeholder: 'Vendemos… a…' },
+
+    { id: 'empleados', q: '¿Cuántos empleados tiene tu empresa?', options: [
+      { label: '1-3', value: '1-3' }, { label: '4-10', value: '4-10' }, { label: '11-20', value: '11-20' },
+      { label: '21-50', value: '21-50' }, { label: 'Más de 50', value: '50+' }] },
+
+    { id: 'modalidad', q: '¿Tu servicio es presencial, online o mixto?', options: [
+      { label: 'Presencial', value: 'presencial' }, { label: 'Online', value: 'online' }, { label: 'Mixto', value: 'mixto' }] },
+
+    { id: 'mercado', q: '¿A quién le vendes?', options: [
+      { label: 'A consumidor final (B2C)', value: 'b2c' },
+      { label: 'A empresas (B2B)', value: 'b2b' },
+      { label: 'A ambos por igual', value: 'mixto' }] },
+
+    { id: 'clientes', q: '¿Cuántos clientes activos gestionas al mes?', options: [
+      { label: 'Menos de 20', value: '-20' }, { label: '20-50', value: '20-50' }, { label: '50-100', value: '50-100' },
+      { label: '100-200', value: '100-200' }, { label: 'Más de 200', value: '200+' }] },
+
+    { id: 'captacion', q: '¿Cómo captas clientes ahora mismo?', options: [
+      { label: 'Boca a boca', value: 'boca' }, { label: 'Referidos', value: 'referidos' },
+      { label: 'Redes sociales', value: 'rrss' }, { label: 'Publicidad online', value: 'ads' },
+      { label: 'Comercial o equipo de ventas', value: 'comercial' },
+      { label: 'No tengo un sistema claro', value: 'ninguno' },
+      { label: 'Varias de las anteriores', value: 'varias' }] },
+
+    { id: 'crm', q: '¿Tienes CRM o sistema de gestión de clientes?', options: [
+      { label: 'Sí, y lo uso bien', value: 'si' }, { label: 'Sí, pero apenas lo uso', value: 'infrautilizado' },
+      { label: 'No tengo', value: 'no' }] },
+
+    { id: 'herramientas', q: '¿Qué herramientas usas en el día a día?', options: [
+      { label: 'Excel / Google Sheets', value: 'excel' },
+      { label: 'Un software específico de mi sector', value: 'sectorial' },
+      { label: 'CRM (Salesforce, HubSpot, Pipedrive)', value: 'crm' },
+      { label: 'WhatsApp para todo', value: 'whatsapp' },
+      { label: 'Papel y cabeza', value: 'papel' },
+      { label: 'Varias combinadas', value: 'varias' }] },
+
+    { id: 'repetitivas', q: '¿Tu equipo dedica tiempo a tareas repetitivas?', options: [
+      { label: 'Sí, mucho', value: 'mucho' }, { label: 'Algo, pero es manejable', value: 'algo' },
+      { label: 'No, tenemos todo automatizado', value: 'no' }] },
+
+    { id: 'automatizar', q: '¿Qué tareas te gustaría automatizar?', options: [
+      { label: 'Entrada de datos y facturación', value: 'datos' },
+      { label: 'Comunicación con clientes (emails, recordatorios)', value: 'comunicacion' },
+      { label: 'Generación de informes', value: 'informes' },
+      { label: 'Seguimiento de clientes, pedidos o proyectos', value: 'seguimiento' },
+      { label: 'Gestión documental', value: 'documental' },
+      { label: 'Todo lo anterior', value: 'todo' }] },
+
+    { id: 'nherramientas', q: '¿Cuántas herramientas de pago usas al mes?', options: [
+      { label: '1-3', value: '1-3' }, { label: '4-6', value: '4-6' }, { label: '7-10', value: '7-10' },
+      { label: 'Más de 10', value: '10+' }, { label: 'No lo sé exactamente', value: 'nose' }] },
+
+    { id: 'gasto', q: '¿Sabes cuánto gastas al mes en software y herramientas?', options: [
+      { label: 'Menos de 100€', value: '-100' }, { label: '100-300€', value: '100-300' },
+      { label: '300-500€', value: '300-500' }, { label: '500-1.000€', value: '500-1000' },
+      { label: 'Más de 1.000€', value: '1000+' }, { label: 'No lo tengo controlado', value: 'nose' }] },
+
+    { id: 'dolor', q: '¿Cuál es tu mayor dolor ahora mismo?', options: [
+      { label: 'No llego a todo con el equipo que tengo', value: 'capacidad' },
+      { label: 'Gasto mucho en herramientas que no uso bien', value: 'gasto' },
+      { label: 'No tengo visibilidad de cómo va mi negocio en tiempo real', value: 'visibilidad' },
+      { label: 'Me cuesta captar clientes nuevos', value: 'captacion' },
+      { label: 'La comunicación interna es un caos', value: 'comunicacion' },
+      { label: 'Varios de estos', value: 'varios' }] },
+
+    { id: 'factura', q: '¿Cuánto facturas al mes?', options: [
+      { label: 'Menos de 5.000€', value: '-5k', v: 3000 }, { label: '5.000-15.000€', value: '5-15k', v: 10000 },
+      { label: '15.000-30.000€', value: '15-30k', v: 22000 }, { label: '30.000-60.000€', value: '30-60k', v: 45000 },
+      { label: 'Más de 60.000€', value: '60k+', v: 90000 }] },
+
+    { id: 'inversion', q: '¿Has invertido antes en consultoría tecnológica o automatización?', options: [
+      { label: 'Nunca', value: 'nunca', v: 0 }, { label: 'Sí, menos de 1.000€', value: '-1k', v: 500 },
+      { label: 'Sí, entre 1.000-5.000€', value: '1-5k', v: 3000 }, { label: 'Sí, más de 5.000€', value: '5k+', v: 8000 }] },
+
+    { id: 'objetivo', q: '¿Qué esperas conseguir en los próximos 6 meses?', options: [
+      { label: 'Reducir costes operativos', value: 'costes' },
+      { label: 'Captar más clientes', value: 'captar' },
+      { label: 'Automatizar procesos para liberar tiempo', value: 'automatizar' },
+      { label: 'Tener un dashboard con datos en tiempo real', value: 'dashboard' },
+      { label: 'Escalar sin contratar más gente', value: 'escalar' },
+      { label: 'Todo lo anterior', value: 'todo' }] },
+  ]),
 ]
 
 // Las preguntas que se ven con lo respondido hasta ahora: las comunes siempre y
@@ -442,5 +538,6 @@ export function etiquetaDe(A, id) {
   if (!q) return ''
   const v = A[id]
   if (v === undefined || v === '') return ''
+  if (q.type === 'text') return String(v)
   return q.options?.find(o => o.value === v)?.label || String(v)
 }

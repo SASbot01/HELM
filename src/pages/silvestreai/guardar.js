@@ -9,7 +9,7 @@
 //      existe aunque abandone en la pregunta 4. Es la mitad del valor.
 //   2. Al terminar → se completan las respuestas de su rama y la calificación.
 import { supabase } from '../../utils/supabase'
-import { Q, etiquetaDe, textoDe, valorDe, ramaCorta } from './preguntas'
+import { Q, etiquetaDe, textoDe, valorDe, ramaCorta, visibles } from './preguntas'
 
 // El perfil al que van los leads de esta página.
 export const PERFIL_SLUG = 'silvestre'
@@ -29,7 +29,7 @@ export async function getClientId(slug = PERFIL_SLUG) {
  * el perfil se reutiliza en vez de duplicar: quien repite el formulario es la
  * misma persona, no un lead nuevo.
  */
-export async function crearLead(clientId, { nombre, empresa, email, telefono, web, pais }) {
+export async function crearLead(clientId, { nombre, empresa, email, telefono, web, pais, origen }) {
   const correo = email.trim().toLowerCase()
   // La P5 pide "Instagram o web" en un solo campo, pero el CRM tiene columna
   // para cada cosa: adivinar cuál es evita que el comercial tenga que abrir la
@@ -44,6 +44,12 @@ export async function crearLead(clientId, { nombre, empresa, email, telefono, we
     country: pais || null,
     website: esInstagram ? '' : dato,
     instagram: esInstagram ? dato : '',
+    // El CRM tiene columnas propias para las UTM y la vista de Ventas filtra
+    // por ellas: dejarlas solo dentro del jsonb las escondería.
+    utm_source: origen?.utm_source || null,
+    utm_medium: origen?.utm_medium || null,
+    utm_campaign: origen?.utm_campaign || null,
+    utm_content: origen?.utm_content || null,
     updated_at: new Date().toISOString(),
   }
 
@@ -92,7 +98,31 @@ export function calificar(A) {
   if (inversion > 0) motivos.push('ya ha invertido antes en consultoría')
   if (gastoIA >= 5000) motivos.push(`quema ${Math.round(gastoIA / 1000)}k€/mes en IA y cloud`)
 
-  return { caliente: motivos.length >= 2, motivos, factura, inversion, gastoIA }
+  // 0–100 en tres tramos, que es lo que pinta la ficha del CRM: puede pagar
+  // (facturación), ya ha pagado antes por algo así (inversión) y tiene un
+  // gasto que recortar (IA y cloud, solo la rama D).
+  const pts = (v, tope, max) => Math.round(Math.min(v / tope, 1) * max)
+  const score = Math.min(100,
+    pts(factura, umbral * 3, 50) + pts(inversion, 5000, 25) + pts(gastoIA, 10000, 25))
+  const tier = score >= 70 ? 'A' : score >= 40 ? 'B' : 'C'
+
+  return { caliente: motivos.length >= 2, motivos, score, tier, factura, inversion, gastoIA }
+}
+
+// De dónde llegó, para el bloque "De dónde vino" de la ficha. Se lee de la URL
+// en la que se abrió el formulario, así que hay que capturarlo al entrar: si se
+// mira al terminar, ya se han perdido los parámetros de navegación.
+export function origenDeLaUrl() {
+  try {
+    const p = new URLSearchParams(window.location.search)
+    const o = {}
+    for (const k of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term']) {
+      const v = p.get(k)
+      if (v) o[k] = v.slice(0, 200)
+    }
+    if (document.referrer) o.referrer = document.referrer.slice(0, 300)
+    return o
+  } catch { return {} }
 }
 
 // Informe legible que se guarda en las notas del contacto. Que quien lo abra
@@ -118,8 +148,49 @@ export function informeTexto(A, datos, calif) {
 }
 
 /**
- * Completa el lead al terminar: notas legibles, datos estructurados en
- * custom_fields y una actividad en su timeline.
+ * La respuesta en el plugin Formularios, que es donde el comercial la lee: la
+ * pestaña del formulario en la ficha del contacto, con pregunta y respuesta una
+ * debajo de otra, igual que las de Detrás de Cámara.
+ *
+ * Hay un formulario por rama (migrations/helm_formulario_valor_silvestre.sql).
+ * Si la migración no está puesta no se encuentra y no se guarda aquí, pero el
+ * lead y sus notas sí: esto no puede tumbar el envío.
+ */
+async function guardarEnFormularios(clientId, contactId, { A, datos, calif }) {
+  const { data: form } = await supabase
+    .from('helm_forms').select('id')
+    .eq('client_id', clientId).eq('slug', `valor-${A.tipo}`).maybeSingle()
+  if (!form) { console.warn('[silvestreai] falta el formulario valor-' + A.tipo); return }
+
+  // Las etiquetas, no los códigos: la ficha se lee sola, sin traducir nada.
+  // El orden lo da preguntas.js, que es el mismo de los campos del formulario.
+  const answers = {}
+  for (const q of visibles(A)) {
+    if (!q.rama) continue                 // la P6 la dice ya el título del formulario
+    const t = etiquetaDe(A, q.id)
+    if (t) answers[q.id] = t
+  }
+
+  const { error } = await supabase.from('helm_form_responses').insert({
+    client_id: clientId,
+    form_id: form.id,
+    contact_id: contactId,
+    respondent: `${datos.nombre} · ${datos.empresa}`.trim(),
+    answers,
+    meta: {
+      ...(datos.origen || {}),
+      lead_tier: calif.tier,
+      lead_score: calif.score,
+      lead_magnet: Boolean(datos.leadMagnet),
+      rama: A.tipo,
+    },
+  })
+  if (error) console.warn('[silvestreai] guardarEnFormularios', error.message)
+}
+
+/**
+ * Completa el lead al terminar: la respuesta en Formularios, notas legibles,
+ * datos estructurados en custom_fields y una actividad en su timeline.
  */
 export async function guardarRespuestas(clientId, contactId, { A, datos }) {
   const calif = calificar(A)
@@ -147,6 +218,8 @@ export async function guardarRespuestas(clientId, contactId, { A, datos }) {
   }).eq('id', contactId)
 
   if (error) { console.warn('[silvestreai] guardarRespuestas', error.message); throw error }
+
+  await guardarEnFormularios(clientId, contactId, { A, datos, calif })
 
   // La actividad es lo que hace que el lead aparezca en el timeline del plugin
   // Actividad y no solo en su ficha. Que falle no puede tirar abajo el guardado.
