@@ -162,9 +162,9 @@ function Intro({ onEmpezar }) {
       <div className="sv-eyebrow">Silvestre IA</div>
       <h1 className="sv-h1">Antes de hablar, queremos entender tu negocio</h1>
       <p className="sv-lead">
-        Ayudamos a empresas a quitarse de encima el trabajo repetitivo: automatizar procesos,
-        conectar las herramientas que ya usan y tener los números a la vista sin perseguirlos.
-        Este formulario es el primer paso.
+        Ayudamos a empresas como la tuya a quitarse de encima el trabajo repetitivo: automatizar
+        procesos, conectar las herramientas que ya usas y analizar tus datos para poder
+        entenderlos y mejorarlos. Este formulario es el primer paso.
       </p>
 
       <ol className="sv-pasos">
