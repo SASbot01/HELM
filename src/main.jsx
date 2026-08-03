@@ -10,6 +10,7 @@ import HelmApp from './helm/HelmApp.jsx'
 import FormularioPublico from './pages/FormularioPublico.jsx'
 import ComunidadPublica from './pages/ComunidadPublica.jsx'
 import PrimerMapa from './pages/PrimerMapa.jsx'
+import SilvestreValor from './pages/SilvestreValor.jsx'
 import './index.css'
 
 // App reducida a HELM: se entra por /login (superadmin) → /admin (Helm).
@@ -50,6 +51,11 @@ createRoot(document.getElementById('root')).render(
           {/* Portal público de la comunidad interna de un perfil. Va ANTES de
               /:slug/* por lo mismo que /f/: si no, se lo tragaría. */}
           <Route path="/c/:slug" element={<ComunidadPublica />} />
+          {/* Formulario de valor de Silvestre IA. Los leads entran al CRM del
+              perfil indicado en silvestreai/guardar.js. También va ANTES de
+              /:slug/*, que si no leería "silvestreai" como slug de perfil. */}
+          <Route path="/silvestreai" element={<Navigate to="/silvestreai/valor" replace />} />
+          <Route path="/silvestreai/valor" element={<SilvestreValor />} />
           {/* HELM — app limpia (CRM · Ventas · Diario · Finanzas · Chat · Ajustes).
               /admin entra sin perfil fijado (redirige al último usado) y
               /<slug> abre directamente ese perfil: /silvestre, /enformaconhugo… */}

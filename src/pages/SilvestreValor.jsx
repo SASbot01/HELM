@@ -1,0 +1,306 @@
+// Silvestre IA — formulario de valor, página pública en /silvestreai/valor.
+//
+// Misma decisión que el diagnóstico de /primermap: los datos de contacto se
+// piden ANTES del cuestionario. Quien abandona en la pregunta 4 se queda
+// igualmente como lead en el CRM, que es la mitad del valor de una pieza así.
+//
+// El formulario tiene cuatro caras: la P6 elige rama y a partir de ahí solo se
+// ven las 16 preguntas de ESA rama. Nadie contesta 64.
+//
+// Con ?lm=1 el cierre es el del lead magnet ("tienes el acceso listo") en vez
+// del normal. Es el mismo formulario servido desde dos sitios distintos, no
+// dos formularios.
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { visibles, textoDe, ramaCorta } from './silvestreai/preguntas'
+import { PAISES, PAIS_DEFECTO, telefonoValido } from './silvestreai/paises'
+import { getClientId, crearLead, guardarRespuestas } from './silvestreai/guardar'
+import './silvestreai/valor.css'
+
+const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i
+
+export default function SilvestreValor() {
+  const [params] = useSearchParams()
+  const leadMagnet = params.get('lm') === '1'
+
+  const [fase, setFase] = useState('puerta')   // puerta | test | fin
+  const [A, setA] = useState({})
+  const [cursor, setCursor] = useState(0)
+  const [historia, setHistoria] = useState([])
+  const [lead, setLead] = useState(null)       // { clientId, contactId, ...datos }
+  const [error, setError] = useState(null)
+
+  const vis = useMemo(() => visibles(A), [A])
+  const q = vis[cursor]
+
+  // Marca propia en la pestaña: esto no es HELM para quien lo abre, y el
+  // índice de la pregunta ayuda a quien deja la pestaña a medias.
+  useEffect(() => {
+    document.title = fase === 'test' && q
+      ? `${cursor + 1}/${vis.length} · Silvestre IA`
+      : 'Silvestre IA — Cuéntanos cómo funciona tu negocio'
+  }, [fase, cursor, vis.length, q])
+
+  const responder = (id, valor) => setA(a => ({ ...a, [id]: valor }))
+  const avanzar = () => { setHistoria(h => [...h, cursor]); setCursor(c => c + 1) }
+  const atras = () => { setCursor(historia.at(-1) ?? 0); setHistoria(h => h.slice(0, -1)) }
+
+  // Al contestar la última pregunta se guarda todo y se pasa al cierre. Si el
+  // guardado falla se avisa y se deja reintentar: no se le enseña el "gracias"
+  // a alguien cuyo formulario no ha llegado.
+  const terminado = fase === 'test' && !q && vis.length > 1
+  const guardando = useRef(false)
+  useEffect(() => {
+    if (!terminado || !lead || guardando.current) return
+    guardando.current = true
+    guardarRespuestas(lead.clientId, lead.contactId, { A, datos: { ...lead, leadMagnet } })
+      .then(() => setFase('fin'))
+      .catch(() => {
+        guardando.current = false
+        setError('No hemos podido enviar tus respuestas. Comprueba la conexión y vuelve a intentarlo.')
+      })
+  }, [terminado, lead, A, leadMagnet])
+
+  const progreso = fase === 'puerta' ? 0 : fase === 'fin' ? 100 : (cursor / Math.max(vis.length, 1)) * 100
+
+  return (
+    <div className="sv-root">
+      <div className="sv-shell">
+        <aside className="sv-rail">
+          <div className="sv-brand">
+            Silvestre IA
+            <b>Cuéntanos cómo<br />funciona tu negocio</b>
+          </div>
+          {/* El raíl cuenta preguntas, no bloques: la rama elegida decide
+              cuántas quedan y eso sí es siempre cierto. */}
+          <div className="sv-cuenta">
+            {fase === 'test' && q ? (
+              <>
+                <b>{String(cursor + 1).padStart(2, '0')}</b>
+                <span>de {String(vis.length).padStart(2, '0')}</span>
+              </>
+            ) : (
+              <>
+                <b>22</b>
+                <span>preguntas</span>
+              </>
+            )}
+          </div>
+          {A.tipo && <div className="sv-rama">{ramaCorta(A.tipo)}</div>}
+          <div className="sv-rail-foot">Tus datos no se comparten con nadie</div>
+        </aside>
+
+        <main className="sv-main">
+          <div className="sv-bar" style={{ width: `${progreso}%` }} />
+
+          {fase === 'puerta' && (
+            <Puerta onEntrar={(datos) => { setLead(datos); setFase('test') }} />
+          )}
+
+          {fase === 'test' && q && (
+            <Pregunta
+              key={q.id}
+              q={q} A={A} indice={cursor} total={vis.length}
+              onResponder={responder}
+              onAvanzar={avanzar}
+              onAtras={historia.length ? atras : null}
+            />
+          )}
+
+          {terminado && (
+            <div className="sv-screen">
+              <div className="sv-eyebrow">Enviando</div>
+              <h2 className="sv-q">{error ? 'No ha salido' : 'Guardando tus respuestas…'}</h2>
+              {error && (
+                <>
+                  <p className="sv-lead">{error}</p>
+                  <div className="sv-nav">
+                    <button className="sv-cta" onClick={() => { guardando.current = false; setError(null) }}>
+                      Reintentar
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {fase === 'fin' && <Cierre leadMagnet={leadMagnet} />}
+        </main>
+      </div>
+    </div>
+  )
+}
+
+// ── Bloque 1 · los datos, antes del cuestionario ────────────────────────────
+function Puerta({ onEntrar }) {
+  const [f, setF] = useState({ nombre: '', empresa: '', email: '', pais: PAIS_DEFECTO.code, tel: '', web: '' })
+  const [tocado, setTocado] = useState(false)
+  const [enviando, setEnviando] = useState(false)
+  const [error, setError] = useState(null)
+  const set = (k, v) => setF(s => ({ ...s, [k]: v }))
+
+  const errores = {}
+  if (f.nombre.trim().length < 2) errores.nombre = 'Dinos cómo te llamas'
+  if (f.empresa.trim().length < 2) errores.empresa = 'El nombre de tu empresa'
+  if (!RE_EMAIL.test(f.email.trim())) errores.email = 'Necesitamos un email válido para contactarte'
+  if (!telefonoValido(f.tel)) errores.tel = 'Número no válido'
+  const ok = Object.keys(errores).length === 0
+  const e = tocado ? errores : {}
+
+  const pais = PAISES.find(p => p.code === f.pais) || PAIS_DEFECTO
+
+  async function entrar(ev) {
+    ev.preventDefault()
+    setTocado(true)
+    setError(null)
+    if (!ok) return
+    setEnviando(true)
+    try {
+      const clientId = await getClientId()
+      if (!clientId) throw new Error('No se pudo conectar. Inténtalo en un momento.')
+      const datos = {
+        nombre: f.nombre,
+        empresa: f.empresa,
+        email: f.email,
+        telefono: `${pais.dial} ${f.tel.trim()}`,
+        web: f.web,
+        pais: pais.code,
+      }
+      const contactId = await crearLead(clientId, datos)
+      onEntrar({ clientId, contactId, ...datos })
+    } catch (err) {
+      setError(err.message || 'No se pudo enviar. Inténtalo de nuevo.')
+      setEnviando(false)
+    }
+  }
+
+  return (
+    <div className="sv-screen">
+      <div className="sv-eyebrow">Silvestre IA · 3 minutos</div>
+      <h1 className="sv-h1">Cuéntanos cómo funciona tu negocio</h1>
+      <p className="sv-lead">
+        Veintidós preguntas para entender dónde estás y qué se puede automatizar. Con lo que
+        respondas preparamos tu caso antes de hablar contigo, así la llamada no se va en
+        ponernos al día.
+      </p>
+
+      <form className="sv-form" onSubmit={entrar} noValidate>
+        <div className="sv-campo">
+          <label htmlFor="svN">Nombre completo</label>
+          <input id="svN" className={'sv-field' + (e.nombre ? ' bad' : '')} value={f.nombre}
+            onChange={ev => set('nombre', ev.target.value)} autoComplete="name" placeholder="Cómo te llamas" />
+          {e.nombre && <div className="sv-err">{e.nombre}</div>}
+        </div>
+
+        <div className="sv-campo">
+          <label htmlFor="svC">Nombre de tu empresa</label>
+          <input id="svC" className={'sv-field' + (e.empresa ? ' bad' : '')} value={f.empresa}
+            onChange={ev => set('empresa', ev.target.value)} autoComplete="organization" placeholder="Cómo se llama" />
+          {e.empresa && <div className="sv-err">{e.empresa}</div>}
+        </div>
+
+        <div className="sv-campo">
+          <label htmlFor="svE">Email</label>
+          <input id="svE" className={'sv-field' + (e.email ? ' bad' : '')} value={f.email}
+            onChange={ev => set('email', ev.target.value)} autoComplete="email" inputMode="email"
+            spellCheck={false} placeholder="donde te escribimos" />
+          {e.email && <div className="sv-err">{e.email}</div>}
+        </div>
+
+        <div className="sv-campo">
+          <label htmlFor="svT">Teléfono</label>
+          <div className="sv-tel">
+            <select value={f.pais} onChange={ev => set('pais', ev.target.value)} aria-label="Prefijo del país">
+              {PAISES.map(p => (
+                <option key={p.code} value={p.code}>{p.flag} {p.dial} {p.label}</option>
+              ))}
+            </select>
+            <input id="svT" className={'sv-field' + (e.tel ? ' bad' : '')} value={f.tel}
+              onChange={ev => set('tel', ev.target.value)} autoComplete="tel-national" type="tel"
+              inputMode="tel" placeholder="600 00 00 00" />
+          </div>
+          {e.tel && <div className="sv-err">{e.tel}</div>}
+        </div>
+
+        <div className="sv-campo">
+          <label htmlFor="svW">Instagram o web de tu empresa</label>
+          <input id="svW" className="sv-field" value={f.web}
+            onChange={ev => set('web', ev.target.value)} spellCheck={false}
+            placeholder="@tuempresa o tuempresa.com" />
+        </div>
+
+        {error && <div className="sv-err">{error}</div>}
+
+        <div className="sv-nav" style={{ marginTop: 8 }}>
+          <button className="sv-cta" type="submit" disabled={enviando}>
+            {enviando ? 'Un segundo…' : 'Empezar'}
+          </button>
+          <span className="sv-hint">22 preguntas · 3 minutos</span>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+// ── Una pregunta ────────────────────────────────────────────────────────────
+function Pregunta({ q, A, indice, total, onResponder, onAvanzar, onAtras }) {
+  // Todas son de opción única, así que avanzan solas tras un instante: se ve la
+  // selección antes de cambiar de pantalla y no hace falta pulsar "siguiente"
+  // veintidós veces.
+  const timer = useRef(null)
+  useEffect(() => () => clearTimeout(timer.current), [])
+
+  const elegir = (valor) => {
+    onResponder(q.id, valor)
+    timer.current = setTimeout(onAvanzar, 190)
+  }
+
+  return (
+    <div className="sv-screen">
+      <div className="sv-eyebrow">Pregunta {indice + 1} de {total}</div>
+      <h2 className="sv-q">{textoDe(q, A)}</h2>
+      {q.help && <p className="sv-help">{q.help}</p>}
+
+      <div className="sv-opts">
+        {q.options.map((o, i) => (
+          <button
+            key={o.value}
+            className={'sv-opt' + (A[q.id] === o.value ? ' sel' : '')}
+            onClick={() => elegir(o.value)}
+          >
+            <span className="k">{String.fromCharCode(65 + i)}</span>
+            <span>{o.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="sv-nav">
+        {onAtras && <button className="sv-back" onClick={onAtras}>← Atrás</button>}
+        <span className="sv-hint">Pulsa para responder</span>
+      </div>
+    </div>
+  )
+}
+
+// ── El cierre ───────────────────────────────────────────────────────────────
+// Dos textos, los del guion. El del lead magnet da por hecho que ya tiene el
+// acceso; el normal, que la llamada está por agendar.
+function Cierre({ leadMagnet }) {
+  return (
+    <div className="sv-fin">
+      <div className="sv-tick" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      </div>
+      <h1 className="sv-h1">Gracias por completar el formulario.</h1>
+      <p>
+        {leadMagnet
+          ? 'Tienes el acceso listo. En las próximas 48 horas nos pondremos en contacto contigo para ver si podemos ayudarte a ir más rápido.'
+          : 'Hemos recibido tu información y en las próximas 48 horas nos pondremos en contacto contigo para agendar una llamada y analizar tu caso. Sin compromiso.'}
+      </p>
+      <div className="sv-plazo">Respuesta en menos de 48 h</div>
+    </div>
+  )
+}

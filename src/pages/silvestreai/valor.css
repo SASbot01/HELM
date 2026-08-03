@@ -1,0 +1,151 @@
+/* Silvestre IA — formulario de valor.
+   Página pública con identidad propia, no el panel de HELM: negro con acento
+   lima, display grande y etiquetas en mono. Todo namespaced bajo .sv-root para
+   que no se toque con theme.css si algún día conviven en la misma pantalla. */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+.sv-root{
+  --void:#07080A;
+  --void-2:#0D0F13;
+  --void-3:#151920;
+  --snow:#F2F4F3;
+  --snow-dim:#8A9490;
+  --lime:#C6F24E;
+  --lime-dim:#8FAE38;
+  --cyan:#5BE3D4;
+  --rose:#FF6B5B;
+  --line:rgba(242,244,243,.12);
+  --line-2:rgba(242,244,243,.26);
+  --display:'Space Grotesk',system-ui,sans-serif;
+  --body:'Inter',system-ui,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+
+  background:var(--void);
+  color:var(--snow);
+  font-family:var(--body);
+  font-size:16px;
+  line-height:1.5;
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+.sv-root *{box-sizing:border-box;}
+.sv-root :focus-visible{outline:2px solid var(--lime);outline-offset:3px;border-radius:4px;}
+
+/* ---------- shell ---------- */
+.sv-shell{display:grid;grid-template-columns:230px 1fr;min-height:100vh;}
+.sv-rail{
+  border-right:1px solid var(--line);
+  padding:30px 24px;
+  display:flex;flex-direction:column;gap:28px;
+  background:linear-gradient(180deg,var(--void-2),var(--void));
+}
+.sv-brand{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--lime);}
+.sv-brand b{
+  display:block;font-family:var(--display);font-size:19px;letter-spacing:-.025em;
+  color:var(--snow);text-transform:none;margin-top:10px;font-weight:700;line-height:1.12;
+}
+.sv-cuenta{display:flex;align-items:baseline;gap:8px;}
+.sv-cuenta b{font-family:var(--display);font-size:40px;font-weight:700;letter-spacing:-.04em;color:var(--lime);line-height:1;}
+.sv-cuenta span{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--snow-dim);}
+.sv-rama{
+  align-self:flex-start;border:1px solid var(--line-2);border-radius:999px;padding:6px 13px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--cyan);
+}
+.sv-rail-foot{margin-top:auto;font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--snow-dim);opacity:.55;text-transform:uppercase;}
+
+.sv-main{position:relative;padding:0 clamp(20px,5vw,64px);display:flex;flex-direction:column;justify-content:center;}
+.sv-bar{position:absolute;top:0;left:0;height:2px;background:var(--lime);transition:width .35s cubic-bezier(.4,0,.2,1);}
+
+/* ---------- pantallas ---------- */
+.sv-screen{max-width:640px;width:100%;margin:0 auto;padding:56px 0;animation:sv-in .3s ease both;}
+@keyframes sv-in{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+@media (prefers-reduced-motion:reduce){
+  .sv-screen{animation:none;}
+  .sv-bar{transition:none;}
+}
+
+.sv-eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--lime-dim);margin-bottom:14px;}
+.sv-h1{font-family:var(--display);font-size:clamp(30px,4.4vw,46px);line-height:1.06;letter-spacing:-.03em;font-weight:700;margin:0 0 16px;}
+.sv-q{font-family:var(--display);font-size:clamp(22px,2.9vw,31px);line-height:1.18;letter-spacing:-.02em;font-weight:600;margin:0 0 10px;}
+.sv-lead{color:var(--snow-dim);font-size:16px;margin:0 0 28px;max-width:52ch;}
+.sv-help{color:var(--snow-dim);font-size:13.5px;margin:0 0 20px;max-width:56ch;}
+
+/* ---------- opciones ---------- */
+.sv-opts{display:flex;flex-direction:column;gap:8px;margin-bottom:26px;}
+.sv-opt{
+  display:flex;align-items:center;gap:14px;width:100%;text-align:left;
+  background:var(--void-2);border:1px solid var(--line);border-radius:12px;
+  padding:14px 16px;color:var(--snow);font-family:inherit;font-size:15px;
+  cursor:pointer;transition:border-color .15s,background .15s,transform .1s;
+}
+.sv-opt:hover{border-color:var(--line-2);background:var(--void-3);}
+.sv-opt:active{transform:scale(.995);}
+.sv-opt.sel{border-color:var(--lime);background:rgba(198,242,78,.08);}
+.sv-opt .k{
+  flex:0 0 26px;height:26px;border-radius:7px;display:grid;place-items:center;
+  background:var(--void-3);border:1px solid var(--line);
+  font-family:var(--mono);font-size:11px;font-weight:700;color:var(--snow-dim);
+}
+.sv-opt.sel .k{background:var(--lime);border-color:var(--lime);color:var(--void);}
+
+/* ---------- formulario del bloque 1 ---------- */
+.sv-form{display:flex;flex-direction:column;gap:16px;max-width:520px;}
+.sv-campo{display:flex;flex-direction:column;gap:6px;}
+.sv-campo label{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--snow-dim);}
+.sv-field{
+  width:100%;background:var(--void-2);border:1px solid var(--line);border-radius:10px;
+  padding:13px 14px;color:var(--snow);font-family:inherit;font-size:15px;
+  transition:border-color .15s;
+}
+.sv-field::placeholder{color:var(--snow-dim);opacity:.5;}
+.sv-field:focus{border-color:var(--lime);outline:none;}
+.sv-field.bad{border-color:var(--rose);}
+.sv-tel{display:grid;grid-template-columns:minmax(112px,auto) 1fr;gap:8px;}
+.sv-tel select{
+  background:var(--void-2);border:1px solid var(--line);border-radius:10px;
+  padding:13px 10px;color:var(--snow);font-family:var(--mono);font-size:13px;cursor:pointer;
+}
+.sv-err{color:var(--rose);font-size:12.5px;font-family:var(--mono);}
+
+/* ---------- navegación ---------- */
+.sv-nav{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.sv-cta{
+  background:var(--lime);color:var(--void);border:none;border-radius:10px;
+  padding:14px 24px;font-family:var(--display);font-size:15px;font-weight:600;
+  cursor:pointer;transition:filter .15s,transform .1s;
+}
+.sv-cta:hover{filter:brightness(1.08);}
+.sv-cta:active{transform:scale(.98);}
+.sv-cta:disabled{opacity:.5;cursor:default;transform:none;filter:none;}
+.sv-back{background:none;border:none;color:var(--snow-dim);font-family:inherit;font-size:13.5px;cursor:pointer;padding:0;}
+.sv-back:hover{color:var(--snow);}
+.sv-hint{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--snow-dim);opacity:.7;margin-left:auto;}
+
+/* ---------- cierre ---------- */
+.sv-fin{max-width:600px;margin:0 auto;padding:80px 0;text-align:left;}
+.sv-tick{
+  width:46px;height:46px;border-radius:14px;display:grid;place-items:center;
+  background:var(--lime);color:var(--void);margin-bottom:24px;
+}
+.sv-fin p{color:var(--snow-dim);font-size:16.5px;line-height:1.6;max-width:50ch;}
+.sv-fin .sv-plazo{
+  margin-top:28px;display:inline-flex;align-items:center;gap:10px;
+  border:1px solid var(--line);border-radius:10px;padding:12px 16px;
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--lime);
+}
+
+/* ---------- móvil ---------- */
+@media (max-width:820px){
+  .sv-shell{grid-template-columns:1fr;}
+  .sv-rail{
+    flex-direction:row;align-items:center;gap:16px;
+    padding:16px 20px;border-right:none;border-bottom:1px solid var(--line);
+  }
+  .sv-brand b{font-size:15px;margin-top:4px;}
+  .sv-cuenta{margin-left:auto;}
+  .sv-cuenta b{font-size:24px;}
+  .sv-rama,.sv-rail-foot{display:none;}
+  .sv-screen{padding:34px 0;}
+  .sv-tel{grid-template-columns:1fr;}
+  .sv-hint{margin-left:0;width:100%;}
+}
