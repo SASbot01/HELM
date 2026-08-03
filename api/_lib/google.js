@@ -15,21 +15,41 @@ const CALENDAR_API = 'https://www.googleapis.com/calendar/v3'
 const DRIVE_API = 'https://www.googleapis.com/drive/v3'
 const USERINFO = 'https://www.googleapis.com/oauth2/v3/userinfo'
 
-// Solo lectura: HELM refleja lo que hay en Google, no escribe en la agenda ni
-// en el Drive de nadie. Pedir permisos de escritura obligaría además a pasar
-// la verificación de Google, que tarda semanas.
+// De la agenda, solo lectura: HELM refleja lo que hay en Google, no escribe en
+// la agenda de nadie.
 //
-// Son exactamente los cuatro que se registran en la pantalla de consentimiento
-// (ver docs/google-app.md). Pedir uno de más que no esté allí registrado es
-// motivo de `invalid_scope`: calendar.readonly ya incluye leer los eventos, así
-// que calendar.events.readonly sobraba.
+// De Drive, lectura y `drive.file`. Ese último es el que deja crear el
+// documento del guion, y está elegido a propósito en vez del `drive` completo:
+//
+//   · `drive` (escritura total) es un scope RESTRINGIDO. Obliga a pasar la
+//     verificación de Google y, además, una auditoría de seguridad anual: son
+//     semanas de trámite y un coste recurrente.
+//   · `drive.file` NO es sensible. No necesita verificación ninguna, y da
+//     acceso solo a los ficheros que crea la propia aplicación. Es exactamente
+//     lo que hace falta para dejar el guion en una carpeta, y de paso significa
+//     que HELM no puede tocar ni leer el resto del Drive del cliente aunque
+//     quisiera.
+//
+// Son exactamente los que se registran en la pantalla de consentimiento (ver
+// docs/google-app.md). Pedir uno de más que no esté allí registrado es motivo
+// de `invalid_scope`: calendar.readonly ya incluye leer los eventos, así que
+// calendar.events.readonly sobraba.
 export const GOOGLE_SCOPES = [
   'openid',
   'email',
   'profile',
   'https://www.googleapis.com/auth/calendar.readonly',
   'https://www.googleapis.com/auth/drive.readonly',
+  'https://www.googleapis.com/auth/drive.file',
 ]
+
+// Quien enlazó Google antes de que existiera `drive.file` tiene un permiso que
+// no incluye escribir. El token sigue siendo válido para todo lo de antes, así
+// que no se le puede echar: hay que detectarlo y pedirle que vuelva a conectar
+// solo cuando vaya a usar algo que escriba.
+export const SCOPE_ESCRITURA = 'https://www.googleapis.com/auth/drive.file'
+export const puedeEscribirEnDrive = (scopes) =>
+  String(scopes || '').includes(SCOPE_ESCRITURA)
 
 export const googleCredsMissing = () =>
   !process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET
@@ -231,6 +251,84 @@ export async function listCalendarEvents(token, {
     if (!pageToken) break
   }
   return events
+}
+
+// Crea un Google Doc con el guion dentro de la carpeta indicada.
+//
+// Va por subida multipart y no por la API de Google Docs (que sería otro scope
+// y otra verificación): se manda el texto como text/plain y se le pide a Drive
+// que lo convierta a documento nativo con `mimeType` de destino. El resultado es
+// un Doc editable, que es lo que espera quien lo abre.
+export async function crearDocEnDrive(token, { nombre, texto, folderId }) {
+  const LIMITE = '-------helm-guion-limite'
+  const meta = {
+    name: String(nombre || 'Guion').slice(0, 200),
+    mimeType: 'application/vnd.google-apps.document',
+    ...(folderId ? { parents: [folderId] } : {}),
+  }
+  const cuerpo = [
+    `--${LIMITE}`,
+    'Content-Type: application/json; charset=UTF-8',
+    '',
+    JSON.stringify(meta),
+    `--${LIMITE}`,
+    'Content-Type: text/plain; charset=UTF-8',
+    '',
+    String(texto || ''),
+    `--${LIMITE}--`,
+    '',
+  ].join('\r\n')
+
+  const res = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,webViewLink',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': `multipart/related; boundary=${LIMITE}`,
+      },
+      body: cuerpo,
+    },
+  )
+  if (!res.ok) {
+    const detalle = await res.text().catch(() => '')
+    // 403 con este scope casi siempre es una carpeta que no creó HELM: con
+    // drive.file solo se puede escribir en lo propio. Merece un mensaje que lo
+    // diga, porque el de Google no lo explica.
+    const e = new Error(
+      res.status === 403
+        ? 'Google no deja escribir en esa carpeta. Con el permiso de HELM (drive.file) solo se puede escribir en carpetas creadas desde aquí.'
+        : `Drive respondió ${res.status}: ${detalle.slice(0, 200)}`,
+    )
+    e.statusCode = res.status
+    throw e
+  }
+  return res.json()
+}
+
+// Crea la carpeta donde irán los guiones y devuelve su id. Con `drive.file`,
+// HELM solo puede escribir dentro de lo que ha creado él, así que la carpeta
+// tiene que nacer aquí: no vale pegar el id de una carpeta hecha a mano.
+export async function crearCarpetaEnDrive(token, { nombre, parentId } = {}) {
+  const res = await fetch(
+    'https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&fields=id,name,webViewLink',
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: String(nombre || 'Guiones').slice(0, 200),
+        mimeType: 'application/vnd.google-apps.folder',
+        ...(parentId ? { parents: [parentId] } : {}),
+      }),
+    },
+  )
+  if (!res.ok) {
+    const detalle = await res.text().catch(() => '')
+    const e = new Error(`No se pudo crear la carpeta: ${detalle.slice(0, 200)}`)
+    e.statusCode = res.status
+    throw e
+  }
+  return res.json()
 }
 
 export function listDriveFiles(token, { q, pageToken, pageSize = 40, folderId } = {}) {

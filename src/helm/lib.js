@@ -382,6 +382,8 @@ export const googleApi = {
   unlink: (clientId) => apiFetch(`/api/google?action=unlink&clientId=${clientId}`, { method: 'DELETE' }),
   config: (clientId, body) => apiFetch('/api/google?action=config', { method: 'POST', body: { clientId, ...body } }),
   calendars: (clientId) => apiFetch(`/api/google?action=calendars&clientId=${clientId}`),
+  carpetaGuiones: (clientId) =>
+    apiFetch('/api/google?action=drive-carpeta-guiones', { method: 'POST', body: { clientId } }),
   syncCalls: (clientId, body = {}) =>
     apiFetch('/api/google?action=sync-calls', { method: 'POST', body: { clientId, ...body } }),
   drive: (clientId, { q, folderId, pageToken } = {}) => apiFetch(

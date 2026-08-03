@@ -403,6 +403,63 @@ function WooCard({ clientId }) {
   )
 }
 
+// ── La carpeta de los guiones ──────────────────────────────────────────────
+// La carpeta la crea HELM y no se pega un id a mano. El permiso que pide HELM
+// (drive.file) solo deja escribir en lo que ha creado la propia app: apuntar a
+// una carpeta hecha desde el Drive del cliente daría un 403 al primer guion, y
+// el error saldría tarde y en el chat, lejos de aquí.
+function CarpetaGuiones({ clientId, status, onListo }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function preparar() {
+    setBusy(true); setError(null)
+    try { await googleApi.carpetaGuiones(clientId); onListo?.() }
+    catch (err) { setError(err.message) }
+    setBusy(false)
+  }
+
+  return (
+    <div className="helm-settings-block">
+      <label>La carpeta de los guiones</label>
+      <p>
+        Cuando programes contenido con <code>/programar-guion</code>, el guion se agenda en{' '}
+        <b>Contenido</b> y además cae aquí como documento, para que quien graba lo abra sin
+        entrar al panel.
+      </p>
+
+      {!status.puedeEscribir ? (
+        <div className="helm-settings-warn">
+          <AlertTriangle size={15} />
+          <span>
+            Este perfil enlazó Google cuando HELM solo sabía leer. Para que pueda dejar los
+            guiones hay que <b>desconectar y volver a conectar</b>: Google preguntará de nuevo,
+            ahora incluyendo el permiso de escritura.
+          </span>
+        </div>
+      ) : status.guionesFolderId ? (
+        <div className="helm-settings-row">
+          <div>
+            <b>Carpeta lista</b>
+            <small>Los guiones que programes van cayendo ahí solos.</small>
+          </div>
+          {status.guionesFolderUrl && (
+            <a className="helm-btn" href={status.guionesFolderUrl} target="_blank" rel="noreferrer">
+              Abrir en Drive
+            </a>
+          )}
+        </div>
+      ) : (
+        <button type="button" className="helm-btn primary" onClick={preparar} disabled={busy}>
+          {busy ? 'Creando…' : 'Crear la carpeta en Drive'}
+        </button>
+      )}
+
+      {error && <div className="helm-formerror" style={{ marginTop: 10 }}>{error}</div>}
+    </div>
+  )
+}
+
 // ── Google (Calendar + Drive) ──────────────────────────────────────────────
 // A diferencia de Stripe y Woo, aquí no se pega ninguna clave: se va a Google,
 // se acepta y se vuelve. Lo que queda guardado en el servidor es un permiso
@@ -595,6 +652,8 @@ function GoogleCard({ clientId }) {
 
               <button className="helm-btn primary" disabled={busy}>Guardar preferencias</button>
             </form>
+
+            <CarpetaGuiones clientId={clientId} status={status} onListo={load} />
           </>
         ) : (
           <>
@@ -605,8 +664,11 @@ function GoogleCard({ clientId }) {
               {' '}puedes traer documentos a la Biblioteca para que la IA del chat los conozca.
             </p>
             <p className="helm-settings-lead">
-              El permiso es de <b>solo lectura</b>: HELM no crea, cambia ni borra nada en tu agenda
-              ni en tu Drive. Puedes retirarlo cuando quieras, desde aquí o desde tu cuenta de Google.
+              De tu <b>agenda</b>, el permiso es de solo lectura: HELM no crea, cambia ni borra
+              nada en ella. De tu <b>Drive</b> lee lo que le enseñes, y además puede crear los
+              documentos de los guiones — pero <b>solo puede tocar lo que ha creado él</b>: el
+              resto de tu Drive le sigue siendo invisible. Puedes retirar el permiso cuando
+              quieras, desde aquí o desde tu cuenta de Google.
             </p>
             <button className="helm-btn primary" onClick={conectar} disabled={busy || !status.appConfigured}>
               <Link2 size={15} /> {busy ? 'Abriendo Google…' : 'Conectar con Google'}

@@ -28,6 +28,7 @@ import {
   getAccessToken, getGoogleConfig, saveGoogleConfig, getUserInfo, listCalendars,
   listCalendarEvents, listDriveFiles, getDriveFile, readDriveFileText,
   driveFileIsReadable, looksLikeCall, meetUrlOf,
+  crearCarpetaEnDrive, puedeEscribirEnDrive,
 } from './_lib/google.js'
 
 const DIAS_ATRAS = 30
@@ -179,6 +180,12 @@ export default async function handler(req, res) {
         diasAdelante: cfg.diasAdelante ?? DIAS_ADELANTE,
         lastSyncAt: cfg.lastSyncAt || null,
         updatedAt: row?.updated_at || null,
+        // Escritura en Drive. `puedeEscribir` distingue a quien enlazó antes de
+        // que existiera el permiso: su token vale para todo lo de antes, así
+        // que no se le echa — se le pide reconectar solo cuando toca escribir.
+        puedeEscribir: puedeEscribirEnDrive(cfg.scopes),
+        guionesFolderId: cfg.guionesFolderId || null,
+        guionesFolderUrl: cfg.guionesFolderUrl || null,
       })
     }
 
@@ -329,6 +336,40 @@ export default async function handler(req, res) {
         ventana: { diasAtras, diasAdelante },
         errores,
       })
+    }
+
+    // ── POST ?action=drive-carpeta-guiones ─────────────────────────────────
+    // Prepara la carpeta donde caerán los guiones y la deja guardada en la
+    // config del perfil. La carpeta la crea HELM y no se pega un id a mano
+    // porque `drive.file` solo permite escribir en lo que ha creado la propia
+    // app: una carpeta hecha desde el Drive del cliente daría 403 al primer
+    // guion, y el error saldría tarde y lejos de aquí.
+    if (req.method === 'POST' && action === 'drive-carpeta-guiones') {
+      const row = await getGoogleConfig(supabase, clientId)
+      if (!row?.config?.refreshToken) return res.status(400).json({ error: 'Este perfil no tiene Google enlazado' })
+      if (!puedeEscribirEnDrive(row.config.scopes)) {
+        return res.status(409).json({
+          error: 'Este perfil enlazó Google antes de que HELM pudiera escribir. Desconecta y vuelve a conectar para dar el permiso nuevo.',
+          reconectar: true,
+        })
+      }
+      if (row.config.guionesFolderId) {
+        return res.status(200).json({
+          folderId: row.config.guionesFolderId,
+          folderUrl: row.config.guionesFolderUrl || null,
+          yaExistia: true,
+        })
+      }
+
+      const { token } = await getAccessToken(supabase, clientId)
+      const carpeta = await crearCarpetaEnDrive(token, { nombre: `Guiones · ${client?.name || 'HELM'}` })
+      await saveGoogleConfig(supabase, clientId, {
+        ...row.config,
+        guionesFolderId: carpeta.id,
+        guionesFolderUrl: carpeta.webViewLink || null,
+      })
+      await writeAudit({ clientId, action: 'google.drive_carpeta_guiones', req, metadata: { folderId: carpeta.id } })
+      return res.status(200).json({ folderId: carpeta.id, folderUrl: carpeta.webViewLink || null, yaExistia: false })
     }
 
     // ── GET ?action=drive ──────────────────────────────────────────────────

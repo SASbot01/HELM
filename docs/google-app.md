@@ -38,14 +38,38 @@ En **APIs y servicios → Pantalla de consentimiento de OAuth**:
 2. Nombre de la aplicación: el que verá el usuario al aceptar — pon el de tu
    marca, no "HELM", si vendes el panel en blanco.
 3. Correo de asistencia y de contacto: el tuyo.
-4. **Permisos (scopes)**: añade exactamente estos cuatro, todos de solo lectura:
+4. **Permisos (scopes)**: añade exactamente estos cinco:
 
    ```
    .../auth/userinfo.email
    .../auth/userinfo.profile
    .../auth/calendar.readonly
    .../auth/drive.readonly
+   .../auth/drive.file
    ```
+
+   Los cuatro primeros son de solo lectura. El quinto, `drive.file`, es el que
+   deja **crear** los documentos de los guiones, y está elegido a propósito en
+   lugar del `drive` completo:
+
+   - `drive` (escritura total) es un scope **restringido**: obliga a pasar la
+     verificación de Google *y* una auditoría de seguridad anual. Semanas de
+     trámite y un coste que se repite cada año.
+   - `drive.file` **no es sensible**: no necesita verificación ninguna. Da
+     acceso solo a los ficheros que crea la propia aplicación, así que HELM
+     puede dejar el guion en su carpeta pero no ve ni toca el resto del Drive
+     del cliente.
+
+   Consecuencia práctica: la carpeta de los guiones **la tiene que crear HELM**,
+   desde *Ajustes → Integraciones → Crear la carpeta en Drive*. Pegar el enlace
+   de una carpeta hecha a mano no funciona — Google devolvería `403` al subir el
+   primer guion.
+
+   > **Si ya tenías la app montada con los cuatro de antes:** añade `drive.file`
+   > aquí y avisa a cada perfil de que tiene que *desconectar y volver a
+   > conectar* Google. Un permiso concedido antes no se amplía solo; hasta que
+   > reconecten, todo lo demás les sigue funcionando igual y HELM les avisa en
+   > Ajustes.
 
 5. **Usuarios de prueba**: mientras la app esté en modo *Prueba*, solo pueden
    conectar las cuentas que añadas aquí (hasta 100). Añade las tuyas y las de

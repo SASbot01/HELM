@@ -21,6 +21,7 @@ import { llmChat, llmChatConHerramientas, llmHealth, llmInfo } from './_lib/llm.
 import { investigar, buscadorEnUso } from './_lib/web.js'
 import { HERRAMIENTAS, INSTRUCCIONES_ACCIONES, ejecutarAccion } from './_lib/acciones.js'
 import { resolverFecha, isoLocal } from './_lib/fechas.js'
+import { getGoogleConfig, getAccessToken, crearDocEnDrive, puedeEscribirEnDrive } from './_lib/google.js'
 
 const MAX_TOKENS = 2048
 const HISTORY_TURNS = 12        // mensajes de contexto que se reenvían al modelo
@@ -410,6 +411,38 @@ function parseCommand(text) {
 // acciones del chat (api/_lib/fechas.js), así que aquí también valen "el lunes"
 // o "en 3 días" y no solo hoy/mañana/25-07 como antes.
 
+/**
+ * Deja el guion como documento en la carpeta de Drive del perfil.
+ *
+ * Nunca lanza: devuelve `{ url, aviso }` y el guion se agenda igual pase lo que
+ * pase. Un guion que se pierde porque Drive dio 500 es mucho peor que un guion
+ * agendado sin documento, y quien lo escribió no tiene forma de saber que hay
+ * que repetirlo.
+ */
+async function docDelGuion(clientId, { titulo, fecha, guion }) {
+  try {
+    const row = await getGoogleConfig(supabase, clientId)
+    const cfg = row?.config
+    if (!cfg?.refreshToken) return { url: null }        // sin Google enlazado: normal, sin aviso
+    if (!cfg.guionesFolderId) {
+      return { url: null, aviso: '_Para que además caiga en Drive, prepara la carpeta en Ajustes → Integraciones._' }
+    }
+    if (!puedeEscribirEnDrive(cfg.scopes)) {
+      return { url: null, aviso: '_Este perfil enlazó Google antes de que HELM pudiera escribir. Reconecta en Ajustes y el próximo guion irá también a Drive._' }
+    }
+    const { token } = await getAccessToken(supabase, clientId)
+    const doc = await crearDocEnDrive(token, {
+      nombre: `${fecha} · ${String(titulo).slice(0, 80)}`,
+      texto: guion,
+      folderId: cfg.guionesFolderId,
+    })
+    return { url: doc.webViewLink || null }
+  } catch (err) {
+    console.warn('[chat] docDelGuion', err.message)
+    return { url: null, aviso: `_El guion está agendado, pero no pude subirlo a Drive: ${err.message}_` }
+  }
+}
+
 // ── Comandos de acción ─────────────────────────────────────────────────────
 // El atajo con nombre propio de las tres cosas que el chat sabe hacer. Lo mismo
 // se puede pedir hablando, pero un comando quita la duda de si te ha entendido.
@@ -721,14 +754,27 @@ export default async function handler(req, res) {
         return res.status(err.statusCode || 502).json({ error: err.message || 'Error llamando al modelo' })
       }
 
+      // El documento en Drive es opcional a propósito: si el perfil no tiene
+      // Google enlazado, o lo enlazó antes de que HELM pudiera escribir, el
+      // guion se agenda igual. Perder el guion por no poder subir el doc sería
+      // el peor de los dos fallos posibles.
+      const doc = await docDelGuion(clientId, { titulo: tema, fecha, guion })
+
       const { error: calErr } = await supabase.from('helm_content_calendar').insert({
         client_id: clientId, date: fecha, title: tema.slice(0, 80),
         body: guion, format: 'reel', status: 'planned', source: 'chat',
+        doc_url: doc.url || null,
       })
       const u = await saveMessage(clientId, 'user', message, command)
       const confirm = calErr
         ? `He escrito el guion pero no pude agendarlo (${calErr.message}).\n\n${guion}`
-        : `📅 Guion agendado en **Contenido** para el **${fecha}**. Lo tienes en el calendario.\n\n${guion}`
+        : [
+          `📅 Guion agendado en **Contenido** para el **${fecha}**. Lo tienes en el calendario.`,
+          doc.url ? `📄 Y en Drive: [abrir el documento](${doc.url})` : '',
+          doc.aviso || '',
+          '',
+          guion,
+        ].filter(Boolean).join('\n\n')
       const b = await saveMessage(clientId, 'assistant', confirm, command)
       return res.status(200).json({ userMessage: u, message: b })
     }
