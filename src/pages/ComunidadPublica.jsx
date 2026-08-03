@@ -14,7 +14,8 @@ import {
 import { miembroApi, tokenMiembro, guardarTokenMiembro } from '../helm/lib'
 import { Markdown } from '../helm/md'
 import { useHelmTheme } from '../helm/theme'
-import { useMarcaEnLaPestana, Marca } from '../helm/marcaPestana'
+import { useMarcaEnLaPestana } from '../helm/marcaPestana'
+import { Marca } from '../helm/marcaPestana.jsx'
 import '../helm/theme.css'
 
 // El vídeo de una lección puede ser de YouTube, de Vimeo o un archivo subido al
