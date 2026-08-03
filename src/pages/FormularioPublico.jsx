@@ -16,6 +16,7 @@ import { CamposRespuesta } from '../helm/formularios/campos'
 import { validarRespuestas } from '../helm/formularios/tipos'
 import { Field, Input, FormNote } from '../helm/ui'
 import { useHelmTheme } from '../helm/theme'
+import { useMarcaEnLaPestana, Marca } from '../helm/marcaPestana'
 import '../helm/theme.css'
 
 export default function FormularioPublico() {
@@ -31,8 +32,13 @@ export default function FormularioPublico() {
   const [enviando, setEnviando] = useState(false)
   const [enviado, setEnviado] = useState(false)
   const [error, setError] = useState(null)
+  const [marca, setMarca] = useState(null)
 
   const contactId = params.get('c')
+
+  // Para quien rellena esto, la página es de la marca que se lo ha mandado, no
+  // de HELM. La pestaña, el icono y la cabecera van con su logo y su nombre.
+  useMarcaEnLaPestana(marca)
 
   useEffect(() => {
     let vivo = true
@@ -43,6 +49,20 @@ export default function FormularioPublico() {
         if (!vivo) return
         if (e || !data) { setForm(false); return }
         setForm(data)
+        // La marca va en una segunda consulta y no en un join: si el perfil no
+        // se pudiera leer, el formulario tiene que salir igual — sin logo, pero
+        // funcionando.
+        supabase.from('clients')
+          .select('name, brand_name, brand_subtitle, logo_url')
+          .eq('id', data.client_id).maybeSingle()
+          .then(({ data: c }) => {
+            if (!vivo || !c) return
+            setMarca({
+              nombre: c.brand_name || c.name,
+              subtitulo: c.brand_subtitle || null,
+              logo: c.logo_url || null,
+            })
+          })
       })
     return () => { vivo = false }
   }, [formId])
@@ -78,6 +98,7 @@ export default function FormularioPublico() {
   return (
     <div className="helm" data-theme={theme}>
       <div className="helm-public">
+        <Marca marca={marca} />
         {form === null ? (
           <div className="helm-empty">Cargando…</div>
         ) : form === false ? (

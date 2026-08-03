@@ -14,6 +14,7 @@ import {
 import { miembroApi, tokenMiembro, guardarTokenMiembro } from '../helm/lib'
 import { Markdown } from '../helm/md'
 import { useHelmTheme } from '../helm/theme'
+import { useMarcaEnLaPestana, Marca } from '../helm/marcaPestana'
 import '../helm/theme.css'
 
 // El vídeo de una lección puede ser de YouTube, de Vimeo o un archivo subido al
@@ -47,32 +48,6 @@ function Video({ url }) {
       <Play size={15} /> Ver el vídeo
     </a>
   )
-}
-
-// La pestaña del navegador y el icono también son marca. El index.html es uno
-// solo para toda la app y dice "HELM": si no se reescribe aquí, el alumno abre
-// el enlace de su formador y lo primero que lee es el nombre de otro producto.
-// (La tarjeta que sale al compartir el enlace por WhatsApp no se arregla aquí
-// —el bot no ejecuta JavaScript—, sino en api/portal-meta.js.)
-function useMarcaEnLaPestana(marca) {
-  useEffect(() => {
-    if (!marca?.nombre) return undefined
-    const tituloPrevio = document.title
-    document.title = marca.subtitulo ? `${marca.nombre} — ${marca.subtitulo}` : marca.nombre
-
-    const iconos = [...document.querySelectorAll("link[rel~='icon'], link[rel='apple-touch-icon']")]
-    const previos = iconos.map(l => ({ href: l.getAttribute('href'), type: l.getAttribute('type') }))
-    if (marca.logo) {
-      for (const l of iconos) { l.setAttribute('href', marca.logo); l.removeAttribute('type') }
-    }
-    return () => {
-      document.title = tituloPrevio
-      iconos.forEach((l, i) => {
-        l.setAttribute('href', previos[i].href)
-        if (previos[i].type) l.setAttribute('type', previos[i].type)
-      })
-    }
-  }, [marca])
 }
 
 export default function ComunidadPublica() {
@@ -153,19 +128,6 @@ export default function ComunidadPublica() {
   return <Dentro slug={slug} sesion={sesion} theme={theme} onSalir={salir} />
 }
 
-function Marca({ marca }) {
-  return (
-    <div className="helm-portal-marca">
-      {marca?.logo
-        ? <img src={marca.logo} alt="" />
-        : <div className="helm-portal-ini">{(marca?.nombre || 'H')[0].toUpperCase()}</div>}
-      <div>
-        <b>{marca?.nombre}</b>
-        {marca?.subtitulo && <span>{marca.subtitulo}</span>}
-      </div>
-    </div>
-  )
-}
 
 // ── Entrar o registrarse ───────────────────────────────────────────────────
 function Entrada({ slug, marca, onDentro }) {
