@@ -10,15 +10,20 @@
 // hay que preguntarlo.
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
-import { fetchRows, fetchRowsOrError, insertRow, deleteRow, fmtDate, todayISO } from '../lib'
+import { supabase, fetchRows, fetchRowsOrError, insertRow, deleteRow, fmtDate, todayISO } from '../lib'
 import { Panel, Empty, Modal, Field, Input, Select, Kpi, CountInput, FormNote } from '../ui'
 import { ROLES, ROLE_MAP, roleLabel } from '../equipo/roles'
+import { marcarVendidos } from '../diario/ventas'
 
 // Roles que reportan algo. Los que no tienen métricas definidas (editor, otro)
 // no aparecen en el diario: no tendrían nada que rellenar.
 const ROLES_DIARIO = ROLES.filter(r => r.diario.length > 0)
 
-const EMPTY = { date: todayISO(), person_id: '', name: '', role: 'closer', metrics: {} }
+const EMPTY = { date: todayISO(), person_id: '', name: '', role: 'closer', metrics: {}, sales: [] }
+
+// Roles cuyo reporte puede cerrar ventas. Un setter agenda, no cierra: pedirle
+// a quién le vendio seria pedirle algo que no hace.
+const VENDEN = new Set(['closer', 'dueno'])
 
 export default function Diario({ clientId }) {
   const [rows, setRows] = useState(null)
@@ -26,6 +31,7 @@ export default function Diario({ clientId }) {
   const [open, setOpen] = useState(false)
   const [rolVista, setRolVista] = useState('closer')
   const [error, setError] = useState(null)
+  const [aviso, setAviso] = useState(null)
 
   useEffect(() => {
     fetchRows('reports', clientId, { order: 'date' }).then(setRows)
@@ -52,14 +58,26 @@ export default function Diario({ clientId }) {
   }, [totales, rolVista])
 
   async function save(form) {
+    const ventas = VENDEN.has(form.role) ? (form.sales || []).filter(v => v.contact_id) : []
     const row = await insertRow('reports', {
       client_id: clientId, date: form.date, name: form.name.trim(), role: form.role,
       person_id: form.person_id || null,
+      sales: ventas,
       ...Object.fromEntries((ROLE_MAP[form.role]?.diario || []).map(m => [m.field, Number(form.metrics[m.field]) || 0])),
     })
     setRows(rs => [row, ...(rs || [])])
     setRolVista(form.role)
     setOpen(false)
+
+    // El reporte ya esta guardado; mover el CRM va despues y no puede tumbarlo.
+    // Si un contacto se borro entre medias, se avisa y el reporte se queda.
+    if (ventas.length) {
+      const { movidos, fallos } = await marcarVendidos(clientId, ventas)
+      setAviso([
+        movidos ? `${movidos} ${movidos === 1 ? 'contacto pasado' : 'contactos pasados'} a ganado en el CRM.` : '',
+        fallos.length ? `No se pudo con: ${fallos.join('; ')}` : '',
+      ].filter(Boolean).join(' '))
+    }
   }
 
   async function remove(id) {
@@ -80,6 +98,7 @@ export default function Diario({ clientId }) {
       </div>
 
       {error && <FormNote>{error}</FormNote>}
+      {aviso && <FormNote tone="warn">{aviso}</FormNote>}
 
       <Panel
         title={`Reportes diarios · ${rol.label}`}
@@ -119,12 +138,109 @@ export default function Diario({ clientId }) {
         )}
       </Panel>
 
-      {open && <ReporteModal people={people} onClose={() => setOpen(false)} onSave={save} />}
+      {open && <ReporteModal clientId={clientId} people={people} onClose={() => setOpen(false)} onSave={save} />}
     </div>
   )
 }
 
-function ReporteModal({ people, onClose, onSave }) {
+// ── A quién se le vendió ───────────────────────────────────────────────────
+// Los contactos se ELIGEN de la lista, no se teclean. Escribir "Ana" con tres
+// Anas en el CRM movería la ficha equivocada, y el error no se vería hasta que
+// alguien se extrañase de que un lead frío figura como cliente.
+function Ventas({ clientId, value = [], onChange, declarados }) {
+  const [contactos, setContactos] = useState(null)
+  const [busca, setBusca] = useState('')
+
+  useEffect(() => {
+    supabase.from('crm_contacts')
+      .select('id, name, email, company, status')
+      .eq('client_id', clientId)
+      .order('last_activity_at', { ascending: false, nullsFirst: false })
+      .limit(500)
+      .then(({ data }) => setContactos(data || []))
+  }, [clientId])
+
+  const sugerencias = useMemo(() => {
+    const q = busca.trim().toLowerCase()
+    if (!q) return []
+    // El set de ya elegidos se calcula aquí dentro y no fuera: si se declara
+    // arriba, el compilador de React no puede conservar la memoización.
+    const elegidos = new Set(value.map(v => v.contact_id))
+    return (contactos || [])
+      .filter(c => !elegidos.has(c.id))
+      .filter(c => [c.name, c.email, c.company].some(x => String(x || '').toLowerCase().includes(q)))
+      .slice(0, 6)
+  }, [busca, contactos, value])
+
+  const añadir = (c) => { onChange([...value, { contact_id: c.id, name: c.name, amount: '' }]); setBusca('') }
+  const quitar = (id) => onChange(value.filter(v => v.contact_id !== id))
+  const importe = (id, v) => onChange(value.map(x => (x.contact_id === id ? { ...x, amount: v } : x)))
+
+  return (
+    <>
+      <div className="helm-drawer-section">A quién se le vendió</div>
+      <p className="helm-settings-note" style={{ marginTop: -4 }}>
+        Lo que pongas aquí <b>mueve el CRM</b>: cada uno pasa a ganado con su importe. Lo demás
+        del reporte son contadores y no tocan nada.
+      </p>
+
+      {value.map(v => (
+        <div key={v.contact_id} className="helm-form-2" style={{ alignItems: 'end' }}>
+          <Field label="Cliente">
+            <div className="helm-settings-row" style={{ margin: 0 }}>
+              <b>{v.name}</b>
+              <button type="button" className="helm-btn sm" onClick={() => quitar(v.contact_id)}>
+                <Trash2 size={13} />
+              </button>
+            </div>
+          </Field>
+          <Field label="Importe (€)">
+            <Input type="number" min="0" step="1" value={v.amount}
+              onChange={e => importe(v.contact_id, e.target.value)} placeholder="1200" />
+          </Field>
+        </div>
+      ))}
+
+      <Field
+        label="Añadir cliente"
+        hint={contactos === null ? 'Cargando contactos…' : 'Busca por nombre, email o empresa'}
+      >
+        <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Empieza a escribir…" />
+      </Field>
+
+      {sugerencias.length > 0 && (
+        <div className="helm-leccion-list" style={{ marginTop: -6 }}>
+          {sugerencias.map(c => (
+            <button key={c.id} type="button" className="helm-leccion-main" onClick={() => añadir(c)}>
+              <span>
+                <b>{c.name}</b>
+                <small>{[c.company, c.email].filter(Boolean).join(' · ') || 'sin más datos'}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {busca.trim() && sugerencias.length === 0 && contactos !== null && (
+        <p className="helm-settings-note">
+          Nadie con ese nombre en el CRM. Si el cliente no está dado de alta, créalo antes en
+          <b> CRM</b> — así el reporte apunta a una ficha de verdad.
+        </p>
+      )}
+
+      {/* Aviso, no bloqueo: se puede cerrar a alguien que no esté en el CRM, y
+          el contador es el que manda para las métricas. */}
+      {value.length > 0 && declarados !== value.length && (
+        <FormNote tone="warn">
+          Has puesto {declarados} en «Convirtieron» y aquí {value.length}. No pasa nada, pero
+          revísalo por si falta alguien.
+        </FormNote>
+      )}
+    </>
+  )
+}
+
+function ReporteModal({ clientId, people, onClose, onSave }) {
   const [form, setForm] = useState(EMPTY)
   const [touched, setTouched] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -215,6 +331,16 @@ function ReporteModal({ people, onClose, onSave }) {
             <CountInput value={form.metrics[m.field] ?? ''} onChange={v => setMetric(m.field, v)} placeholder="0" />
           </Field>
         ))}
+
+        {/* Quien cierra ventas dice a QUIÉN. Es lo único de todo el reporte que
+            mueve el CRM: el resto son contadores y no tocan nada. */}
+        {VENDEN.has(rol.key) && (
+          <Ventas
+            clientId={clientId} value={form.sales}
+            onChange={v => setForm(f => ({ ...f, sales: v }))}
+            declarados={num('closes')}
+          />
+        )}
 
         <FormNote>{error}</FormNote>
         {touched && !ok && <FormNote>Revisa los campos marcados en rojo.</FormNote>}
