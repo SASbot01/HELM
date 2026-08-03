@@ -17,7 +17,7 @@ export const eur = (n) =>
 export const PERFILES = [
   { max: 35, name: 'Negocio artesanal', color: 'var(--clay)',
     txt: 'Todo funciona porque tú estás encima. Ahora mismo, cada euro extra que metas en captación te va a comprar más caos que ventas. Antes de automatizar nada hay que documentar y unificar dónde vive la información.' },
-  { max: 55, name: 'Techo operativo', color: 'var(--amber)',
+  { max: 55, name: 'Techo operativo', color: 'var(--warn)',
     txt: 'Vendes bien y el freno está en la operativa. Este es el punto donde la automatización se paga sola más rápido: ya hay procesos claros y repetidos, solo hay que conectarlos.' },
   { max: 75, name: 'Base sólida con fugas', color: 'var(--mint)',
     txt: 'Lo esencial funciona. Lo que queda son fugas concretas y localizables que están costando dinero en silencio, no un problema de fondo.' },

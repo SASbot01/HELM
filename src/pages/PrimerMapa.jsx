@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { SECTIONS, visibles, textoDe } from './primermapa/preguntas'
 import { compute, calificar, señales, eur, DIMENSIONES } from './primermapa/calculo'
-import { getClientId, crearLead, guardarDiagnostico } from './primermapa/guardar'
+import { getClientId, crearLead, guardarDiagnostico, origenDeLaUrl } from './primermapa/guardar'
 import './primermapa/primermapa.css'
 
 const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i
@@ -117,8 +117,11 @@ function Puerta({ onEntrar }) {
     try {
       const clientId = await getClientId()
       if (!clientId) throw new Error('No se pudo conectar. Inténtalo en un momento.')
-      const contactId = await crearLead(clientId, f)
-      onEntrar({ clientId, contactId, ...f })
+      // De qué anuncio o enlace viene, capturado al entrar: al terminar el
+      // diagnóstico la URL ya no tiene por qué conservar los parámetros.
+      const origen = origenDeLaUrl()
+      const contactId = await crearLead(clientId, f, origen)
+      onEntrar({ clientId, contactId, origen, ...f })
     } catch (err) {
       setError(err.message || 'No se pudo continuar. Inténtalo de nuevo.')
       setEnviando(false)
@@ -297,7 +300,7 @@ function Resultados({ A, lead, onEnviado }) {
     return () => { clearTimeout(t); cancelAnimationFrame(raf) }
   }, [R.total.max])
 
-  const col = (v) => (v >= 67 ? 'var(--mint)' : v >= 40 ? 'var(--amber)' : 'var(--clay)')
+  const col = (v) => (v >= 67 ? 'var(--mint)' : v >= 40 ? 'var(--warn)' : 'var(--clay)')
   const terminado = contador >= R.total.max
   const hoy = new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })
 
@@ -318,7 +321,8 @@ function Resultados({ A, lead, onEnviado }) {
     setEnviando(true); setError(null)
     try {
       await guardarDiagnostico(lead.clientId, lead.contactId, {
-        A, R, calif, extra: { web, quiereRevision: revision },
+        A, R, calif,
+        extra: { web, quiereRevision: revision, nombre: lead.nombre, origen: lead.origen },
       })
       onEnviado()
     } catch {

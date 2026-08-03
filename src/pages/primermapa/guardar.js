@@ -30,7 +30,23 @@ export async function getClientId(slug = PERFIL_SLUG) {
  * Si ese email ya existe en el perfil se reutiliza en vez de duplicar: alguien
  * que repite el diagnóstico es la misma persona, no un lead nuevo.
  */
-export async function crearLead(clientId, { nombre, email, telefono }) {
+// De dónde llegó, para el bloque "De dónde vino" de la ficha. Se lee de la URL
+// en la que se abrió la página: si se mira al terminar, ya se han podido perder
+// los parámetros de navegación.
+export function origenDeLaUrl() {
+  try {
+    const p = new URLSearchParams(window.location.search)
+    const o = {}
+    for (const k of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term']) {
+      const v = p.get(k)
+      if (v) o[k] = v.slice(0, 200)
+    }
+    if (document.referrer) o.referrer = document.referrer.slice(0, 300)
+    return o
+  } catch { return {} }
+}
+
+export async function crearLead(clientId, { nombre, email, telefono }, origen = {}) {
   const correo = email.trim().toLowerCase()
 
   const { data: existente } = await supabase
@@ -54,6 +70,12 @@ export async function crearLead(clientId, { nombre, email, telefono }) {
     status: 'lead',
     tags: ['primermapa'],
     notes: 'Empezó el diagnóstico operativo. Aún sin terminar.',
+    // El CRM tiene columnas propias para las UTM y la vista de Ventas filtra
+    // por ellas: dejarlas solo dentro del jsonb las escondería.
+    utm_source: origen.utm_source || null,
+    utm_medium: origen.utm_medium || null,
+    utm_campaign: origen.utm_campaign || null,
+    utm_content: origen.utm_content || null,
   }).select('id').single()
 
   if (error) { console.warn('[primermapa] crearLead', error.message); throw error }
@@ -90,8 +112,52 @@ export function informeTexto(A, R, calif) {
 }
 
 /**
- * Completa el lead con el diagnóstico: notas legibles, datos estructurados en
- * custom_fields y una actividad en su timeline.
+ * La respuesta en el plugin Formularios, que es donde el comercial la lee: la
+ * pestaña del formulario en la ficha del contacto, con pregunta y respuesta una
+ * debajo de otra. Antes esto solo estaba en las notas, que es un muro de texto.
+ *
+ * El formulario lo crea migrations/helm_formulario_primermap_silvestre.sql. Si
+ * la migración no está puesta no se encuentra y no se guarda aquí, pero el lead
+ * y sus notas sí: esto no puede tumbar el envío.
+ */
+async function guardarEnFormularios(clientId, contactId, { A, R, calif, extra }) {
+  const { data: form } = await supabase
+    .from('helm_forms').select('id')
+    .eq('client_id', clientId).eq('slug', 'primermap').maybeSingle()
+  if (!form) { console.warn('[primermapa] falta el formulario primermap'); return }
+
+  // Las etiquetas, no los códigos: la ficha se lee sola, sin traducir nada.
+  const answers = {}
+  for (const q of Q) {
+    const t = etiquetaDe(A, q.id)
+    if (t) answers[q.id] = t
+  }
+
+  const { error } = await supabase.from('helm_form_responses').insert({
+    client_id: clientId,
+    form_id: form.id,
+    contact_id: contactId,
+    respondent: extra?.nombre || '',
+    answers,
+    meta: {
+      ...(extra?.origen || {}),
+      // El índice de escalabilidad no vale como "calidad del lead": va al revés
+      // (cuanto más alto, mejor le va y menos tiene que arreglar). El tramo se
+      // saca de lo que de verdad decide a quién se llama antes — si está
+      // caliente y cuánto dinero hay sobre la mesa.
+      lead_tier: calif.caliente ? 'A' : R.total.max * 12 >= 50000 ? 'B' : 'C',
+      indice: R.idx,
+      perfil: R.perfil.name,
+      fuga_anual_max: Math.round(R.total.max * 12),
+      quiere_revision: Boolean(extra?.quiereRevision),
+    },
+  })
+  if (error) console.warn('[primermapa] guardarEnFormularios', error.message)
+}
+
+/**
+ * Completa el lead con el diagnóstico: la respuesta en Formularios, notas
+ * legibles, datos estructurados en custom_fields y una actividad en su timeline.
  */
 export async function guardarDiagnostico(clientId, contactId, { A, R, calif, extra }) {
   const informe = informeTexto(A, R, calif)
@@ -124,6 +190,8 @@ export async function guardarDiagnostico(clientId, contactId, { A, R, calif, ext
 
   const { error } = await supabase.from('crm_contacts').update(patch).eq('id', contactId)
   if (error) { console.warn('[primermapa] guardarDiagnostico', error.message); throw error }
+
+  await guardarEnFormularios(clientId, contactId, { A, R, calif, extra })
 
   // La actividad es lo que hace que el lead aparezca en el timeline del plugin
   // Actividad y no solo en su ficha.
