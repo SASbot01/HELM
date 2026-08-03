@@ -31,6 +31,31 @@ const handle = (v) => txt(v, 120)
 // "0034600112233" son el mismo número, que es como los escribe la gente.
 const cola = (v) => String(v || '').replace(/\D/g, '').slice(-9)
 
+/**
+ * Pipeline y etapa de entrada de los leads de un formulario.
+ *
+ * Solo se aplica al CREAR el contacto. A quien ya está en el CRM no se le
+ * mueve: si alguien lleva semanas en "propuesta" y vuelve a rellenar un
+ * formulario, sacarlo de ahí y devolverlo a "lead" borraría el trabajo del
+ * comercial — el mismo criterio que ya se usa para no pisarle los datos.
+ */
+async function destinoDe(form) {
+  if (!form?.pipeline_id) return { pipelineId: null, stage: 'lead' }
+
+  const { data: pipeline } = await supabase
+    .from('crm_pipelines').select('id, stages').eq('id', form.pipeline_id).maybeSingle()
+  // El pipeline pudo borrarse después de configurar el formulario. Mejor un
+  // lead en el embudo por defecto que un contacto apuntando a algo que no está.
+  if (!pipeline) return { pipelineId: null, stage: 'lead' }
+
+  const stages = Array.isArray(pipeline.stages) ? pipeline.stages : []
+  const elegida = stages.find(s => s.key === form.stage_key)
+  return {
+    pipelineId: pipeline.id,
+    stage: elegida?.key || stages[0]?.key || 'lead',
+  }
+}
+
 export default async function handler(req, res) {
   applyCors(req, res)
   if (req.method === 'OPTIONS') return res.status(204).end()
@@ -57,7 +82,7 @@ export default async function handler(req, res) {
     }
 
     const { data: form } = await supabase
-      .from('helm_forms').select('id, title, fields, active')
+      .from('helm_forms').select('id, title, fields, active, pipeline_id, stage_key')
       .eq('client_id', client.id).eq('slug', formSlug).maybeSingle()
     if (!form) return res.status(404).json({ error: 'Formulario no encontrado' })
     if (form.active === false) return res.status(410).json({ error: 'Este formulario ya no admite respuestas' })
@@ -140,6 +165,9 @@ export default async function handler(req, res) {
       if (!contacto.instagram && instagram) patch.instagram = instagram
       await supabase.from('crm_contacts').update(patch).eq('id', contactId)
     } else {
+      // A qué embudo entra. El formulario lo decide; si no lo dice, se queda
+      // como siempre: pipeline por defecto y etapa 'lead'.
+      const destino = await destinoDe(form)
       const { data: nuevo, error } = await supabase.from('crm_contacts').insert({
         client_id: client.id,
         name: nombre,
@@ -148,7 +176,8 @@ export default async function handler(req, res) {
         whatsapp: telefono,
         instagram,
         source: txt(body.origen, 60) || 'Web',
-        status: 'lead',
+        status: destino.stage,
+        pipeline_id: destino.pipelineId,
         last_activity_at: new Date().toISOString(),
       }).select('id').single()
       if (error) return res.status(500).json({ error: 'No se pudo crear el contacto: ' + error.message })

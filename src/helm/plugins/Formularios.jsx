@@ -14,6 +14,7 @@ import { Panel, Empty, Modal, Field, Input, Textarea, Select, Kpi, FormNote, Sea
 import MigracionPendiente from '../MigracionPendiente'
 import { CamposRespuesta } from '../formularios/campos'
 import { TIPOS, tipoOf, validarRespuestas } from '../formularios/tipos'
+import { loadPipelines } from '../crm/pipeline'
 
 
 // Plantillas de arranque: los cuatro momentos que nombra el informe.
@@ -45,7 +46,7 @@ const PLANTILLAS = [
   },
 ]
 
-const EMPTY_FORM = { title: '', slug: '', description: '', fields: [], active: true }
+const EMPTY_FORM = { title: '', slug: '', description: '', fields: [], active: true, pipeline_id: '', stage_key: '' }
 const nuevoCampo = () => ({ key: 'c' + Math.random().toString(36).slice(2, 8), label: '', type: 'text', required: false, options: [] })
 
 export default function Formularios({ clientId }) {
@@ -84,6 +85,9 @@ export default function Formularios({ clientId }) {
       description: form.description.trim(),
       fields: form.fields.filter(f => f.label.trim()),
       active: form.active,
+      // '' desde el <select> significa "el por defecto": a la base va null.
+      pipeline_id: form.pipeline_id || null,
+      stage_key: form.stage_key || null,
       updated_at: new Date().toISOString(),
     }
     if (form.id) {
@@ -204,7 +208,7 @@ export default function Formularios({ clientId }) {
         )}
       </Panel>
 
-      {edit && <ConstructorModal inicial={edit} onClose={() => setEdit(null)} onSave={save} />}
+      {edit && <ConstructorModal clientId={clientId} inicial={edit} onClose={() => setEdit(null)} onSave={save} />}
       {responder && (
         <ResponderModal
           form={responder} contacts={contacts}
@@ -225,6 +229,8 @@ const toFormState = (f) => ({
   id: f.id, title: f.title || '', slug: f.slug || '', description: f.description || '',
   fields: (f.fields || []).map(x => ({ ...nuevoCampo(), ...x, options: x.options || [] })),
   active: f.active !== false,
+  pipeline_id: f.pipeline_id || '',
+  stage_key: f.stage_key || '',
 })
 
 // El enlace que se manda al cliente. Va por ID y no por slug: el slug solo es
@@ -246,7 +252,66 @@ function EnlacePublico({ form }) {
 }
 
 // ── Constructor ────────────────────────────────────────────────────────────
-function ConstructorModal({ inicial, onClose, onSave }) {
+// ── A qué embudo entra el lead ─────────────────────────────────────────────
+// Solo aplica a los leads que ENTRAN por este formulario desde fuera (una
+// landing que llama a api/formularios.js). A quien ya está en el CRM no se le
+// mueve: si lleva semanas en "propuesta" y vuelve a rellenar algo, devolverlo a
+// la casilla de salida borraría el trabajo del comercial.
+function Destino({ clientId, f, set }) {
+  const [pipelines, setPipelines] = useState(null)
+
+  useEffect(() => { loadPipelines(clientId).then(setPipelines).catch(() => setPipelines([])) }, [clientId])
+
+  const elegido = (pipelines || []).find(p => p.id === f.pipeline_id)
+  const etapas = elegido?.stages || []
+
+  return (
+    <>
+      <div className="helm-drawer-section">A qué embudo entra el lead</div>
+      <p className="helm-settings-note" style={{ marginTop: -4 }}>
+        Cuando alguien de fuera rellena este formulario y todavía no está en el CRM, su ficha
+        se crea aquí. Si no eliges nada, va al embudo por defecto.
+      </p>
+
+      <div className="helm-form-2">
+        <Field label="Pipeline" hint={pipelines === null ? 'Cargando…' : undefined}>
+          <Select
+            value={f.pipeline_id || ''}
+            onChange={e => { set('pipeline_id', e.target.value); set('stage_key', '') }}
+          >
+            <option value="">El que esté por defecto</option>
+            {(pipelines || []).filter(p => p.id).map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </Select>
+        </Field>
+
+        <Field label="Etapa de entrada" hint={!f.pipeline_id ? 'Elige antes un pipeline' : undefined}>
+          <Select
+            value={f.stage_key || ''}
+            disabled={!f.pipeline_id}
+            onChange={e => set('stage_key', e.target.value)}
+          >
+            <option value="">La primera</option>
+            {etapas.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+          </Select>
+        </Field>
+      </div>
+
+      {/* El pipeline virtual (id null) es el que se enseña cuando el perfil no
+          ha creado ninguno todavía: no se puede elegir porque no existe en la
+          base, así que se dice dónde crearlo en vez de ofrecer una opción muerta. */}
+      {pipelines !== null && pipelines.filter(p => p.id).length === 0 && (
+        <p className="helm-settings-note">
+          Este perfil todavía no tiene pipelines propios. Créalos en <b>CRM → Editar etapas</b> y
+          aparecerán aquí.
+        </p>
+      )}
+    </>
+  )
+}
+
+function ConstructorModal({ clientId, inicial, onClose, onSave }) {
   const [f, setF] = useState(inicial)
   const [touched, setTouched] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -324,6 +389,8 @@ function ConstructorModal({ inicial, onClose, onSave }) {
         <button type="button" className="helm-btn" onClick={() => set('fields', [...f.fields, nuevoCampo()])}>
           <Plus size={14} />Añadir pregunta
         </button>
+
+        <Destino clientId={clientId} f={f} set={set} />
 
         <label className="helm-checkline" style={{ marginTop: 16 }}>
           <input type="checkbox" checked={f.active} onChange={e => set('active', e.target.checked)} />
