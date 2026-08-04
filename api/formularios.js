@@ -16,6 +16,9 @@
 // de ese perfil, y con límite por IP.
 import { supabase } from './lib/supabase.js'
 import { applyCors, rateLimit, getClientIp } from './_lib/auth.js'
+import {
+  getGoogleConfig, getAccessToken, crearEventoEnCalendar, puedeEscribirEnAgenda,
+} from './_lib/google.js'
 
 const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i
 
@@ -210,6 +213,40 @@ export default async function handler(req, res) {
       creado = true
     }
 
+    // ── La reunión en el calendario ────────────────────────────────────────
+    // Se crea ANTES de guardar la respuesta para poder meter el enlace de Meet
+    // dentro de ella. Si Google falla, la reserva sigue adelante sin evento: el
+    // lead ya ha elegido su hora y perderlo por un fallo de calendario sería
+    // mucho peor que una reunión que hay que apuntar a mano.
+    let evento = null
+    if (meta.slot_start) {
+      try {
+        const cfgG = (await getGoogleConfig(supabase, client.id))?.config
+        if (cfgG?.refreshToken && puedeEscribirEnAgenda(cfgG.scopes)) {
+          const { token } = await getAccessToken(supabase, client.id)
+          const fin = meta.slot_end || new Date(new Date(meta.slot_start).getTime() + 30 * 60000).toISOString()
+          evento = await crearEventoEnCalendar(token, {
+            calendarId: cfgG.calendarId || 'primary',
+            titulo: `Llamada · ${nombre}`,
+            descripcion: [
+              `Lead de ${form.title}.`,
+              email ? `Email: ${email}` : '',
+              telefono ? `Teléfono: ${telefono}` : '',
+              '',
+              ...Object.entries(respuestas).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`),
+            ].filter(Boolean).join('\n'),
+            inicio: meta.slot_start,
+            fin,
+            invitado: email || null,
+          })
+        } else if (cfgG?.refreshToken) {
+          console.warn('[formularios] el perfil no tiene permiso de calendario; la llamada no se agenda')
+        }
+      } catch (err) {
+        console.warn('[formularios] no se pudo crear el evento:', err.message)
+      }
+    }
+
     // ── La respuesta ───────────────────────────────────────────────────────
     const { data: respuesta, error: errResp } = await supabase
       .from('helm_form_responses').insert({
@@ -218,7 +255,13 @@ export default async function handler(req, res) {
         contact_id: contactId,
         respondent: [nombre, email].filter(Boolean).join(' · '),
         answers: respuestas,
-        meta: { ...meta, ip: ip || null, recibido_en: new Date().toISOString() },
+        meta: {
+          ...meta,
+          ip: ip || null,
+          recibido_en: new Date().toISOString(),
+          // Para poder abrir la reunión desde la ficha del CRM sin buscarla.
+          ...(evento ? { evento_id: evento.id, evento_url: evento.htmlLink, meet_url: evento.meet } : {}),
+        },
       }).select('id, submitted_at').single()
     if (errResp) return res.status(500).json({ error: 'No se pudo guardar la respuesta: ' + errResp.message })
 

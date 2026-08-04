@@ -28,7 +28,7 @@ import {
   getAccessToken, getGoogleConfig, saveGoogleConfig, getUserInfo, listCalendars,
   listCalendarEvents, listDriveFiles, getDriveFile, readDriveFileText,
   driveFileIsReadable, looksLikeCall, meetUrlOf,
-  crearCarpetaEnDrive, puedeEscribirEnDrive,
+  crearCarpetaEnDrive, puedeEscribirEnDrive, puedeEscribirEnAgenda,
 } from './_lib/google.js'
 
 const DIAS_ATRAS = 30
@@ -184,6 +184,7 @@ export default async function handler(req, res) {
         // que existiera el permiso: su token vale para todo lo de antes, así
         // que no se le echa — se le pide reconectar solo cuando toca escribir.
         puedeEscribir: puedeEscribirEnDrive(cfg.scopes),
+        puedeAgendar: puedeEscribirEnAgenda(cfg.scopes),
         guionesFolderId: cfg.guionesFolderId || null,
         guionesFolderUrl: cfg.guionesFolderUrl || null,
       })

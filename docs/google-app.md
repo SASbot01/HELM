@@ -38,18 +38,24 @@ En **APIs y servicios → Pantalla de consentimiento de OAuth**:
 2. Nombre de la aplicación: el que verá el usuario al aceptar — pon el de tu
    marca, no "HELM", si vendes el panel en blanco.
 3. Correo de asistencia y de contacto: el tuyo.
-4. **Permisos (scopes)**: añade exactamente estos cinco:
+4. **Permisos (scopes)**: añade exactamente estos seis:
 
    ```
    .../auth/userinfo.email
    .../auth/userinfo.profile
    .../auth/calendar.readonly
+   .../auth/calendar.events
    .../auth/drive.readonly
    .../auth/drive.file
    ```
 
-   Los cuatro primeros son de solo lectura. El quinto, `drive.file`, es el que
-   deja **crear** los documentos de los guiones, y está elegido a propósito en
+   `calendar.events` es el que deja **crear la reunión** cuando un lead reserva
+   su llamada desde una landing: sin él, la hora queda apuntada en el CRM pero
+   no aparece en el calendario de nadie. Es un scope *sensible*, de la misma
+   familia que `calendar.readonly`, que ya estaba: no cambia en nada el trámite
+   de verificación respecto a lo que ya tenías.
+
+   `drive.file` es el que deja **crear** los documentos de los guiones, y está elegido a propósito en
    lugar del `drive` completo:
 
    - `drive` (escritura total) es un scope **restringido**: obliga a pasar la
@@ -131,14 +137,16 @@ dejará de avisar y el botón **Conectar con Google** ya funciona.
 
 | Permiso | Para qué |
 |---|---|
-| `calendar.readonly` | Leer los eventos y traer los que parecen llamadas a la sección **Llamadas**. |
+| `calendar.readonly` | Leer los eventos: traer los que parecen llamadas a la sección **Llamadas**, y saber qué horas están ocupadas para no ofrecerlas en la agenda pública. |
+| `calendar.events` | **Crear** la reunión cuando un lead reserva su llamada desde una landing, con enlace de Meet e invitación para él. |
 | `drive.readonly` | Listar archivos e importar el texto de Documentos, Hojas y Presentaciones a la **Biblioteca** (el contexto de la IA). |
+| `drive.file` | **Crear** el documento del guion en la carpeta del perfil. Solo alcanza a lo que crea HELM. |
 | `userinfo.email` / `profile` | Enseñar qué cuenta está conectada en Ajustes. |
 
-Todo es de **lectura**. HELM no crea, modifica ni borra nada en el Calendar ni
-en el Drive de nadie. Cada perfil guarda su propio permiso en la tabla
-`user_integrations`, que tiene RLS negando al rol anónimo: el token nunca llega
-al navegador.
+HELM solo escribe dos cosas: la reunión de una llamada reservada y el documento
+de un guion. Nada más se crea, modifica ni borra. Cada perfil guarda su propio
+permiso en `user_integrations`, que tiene RLS negando al rol anónimo: el token
+nunca llega al navegador.
 
 ## Averías típicas
 

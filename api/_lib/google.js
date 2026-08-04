@@ -15,8 +15,10 @@ const CALENDAR_API = 'https://www.googleapis.com/calendar/v3'
 const DRIVE_API = 'https://www.googleapis.com/drive/v3'
 const USERINFO = 'https://www.googleapis.com/oauth2/v3/userinfo'
 
-// De la agenda, solo lectura: HELM refleja lo que hay en Google, no escribe en
-// la agenda de nadie.
+// De la agenda, lectura y `calendar.events`. El segundo es el que deja CREAR la
+// reunión cuando un lead reserva su llamada: sin él, la hora quedaba apuntada
+// en el CRM pero no aparecía en el calendario de nadie, así que había que
+// meterla a mano y era cuestión de tiempo que se solapara con otra cosa.
 //
 // De Drive, lectura y `drive.file`. Ese último es el que deja crear el
 // documento del guion, y está elegido a propósito en vez del `drive` completo:
@@ -39,9 +41,14 @@ export const GOOGLE_SCOPES = [
   'email',
   'profile',
   'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/drive.readonly',
   'https://www.googleapis.com/auth/drive.file',
 ]
+
+export const SCOPE_AGENDA = 'https://www.googleapis.com/auth/calendar.events'
+export const puedeEscribirEnAgenda = (scopes) =>
+  String(scopes || '').includes(SCOPE_AGENDA)
 
 // Quien enlazó Google antes de que existiera `drive.file` tiene un permiso que
 // no incluye escribir. El token sigue siendo válido para todo lo de antes, así
@@ -251,6 +258,58 @@ export async function listCalendarEvents(token, {
     if (!pageToken) break
   }
   return events
+}
+
+/**
+ * Crea la reunión en el calendario cuando un lead reserva su llamada.
+ *
+ * Con invitado y con enlace de Meet: si la llamada solo existiera en el
+ * calendario del negocio, el lead no tendría ni recordatorio ni por dónde
+ * entrar, y la mitad no se presenta. `sendUpdates=all` es lo que hace que le
+ * llegue la invitación por correo.
+ */
+export async function crearEventoEnCalendar(token, {
+  calendarId = 'primary', titulo, descripcion, inicio, fin, invitado, zona = 'Europe/Madrid',
+}) {
+  const cuerpo = {
+    summary: String(titulo || 'Llamada').slice(0, 300),
+    description: String(descripcion || '').slice(0, 4000),
+    start: { dateTime: new Date(inicio).toISOString(), timeZone: zona },
+    end: { dateTime: new Date(fin).toISOString(), timeZone: zona },
+    ...(invitado ? { attendees: [{ email: invitado }] } : {}),
+    // requestId tiene que ser único por evento: si se repite, Google devuelve
+    // el Meet del evento anterior y dos llamadas distintas comparten sala.
+    conferenceData: {
+      createRequest: {
+        requestId: `helm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        conferenceSolutionKey: { type: 'hangoutsMeet' },
+      },
+    },
+    reminders: { useDefault: true },
+  }
+
+  const params = new URLSearchParams({
+    conferenceDataVersion: '1',
+    sendUpdates: invitado ? 'all' : 'none',
+  })
+  const res = await fetch(`${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events?${params}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(cuerpo),
+    signal: AbortSignal.timeout(20_000),
+  })
+  if (!res.ok) {
+    const detalle = await res.text().catch(() => '')
+    const e = new Error(`Calendar respondió ${res.status}: ${detalle.slice(0, 200)}`)
+    e.statusCode = res.status
+    throw e
+  }
+  const ev = await res.json()
+  return {
+    id: ev.id,
+    htmlLink: ev.htmlLink || null,
+    meet: ev.hangoutLink || ev.conferenceData?.entryPoints?.find(p => p.entryPointType === 'video')?.uri || null,
+  }
 }
 
 // Crea un Google Doc con el guion dentro de la carpeta indicada.

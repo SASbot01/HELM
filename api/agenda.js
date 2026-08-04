@@ -25,7 +25,7 @@ export const AGENDA_DEFECTO = {
   hasta: '19:00',
   duracion: 30,                 // minutos por llamada
   diasVista: 10,                // cuántos días hacia adelante se ofrecen
-  avisoHoras: 12,               // no se ofrece nada antes de este margen
+  avisoHoras: 2,                // no se ofrece nada con menos margen que este
   zona: 'Europe/Madrid',
 }
 
