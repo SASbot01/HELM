@@ -99,6 +99,24 @@ export default async function handler(req, res) {
 
     const meta = body.meta && typeof body.meta === 'object' ? body.meta : {}
 
+    // ── El hueco, si reserva llamada ───────────────────────────────────────
+    // Dos personas pueden abrir la landing a la vez y elegir la misma hora: los
+    // huecos se calcularon antes de que ninguna enviara. Se comprueba aquí, que
+    // es el único punto por el que pasan las dos.
+    //
+    // El 409 es el código que la landing ya sabe interpretar: recarga los
+    // huecos y le pide que elija otro, en vez de dar un error genérico.
+    if (meta.slot_start) {
+      const { data: pillado } = await supabase
+        .from('helm_form_responses').select('id')
+        .eq('client_id', client.id)
+        .eq('meta->>slot_start', meta.slot_start)
+        .limit(1)
+      if (pillado?.length) {
+        return res.status(409).json({ error: 'Ese horario acaba de ocuparse. Elige otro.' })
+      }
+    }
+
     // ── Completar una respuesta ya empezada ────────────────────────────────
     // Los formularios de varios pasos (la calculadora de Hugo: primero los
     // datos, después el cálculo) mandan lo que tienen en cada paso. Si se
