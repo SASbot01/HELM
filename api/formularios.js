@@ -178,6 +178,13 @@ export default async function handler(req, res) {
         source: txt(body.origen, 60) || 'Web',
         status: destino.stage,
         pipeline_id: destino.pipelineId,
+        // De qué anuncio viene. Va también a las columnas del CRM y no solo al
+        // meta de la respuesta: la vista de Ventas filtra por estas columnas, y
+        // dejarlas vacías esconde de dónde salió cada venta.
+        utm_source: txt(meta.utm_source, 200) || null,
+        utm_medium: txt(meta.utm_medium, 200) || null,
+        utm_campaign: txt(meta.utm_campaign, 200) || null,
+        utm_content: txt(meta.utm_content, 200) || null,
         last_activity_at: new Date().toISOString(),
       }).select('id').single()
       if (error) return res.status(500).json({ error: 'No se pudo crear el contacto: ' + error.message })
