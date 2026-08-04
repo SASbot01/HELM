@@ -65,6 +65,11 @@ export default defineConfig({
       origin: [
         'https://detrasdecamara.org', 'https://www.detrasdecamara.org',
         'https://web.enformaconhugo.com', 'https://enformaconhugo.com',
+        // El despliegue de Vercel de la landing de Hugo, mientras el dominio
+        // definitivo no apunte a él. Va el host exacto y no un comodín de
+        // *.vercel.app: eso abriría el endpoint a cualquier proyecto de Vercel
+        // del mundo, que es justo lo que esta lista existe para evitar.
+        'https://game-of-life-landing-kfp4.vercel.app',
       ],
     },
     proxy: {
