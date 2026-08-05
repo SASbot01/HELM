@@ -69,6 +69,7 @@ export const SECCIONES = [
   { key: 'biblioteca', label: 'Biblioteca', desc: 'Documentos de la IA' },
   { key: 'formularios', label: 'Formularios', desc: 'Constructor y respuestas' },
   { key: 'actividad', label: 'Actividad', desc: 'Timeline del equipo' },
+  { key: 'fiscal', label: 'Fiscal', desc: 'Plazos y modelos de una asesoría' },
 ]
 
 // Lo que ve cada rol si nadie ha tocado nada. Un closer entra a hacer su
@@ -156,8 +157,17 @@ export async function savePermisos(clientId, matrix, visible) {
 // configuración, y sin Secciones no hay forma de volver a encender nada.
 export const SECCIONES_FIJAS = ['ajustes', 'secciones']
 
-export const seccionEncendida = (sections, key) =>
-  SECCIONES_FIJAS.includes(key) || sections?.[key] !== false
+// Secciones de SECTOR: al revés que las demás, nacen apagadas. Una asesoría
+// quiere el control de plazos fiscales; un infoproducto o un gimnasio verían
+// una sección con modelos del 303 que no van a abrir jamás. Las normales se
+// apagan si molestan; estas se encienden si hacen falta.
+export const SECCIONES_SECTOR = ['fiscal']
+
+export const seccionEncendida = (sections, key) => {
+  if (SECCIONES_FIJAS.includes(key)) return true
+  if (SECCIONES_SECTOR.includes(key)) return sections?.[key] === true
+  return sections?.[key] !== false
+}
 
 export async function loadSecciones(clientId) {
   const { data, error } = await supabase
