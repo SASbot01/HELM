@@ -24,6 +24,7 @@ import Enlaces from './views/Enlaces'
 import Archivos from './views/Archivos'
 import Secciones from './views/Secciones'
 import Fiscal from './views/Fiscal'
+import Marketing from './views/Marketing'
 import Ajustes from './views/Ajustes'
 import { PLUGINS, PLUGIN_MAP } from './plugins/registry'
 import { loadPermisos, puedeVer, accesoTotal, DEFAULT_VISIBLE, loadSecciones, saveSecciones, seccionEncendida, esOptIn } from './permisos'
@@ -47,6 +48,7 @@ const NAV = [
   { key: 'enlaces', label: 'Enlaces', icon: Link2, title: 'Enlaces', sub: 'Las URLs del negocio, a mano', C: Enlaces },
   { key: 'archivos', label: 'Archivos', icon: FolderOpen, title: 'Archivos', sub: 'Lo que subes, lo que escribe la IA y las Biblias', C: Archivos },
   { key: 'fiscal', label: 'Fiscal', icon: CalendarClock, title: 'Fiscal', sub: 'Plazos y modelos de tus clientes', C: Fiscal },
+  { key: 'marketing', label: 'Marketing', icon: TrendingUp, title: 'Marketing', sub: 'Qué campaña trae leads y cuál trae ventas', C: Marketing },
   { key: 'secciones', label: 'Secciones', icon: Layers, title: 'Secciones', sub: 'Qué partes del panel usa este negocio', C: Secciones },
   { key: 'ajustes', label: 'Ajustes', icon: Settings, title: 'Ajustes', sub: 'Integraciones y IA de este perfil', C: Ajustes },
 ]
