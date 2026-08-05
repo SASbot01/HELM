@@ -38,20 +38,24 @@ export const PRODUCTOS = {
     // perfil: el calendario de contenido, la comunidad y la formación son de
     // infoproducto y en un despacho no deberían poder encenderse siquiera.
     secciones: [
-      'informe',      // el director: cargas, plazos, facturación
+      'informe',      // el director: facturación y cobros del despacho
       'crm',          // clientes del despacho, con su pipeline
-      'fiscal',       // plazos y modelos — el corazón del vertical
+      'fiscal',       // plazos, avisos y dirección — el corazón del vertical
       'servicios',    // catálogo: cuotas y servicios que presta
-      'equipo',       // asesores, cargas y comisiones
+      'equipo',       // los asesores
       'ventas',       // facturación del despacho
       'finanzas',     // cobros, morosos y márgenes
       'llamadas',     // citas con clientes desde el calendario
       'archivos',     // documentación por cliente
-      'chat',         // la IA con el contexto del despacho
-      'enlaces',
       'plugins',      // tareas, biblioteca y formularios viven aquí
       'secciones',
       'ajustes',
+      // FUERA a propósito:
+      //   chat     → el asistente está escrito como copywriter de infoproducto
+      //              ("escribe tu guion, tu hook, tu CTA"). Enseñárselo a un
+      //              despacho quita credibilidad. Vuelve cuando sea el RAG de
+      //              normativa, que es otra cosa y sí les sirve.
+      //   enlaces  → un cajón de URLs del negocio; con Archivos les sobra.
     ],
   },
 }

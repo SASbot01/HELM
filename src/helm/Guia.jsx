@@ -1,13 +1,20 @@
-// HELM — guía de bienvenida. Modal bloqueante de 15 páginas que salta en el
-// primer login de un usuario nuevo: no se puede cerrar, solo avanzar, y al
-// terminar te lleva a tu Onboarding. Explica cómo funciona el sistema.
+// HELM — la guía de bienvenida. Salta en el primer login de un usuario nuevo y
+// se puede volver a abrir cuando se quiera desde «Guía», abajo en el menú: un
+// equipo de 25 personas no la lee una vez, la consulta cada vez que entra
+// alguien nuevo.
+//
+// Cada producto tiene la suya. La de HELM habla de guiones, Biblia y calendario
+// de contenido; la del vertical de asesorías, de fichas fiscales, plazos y
+// avisos. Enseñar la equivocada seria peor que no enseñar ninguna.
 import { useState } from 'react'
+import { productoActual } from './producto'
+import { PAGES_CONSULTORIA } from './guia/consultoria'
 import {
   Rocket, LayoutDashboard, Sparkles, BookOpen, MessageSquare, Terminal, CalendarClock,
   CalendarDays, Users, TrendingUp, ClipboardList, Wallet, CheckSquare, Plug, Flag, ArrowRight, ArrowLeft, X,
 } from 'lucide-react'
 
-const PAGES = [
+const PAGES_HELM = [
   { icon: Rocket, title: 'Bienvenido a HELM', lead: 'Este es el puesto de mando de tu negocio: contenido, clientes, ventas y finanzas en un solo sitio, con una IA que trabaja contigo.',
     bullets: ['En los próximos pasos te enseño cómo funciona.', 'Son 15 pantallas rápidas. Al final te llevo a tu onboarding para arrancar.'] },
   { icon: LayoutDashboard, title: 'Cómo está organizado', lead: 'Todo se maneja desde el menú de la izquierda. Cada sección es una parte de tu negocio.',
@@ -42,6 +49,9 @@ const PAGES = [
 
 export default function Guia({ onFinish, onClose }) {
   const [i, setI] = useState(0)
+  // Las del producto por el que se ha entrado. Sin fallback silencioso: si
+  // algún día hay un producto sin guía, se ve al momento.
+  const PAGES = productoActual().key === 'consultoria' ? PAGES_CONSULTORIA : PAGES_HELM
   const page = PAGES[i]
   const Icon = page.icon
   const last = i === PAGES.length - 1

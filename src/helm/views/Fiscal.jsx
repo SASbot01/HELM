@@ -12,17 +12,20 @@
 // Sección de sector: nace apagada y se enciende en Secciones (ver permisos.js).
 // Un infoproducto no tiene por qué ver modelos del 347.
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarClock, Plus, RefreshCw, Check, Users } from 'lucide-react'
-import { supabase, fetchRows, fetchRowsOrError, insertRow, updateRow, fmtDate, MISSING_TABLE } from '../lib'
+import { CalendarClock, Plus, RefreshCw, Check, Users, Send, LayoutDashboard, MessageSquare, Mail, Copy } from 'lucide-react'
+import { supabase, fetchRows, fetchRowsOrError, insertRow, updateRow, fmtDate, MISSING_TABLE, docsApi } from '../lib'
 import { Panel, Empty, Modal, Field, Input, Select, Textarea, Kpi, Tabs, FormNote } from '../ui'
 import MigracionPendiente from '../MigracionPendiente'
 import {
   MODELOS, FORMAS, IVA_OPCIONES, IRPF_OPCIONES, ESTADOS, ESTADO_MAP,
   obligacionesDe, urgencia, diasPara,
 } from '../fiscal/modelos'
+import { avisosDeHoy, mensajeDe, enlaceWhatsApp, enlaceEmail } from '../fiscal/avisos'
 
 const TABS = [
   { key: 'plazos', label: 'Plazos', icon: <CalendarClock size={15} /> },
+  { key: 'avisos', label: 'Avisos de hoy', icon: <Send size={15} /> },
+  { key: 'direccion', label: 'Dirección', icon: <LayoutDashboard size={15} /> },
   { key: 'clientes', label: 'Clientes', icon: <Users size={15} /> },
 ]
 
@@ -69,6 +72,16 @@ export default function Fiscal({ clientId }) {
           obligaciones={obligaciones} nombreDe={nombreDe}
           perfiles={perfiles || []} clientId={clientId}
           onCambio={load} onError={setError}
+        />
+      ) : tab === 'avisos' ? (
+        <Avisos
+          obligaciones={obligaciones} contactos={contactos} clientId={clientId}
+          onError={setError}
+        />
+      ) : tab === 'direccion' ? (
+        <Direccion
+          obligaciones={obligaciones} perfiles={perfiles || []} equipo={equipo}
+          nombreDe={nombreDe}
         />
       ) : (
         <Clientes
@@ -217,6 +230,253 @@ function Plazos({ obligaciones, nombreDe, perfiles, clientId, onCambio, onError 
                     </tr>
                   )
                 })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+    </>
+  )
+}
+
+
+// ── Avisos de hoy ──────────────────────────────────────────────────────────
+// La pantalla que sustituye a "alguien tiene que acordarse". El despacho la
+// abre por la mañana y ve exactamente a quién escribir, con el mensaje hecho y
+// su enlace de subida dentro. Un clic y sale por WhatsApp.
+//
+// No se manda solo todavía porque HELM no tiene proveedor de correo ni la API
+// de WhatsApp Business. Pero la parte difícil de un aviso nunca fue el envío:
+// era saber A QUIÉN. Cuando haya canal, esto no cambia — solo deja de pulsarlo
+// una persona.
+function Avisos({ obligaciones, contactos, clientId, onError }) {
+  const [enviados, setEnviados] = useState(null)
+  const [enlaces, setEnlaces] = useState({})
+  const [copiado, setCopiado] = useState(null)
+
+  const cargar = useCallback(async () => {
+    const { data } = await supabase.from('helm_fiscal_avisos')
+      .select('obligacion_id, tipo').eq('client_id', clientId)
+    setEnviados(new Set((data || []).map(a => `${a.obligacion_id}:${a.tipo}`)))
+  }, [clientId])
+
+  // Los setState de cargar() van después del await contra Supabase: no hay
+  // render en cascada, la regla solo no sabe seguir el await.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { cargar() }, [cargar])
+
+  const lista = useMemo(
+    () => (enviados ? avisosDeHoy(obligaciones, enviados) : []),
+    [obligaciones, enviados],
+  )
+
+  // Los enlaces de subida se piden de una vez para toda la lista, no uno por
+  // clic: si se esperara al clic, el mensaje saldría sin enlace, que es lo único
+  // que se le pide al cliente. Cada contacto se pide una sola vez aunque tenga
+  // varios avisos.
+  const faltan = useMemo(
+    () => [...new Set(lista.map(a => a.obligacion.contact_id))].filter(id => !enlaces[id]),
+    [lista, enlaces],
+  )
+
+  useEffect(() => {
+    if (!faltan.length) return
+    let vivo = true
+    Promise.all(faltan.map(async id => {
+      try {
+        const { token } = await docsApi.enlace(clientId, id)
+        return [id, `${window.location.origin}/d/${token}`]
+      } catch { return null }
+    })).then(pares => {
+      if (!vivo) return
+      const nuevos = Object.fromEntries(pares.filter(Boolean))
+      if (Object.keys(nuevos).length) setEnlaces(e => ({ ...e, ...nuevos }))
+    })
+    return () => { vivo = false }
+  }, [faltan, clientId])
+
+  async function marcar(aviso, canal) {
+    try {
+      await insertRow('helm_fiscal_avisos', {
+        client_id: clientId,
+        obligacion_id: aviso.obligacion.id,
+        tipo: aviso.tipo,
+        canal,
+      })
+      cargar()
+    } catch (e) { onError('No se pudo anotar el aviso: ' + e.message) }
+  }
+
+  if (enviados === null) return <Panel title="Avisos de hoy"><Empty>Cargando…</Empty></Panel>
+
+  return (
+    <Panel
+      title="Avisos de hoy"
+      action={<span className="helm-badge">{lista.length} por mandar</span>}
+    >
+      <p className="helm-settings-lead">
+        A quién hay que escribir hoy y qué decirle. El mensaje ya lleva dentro el enlace donde
+        sube sus documentos. Cada aviso se manda una sola vez: lo que marques aquí no vuelve a
+        aparecer.
+      </p>
+
+      {lista.length === 0 ? (
+        <Empty>Hoy no hay que avisar a nadie. Vuelve mañana.</Empty>
+      ) : (
+        <div className="helm-grid" style={{ gap: 10 }}>
+          {lista.map(a => {
+            const c = contactos.find(x => x.id === a.obligacion.contact_id)
+            const enlace = enlaces[a.obligacion.contact_id]
+            const msg = mensajeDe({
+              tipo: a.tipo, obligacion: a.obligacion,
+              nombreCliente: c?.name, enlace,
+            })
+            const wa = enlaceWhatsApp(c?.whatsapp || c?.phone, msg)
+            const mail = enlaceEmail(c?.email, `Modelo ${a.obligacion.modelo} · ${a.obligacion.periodo}`, msg)
+            return (
+              <div key={`${a.obligacion.id}:${a.tipo}`} className="helm-curso">
+                <div className="helm-curso-head">
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <b>{c?.name || 'Cliente'}</b>
+                    <small style={{ display: 'block', color: 'var(--text-mut)' }}>
+                      Modelo {a.obligacion.modelo} · {a.obligacion.periodo} · vence en {a.faltan} día{a.faltan === 1 ? '' : 's'}
+                    </small>
+                  </div>
+                  <span className={'helm-badge ' + (a.tono || '')}>{a.label}</span>
+                </div>
+
+                <pre className="helm-aviso-msg">{msg}</pre>
+
+                <div className="helm-curso-acts">
+                  {wa && (
+                    <a className="helm-btn primary" href={wa} target="_blank" rel="noreferrer"
+                      onClick={() => marcar(a, 'whatsapp')}>
+                      <MessageSquare size={14} /> WhatsApp
+                    </a>
+                  )}
+                  {mail && (
+                    <a className="helm-btn" href={mail} onClick={() => marcar(a, 'email')}>
+                      <Mail size={14} /> Email
+                    </a>
+                  )}
+                  <button className="helm-btn" onClick={() => {
+                    navigator.clipboard?.writeText(msg)
+                    setCopiado(`${a.obligacion.id}:${a.tipo}`)
+                    setTimeout(() => setCopiado(null), 1600)
+                  }}>
+                    {copiado === `${a.obligacion.id}:${a.tipo}` ? <Check size={14} /> : <Copy size={14} />}
+                    {copiado === `${a.obligacion.id}:${a.tipo}` ? 'Copiado' : 'Copiar'}
+                  </button>
+                  <button className="helm-btn sm" onClick={() => marcar(a, 'manual')}>
+                    Ya le he avisado
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </Panel>
+  )
+}
+
+// ── Dirección ──────────────────────────────────────────────────────────────
+// Lo que el director no tiene hoy: cuánto lleva cada asesor y si el despacho
+// está cumpliendo. La tasa de cumplimiento es además el número que se le enseña
+// al cliente — "cero plazos perdidos" deja de ser una promesa y pasa a ser un
+// dato medido.
+function Direccion({ obligaciones, perfiles, equipo, nombreDe }) {
+  const datos = useMemo(() => {
+    const cerradas = obligaciones.filter(o => o.estado === 'presentado' || diasPara(o.fecha_limite) < 0)
+    const aTiempo = obligaciones.filter(o => o.estado === 'presentado').length
+    const fuera = obligaciones.filter(o => o.estado !== 'presentado' && diasPara(o.fecha_limite) < 0).length
+    const cumplimiento = cerradas.length ? Math.round((aTiempo / cerradas.length) * 100) : null
+
+    // Carga por asesor: cuántos clientes lleva y cuántos plazos abiertos tiene
+    // encima. Es lo que hoy se sabe "por intuición".
+    const porAsesor = new Map()
+    for (const p of perfiles) {
+      const k = p.asesor_id || 'sin'
+      if (!porAsesor.has(k)) porAsesor.set(k, { clientes: 0, abiertos: 0, vencidos: 0 })
+      const e = porAsesor.get(k)
+      e.clientes++
+      for (const o of obligaciones.filter(x => x.contact_id === p.contact_id)) {
+        if (o.estado === 'presentado') continue
+        e.abiertos++
+        if (diasPara(o.fecha_limite) < 0) e.vencidos++
+      }
+    }
+
+    // Clientes en riesgo: los que acumulan plazos vencidos sin presentar. Es la
+    // señal temprana de que ese cliente se va — o de que nadie lo está mirando.
+    const riesgo = perfiles.map(p => {
+      const suyas = obligaciones.filter(x => x.contact_id === p.contact_id)
+      const vencidos = suyas.filter(o => o.estado !== 'presentado' && diasPara(o.fecha_limite) < 0).length
+      const sinDocs = suyas.filter(o => o.estado === 'pendiente_docs').length
+      return { contact_id: p.contact_id, vencidos, sinDocs }
+    }).filter(r => r.vencidos > 0).sort((a, b) => b.vencidos - a.vencidos)
+
+    return { cumplimiento, aTiempo, fuera, porAsesor, riesgo, total: obligaciones.length }
+  }, [obligaciones, perfiles])
+
+  const nombreAsesor = (id) => (id === 'sin' ? 'Sin asignar' : equipo.find(e => e.id === id)?.name || 'Sin asignar')
+
+  return (
+    <>
+      <div className="helm-grid helm-kpis">
+        <Kpi
+          label="Cumplimiento" accent
+          value={datos.cumplimiento == null ? '—' : `${datos.cumplimiento}%`}
+          sub="presentados a tiempo"
+        />
+        <Kpi label="Plazos gestionados" value={datos.total} />
+        <Kpi label="Presentados" value={datos.aTiempo} />
+        <Kpi label="Fuera de plazo" value={datos.fuera} sub={datos.fuera ? 'sanción al cliente' : undefined} />
+      </div>
+
+      <Panel title="Carga por asesor">
+        {datos.porAsesor.size === 0 ? <Empty>Sin fichas fiscales todavía.</Empty> : (
+          <div className="helm-tablewrap">
+            <table className="helm-table">
+              <thead>
+                <tr><th>Asesor</th><th>Clientes</th><th>Plazos abiertos</th><th>Vencidos</th></tr>
+              </thead>
+              <tbody>
+                {[...datos.porAsesor.entries()]
+                  .sort((a, b) => b[1].abiertos - a[1].abiertos)
+                  .map(([id, e]) => (
+                    <tr key={id}>
+                      <td>{nombreAsesor(id)}</td>
+                      <td className="helm-num">{e.clientes}</td>
+                      <td className="helm-num">{e.abiertos}</td>
+                      <td className="helm-num">
+                        {e.vencidos > 0 ? <span className="helm-chip red">{e.vencidos}</span> : 0}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      <Panel title="Clientes en riesgo">
+        <p className="helm-settings-lead">
+          Los que acumulan plazos vencidos sin presentar. Es la señal temprana de que ese cliente
+          se va — o de que nadie lo está mirando.
+        </p>
+        {datos.riesgo.length === 0 ? <Empty>Ninguno. Todo al día.</Empty> : (
+          <div className="helm-tablewrap">
+            <table className="helm-table">
+              <thead><tr><th>Cliente</th><th>Vencidos</th><th>Sin documentación</th></tr></thead>
+              <tbody>
+                {datos.riesgo.map(r => (
+                  <tr key={r.contact_id}>
+                    <td>{nombreDe(r.contact_id)}</td>
+                    <td className="helm-num"><span className="helm-chip red">{r.vencidos}</span></td>
+                    <td className="helm-num">{r.sinDocs}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

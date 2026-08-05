@@ -2,7 +2,7 @@
 // Se monta en /admin. Gestiona un perfil (cliente) a la vez, con selector arriba.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Link2, Blocks, Settings, Plus, Rocket, CalendarDays, Menu, X, Package, UserCog, PhoneCall, MessagesSquare, GraduationCap, FolderOpen, Layers, CalendarClock } from 'lucide-react'
+import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Link2, Blocks, Settings, Plus, Rocket, CalendarDays, Menu, X, Package, UserCog, PhoneCall, MessagesSquare, GraduationCap, FolderOpen, Layers, CalendarClock, BookOpen } from 'lucide-react'
 import { listClients, createProfile, slugify, usersApi, brandOf } from './lib'
 import { productoActual, seccionDelProducto } from './producto'
 import { Modal, Field, Input } from './ui'
@@ -192,7 +192,10 @@ export default function HelmApp() {
     } catch { /* sesión corrupta: da igual, se marca en servidor */ }
     setGuideDone(true)
     setShowGuide(false)
-    setView('onboarding')
+    // Al terminar, cada producto lleva a su primer paso real: en HELM es el
+    // onboarding de marca; en un despacho, el CRM — porque sin clientes dados
+    // de alta no hay ficha fiscal, y sin ficha no hay plazos.
+    setView(seccionDelProducto('onboarding') ? 'onboarding' : 'crm')
   }
   const email = (typeof localStorage !== 'undefined' && localStorage.getItem('bw_superadmin'))
     || clientSession?.email || 'silvestreIA'
@@ -401,6 +404,11 @@ export default function HelmApp() {
                 <Users /> Usuarios
               </div>
             )}
+            {/* Siempre a mano, no solo el primer día: en un equipo entra gente
+                nueva cada mes y la guía es lo que le enseña por dónde empezar. */}
+            <div className="helm-nav" onClick={() => setShowGuide(true)}>
+              <BookOpen /> Guía
+            </div>
             <div className="helm-user">
               <div className="helm-avatar">{email[0]?.toUpperCase()}</div>
               <div style={{ minWidth: 0 }}>

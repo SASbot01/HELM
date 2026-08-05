@@ -380,6 +380,14 @@ export const stripeApi = {
 // Google (Calendar + Drive) por perfil. El refresh token se queda en el
 // servidor; aquí solo se pide la URL de autorización y se disparan las
 // sincronizaciones.
+// El enlace personal donde un cliente de una asesoría sube su documentación.
+// Se pide al vuelo y no se guarda: un token guardado es un token que hay que
+// rotar el día que alguien lo filtra.
+export const docsApi = {
+  enlace: (clientId, contactId) =>
+    apiFetch(`/api/documentos?action=enlace&clientId=${clientId}&contactId=${contactId}`),
+}
+
 export const googleApi = {
   status: (clientId) => apiFetch(`/api/google?action=status&clientId=${clientId}`),
   authUrl: (clientId) => apiFetch(`/api/google?action=auth-url&clientId=${clientId}`),
