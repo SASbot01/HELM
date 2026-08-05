@@ -11,6 +11,7 @@ import FormularioPublico from './pages/FormularioPublico.jsx'
 import ComunidadPublica from './pages/ComunidadPublica.jsx'
 import PrimerMapa from './pages/PrimerMapa.jsx'
 import SilvestreValor from './pages/SilvestreValor.jsx'
+import PortalDocumentos from './pages/PortalDocumentos.jsx'
 import './index.css'
 
 // App reducida a HELM: se entra por /login (superadmin) → /admin (Helm).
@@ -51,6 +52,10 @@ createRoot(document.getElementById('root')).render(
           {/* Portal público de la comunidad interna de un perfil. Va ANTES de
               /:slug/* por lo mismo que /f/: si no, se lo tragaría. */}
           <Route path="/c/:slug" element={<ComunidadPublica />} />
+          {/* El portal donde el cliente de una asesoria sube su documentacion.
+              El token del enlace es lo que autentica; va ANTES de /:slug/* como
+              todas las publicas. */}
+          <Route path="/d/:token" element={<PortalDocumentos />} />
           {/* Formulario de valor de Silvestre IA. Los leads entran al CRM del
               perfil indicado en silvestreai/guardar.js. También va ANTES de
               /:slug/*, que si no leería "silvestreai" como slug de perfil. */}
