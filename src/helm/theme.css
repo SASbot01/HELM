@@ -97,6 +97,33 @@
   --glow-2:    rgba(29,78,216,0.22);
 }
 
+/* ── Tema TOGA ──────────────────────────────────────────────────────────────
+   El del vertical de consultoría. Un despacho de 48 años no se presenta con el
+   verde neón de un infoproductor: pizarra fría, acento azul acero y contrastes
+   más bajos, que es como se ve un panel que se mira ocho horas seguidas.
+   No sale en el selector de temas — lo fija el producto (ver producto.js). */
+.helm[data-theme="toga"], .helm-swatch[data-theme="toga"] {
+  --bg:        #0B0F14;
+  --bg-1:      #10161D;
+  --panel:     #151C25;
+  --panel-2:   #1B242F;
+  --hover:     #232E3B;
+  --border:    rgba(226,232,240,0.10);
+  --border-2:  rgba(226,232,240,0.18);
+  --text:      #E8EDF3;
+  --text-dim:  #A3B0C0;
+  --text-mut:  #6B7A8D;
+  --cyan:      #6E9FD4;
+  --violet:    #8B93C4;
+  --green:     #4E9E7F;
+  --red:       #C4736B;
+  --amber:     #C9A227;
+  --on-accent: #0B0F14;
+  --scrim:     6,10,14;
+  --glow-1:    rgba(110,159,212,0.14);
+  --glow-2:    rgba(80,110,150,0.10);
+}
+
 /* ── Tema ROJO ──────────────────────────────────────────────────────────────
    Base casi neutra con un punto cálido: si el fondo se tiñe de rojo, el acento
    deja de destacar. Y ojo con --red, que aquí NO es decoración: es la señal de

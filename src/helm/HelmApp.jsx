@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Link2, Blocks, Settings, Plus, Rocket, CalendarDays, Menu, X, Package, UserCog, PhoneCall, MessagesSquare, GraduationCap, FolderOpen, Layers, CalendarClock } from 'lucide-react'
 import { listClients, createProfile, slugify, usersApi, brandOf } from './lib'
-import { productoActual } from './producto'
+import { productoActual, seccionDelProducto } from './producto'
 import { Modal, Field, Input } from './ui'
 import Guia from './Guia'
 import Informe from './views/Informe'
@@ -303,11 +303,13 @@ export default function HelmApp() {
     loadSecciones(clientId).then(setSecciones).catch(() => setSecciones({}))
   }, [clientId])
 
-  // Apagar una sección es del negocio; el permiso es del rol. Se aplican los
-  // dos, y lo apagado manda: si el negocio no usa Diario, no le sale a nadie
-  // por mucho permiso que tenga.
+  // Tres filtros, y en este orden: qué secciones EXISTEN en este producto (el
+  // calendario de contenido no pinta nada en un despacho, ni encendiéndolo),
+  // qué usa este negocio, y qué puede ver este rol. El primero manda sobre los
+  // otros dos.
   const puede = useCallback(
-    (key) => seccionEncendida(secciones, key)
+    (key) => seccionDelProducto(key)
+      && seccionEncendida(secciones, key)
       && puedeVer(visible, clientSession?.teamRole, key, clientSession?.level),
     [secciones, visible, clientSession],
   )
@@ -451,7 +453,7 @@ export default function HelmApp() {
               <Plugins key={clientId} enabled={enabled} onToggle={togglePlugin} />
             ) : current.key === 'secciones' ? (
               <Secciones
-                key={clientId} secciones={secciones} catalogo={NAV}
+                key={clientId} secciones={secciones} catalogo={NAV.filter(n => seccionDelProducto(n.key))}
                 onToggle={toggleSeccion} guardando={guardandoSecciones} />
             ) : (
               <View

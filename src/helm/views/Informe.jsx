@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Rocket, ArrowRight, X } from 'lucide-react'
 import { supabase, money, fmtDate, getOnboarding, isSaleCancelled, cuotasPendientes } from '../lib'
 import { Kpi, Panel, Empty } from '../ui'
+import { seccionDelProducto } from '../producto'
 
 // Banner de arranque: empuja al onboarding de contenido mientras no esté hecho.
 //
@@ -26,6 +27,10 @@ function OnboardingBanner({ clientId, onNavigate }) {
     return () => { alive = false }
   }, [clientId])
 
+  // El onboarding es el de un infoproductor: "para que la IA aprenda cómo
+  // hablas y escriba tu contenido". En un despacho ni existe la sección, así
+  // que el banner que lleva a ella sobra.
+  if (!seccionDelProducto('onboarding')) return null
   if (status === 'loading' || status === 'completed' || cerrado || !onNavigate) return null
 
   return (

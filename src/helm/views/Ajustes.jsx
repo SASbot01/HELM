@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { stripeApi, wooApi, chatApi, googleApi, brandOf, saveBrand, uploadLogo, MAX_LOGO_MB, DEFAULT_SUBTITLE } from '../lib'
 import { Panel, Field, Input, Select, Tabs, Empty } from '../ui'
-import { THEMES, useHelmTheme } from '../theme'
+import { TEMAS_ELEGIBLES, useHelmTheme } from '../theme'
 import {
   AREAS, SECCIONES, DEFAULT_MATRIX, DEFAULT_VISIBLE, OWNER_ROLE, loadPermisos, savePermisos,
 } from '../permisos'
@@ -944,7 +944,7 @@ function AparienciaCard() {
           Cómo se ve HELM en <b>este dispositivo</b>. No afecta a lo que ven los demás.
         </p>
         <div className="helm-theme-grid">
-          {THEMES.map(t => (
+          {TEMAS_ELEGIBLES.map(t => (
             <button
               key={t.key}
               type="button"

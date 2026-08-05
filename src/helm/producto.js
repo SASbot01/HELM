@@ -31,7 +31,35 @@ export const PRODUCTOS = {
     lema: 'El puesto de mando de tu despacho',
     // Enseña SOLO las asesorías.
     soloTipos: [TIPO_CONSULTORIA],
+    // Tema fijo, no elegible: un despacho de 48 años no se presenta con el
+    // verde neón de un infoproductor.
+    tema: 'toga',
+    // Las secciones que EXISTEN aquí. Es una lista blanca, no un apagado por
+    // perfil: el calendario de contenido, la comunidad y la formación son de
+    // infoproducto y en un despacho no deberían poder encenderse siquiera.
+    secciones: [
+      'informe',      // el director: cargas, plazos, facturación
+      'crm',          // clientes del despacho, con su pipeline
+      'fiscal',       // plazos y modelos — el corazón del vertical
+      'servicios',    // catálogo: cuotas y servicios que presta
+      'equipo',       // asesores, cargas y comisiones
+      'ventas',       // facturación del despacho
+      'finanzas',     // cobros, morosos y márgenes
+      'llamadas',     // citas con clientes desde el calendario
+      'archivos',     // documentación por cliente
+      'chat',         // la IA con el contexto del despacho
+      'enlaces',
+      'plugins',      // tareas, biblioteca y formularios viven aquí
+      'secciones',
+      'ajustes',
+    ],
   },
+}
+
+/** ¿Esta sección existe en el producto que se está sirviendo? */
+export function seccionDelProducto(key, producto = productoActual()) {
+  if (!producto.secciones) return true      // HELM: todas
+  return producto.secciones.includes(key)
 }
 
 /**

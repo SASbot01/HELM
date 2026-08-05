@@ -4,6 +4,7 @@
 // resuelve theme.css. Se guarda por navegador, no por perfil: es una
 // preferencia de quien mira la pantalla, no un dato del negocio.
 import { useCallback, useEffect, useState } from 'react'
+import { productoActual } from './producto'
 
 // `bg` es el color de fondo del NAVEGADOR (rebote del scroll, barra de estado
 // del móvil). Vive aquí y no en el CSS porque hay que pintarlo en el <html> y
@@ -14,12 +15,22 @@ export const THEMES = [
   { key: 'rojo',   label: 'Rojo',   desc: 'OLED con acento carmesí. Intenso.',         bg: '#0E0709' },
   { key: 'negro',  label: 'Negro',  desc: 'Monocromo puro. Sin acento de color.',      bg: '#000000' },
   { key: 'blanco', label: 'Blanco', desc: 'Fondo claro, para trabajar con luz o proyectar.', bg: '#EFF2F0' },
+  // No aparece en el selector (ver TEMAS_ELEGIBLES): lo fija el producto.
+  { key: 'toga', label: 'Toga', desc: 'Pizarra fría con acento azul acero.', bg: '#0B0F14', oculto: true },
 ]
+
+// Los que se ofrecen en Ajustes. El del vertical no se elige a mano.
+export const TEMAS_ELEGIBLES = THEMES.filter(t => !t.oculto)
 const KEYS = THEMES.map(t => t.key)
 const STORAGE_KEY = 'helm_theme'
 export const DEFAULT_THEME = 'verde'
 
 export function readTheme() {
+  // El vertical de consultoría lleva su propio tema y no es elegible: un
+  // despacho no se presenta con el verde neón de un infoproductor, y dejar que
+  // cada usuario lo cambie rompe la identidad del producto que se le vende.
+  const fijo = productoActual().tema
+  if (fijo) return fijo
   try {
     const v = localStorage.getItem(STORAGE_KEY)
     return KEYS.includes(v) ? v : DEFAULT_THEME
