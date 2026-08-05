@@ -32,11 +32,9 @@ export const PLUGINS = [
 
 export const PLUGIN_MAP = Object.fromEntries(PLUGINS.map(p => [p.key, p]))
 
-// Estado activado por cliente (persistido en localStorage).
-const lsKey = (clientId) => `helm_plugins_${clientId}`
-export function loadEnabled(clientId) {
-  try { return JSON.parse(localStorage.getItem(lsKey(clientId)) || '{}') } catch { return {} }
-}
-export function saveEnabled(clientId, map) {
-  localStorage.setItem(lsKey(clientId), JSON.stringify(map))
-}
+// El estado de activación ya NO vive aquí. Antes se guardaba en localStorage y
+// eso significaba que quien encendía un módulo en su portátil no lo veía en el
+// móvil, y a su equipo no le aparecía nunca. Ahora es una sección más, en
+// helm_permissions.sections, y se enciende desde Secciones (ver permisos.js →
+// SECCIONES_MODULO).
+

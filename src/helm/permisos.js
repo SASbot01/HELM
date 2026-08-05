@@ -157,15 +157,27 @@ export async function savePermisos(clientId, matrix, visible) {
 // configuración, y sin Secciones no hay forma de volver a encender nada.
 export const SECCIONES_FIJAS = ['ajustes', 'secciones']
 
-// Secciones de SECTOR: al revés que las demás, nacen apagadas. Una asesoría
-// quiere el control de plazos fiscales; un infoproducto o un gimnasio verían
-// una sección con modelos del 303 que no van a abrir jamás. Las normales se
-// apagan si molestan; estas se encienden si hacen falta.
+// Secciones que nacen APAGADAS, al revés que las demás. Dos familias:
+//
+//   · de SECTOR — una asesoría quiere el control de plazos fiscales; un
+//     infoproducto vería una sección con modelos del 303 que no abrirá jamás.
+//   · MÓDULOS — lo que antes era el catálogo de "Plugins". Se fusionó aquí
+//     porque tener dos pantallas para lo mismo (qué usa este negocio) confundía,
+//     y porque los plugins se guardaban en el localStorage del navegador: quien
+//     los activaba en su portátil no los veía en el móvil, y a su equipo no le
+//     aparecían. Ahora van en la base, como el resto.
+//
+// Las normales se apagan si molestan; estas se encienden si hacen falta.
 export const SECCIONES_SECTOR = ['fiscal']
+export const SECCIONES_MODULO = ['tareas', 'actividad', 'biblioteca', 'formularios']
+const OPT_IN = new Set([...SECCIONES_SECTOR, ...SECCIONES_MODULO])
+
+/** ¿Esta sección nace apagada? Lo necesita el interruptor, que va al revés. */
+export const esOptIn = (key) => OPT_IN.has(key)
 
 export const seccionEncendida = (sections, key) => {
   if (SECCIONES_FIJAS.includes(key)) return true
-  if (SECCIONES_SECTOR.includes(key)) return sections?.[key] === true
+  if (OPT_IN.has(key)) return sections?.[key] === true
   return sections?.[key] !== false
 }
 

@@ -47,9 +47,14 @@ export const PRODUCTOS = {
       'finanzas',     // cobros, morosos y márgenes
       'llamadas',     // citas con clientes desde el calendario
       'archivos',     // documentación por cliente
-      'plugins',      // tareas, biblioteca y formularios viven aquí
       'secciones',
       'ajustes',
+      // Los módulos. Nacen apagados y se encienden en Secciones, que es donde
+      // vive todo lo activable desde que se fusionó con Plugins.
+      'tareas',       // el trabajo del equipo del despacho
+      'formularios',  // cuestionarios al cliente, pegados a su ficha
+      'biblioteca',   // documentos que amplían el contexto del sistema
+      'actividad',    // quién hizo qué con cada cliente
       // FUERA a propósito:
       //   chat     → el asistente está escrito como copywriter de infoproducto
       //              ("escribe tu guion, tu hook, tu CTA"). Enseñárselo a un

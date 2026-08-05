@@ -22,12 +22,11 @@ import Finanzas from './views/Finanzas'
 import Chat from './views/Chat'
 import Enlaces from './views/Enlaces'
 import Archivos from './views/Archivos'
-import Plugins from './views/Plugins'
 import Secciones from './views/Secciones'
 import Fiscal from './views/Fiscal'
 import Ajustes from './views/Ajustes'
-import { PLUGINS, PLUGIN_MAP, loadEnabled, saveEnabled } from './plugins/registry'
-import { loadPermisos, puedeVer, accesoTotal, DEFAULT_VISIBLE, loadSecciones, saveSecciones, seccionEncendida } from './permisos'
+import { PLUGINS, PLUGIN_MAP } from './plugins/registry'
+import { loadPermisos, puedeVer, accesoTotal, DEFAULT_VISIBLE, loadSecciones, saveSecciones, seccionEncendida, esOptIn } from './permisos'
 import { useHelmTheme } from './theme'
 import './theme.css'
 
@@ -48,7 +47,6 @@ const NAV = [
   { key: 'enlaces', label: 'Enlaces', icon: Link2, title: 'Enlaces', sub: 'Las URLs del negocio, a mano', C: Enlaces },
   { key: 'archivos', label: 'Archivos', icon: FolderOpen, title: 'Archivos', sub: 'Lo que subes, lo que escribe la IA y las Biblias', C: Archivos },
   { key: 'fiscal', label: 'Fiscal', icon: CalendarClock, title: 'Fiscal', sub: 'Plazos y modelos de tus clientes', C: Fiscal },
-  { key: 'plugins', label: 'Plugins', icon: Blocks, title: 'Plugins', sub: 'Amplía tu HELM', C: Plugins },
   { key: 'secciones', label: 'Secciones', icon: Layers, title: 'Secciones', sub: 'Qué partes del panel usa este negocio', C: Secciones },
   { key: 'ajustes', label: 'Ajustes', icon: Settings, title: 'Ajustes', sub: 'Integraciones y IA de este perfil', C: Ajustes },
 ]
@@ -152,7 +150,6 @@ export default function HelmApp() {
   const [clients, setClients] = useState([])
   const [clientId, setClientId] = useState(null)
   const [loadingClients, setLoadingClients] = useState(true)
-  const [enabled, setEnabled] = useState({})
   // Secciones apagadas en este negocio. {} = todo encendido, que es como se
   // comportaba HELM antes de que esto existiera.
   const [secciones, setSecciones] = useState({})
@@ -205,7 +202,6 @@ export default function HelmApp() {
     setClientId(id)
     if (id) {
       localStorage.setItem(LAST_CLIENT_KEY, id)
-      setEnabled(loadEnabled(id))
     }
   }
 
@@ -274,14 +270,6 @@ export default function HelmApp() {
     if (new URLSearchParams(window.location.search).get('google')) setView('ajustes')
   }, [])
 
-  function togglePlugin(key) {
-    setEnabled(prev => {
-      const next = { ...prev, [key]: !prev[key] }
-      saveEnabled(clientId, next)
-      return next
-    })
-  }
-
   function logout() {
     localStorage.removeItem('bw_superadmin')
     localStorage.removeItem('bw_client')
@@ -319,18 +307,31 @@ export default function HelmApp() {
 
   async function toggleSeccion(key) {
     const siguiente = { ...secciones }
-    if (siguiente[key] === false) delete siguiente[key]   // encender = quitarla del objeto
-    else siguiente[key] = false
+    // Dos familias con lógica invertida. Las del núcleo nacen ENCENDIDAS, así
+    // que apagarlas es escribir `false` y encenderlas es quitar la clave. Las
+    // de sector y los módulos nacen APAGADOS: encenderlos es escribir `true`.
+    // Con una sola regla, pulsar un módulo le ponía `false` — que ya lo estaba
+    // — y el interruptor no hacía nada.
+    if (esOptIn(key)) {
+      if (siguiente[key] === true) delete siguiente[key]
+      else siguiente[key] = true
+    } else if (siguiente[key] === false) {
+      delete siguiente[key]
+    } else {
+      siguiente[key] = false
+    }
     setSecciones(siguiente)                               // optimista: el menú responde ya
     setGuardandoSecciones(true)
     try { await saveSecciones(clientId, siguiente) } catch { setSecciones(secciones) }
     setGuardandoSecciones(false)
   }
 
-  // Plugins activos y disponibles → entradas de menú extra, filtradas igual.
+  // Los módulos (lo que antes eran los "plugins") son secciones como las demás:
+  // se encienden en Secciones y se guardan en la base. Aquí solo se pintan los
+  // que estén encendidos y el rol pueda ver.
   const pluginNav = useMemo(
-    () => PLUGINS.filter(p => p.available && enabled[p.key] && puede(p.key)),
-    [enabled, puede],
+    () => PLUGINS.filter(p => p.available && puede(p.key)),
+    [puede],
   )
 
   // Menú del núcleo ya filtrado. Si no le queda ninguna sección (un rol al que
@@ -458,10 +459,19 @@ export default function HelmApp() {
                 </button>
               </div>
             ) : current.key === 'plugins' ? (
-              <Plugins key={clientId} enabled={enabled} onToggle={togglePlugin} />
+              // Ruta vieja: quien la tenga en un marcador cae en Secciones, que
+              // es donde vive ahora todo.
+              <Secciones
+                key={clientId} secciones={secciones}
+                catalogo={NAV.filter(n => seccionDelProducto(n.key))}
+                modulos={PLUGINS.filter(p => p.available && seccionDelProducto(p.key))}
+                onToggle={toggleSeccion} guardando={guardandoSecciones}
+              />
             ) : current.key === 'secciones' ? (
               <Secciones
-                key={clientId} secciones={secciones} catalogo={NAV.filter(n => seccionDelProducto(n.key))}
+                key={clientId} secciones={secciones}
+                catalogo={NAV.filter(n => seccionDelProducto(n.key))}
+                modulos={PLUGINS.filter(p => p.available && seccionDelProducto(p.key))}
                 onToggle={toggleSeccion} guardando={guardandoSecciones} />
             ) : (
               <View

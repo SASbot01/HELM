@@ -1,9 +1,18 @@
 // HELM — Secciones: qué partes del panel usa ESTE negocio.
 //
-// El catálogo de Plugins sirve para añadir módulos; esto es lo contrario, y
-// hacía falta: un negocio que no vende por llamada no quiere Diario ni Llamadas
-// en el menú para siempre, y un infoproducto sin comunidad ve dos secciones que
-// no va a abrir nunca.
+// Un negocio que no vende por llamada no quiere Diario ni Llamadas en el menú
+// para siempre, y un infoproducto sin comunidad ve dos secciones que no va a
+// abrir nunca.
+//
+// Aquí dentro está TODO lo activable, en dos bloques:
+//   · Del panel  — las secciones del núcleo. Nacen encendidas y se apagan.
+//   · Módulos    — lo que antes era la pantalla de "Plugins". Nacen apagados y
+//                  se encienden.
+//
+// Se fusionaron porque eran dos pantallas para la misma pregunta —qué usa este
+// negocio— y porque los plugins se guardaban en el localStorage del navegador:
+// quien los activaba en su portátil no los veía en el móvil, y a su equipo no
+// le aparecían nunca. Ahora todo vive en la base.
 //
 // No se confunde con los permisos de Ajustes: allí se decide qué ve cada ROL
 // (a un closer no le enseñamos Finanzas); aquí, qué usa el NEGOCIO. Se aplican
@@ -11,8 +20,9 @@
 import { Layers, Lock } from 'lucide-react'
 import { SECCIONES_FIJAS, seccionEncendida } from '../permisos'
 
-export default function Secciones({ secciones, catalogo, onToggle, guardando }) {
+export default function Secciones({ secciones, catalogo, modulos = [], onToggle, guardando }) {
   const apagadas = catalogo.filter(n => !seccionEncendida(secciones, n.key)).length
+  const activos = modulos.filter(m => seccionEncendida(secciones, m.key)).length
 
   return (
     <div className="helm-grid" style={{ gap: 20 }}>
@@ -23,7 +33,10 @@ export default function Secciones({ secciones, catalogo, onToggle, guardando }) 
           <div style={{ color: 'var(--text-dim)', fontSize: 13, marginTop: 2 }}>
             Apaga lo que no uses y desaparece del menú, para todo el equipo y en todos
             los dispositivos. Los datos no se borran: si la vuelves a encender, está todo.
-            {apagadas > 0 && ` Ahora mismo tienes ${apagadas} apagada${apagadas === 1 ? '' : 's'}.`}
+            {apagadas > 0 && ` Ahora mismo tienes ${apagadas} apagada${apagadas === 1 ? '' : 's'}`}
+            {apagadas > 0 && activos > 0 && ' y'}
+            {activos > 0 && ` ${activos} módulo${activos === 1 ? '' : 's'} activo${activos === 1 ? '' : 's'}`}
+            {(apagadas > 0 || activos > 0) && '.'}
           </div>
         </div>
       </div>
@@ -61,6 +74,36 @@ export default function Secciones({ secciones, catalogo, onToggle, guardando }) 
           )
         })}
       </div>
+
+      {modulos.length > 0 && (
+        <>
+          <div className="helm-drawer-section" style={{ marginTop: 6 }}>Módulos</div>
+          <p className="helm-settings-lead" style={{ marginTop: -6 }}>
+            Al revés que las de arriba, estas nacen apagadas: se encienden solo si las usas.
+          </p>
+          <div className="helm-plugins">
+            {modulos.map(m => {
+              const Icon = m.icon
+              const on = seccionEncendida(secciones, m.key)
+              return (
+                <div className="helm-plugin" key={m.key}>
+                  <div className="helm-plugin-ico"><Icon size={20} /></div>
+                  <h4>{m.name}</h4>
+                  <p>{m.desc}</p>
+                  <div className="helm-toggle">
+                    <span className={'helm-chip' + (on ? ' green' : '')}>{on ? 'activo' : 'apagado'}</span>
+                    <div
+                      className={'helm-switch' + (on ? ' on' : '') + (guardando ? ' guardando' : '')}
+                      onClick={() => onToggle(m.key)}
+                      role="switch" aria-checked={on} aria-label={m.name}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
     </div>
   )
 }
