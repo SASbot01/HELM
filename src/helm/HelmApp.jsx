@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Link2, Blocks, Settings, Plus, Rocket, CalendarDays, Menu, X, Package, UserCog, PhoneCall, MessagesSquare, GraduationCap, FolderOpen, Layers, CalendarClock } from 'lucide-react'
 import { listClients, createProfile, slugify, usersApi, brandOf } from './lib'
+import { productoActual } from './producto'
 import { Modal, Field, Input } from './ui'
 import Guia from './Guia'
 import Informe from './views/Informe'
@@ -257,7 +258,12 @@ export default function HelmApp() {
 
   // La pestaña del navegador también es marca: con varios perfiles abiertos es
   // lo único que los distingue.
-  useEffect(() => { document.title = client ? marca.name : 'HELM' }, [client, marca.name])
+  // Sin perfil elegido, la pestaña lleva el nombre del PRODUCTO, no el de HELM:
+  // en consultoria.s4sf.net se está vendiendo otra cosa.
+  const producto = productoActual()
+  useEffect(() => {
+    document.title = client ? marca.name : producto.nombre
+  }, [client, marca.name, producto.nombre])
 
   // Volver del consentimiento de Google aterriza en el perfil con ?google=ok;
   // la tarjeta de Ajustes es la que cuenta cómo ha ido, así que abrimos esa.

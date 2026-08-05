@@ -1,5 +1,6 @@
 // HELM — capa de datos. Lee/escribe directo a Supabase (RLS "allow all" + anon key).
 import { supabase } from '../utils/supabase'
+import { esDeEsteProducto, productoActual } from './producto'
 import { DEFAULT_STAGES, DEFAULT_SUBSTAGES } from './crm/pipeline'
 
 export { supabase }
@@ -29,7 +30,10 @@ export async function listClients() {
     .eq('active', true)
     .order('created_at', { ascending: true })
   if (error) { console.warn('[helm] listClients', error.message); return [] }
-  return data || []
+  // Cada dominio enseña solo los perfiles de SU producto: en HELM no aparecen
+  // los despachos y en el vertical de consultoría no aparecen los
+  // infoproductores. Se filtra aquí, que es por donde pasan todas las listas.
+  return (data || []).filter(c => esDeEsteProducto(c))
 }
 
 // ── Perfiles (clientes) ────────────────────────────────────────────────────
@@ -235,7 +239,7 @@ export const DEFAULT_SUBTITLE = 'OPERATING LAYER'
 export const MAX_LOGO_MB = 2
 
 export const brandOf = (client) => ({
-  name: (client?.brand_name || client?.name || 'HELM').trim(),
+  name: (client?.brand_name || client?.name || productoActual().nombre).trim(),
   subtitle: (client?.brand_subtitle ?? DEFAULT_SUBTITLE),
   logo: client?.logo_url || '',
 })
