@@ -1645,3 +1645,70 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius-sm);
   font-family: inherit; font-size: 13px; line-height: 1.6; color: var(--text-dim);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   DOCUMENTOS · presupuestos y facturas
+   ═══════════════════════════════════════════════════════════════════════ */
+.helm-doc-lineas { display: flex; flex-direction: column; gap: 6px; }
+.helm-doc-lineas-head, .helm-doc-linea {
+  display: grid; grid-template-columns: 1fr 70px 100px 80px 100px 34px; gap: 8px; align-items: center;
+}
+.helm-doc-lineas-head { padding: 0 2px; font-size: 11px; letter-spacing: .5px; text-transform: uppercase; color: var(--text-mut); }
+.helm-doc-importe { font-family: 'JetBrains Mono', monospace; font-size: 13px; text-align: right; padding-right: 6px; }
+.helm-doc-linea .helm-btn { padding: 8px; }
+
+.helm-doc-totales {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px;
+  margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border);
+}
+.helm-doc-totales label { font-size: 12px; color: var(--text-dim); margin-right: 8px; }
+.helm-doc-totales-cifras { display: flex; gap: 18px; font-size: 13px; color: var(--text-dim); }
+.helm-doc-totales-cifras b { color: var(--text); font-family: 'JetBrains Mono', monospace; }
+.helm-doc-total-final { font-size: 15px; color: var(--text) !important; }
+.helm-doc-total-final b { color: var(--accent); font-size: 17px; }
+
+@media (max-width: 700px) {
+  .helm-doc-lineas-head { display: none; }
+  .helm-doc-linea { grid-template-columns: 1fr 1fr; grid-template-areas: 'concepto concepto' 'cant precio' 'dto importe' 'x x'; }
+}
+
+/* La capa de "ver e imprimir": se monta por encima de todo el panel, en
+   pantalla como una hoja con barra de acciones y en papel como el documento
+   solo, sin rastro de HELM. Mismo patrón sin librería que PrimerMapa.jsx. */
+.helm-doc-print-overlay { position: fixed; inset: 0; z-index: 60; background: var(--bg); overflow-y: auto; }
+.helm-doc-print-bar {
+  position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 14px 24px; background: var(--panel); border-bottom: 1px solid var(--border);
+}
+.helm-doc-hoja {
+  max-width: 780px; margin: 28px auto 60px; padding: 44px 48px; background: #fff; color: #1a1a1a;
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.helm-doc-cab { display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: start; padding-bottom: 20px; border-bottom: 2px solid #1a1a1a; }
+.helm-doc-logo { width: 52px; height: 52px; border-radius: 12px; object-fit: contain; background: #f2f2f2; }
+.helm-doc-logo-ini { width: 52px; height: 52px; border-radius: 12px; display: grid; place-items: center; background: #1a1a1a; color: #fff; font-weight: 800; font-size: 22px; }
+.helm-doc-cab-marca { display: flex; flex-direction: column; gap: 3px; }
+.helm-doc-cab-marca b { font-size: 17px; }
+.helm-doc-cab-marca span { font-size: 12px; color: #6b6b6b; }
+.helm-doc-cab-num { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; text-align: right; }
+.helm-doc-cab-num b { font-size: 14px; letter-spacing: 1px; }
+.helm-doc-cab-num span { font-size: 13px; color: #6b6b6b; }
+.helm-doc-cliente { display: flex; flex-direction: column; gap: 2px; margin: 22px 0; font-size: 13.5px; color: #444; }
+.helm-doc-cliente b { font-size: 15px; color: #1a1a1a; }
+.helm-doc-tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
+.helm-doc-tabla th { text-align: left; font-size: 11px; letter-spacing: .5px; text-transform: uppercase; color: #6b6b6b; padding: 8px 6px; border-bottom: 1.5px solid #1a1a1a; }
+.helm-doc-tabla td { padding: 10px 6px; border-bottom: 1px solid #e5e5e5; }
+.helm-doc-tabla th:last-child, .helm-doc-tabla td:last-child, .helm-doc-tabla th:nth-child(2), .helm-doc-tabla td:nth-child(2), .helm-doc-tabla th:nth-child(3), .helm-doc-tabla td:nth-child(3) { text-align: right; }
+.helm-doc-totales-final { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; margin: 18px 0 4px; font-size: 13.5px; color: #444; }
+.helm-doc-totales-final b { color: #1a1a1a; font-family: 'JetBrains Mono', monospace; min-width: 90px; display: inline-block; text-align: right; }
+.helm-doc-total-final { font-size: 16px; padding-top: 8px; border-top: 1.5px solid #1a1a1a; color: #1a1a1a; }
+.helm-doc-total-final b { font-size: 18px; }
+.helm-doc-notas { margin-top: 20px; padding-top: 16px; border-top: 1px solid #e5e5e5; font-size: 12.5px; color: #6b6b6b; white-space: pre-wrap; }
+
+@media print {
+  @page { size: A4; margin: 16mm; }
+  body * { visibility: hidden; }
+  .helm-doc-hoja, .helm-doc-hoja * { visibility: visible; }
+  .helm-doc-print-bar { display: none !important; }
+  .helm-doc-hoja { position: absolute; inset: 0; margin: 0; padding: 0; box-shadow: none; border-radius: 0; max-width: none; }
+}

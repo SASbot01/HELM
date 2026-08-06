@@ -43,6 +43,7 @@ export const PRODUCTOS = {
       'fiscal',       // plazos, avisos y dirección — el corazón del vertical
       'servicios',    // catálogo: cuotas y servicios que presta
       'equipo',       // los asesores
+      'documentos',   // presupuestos y facturas al cliente, con PDF y envío
       'ventas',       // facturación del despacho
       'finanzas',     // cobros, morosos y márgenes
       'llamadas',     // citas con clientes desde el calendario

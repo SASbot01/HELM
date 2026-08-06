@@ -20,6 +20,7 @@ import { supabase } from './lib'
 export const AREAS = [
   { key: 'crm', label: 'CRM', desc: 'Contactos, etapas y actividad' },
   { key: 'servicios', label: 'Servicios', desc: 'El catálogo' },
+  { key: 'documentos', label: 'Documentos', desc: 'Presupuestos y facturas' },
   { key: 'equipo', label: 'Equipo', desc: 'Personas, pagos y contratos' },
   { key: 'ventas', label: 'Ventas', desc: 'Registrar y cancelar ventas' },
   { key: 'diario', label: 'Diario', desc: 'Reportes diarios' },
@@ -53,6 +54,7 @@ export const SECCIONES = [
   { key: 'onboarding', label: 'Onboarding', desc: 'Formularios y Biblia' },
   { key: 'crm', label: 'CRM', desc: 'Contactos y pipeline' },
   { key: 'servicios', label: 'Servicios', desc: 'Catálogo de servicios' },
+  { key: 'documentos', label: 'Documentos', desc: 'Presupuestos y facturas' },
   { key: 'equipo', label: 'Equipo', desc: 'Personas, pagos y contratos' },
   { key: 'ventas', label: 'Ventas', desc: 'Reporte de ventas' },
   { key: 'diario', label: 'Diario', desc: 'Reportes diarios' },

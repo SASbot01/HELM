@@ -2,7 +2,7 @@
 // Se monta en /admin. Gestiona un perfil (cliente) a la vez, con selector arriba.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Link2, Blocks, Settings, Plus, Rocket, CalendarDays, Menu, X, Package, UserCog, PhoneCall, MessagesSquare, GraduationCap, FolderOpen, Layers, CalendarClock, BookOpen } from 'lucide-react'
+import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Link2, Blocks, Settings, Plus, Rocket, CalendarDays, Menu, X, Package, UserCog, PhoneCall, MessagesSquare, GraduationCap, FolderOpen, Layers, CalendarClock, BookOpen, FileText } from 'lucide-react'
 import { listClients, createProfile, slugify, usersApi, brandOf } from './lib'
 import { productoActual, seccionDelProducto } from './producto'
 import { Modal, Field, Input } from './ui'
@@ -15,6 +15,7 @@ import Comunidad from './views/Comunidad'
 import Interna from './views/Interna'
 import Crm from './views/Crm'
 import Servicios from './views/Servicios'
+import Documentos from './views/Documentos'
 import Equipo from './views/Equipo'
 import Ventas from './views/Ventas'
 import Diario from './views/Diario'
@@ -36,6 +37,7 @@ const NAV = [
   { key: 'onboarding', label: 'Onboarding', icon: Rocket, title: 'Onboarding', sub: 'Alimenta a tu IA y trae tu sistema', C: Onboarding },
   { key: 'crm', label: 'CRM', icon: Users, title: 'CRM', sub: 'Tus contactos y pipeline', C: Crm },
   { key: 'servicios', label: 'Servicios', icon: Package, title: 'Servicios', sub: 'El catálogo que lo conecta todo', C: Servicios },
+  { key: 'documentos', label: 'Documentos', icon: FileText, title: 'Presupuestos y facturas', sub: 'Del presupuesto a la factura, con tu marca', C: Documentos },
   { key: 'equipo', label: 'Equipo', icon: UserCog, title: 'Equipo y perfiles', sub: 'Quién es quién, cómo se le paga y su contrato', C: Equipo },
   { key: 'ventas', label: 'Ventas', icon: TrendingUp, title: 'Ventas', sub: 'Reporte de ventas', C: Ventas },
   { key: 'diario', label: 'Diario', icon: ClipboardList, title: 'Diario', sub: 'Reportes de closer y setter', C: Diario },
