@@ -21,6 +21,7 @@ export const AREAS = [
   { key: 'crm', label: 'CRM', desc: 'Contactos, etapas y actividad' },
   { key: 'servicios', label: 'Servicios', desc: 'El catálogo' },
   { key: 'documentos', label: 'Documentos', desc: 'Presupuestos y facturas' },
+  { key: 'gastos', label: 'Gastos', desc: 'Facturas de compra' },
   { key: 'equipo', label: 'Equipo', desc: 'Personas, pagos y contratos' },
   { key: 'ventas', label: 'Ventas', desc: 'Registrar y cancelar ventas' },
   { key: 'diario', label: 'Diario', desc: 'Reportes diarios' },
@@ -55,6 +56,7 @@ export const SECCIONES = [
   { key: 'crm', label: 'CRM', desc: 'Contactos y pipeline' },
   { key: 'servicios', label: 'Servicios', desc: 'Catálogo de servicios' },
   { key: 'documentos', label: 'Documentos', desc: 'Presupuestos y facturas' },
+  { key: 'gastos', label: 'Gastos', desc: 'Facturas de compra' },
   { key: 'equipo', label: 'Equipo', desc: 'Personas, pagos y contratos' },
   { key: 'ventas', label: 'Ventas', desc: 'Reporte de ventas' },
   { key: 'diario', label: 'Diario', desc: 'Reportes diarios' },
@@ -72,6 +74,7 @@ export const SECCIONES = [
   { key: 'formularios', label: 'Formularios', desc: 'Constructor y respuestas' },
   { key: 'actividad', label: 'Actividad', desc: 'Timeline del equipo' },
   { key: 'fiscal', label: 'Fiscal', desc: 'Plazos y modelos de una asesoría' },
+  { key: 'copiloto', label: 'Copiloto Fiscal', desc: 'IA con los plazos y clientes del despacho' },
 ]
 
 // Lo que ve cada rol si nadie ha tocado nada. Un closer entra a hacer su

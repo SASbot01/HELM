@@ -5,17 +5,21 @@
 // enviarlo por email. Copiado del primer bloque de Sage Active, con lo que de
 // verdad hace falta en una asesoría y sin lo que no.
 //
-// AVISO que no se puede perder: esto NO es VeriFactu. Numera correlativo
-// normal; el hash encadenado, la firma y el QR son la pieza aparte
-// (helm_verifactu, sin construir todavía). Decir aquí que esto es "conforme"
-// sería mentirle al despacho.
+// Cada factura, al emitirse (salir de "Borrador"), queda encadenada por hash
+// a la anterior — ver documentos/verifactu.js. Eso es integridad verificable,
+// NO conformidad VeriFactu: falta la firma electrónica (certificado digital
+// del despacho) y el envío a la AEAT, que no se pueden fabricar aquí. La hoja
+// impresa lo dice tal cual, para que nadie lo confunda con lo oficial.
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { FileText, Plus, Send, Check, Trash2, ArrowRight, Printer, Mail } from 'lucide-react'
-import { supabase, fetchRows, insertRow, updateRow, deleteRow, fmtDate, money, brandOf } from '../lib'
+import QRCode from 'qrcode'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { FileText, Plus, Check, Trash2, ArrowRight, Printer, Mail, Download, ShieldCheck } from 'lucide-react'
+import { supabase, fetchRows, insertRow, updateRow, deleteRow, fmtDate, money, brandOf, exportCSV } from '../lib'
 import { Panel, Empty, Modal, Field, Input, Select, Textarea, Kpi, Tabs, FormNote } from '../ui'
 import {
   siguienteNumero, lineaVacia, importeLinea, calcularTotales, IVA_DEFECTO, ESTADOS, estadoLabel,
 } from '../documentos/calculo'
+import { emitirConHash, datosQR } from '../documentos/verifactu'
 
 const TABS = [
   { key: 'factura', label: 'Facturas', icon: <FileText size={15} /> },
@@ -53,6 +57,38 @@ export default function Documentos({ clientId, client }) {
     }
   }, [docs])
 
+  // Facturación por mes de los últimos 6 meses, para el gráfico. Solo
+  // facturas (un presupuesto no es facturación todavía) y sin anular.
+  const porMes = useMemo(() => {
+    const meses = []
+    const hoy = new Date()
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1)
+      meses.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, mes: d.toLocaleDateString('es-ES', { month: 'short' }), total: 0 })
+    }
+    for (const d of docs || []) {
+      if (d.tipo !== 'factura' || d.estado === 'anulado') continue
+      const k = String(d.fecha).slice(0, 7)
+      const m = meses.find(x => x.key === k)
+      if (m) m.total += Number(d.total)
+    }
+    return meses
+  }, [docs])
+
+  function exportar() {
+    exportCSV(`${tipo === 'factura' ? 'facturas' : 'presupuestos'}.csv`, [
+      { label: 'Número', value: 'numero' },
+      { label: 'Cliente', value: 'cliente_nombre' },
+      { label: 'NIF', value: 'cliente_nif' },
+      { label: 'Fecha', value: 'fecha' },
+      { label: 'Subtotal', value: r => Number(r.subtotal).toFixed(2) },
+      { label: 'IVA %', value: 'iva_pct' },
+      { label: 'IVA', value: r => Number(r.iva).toFixed(2) },
+      { label: 'Total', value: r => Number(r.total).toFixed(2) },
+      { label: 'Estado', value: r => estadoLabel(r.tipo, r.estado) },
+    ], delTipo)
+  }
+
   async function guardar(form) {
     const { subtotal, iva, total } = calcularTotales(form.lineas, form.iva_pct)
     const fila = {
@@ -80,12 +116,22 @@ export default function Documentos({ clientId, client }) {
 
   async function cambiarEstado(d, estado) {
     try {
-      await updateRow('helm_documentos_venta', d.id, {
+      const patch = {
         estado,
         pagado_at: estado === 'pagado' ? new Date().toISOString() : d.pagado_at,
         enviado_at: estado === 'enviado' ? new Date().toISOString() : d.enviado_at,
         updated_at: new Date().toISOString(),
-      })
+      }
+      // Una factura se encadena UNA vez, al salir de "Borrador" por primera
+      // vez: es el momento en que deja de ser un borrador editable y pasa a
+      // ser un registro. Reemitir no debe generar un segundo hash.
+      if (d.tipo === 'factura' && d.estado === 'borrador' && estado !== 'borrador' && !d.hash) {
+        const ultimo = (docs || [])
+          .filter(x => x.tipo === 'factura' && x.hash && x.id !== d.id)
+          .sort((a, b) => new Date(b.emitido_at || b.fecha) - new Date(a.emitido_at || a.fecha))[0]
+        Object.assign(patch, await emitirConHash(d, ultimo?.hash || ''), { emitido_at: new Date().toISOString() })
+      }
+      await updateRow('helm_documentos_venta', d.id, patch)
       load()
     } catch (e) { setError('No se pudo cambiar: ' + e.message) }
   }
@@ -127,14 +173,37 @@ export default function Documentos({ clientId, client }) {
       )}
 
       {error && <FormNote>{error}</FormNote>}
+
+      {tipo === 'factura' && docs && docs.some(d => d.tipo === 'factura') && (
+        <Panel title="Facturación mensual">
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={porMes} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="mes" stroke="var(--text-mut)" fontSize={12} tickLine={false} axisLine={false} />
+              <YAxis stroke="var(--text-mut)" fontSize={12} tickLine={false} axisLine={false} width={56} tickFormatter={v => money(v)} />
+              <Tooltip
+                formatter={v => money(v)}
+                contentStyle={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13 }}
+              />
+              <Bar dataKey="total" fill="var(--cyan)" radius={[5, 5, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Panel>
+      )}
+
       <Tabs tabs={TABS} value={tipo} onChange={setTipo} />
 
       <Panel
         title={tipo === 'factura' ? 'Facturas' : 'Presupuestos'}
         action={
-          <button className="helm-btn primary" onClick={() => setEdit(nuevoDoc(tipo))}>
-            <Plus size={15} /> {tipo === 'factura' ? 'Nueva factura' : 'Nuevo presupuesto'}
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="helm-btn" onClick={exportar} disabled={!delTipo.length}>
+              <Download size={15} /> Exportar CSV
+            </button>
+            <button className="helm-btn primary" onClick={() => setEdit(nuevoDoc(tipo))}>
+              <Plus size={15} /> {tipo === 'factura' ? 'Nueva factura' : 'Nuevo presupuesto'}
+            </button>
+          </div>
         }
       >
         {docs === null ? <Empty>Cargando…</Empty>
@@ -317,6 +386,12 @@ function EditorModal({ doc, contactos, onClose, onSave }) {
 // lo que usa el diagnóstico de Silvestre para su informe. Cero dependencias
 // nuevas por un botón que el sistema operativo ya resuelve mejor que nosotros.
 function VistaImpresion({ doc, marca, onClose }) {
+  const [qr, setQr] = useState(null)
+  useEffect(() => {
+    if (!doc.hash) return
+    QRCode.toDataURL(datosQR(doc), { margin: 0, width: 108 }).then(setQr).catch(() => {})
+  }, [doc])
+
   function imprimir() {
     const antes = document.title
     document.title = `${doc.numero} · ${doc.cliente_nombre}`
@@ -390,6 +465,17 @@ function VistaImpresion({ doc, marca, onClose }) {
         </div>
 
         {doc.notas && <p className="helm-doc-notas">{doc.notas}</p>}
+
+        {doc.hash && (
+          <div className="helm-doc-verifactu">
+            {qr && <img src={qr} alt="" width={72} height={72} />}
+            <div>
+              <b><ShieldCheck size={13} /> Registro íntegro, hash encadenado</b>
+              <span>{doc.hash.slice(0, 24)}…</span>
+              <small>No es una factura VeriFactu conforme: falta la firma electrónica del despacho y el envío a la AEAT.</small>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

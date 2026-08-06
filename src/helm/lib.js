@@ -277,6 +277,24 @@ export async function saveBrand(clientId, { brand_name, brand_subtitle, logo_url
   return data
 }
 
+// ── Exportar a CSV ─────────────────────────────────────────────────────────
+// `;` como separador y BOM al principio: es lo que Excel en español espera
+// para no descuadrar columnas ni mostrar acentos rotos.
+export function exportCSV(filename, columns, rows) {
+  const esc = (v) => {
+    const s = String(v ?? '')
+    return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+  }
+  const head = columns.map(c => esc(c.label)).join(';')
+  const body = rows.map(r => columns.map(c => esc(typeof c.value === 'function' ? c.value(r) : r[c.value])).join(';')).join('\n')
+  const blob = new Blob(['﻿' + head + '\n' + body], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = filename
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 export const humanSize = (bytes) => {
   const n = Number(bytes) || 0
   if (n < 1024) return n + ' B'
@@ -386,6 +404,12 @@ export const stripeApi = {
 export const docsApi = {
   enlace: (clientId, contactId) =>
     apiFetch(`/api/documentos?action=enlace&clientId=${clientId}&contactId=${contactId}`),
+}
+
+// Captura inteligente de facturas de compra: Tesseract + el modelo local
+// sugieren los campos, nunca los guardan solos (ver api/gastos.js).
+export const gastosApi = {
+  ocr: (clientId, ruta) => apiFetch('/api/gastos?action=ocr', { method: 'POST', body: { clientId, ruta } }),
 }
 
 export const googleApi = {

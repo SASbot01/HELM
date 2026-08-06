@@ -11,11 +11,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Upload, Trash2, ExternalLink, Copy, Check, FileText, Image as ImageIcon,
-  Film, File, Search, Sparkles, Rocket, Hand,
+  Film, File, Search, Sparkles, Rocket, Hand, Download,
 } from 'lucide-react'
 import {
   fetchRowsOrError, insertRow, deleteRow, uploadFile, deleteFile, publicUrl,
-  humanSize, fmtDate, MAX_UPLOAD_MB, MISSING_TABLE,
+  humanSize, fmtDate, MAX_UPLOAD_MB, MISSING_TABLE, exportCSV,
 } from '../lib'
 import { Panel, Empty, Input, FormNote, Kpi } from '../ui'
 import MigracionPendiente from '../MigracionPendiente'
@@ -136,6 +136,18 @@ export default function Archivos({ clientId }) {
 
   if (faltaTabla) return <MigracionPendiente seccion="Archivos" archivo="migrations/helm_archivos.sql" />
 
+  function exportar() {
+    exportCSV('archivos.csv', [
+      { label: 'Nombre', value: 'name' },
+      { label: 'Carpeta', value: r => r.folder || 'General' },
+      { label: 'Tipo', value: 'type' },
+      { label: 'Tamaño', value: r => humanSize(r.size) },
+      { label: 'Origen', value: r => r.source || 'manual' },
+      { label: 'Subido', value: r => fmtDate(r.created_at) },
+      { label: 'Enlace', value: r => enlaceDe(r) },
+    ], visibles)
+  }
+
   return (
     <Panel
       title="Archivos del negocio"
@@ -148,6 +160,9 @@ export default function Archivos({ clientId }) {
           <datalist id="helm-carpetas">
             {carpetas.map(c => <option key={c} value={c} />)}
           </datalist>
+          <button className="helm-btn" onClick={exportar} disabled={!visibles.length}>
+            <Download size={15} /> Exportar CSV
+          </button>
           <input ref={inputRef} type="file" multiple hidden onChange={subir} />
           <button className="helm-btn primary" disabled={Boolean(subiendo)} onClick={() => inputRef.current?.click()}>
             <Upload size={15} /> {subiendo ? `Subiendo ${subiendo}…` : 'Subir archivo'}

@@ -44,6 +44,7 @@ export const PRODUCTOS = {
       'servicios',    // catálogo: cuotas y servicios que presta
       'equipo',       // los asesores
       'documentos',   // presupuestos y facturas al cliente, con PDF y envío
+      'gastos',       // facturas de compra, con captura por OCR
       'ventas',       // facturación del despacho
       'finanzas',     // cobros, morosos y márgenes
       'llamadas',     // citas con clientes desde el calendario
@@ -56,11 +57,11 @@ export const PRODUCTOS = {
       'formularios',  // cuestionarios al cliente, pegados a su ficha
       'biblioteca',   // documentos que amplían el contexto del sistema
       'actividad',    // quién hizo qué con cada cliente
+      'copiloto',     // el Copiloto Fiscal: rol propio, con los plazos reales del despacho
       // FUERA a propósito:
       //   chat     → el asistente está escrito como copywriter de infoproducto
-      //              ("escribe tu guion, tu hook, tu CTA"). Enseñárselo a un
-      //              despacho quita credibilidad. Vuelve cuando sea el RAG de
-      //              normativa, que es otra cosa y sí les sirve.
+      //              ("escribe tu guion, tu hook, tu CTA"). No es este: el
+      //              Copiloto Fiscal de arriba es un rol aparte para el despacho.
       //   enlaces  → un cajón de URLs del negocio; con Archivos les sobra.
     ],
   },

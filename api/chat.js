@@ -74,6 +74,29 @@ que necesitas — no te lo inventes.`
 
 // Los comandos de setting no los escribe un copywriter: los escribe alguien que
 // se ha comido miles de DMs. Cambia el oficio, así que cambia el rol entero.
+// El Copiloto Fiscal (consultoria.s4sf.net): un rol entero aparte, no el
+// copywriter con otro nombre. Un despacho no necesita hooks ni CTAs — necesita
+// que alguien con memoria perfecta de sus plazos y sus clientes conteste rápido
+// y no se invente una cifra. Es la respuesta seria a "Sage Copilot".
+const FISCAL_ROLE = `Eres el Copiloto Fiscal de este despacho dentro de HELM. Ayudas al asesor con
+plazos y modelos tributarios españoles (303, 130, 131, 111, 115, 349, 390, 190, 347, 200, 202),
+con el estado de sus clientes en el sistema, y con redactar avisos o resúmenes cuando te lo pidan.
+
+Hablas español de España, profesional y al grano — como un compañero de despacho con memoria
+perfecta de los datos del sistema, no como un buscador ni como una guía genérica de Hacienda.
+
+Reglas que no se negocian:
+· Si te preguntan un plazo, un importe o el estado de un cliente y NO está en el contexto que
+  tienes más abajo, dilo tal cual — "eso no lo tengo en el sistema, compruébalo" — en vez de
+  inventarte una fecha o una cifra. Un dato fiscal mal dicho le cuesta dinero real a alguien.
+· Si te piden redactar un aviso o un email para un cliente, escríbelo, pero dejando claro que es
+  un borrador que el asesor revisa antes de mandarlo — tú no presentas nada ni envías nada.
+· No eres el copywriter de contenido de HELM. Si te piden un guion de reel o de ventas, di que
+  eso no es lo tuyo aquí.
+
+Si te falta contexto del despacho para responder bien, dilo y pide justo el dato que necesitas —
+no te lo inventes.`
+
 const SETTER_ROLE = `Eres el jefe de setting de este negocio dentro de HELM. Tu trabajo es
 conseguir llamadas agendadas por mensaje directo (Instagram, WhatsApp, LinkedIn),
 y entrenar al setter que los manda.
@@ -250,12 +273,14 @@ const recorta = (txt) => {
 /**
  * Arma el system prompt del turno.
  *
- * @param {'copy'|'setting'} modo qué oficio toca. En 'setting' no entra el
+ * @param {'copy'|'setting'|'fiscal'} modo qué oficio toca. En 'setting' no entra el
  *   método de copywriting (es para guiones de contenido y solo desviaría al
- *   modelo) y sí entra el entrenamiento del setter, que en 'copy' sobra.
+ *   modelo) y sí entra el entrenamiento del setter, que en 'copy' sobra. En
+ *   'fiscal' (consultoria) no entra ninguno de los dos: es un oficio distinto.
  */
-function buildSystem({ clientName, knowledge, biblia, library = [], modo = 'copy' }) {
+function buildSystem({ clientName, knowledge, biblia, library = [], modo = 'copy', contextoFiscal }) {
   const esSetting = modo === 'setting'
+  const esFiscal = modo === 'fiscal'
   // Lo guardado con /memoria-setter va en su propio bloque: mezclado con las
   // notas de copy, el modelo escribía DMs con estructura de reel.
   const setter = knowledge.filter(k => k.kind === 'setter')
@@ -266,10 +291,11 @@ function buildSystem({ clientName, knowledge, biblia, library = [], modo = 'copy
     : '(Todavía no hay nada guardado suelto de este perfil. Si necesitas contexto, pídelo.)'
 
   const parts = [
-    esSetting ? SETTER_ROLE : BASE_ROLE,
+    esFiscal ? FISCAL_ROLE : esSetting ? SETTER_ROLE : BASE_ROLE,
     `# PERFIL ACTIVO\n${clientName}`,
   ]
-  if (!esSetting) parts.push(`# MÉTODO\n${COPY_KNOWLEDGE}`)
+  if (!esSetting && !esFiscal) parts.push(`# MÉTODO\n${COPY_KNOWLEDGE}`)
+  if (esFiscal && contextoFiscal) parts.push(`# PLAZOS Y ESTADO DEL DESPACHO (datos reales del sistema, ahora mismo)\n${contextoFiscal}`)
 
   // La Biblia (si el onboarding está hecho) es el contexto de máxima prioridad:
   // manda sobre el método genérico y sobre cualquier suposición.
@@ -314,6 +340,38 @@ function buildSystem({ clientName, knowledge, biblia, library = [], modo = 'copy
   }
 
   return parts.join('\n\n---\n\n')
+}
+
+// Lo que el Copiloto Fiscal necesita para no inventarse un plazo: los
+// próximos 30 días de obligaciones (con el nombre del cliente, que es lo que
+// pregunta el asesor) y un recuento de cómo está el trimestre. Sin esto, un
+// 14B respondería con lo que "normalmente" pasa en vez de con la realidad de
+// este despacho — que es justo lo que la regla del rol le prohíbe hacer.
+async function getContextoFiscal(clientId) {
+  const hoy = new Date().toISOString().slice(0, 10)
+  const en30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
+  const { data: proximas } = await supabase
+    .from('helm_fiscal_obligaciones')
+    .select('modelo, periodo, fecha_limite, estado, crm_contacts(name)')
+    .eq('client_id', clientId)
+    .gte('fecha_limite', hoy).lte('fecha_limite', en30)
+    .order('fecha_limite').limit(60)
+  const { data: todas } = await supabase
+    .from('helm_fiscal_obligaciones')
+    .select('estado')
+    .eq('client_id', clientId)
+  if (!proximas?.length && !todas?.length) return null
+
+  const cuenta = { pendiente_docs: 0, en_proceso: 0, presentado: 0, fuera_plazo: 0 }
+  for (const o of todas || []) cuenta[o.estado] = (cuenta[o.estado] || 0) + 1
+
+  const lista = (proximas || [])
+    .map(o => `- ${o.modelo} (${o.periodo}) de ${o.crm_contacts?.name || 'cliente sin nombre'} — vence ${o.fecha_limite}, estado: ${o.estado}`)
+    .join('\n') || '(ninguna en los próximos 30 días)'
+
+  return `Resumen general: ${cuenta.pendiente_docs} pendientes de documentación, ${cuenta.en_proceso} en proceso, `
+    + `${cuenta.presentado} presentadas, ${cuenta.fuera_plazo} fuera de plazo.\n\n`
+    + `Próximos 30 días (hoy es ${hoy}):\n${lista}`
 }
 
 // ── Helpers de datos ───────────────────────────────────────────────────────
@@ -588,10 +646,21 @@ export default async function handler(req, res) {
     }
 
     const { data: client } = await supabase
-      .from('clients').select('id, name').eq('id', clientId).maybeSingle()
+      .from('clients').select('id, name, client_type').eq('id', clientId).maybeSingle()
     if (!client) return res.status(404).json({ error: 'Perfil no encontrado' })
+    const esConsultoria = client.client_type === 'consultoria'
 
     const { command, body } = parseCommand(message)
+
+    // El Copiloto Fiscal no tiene comandos de infoproducto (/reel-guion,
+    // /email…): son de otro oficio. Se avisa en vez de ejecutarlos.
+    if (command && esConsultoria) {
+      const u = await saveMessage(clientId, 'user', message, command)
+      const b = await saveMessage(clientId, 'assistant',
+        `Aquí no hay comandos — pregúntame directamente lo que necesites sobre plazos, modelos o `
+        + `clientes del despacho.`, command)
+      return res.status(200).json({ userMessage: u, message: b })
+    }
 
     // Comandos que se resuelven sin llamar al modelo.
     if (command === '/help') {
@@ -880,6 +949,27 @@ export default async function handler(req, res) {
       ].join('\n')
       const u = await saveMessage(clientId, 'user', message, command)
       const b = await saveMessage(clientId, 'assistant', help, command)
+      return res.status(200).json({ userMessage: u, message: b })
+    }
+
+    // ── Copiloto Fiscal (consultoria): conversación normal, SIN las
+    // herramientas de infoproducto (agendar contenido, reporte de closer…),
+    // que no pintan nada en un despacho. Con el contexto real de plazos.
+    if (!command && esConsultoria) {
+      const contextoFiscal = await getContextoFiscal(clientId)
+      const system = buildSystem({ clientName: client.name, knowledge, biblia, library, modo: 'fiscal', contextoFiscal })
+      const messages = [
+        ...history.map(m => ({ role: m.role, content: m.content })),
+        { role: 'user', content: message },
+      ]
+      let respuesta
+      // Temperatura baja a propósito: aquí lo que importa es no inventarse un
+      // plazo, no sonar creativo.
+      try { respuesta = await llmChat({ system, messages, maxTokens: MAX_TOKENS, temperature: 0.3 }) } catch (err) {
+        return res.status(err.statusCode || 502).json({ error: err.message })
+      }
+      const u = await saveMessage(clientId, 'user', message, null)
+      const b = await saveMessage(clientId, 'assistant', respuesta, null)
       return res.status(200).json({ userMessage: u, message: b })
     }
 

@@ -12,8 +12,9 @@
 // Sección de sector: nace apagada y se enciende en Secciones (ver permisos.js).
 // Un infoproducto no tiene por qué ver modelos del 347.
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarClock, Plus, RefreshCw, Check, Users, Send, LayoutDashboard, MessageSquare, Mail, Copy } from 'lucide-react'
-import { supabase, fetchRows, fetchRowsOrError, insertRow, updateRow, fmtDate, MISSING_TABLE, docsApi } from '../lib'
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip as ChartTooltip } from 'recharts'
+import { CalendarClock, Plus, RefreshCw, Check, Users, Send, LayoutDashboard, MessageSquare, Mail, Copy, Download } from 'lucide-react'
+import { supabase, fetchRows, fetchRowsOrError, insertRow, updateRow, fmtDate, MISSING_TABLE, docsApi, exportCSV } from '../lib'
 import { Panel, Empty, Modal, Field, Input, Select, Textarea, Kpi, Tabs, FormNote } from '../ui'
 import MigracionPendiente from '../MigracionPendiente'
 import {
@@ -160,6 +161,17 @@ function Plazos({ obligaciones, nombreDe, perfiles, clientId, onCambio, onError 
 
   const año = new Date().getFullYear()
 
+  function exportar() {
+    exportCSV('plazos-fiscales.csv', [
+      { label: 'Vence', value: 'fecha_limite' },
+      { label: 'Cliente', value: o => nombreDe(o.contact_id) },
+      { label: 'Modelo', value: 'modelo' },
+      { label: 'Nombre del modelo', value: o => MODELOS[o.modelo]?.nombre || '' },
+      { label: 'Periodo', value: 'periodo' },
+      { label: 'Estado', value: o => ESTADO_MAP[o.estado]?.label || o.estado },
+    ], visibles)
+  }
+
   return (
     <>
       <div className="helm-grid helm-kpis">
@@ -178,6 +190,9 @@ function Plazos({ obligaciones, nombreDe, perfiles, clientId, onCambio, onError 
               <option value="todos">Todos</option>
               {ESTADOS.map(e => <option key={e.key} value={e.key}>{e.label}</option>)}
             </select>
+            <button className="helm-btn" onClick={exportar} disabled={!visibles.length}>
+              <Download size={15} /> Exportar CSV
+            </button>
             <button className="helm-btn primary" disabled={generando} onClick={() => generar(año)}>
               {generando ? <RefreshCw size={15} className="helm-spin" /> : <Plus size={15} />}
               {generando ? 'Generando…' : `Generar ${año}`}
@@ -416,10 +431,16 @@ function Direccion({ obligaciones, perfiles, equipo, nombreDe }) {
       return { contact_id: p.contact_id, vencidos, sinDocs }
     }).filter(r => r.vencidos > 0).sort((a, b) => b.vencidos - a.vencidos)
 
-    return { cumplimiento, aTiempo, fuera, porAsesor, riesgo, total: obligaciones.length }
+    const porEstado = ESTADOS.map(e => ({
+      key: e.key, label: e.label, tono: e.tono,
+      valor: obligaciones.filter(o => o.estado === e.key).length,
+    })).filter(e => e.valor > 0)
+
+    return { cumplimiento, aTiempo, fuera, porAsesor, riesgo, porEstado, total: obligaciones.length }
   }, [obligaciones, perfiles])
 
   const nombreAsesor = (id) => (id === 'sin' ? 'Sin asignar' : equipo.find(e => e.id === id)?.name || 'Sin asignar')
+  const colorTono = { '': 'var(--text-mut)', cyan: 'var(--cyan)', green: 'var(--green)', red: 'var(--red)' }
 
   return (
     <>
@@ -433,6 +454,20 @@ function Direccion({ obligaciones, perfiles, equipo, nombreDe }) {
         <Kpi label="Presentados" value={datos.aTiempo} />
         <Kpi label="Fuera de plazo" value={datos.fuera} sub={datos.fuera ? 'sanción al cliente' : undefined} />
       </div>
+
+      {datos.porEstado.length > 0 && (
+        <Panel title="Cómo está el despacho">
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie data={datos.porEstado} dataKey="valor" nameKey="label" innerRadius={55} outerRadius={85} paddingAngle={2}>
+                {datos.porEstado.map(e => <Cell key={e.key} fill={colorTono[e.tono]} />)}
+              </Pie>
+              <ChartTooltip contentStyle={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13 }} />
+              <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </Panel>
+      )}
 
       <Panel title="Carga por asesor">
         {datos.porAsesor.size === 0 ? <Empty>Sin fichas fiscales todavía.</Empty> : (

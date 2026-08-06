@@ -2,7 +2,7 @@
 // Se monta en /admin. Gestiona un perfil (cliente) a la vez, con selector arriba.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Link2, Blocks, Settings, Plus, Rocket, CalendarDays, Menu, X, Package, UserCog, PhoneCall, MessagesSquare, GraduationCap, FolderOpen, Layers, CalendarClock, BookOpen, FileText } from 'lucide-react'
+import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Link2, Blocks, Settings, Plus, Rocket, CalendarDays, Menu, X, Package, UserCog, PhoneCall, MessagesSquare, GraduationCap, FolderOpen, Layers, CalendarClock, BookOpen, FileText, Receipt, ShieldCheck } from 'lucide-react'
 import { listClients, createProfile, slugify, usersApi, brandOf } from './lib'
 import { productoActual, seccionDelProducto } from './producto'
 import { Modal, Field, Input } from './ui'
@@ -16,6 +16,7 @@ import Interna from './views/Interna'
 import Crm from './views/Crm'
 import Servicios from './views/Servicios'
 import Documentos from './views/Documentos'
+import Gastos from './views/Gastos'
 import Equipo from './views/Equipo'
 import Ventas from './views/Ventas'
 import Diario from './views/Diario'
@@ -25,6 +26,7 @@ import Enlaces from './views/Enlaces'
 import Archivos from './views/Archivos'
 import Secciones from './views/Secciones'
 import Fiscal from './views/Fiscal'
+import Copiloto from './views/Copiloto'
 import Marketing from './views/Marketing'
 import Ajustes from './views/Ajustes'
 import { PLUGINS, PLUGIN_MAP } from './plugins/registry'
@@ -38,6 +40,7 @@ const NAV = [
   { key: 'crm', label: 'CRM', icon: Users, title: 'CRM', sub: 'Tus contactos y pipeline', C: Crm },
   { key: 'servicios', label: 'Servicios', icon: Package, title: 'Servicios', sub: 'El catálogo que lo conecta todo', C: Servicios },
   { key: 'documentos', label: 'Documentos', icon: FileText, title: 'Presupuestos y facturas', sub: 'Del presupuesto a la factura, con tu marca', C: Documentos },
+  { key: 'gastos', label: 'Gastos', icon: Receipt, title: 'Gastos', sub: 'Facturas de compra, con captura por IA', C: Gastos },
   { key: 'equipo', label: 'Equipo', icon: UserCog, title: 'Equipo y perfiles', sub: 'Quién es quién, cómo se le paga y su contrato', C: Equipo },
   { key: 'ventas', label: 'Ventas', icon: TrendingUp, title: 'Ventas', sub: 'Reporte de ventas', C: Ventas },
   { key: 'diario', label: 'Diario', icon: ClipboardList, title: 'Diario', sub: 'Reportes de closer y setter', C: Diario },
@@ -50,6 +53,7 @@ const NAV = [
   { key: 'enlaces', label: 'Enlaces', icon: Link2, title: 'Enlaces', sub: 'Las URLs del negocio, a mano', C: Enlaces },
   { key: 'archivos', label: 'Archivos', icon: FolderOpen, title: 'Archivos', sub: 'Lo que subes, lo que escribe la IA y las Biblias', C: Archivos },
   { key: 'fiscal', label: 'Fiscal', icon: CalendarClock, title: 'Fiscal', sub: 'Plazos y modelos de tus clientes', C: Fiscal },
+  { key: 'copiloto', label: 'Copiloto Fiscal', icon: ShieldCheck, title: 'Copiloto Fiscal', sub: 'Pregúntale por plazos, clientes y avisos', C: Copiloto },
   { key: 'marketing', label: 'Marketing', icon: TrendingUp, title: 'Marketing', sub: 'Qué campaña trae leads y cuál trae ventas', C: Marketing },
   { key: 'secciones', label: 'Secciones', icon: Layers, title: 'Secciones', sub: 'Qué partes del panel usa este negocio', C: Secciones },
   { key: 'ajustes', label: 'Ajustes', icon: Settings, title: 'Ajustes', sub: 'Integraciones y IA de este perfil', C: Ajustes },
