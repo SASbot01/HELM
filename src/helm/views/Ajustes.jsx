@@ -6,7 +6,7 @@ import {
   ShoppingCart, CalendarDays, Folder, FileText, ChevronRight, Search,
   Download, Sparkles, Image as ImageIcon, Trash2, Eye, Pencil,
 } from 'lucide-react'
-import { stripeApi, wooApi, chatApi, googleApi, brandOf, saveBrand, uploadLogo, MAX_LOGO_MB, DEFAULT_SUBTITLE } from '../lib'
+import { stripeApi, wooApi, chatApi, googleApi, calendlyApi, brandOf, saveBrand, uploadLogo, MAX_LOGO_MB, DEFAULT_SUBTITLE } from '../lib'
 import { Panel, Field, Input, Select, Tabs, Empty } from '../ui'
 import { TEMAS_ELEGIBLES, useHelmTheme } from '../theme'
 import {
@@ -392,6 +392,133 @@ function WooCard({ clientId }) {
               Las claves se validan contra la tienda antes de guardarse y se quedan en el
               servidor: el navegador solo ve los últimos 4 caracteres. La tienda debe usar
               HTTPS — por HTTP las credenciales viajarían en claro.
+            </small>
+          </>
+        )}
+
+        {msg && <div className="helm-settings-ok" style={{ whiteSpace: 'pre-line' }}>{msg}</div>}
+        {error && <div className="helm-formerror">{error}</div>}
+      </div>
+    </Panel>
+  )
+}
+
+// ── Calendly ────────────────────────────────────────────────────────────────
+// Un enlace, no una pasarela: no hay claves ni webhooks que pegar, solo el
+// Token de Acceso Personal que Calendly da en Integrations → API & Webhooks.
+// Sirve igual en HELM (agendar la llamada de venta) que en consultoria
+// (agendar la reunión con el cliente del despacho).
+function CalendlyCard({ clientId }) {
+  const [status, setStatus] = useState(null)
+  const [token, setToken] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
+  const [error, setError] = useState(null)
+  const [eventos, setEventos] = useState(null)
+
+  const load = () => calendlyApi.status(clientId)
+    .then(st => {
+      setStatus(st)
+      if (st.linked) calendlyApi.eventos(clientId).then(r => setEventos(r.eventos || [])).catch(() => setEventos([]))
+    })
+    .catch(err => { setError(err.message); setStatus({ linked: false, failed: true }) })
+  useEffect(() => { load() }, [clientId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function link(e) {
+    e.preventDefault()
+    setBusy(true); setError(null); setMsg(null)
+    try {
+      await calendlyApi.link(clientId, token.trim())
+      setToken('')
+      setMsg('Calendly enlazado.')
+      await load()
+    } catch (err) { setError(err.message) }
+    setBusy(false)
+  }
+
+  async function unlink() {
+    if (!confirm('¿Desenlazar Calendly de este perfil?')) return
+    setBusy(true); setError(null); setMsg(null)
+    try { await calendlyApi.unlink(clientId); await load(); setMsg('Calendly desenlazado.') }
+    catch (err) { setError(err.message) }
+    setBusy(false)
+  }
+
+  if (!status) return <Panel title="Calendly"><div className="helm-empty">Cargando…</div></Panel>
+  if (status.failed) {
+    return (
+      <Panel title="Calendly" action={<Badge tone="red">Sin conexión</Badge>}>
+        <div className="helm-settings-body"><div className="helm-formerror">{error}</div></div>
+      </Panel>
+    )
+  }
+
+  return (
+    <Panel title="Calendly" action={status.linked ? <Badge tone="green">Enlazado</Badge> : <Badge>Sin enlazar</Badge>}>
+      <div className="helm-settings-body">
+        {status.linked ? (
+          <>
+            <div className="helm-settings-row">
+              <div>
+                <b>{status.name}</b>
+                <small>{status.email}</small>
+              </div>
+              <div className="helm-settings-actions">
+                <button className="helm-btn" onClick={unlink} disabled={busy}>
+                  <Unlink size={15} /> Desenlazar
+                </button>
+              </div>
+            </div>
+
+            {status.schedulingUrl && (
+              <div className="helm-settings-block">
+                <label>Tu enlace para agendar</label>
+                <p>Compártelo con un lead o un cliente para que reserve un hueco directamente en tu calendario.</p>
+                <CopyRow value={status.schedulingUrl} />
+              </div>
+            )}
+
+            <div className="helm-settings-block">
+              <label>Próximas reuniones</label>
+              {eventos === null ? (
+                <p>Cargando…</p>
+              ) : eventos.length === 0 ? (
+                <p>Nada agendado por ahora.</p>
+              ) : (
+                <div className="helm-settings-list">
+                  {eventos.map(e => (
+                    <div key={e.uri} className="helm-settings-row">
+                      <div>
+                        <b>{e.name}</b>
+                        <small>
+                          {new Date(e.start).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}
+                          {e.location ? ` · ${e.location}` : ''}
+                        </small>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="helm-settings-lead">
+              Enlaza tu cuenta de Calendly para agendar llamadas o reuniones sin salir de HELM.
+              Es una alternativa a Google Calendar: usa la que ya tengas montada, o las dos.
+            </p>
+            <form className="helm-settings-form" onSubmit={link}>
+              <Field label="Token de Acceso Personal de Calendly">
+                <Input type="password" value={token} autoComplete="off" required
+                  onChange={e => setToken(e.target.value)} placeholder="eyJhbGciOiJIUzI1NiJ9…" />
+              </Field>
+              <button className="helm-btn primary" disabled={busy || !token.trim()}>
+                <Link2 size={15} /> {busy ? 'Comprobando…' : 'Enlazar cuenta'}
+              </button>
+            </form>
+            <small className="helm-settings-note">
+              Sácalo de Calendly → Configuración → Integrations → API & Webhooks → Generate New Token.
+              Se valida contra Calendly antes de guardarse y se queda en el servidor: el navegador no lo ve.
             </small>
           </>
         )}
@@ -1143,6 +1270,7 @@ export default function Ajustes({ clientId, client, onClientUpdate }) {
       {tab === 'integraciones' ? (
         <div className="helm-grid" style={{ gap: 20 }}>
           <GoogleCard clientId={clientId} />
+          <CalendlyCard clientId={clientId} />
           <DriveCard clientId={clientId} />
           <StripeCard clientId={clientId} />
           <WooCard clientId={clientId} />

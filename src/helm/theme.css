@@ -712,6 +712,8 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-settings-actions { display: flex; gap: 8px; }
 
 .helm-settings-block { border-top: 1px solid var(--border); padding-top: 14px; }
+.helm-settings-list { display: flex; flex-direction: column; gap: 10px; }
+.helm-settings-list .helm-settings-row { padding: 8px 10px; background: var(--bg-1); border-radius: var(--radius-sm); }
 .helm-settings-block label {
   display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
   color: var(--text-mut); margin-bottom: 6px;

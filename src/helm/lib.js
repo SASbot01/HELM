@@ -412,6 +412,15 @@ export const gastosApi = {
   ocr: (clientId, ruta) => apiFetch('/api/gastos?action=ocr', { method: 'POST', body: { clientId, ruta } }),
 }
 
+// Calendly por perfil. El token nunca vuelve al navegador: el backend lo
+// valida y guarda; aquí solo se ve si está enlazado y el enlace público.
+export const calendlyApi = {
+  status: (clientId) => apiFetch(`/api/calendly?action=status&clientId=${clientId}`),
+  link: (clientId, token) => apiFetch('/api/calendly?action=link', { method: 'POST', body: { clientId, token } }),
+  unlink: (clientId) => apiFetch(`/api/calendly?action=unlink&clientId=${clientId}`, { method: 'DELETE' }),
+  eventos: (clientId) => apiFetch(`/api/calendly?action=eventos&clientId=${clientId}`),
+}
+
 export const googleApi = {
   status: (clientId) => apiFetch(`/api/google?action=status&clientId=${clientId}`),
   authUrl: (clientId) => apiFetch(`/api/google?action=auth-url&clientId=${clientId}`),
