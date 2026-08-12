@@ -56,6 +56,19 @@
   --shadow:    none;
   --radius:    18px;
   --radius-sm: 12px;
+
+  /* Puente con la hoja global (index.css), que se carga en toda la app y trae
+     el naranja del panel de Black Wolf: --orange/--yellow pintan el anillo de
+     foco, la selección de texto y el color del texto sobre botones primarios.
+     Esas reglas son globales (button:focus-visible, ::selection) y también caen
+     dentro de .helm, así que sin esto quedaban detalles naranjas con CUALQUIER
+     tema y con cualquier color de marca. Apuntándolas al acento, el naranja
+     desaparece de HELM y sigue mandando en el resto de la app. */
+  --orange:     var(--cyan);
+  --yellow:     var(--amber);
+  --gradient:   linear-gradient(135deg, var(--cyan), var(--violet));
+  --on-primary: var(--on-accent);
+  --on-secondary: var(--on-accent);
 }
 
 .helm {

@@ -9,8 +9,14 @@
 *::before,
 *::after { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
-  --orange: #FF6B00;
-  --yellow: #FFB800;
+  /* El acento global. Se llamaba --orange por el panel antiguo de Black Wolf y
+     el nombre se queda (lo usan decenas de reglas de esta hoja), pero el color
+     es el verde de HELM: la app es HELM, y el naranja solo asomaba ya en el
+     anillo de foco y la selección de texto — detalles sueltos que se veían
+     naranjas sobre pantallas verdes con cualquier tema. Dentro de .helm este
+     valor lo pisa el tema activo o el color de marca (ver helm/theme.css). */
+  --orange: #2FCB6A;
+  --yellow: #FBBF24;
   --black: #000000;
   --white: #F5F5F5;
   --bg: #050510;
@@ -63,8 +69,8 @@
   --warning:          #D97706;
 }
 :root.theme-dark {
-  --orange: #FF6B00;
-  --yellow: #FFB800;
+  --orange: #2FCB6A;
+  --yellow: #FBBF24;
   --bg: #050510;
   --bg-card: rgba(255,255,255,0.02);
   --bg-card-hover: rgba(255,255,255,0.05);
@@ -923,11 +929,11 @@ a[style*="var(--orange)"][style*="background"] svg {
   fill: var(--on-primary, #fff) !important;
 }
 ::selection {
-  background: var(--orange, #FF6B00);
+  background: var(--orange, #2FCB6A);
   color: var(--on-primary, #fff);
 }
 ::-moz-selection {
-  background: var(--orange, #FF6B00);
+  background: var(--orange, #2FCB6A);
   color: var(--on-primary, #fff);
 }
 button,
@@ -942,9 +948,11 @@ button:focus-visible,
 a:focus-visible,
 [role="button"]:focus-visible,
 [role="tab"]:focus-visible {
-  outline: 2px solid var(--orange, #FF6B00);
+  outline: 2px solid var(--orange, #2FCB6A);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(255, 107, 0, 0.18);
+  /* Del acento, no naranja a fuego: dentro de .helm --orange es el color del
+     tema (o el de marca del perfil) y el halo tiene que seguirlo. */
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--orange, #2FCB6A) 18%, transparent);
   border-radius: inherit;
 }
 button:active,

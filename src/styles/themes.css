@@ -9,8 +9,10 @@ html.theme-dark,
 body.theme-dark,
 [data-theme="dark"] {
   /* Primary Colors */
-  --orange: #FF6B00;
-  --yellow: #FFB800;
+  /* Acento global. El nombre viene del panel antiguo de Black Wolf; el color
+     es el verde de HELM (ver index.css). Dentro de .helm manda el tema activo. */
+  --orange: #2FCB6A;
+  --yellow: #FBBF24;
   
   /* Backgrounds */
   --bg: #050510;
@@ -68,18 +70,18 @@ body.theme-dark,
   --accent-red: #EF4444;
   
   /* Message Colors */
-  --msg-user-bg: rgba(255, 107, 0, 0.1);
-  --msg-user-text: #FF6B00;
+  --msg-user-bg: rgba(47, 203, 106, 0.1);
+  --msg-user-text: #2FCB6A;
   --msg-assistant-bg: rgba(139, 92, 246, 0.1);
   --msg-assistant-text: #E4E4E7;
   
   /* UI Elements */
-  --gradient: linear-gradient(135deg, #FF6B00, color-mix(in srgb, #FF6B00 70%, #000));
+  --gradient: linear-gradient(135deg, var(--orange), color-mix(in srgb, var(--orange) 70%, #000));
   --glow: rgba(245, 245, 245, 0.08);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
-  --shadow-focus: 0 0 0 3px rgba(255, 107, 0, 0.2);
+  --shadow-focus: 0 0 0 3px color-mix(in srgb, var(--orange) 20%, transparent);
   
   /* Radius */
   --radius: 16px;
@@ -97,7 +99,7 @@ body.theme-dark,
   /* Input & Form */
   --input-bg: rgba(255, 255, 255, 0.03);
   --input-border: rgba(255, 255, 255, 0.08);
-  --input-border-focus: rgba(255, 107, 0, 0.5);
+  --input-border-focus: color-mix(in srgb, var(--orange) 50%, transparent);
   --input-text: #E4E4E7;
   --input-placeholder: rgba(255, 255, 255, 0.3);
   
