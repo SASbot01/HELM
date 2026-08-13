@@ -38,3 +38,4 @@ landing-bootcamp-fba/
 # Claude Code local state — agent caches, transcripts, settings.
 .claude/
 .env.server
+.places-key

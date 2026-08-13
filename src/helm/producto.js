@@ -1,7 +1,8 @@
-// HELM — dos productos sobre el mismo código, separados por dominio.
+// HELM — tres productos sobre el mismo código, separados por dominio.
 //
 //   helm.s4sf.net         → HELM, para infoproductores y creadores.
 //   consultoria.s4sf.net  → el vertical de asesorías y despachos legales.
+//   scraper.s4sf.net      → solo el Scraper: la máquina de sacar leads, sola.
 //
 // No se mezclan a propósito: un despacho al que le vendes el sistema no tiene
 // por qué ver que existen Hugo o Abel, ni al revés. Cada dominio enseña solo
@@ -15,12 +16,39 @@
 export const TIPO_CONSULTORIA = 'consultoria'
 
 export const PRODUCTOS = {
+  // ── El Scraper, en su propio dominio ────────────────────────────────────
+  // Es HELM entero por debajo, pero entrar por scraper.s4sf.net enseña una sola
+  // cosa: de dónde salen los leads. Se vende (y se enseña en una demo) como una
+  // herramienta que hace UNA cosa; un panel con diecisiete secciones al lado
+  // convierte esa demo en una explicación de otro producto.
+  //
+  // Van tres secciones y ni una más: el Scraper, el CRM donde aterriza lo que
+  // importas —sin él, "pasar al CRM" lleva a una pantalla que no existe— y
+  // Ajustes, que es donde vive la clave de Google.
+  scraper: {
+    key: 'scraper',
+    nombre: 'Scraper',
+    lema: 'De dónde salen tus leads',
+    excluye: [TIPO_CONSULTORIA],
+    secciones: ['prospeccion', 'crm', 'ajustes'],
+    // El Scraper es un módulo y los módulos nacen apagados (ver permisos.js).
+    // En este dominio no tiene sentido que se pueda apagar: es el producto.
+    siempre: ['prospeccion'],
+    vistaInicial: 'prospeccion',
+  },
+
   helm: {
     key: 'helm',
     nombre: 'HELM',
     lema: 'El puesto de mando de tu negocio',
     // Enseña todo MENOS las asesorías.
     excluye: [TIPO_CONSULTORIA],
+    // Fiscal y Copiloto Fiscal son del vertical de despachos, no de HELM: sin
+    // esto, un perfil de fitness o de infoproducto ve en su menú "Fiscal" y
+    // "Copiloto Fiscal" aunque no pinten nada ahí. consultoria.s4sf.net no
+    // necesita lo contrario porque ya enseña solo su lista blanca (`secciones`
+    // arriba), no una lista negra sobre "todas".
+    excluyeSecciones: ['fiscal', 'copiloto'],
   },
   consultoria: {
     key: 'consultoria',
@@ -69,8 +97,20 @@ export const PRODUCTOS = {
 
 /** ¿Esta sección existe en el producto que se está sirviendo? */
 export function seccionDelProducto(key, producto = productoActual()) {
-  if (!producto.secciones) return true      // HELM: todas
+  if (producto.excluyeSecciones?.includes(key)) return false
+  if (!producto.secciones) return true      // HELM: todas menos las excluidas arriba
   return producto.secciones.includes(key)
+}
+
+/**
+ * ¿La enciende el producto pase lo que pase?
+ *
+ * Solo para lo que ES el producto. Un módulo normal se enciende en Secciones y
+ * puede apagarse; el Scraper en scraper.s4sf.net no — apagarlo dejaría el
+ * dominio entero en una pantalla vacía sin forma de volver a encenderlo.
+ */
+export function seccionSiempre(key, producto = productoActual()) {
+  return Boolean(producto.siempre?.includes(key))
 }
 
 /**
@@ -84,6 +124,7 @@ export function productoActual() {
   try {
     const h = String(window.location.hostname || '').toLowerCase()
     if (h.startsWith('consultoria.')) return PRODUCTOS.consultoria
+    if (h.startsWith('scraper.')) return PRODUCTOS.scraper
   } catch { /* fuera del navegador: HELM por defecto */ }
   return PRODUCTOS.helm
 }

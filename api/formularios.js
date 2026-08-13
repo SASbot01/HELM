@@ -43,20 +43,58 @@ const cola = (v) => String(v || '').replace(/\D/g, '').slice(-9)
  * comercial — el mismo criterio que ya se usa para no pisarle los datos.
  */
 async function destinoDe(form) {
-  if (!form?.pipeline_id) return { pipelineId: null, stage: 'lead' }
+  const sinEmbudo = { pipelineId: null, stage: 'lead', stageReservado: null }
+  if (!form?.pipeline_id) return sinEmbudo
 
   const { data: pipeline } = await supabase
     .from('crm_pipelines').select('id, stages').eq('id', form.pipeline_id).maybeSingle()
   // El pipeline pudo borrarse después de configurar el formulario. Mejor un
   // lead en el embudo por defecto que un contacto apuntando a algo que no está.
-  if (!pipeline) return { pipelineId: null, stage: 'lead' }
+  if (!pipeline) return sinEmbudo
 
   const stages = Array.isArray(pipeline.stages) ? pipeline.stages : []
-  const elegida = stages.find(s => s.key === form.stage_key)
+  const existe = (key) => stages.find(s => s.key === key)?.key || null
   return {
     pipelineId: pipeline.id,
-    stage: elegida?.key || stages[0]?.key || 'lead',
+    stage: existe(form.stage_key) || stages[0]?.key || 'lead',
+    // La etapa de "ya ha reservado hora", si el formulario la declara y sigue
+    // existiendo en el embudo. Null = este formulario no distingue las dos
+    // cosas y todos sus leads entran igual.
+    stageReservado: existe(form.booked_stage_key),
   }
+}
+
+/**
+ * Mueve al contacto a la etapa de "ya ha reservado" cuando el formulario se
+ * completa eligiendo hora.
+ *
+ * Esto es la excepción a la regla de no tocar a quien ya está en el CRM, y
+ * tiene motivo: los formularios de dos pasos (la carta de ventas de Detrás de
+ * Cámara: primero el contacto, después cualificar y elegir hueco) crean el
+ * contacto en el paso 1, cuando todavía no ha reservado nada. Sin esto, el
+ * embudo no distingue a quien dejó el email de quien va a estar en la llamada,
+ * que es justo lo que hay que ver.
+ *
+ * No es "un lead que vuelve a rellenar el formulario semanas después": es el
+ * mismo envío terminándose. Aun así solo se mueve a quien sigue en la etapa de
+ * entrada — si el comercial ya lo trabajó, no se le pisa el trabajo.
+ */
+async function avanzarPorReserva(form, contactId) {
+  if (!form?.booked_stage_key || !contactId) return
+
+  const destino = await destinoDe(form)
+  if (!destino.stageReservado) return
+
+  const { data: contacto } = await supabase
+    .from('crm_contacts').select('id, status, pipeline_id').eq('id', contactId).maybeSingle()
+  if (!contacto || contacto.status !== destino.stage) return
+
+  const { error } = await supabase.from('crm_contacts').update({
+    status: destino.stageReservado,
+    pipeline_id: contacto.pipeline_id || destino.pipelineId,
+    last_activity_at: new Date().toISOString(),
+  }).eq('id', contactId)
+  if (error) console.warn('[formularios] no se pudo mover el contacto a reservado:', error.message)
 }
 
 export default async function handler(req, res) {
@@ -85,7 +123,7 @@ export default async function handler(req, res) {
     }
 
     const { data: form } = await supabase
-      .from('helm_forms').select('id, title, fields, active, pipeline_id, stage_key')
+      .from('helm_forms').select('id, title, fields, active, pipeline_id, stage_key, booked_stage_key')
       .eq('client_id', client.id).eq('slug', formSlug).maybeSingle()
     if (!form) return res.status(404).json({ error: 'Formulario no encontrado' })
     if (form.active === false) return res.status(410).json({ error: 'Este formulario ya no admite respuestas' })
@@ -140,6 +178,29 @@ export default async function handler(req, res) {
         meta: { ...(previa.meta || {}), ...meta, completado_en: new Date().toISOString() },
       }).eq('id', previa.id)
       if (errMerge) return res.status(500).json({ error: 'No se pudo completar la respuesta: ' + errMerge.message })
+
+      // Si en este paso ha elegido hora, deja de ser un lead a medias. Se mueve
+      // de etapa y se anota en el timeline: quien abre la ficha antes de la
+      // llamada tiene que ver cuándo es sin abrir la respuesta.
+      //
+      // La fecha se comprueba porque `meta` viene de fuera: una cadena que no
+      // sea una fecha reventaría el formateo y devolvería un 500 por una
+      // respuesta que ya se ha guardado bien.
+      const cuando = new Date(meta.slot_start || '')
+      if (previa.contact_id && !Number.isNaN(cuando.getTime())) {
+        await avanzarPorReserva(form, previa.contact_id)
+        const { error: errAct } = await supabase.from('crm_activities').insert({
+          client_id: client.id,
+          contact_id: previa.contact_id,
+          type: 'meeting',
+          description: `Llamada reservada · ${cuando.toLocaleString('es-ES', {
+            dateStyle: 'long', timeStyle: 'short', timeZone: 'Europe/Madrid',
+          })}`,
+          performed_at: new Date().toISOString(),
+          performed_by: 'Formulario web',
+        })
+        if (errAct) console.warn('[formularios] actividad de reserva:', errAct.message)
+      }
 
       return res.status(200).json({ ok: true, contactId: previa.contact_id, responseId: previa.id })
     }
@@ -197,7 +258,10 @@ export default async function handler(req, res) {
         whatsapp: telefono,
         instagram,
         source: txt(body.origen, 60) || 'Web',
-        status: destino.stage,
+        // Si el envío ya trae hora (llegó de una sola vez, sin pasar por el
+        // paso 1), no es un lead: es alguien con la llamada puesta. Entra ya en
+        // la etapa de reservado en vez de esperar a que alguien lo mueva.
+        status: (meta.slot_start && destino.stageReservado) || destino.stage,
         pipeline_id: destino.pipelineId,
         // De qué anuncio viene. Va también a las columnas del CRM y no solo al
         // meta de la respuesta: la vista de Ventas filtra por estas columnas, y

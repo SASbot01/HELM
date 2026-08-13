@@ -12,7 +12,8 @@ import {
   money, fmtDate, todayISO, activeSales,
 } from '../lib'
 import { Panel, Empty, Modal, Field, Input, Select, Kpi, MoneyInput, FormNote } from '../ui'
-import { ROLES, roleLabel } from '../equipo/roles'
+import { rolesDelProducto, roleLabel } from '../equipo/roles'
+import { productoActual } from '../producto'
 
 // Cómo se clasifica cada movimiento. `sign` decide si suma o resta, y
 // `recurring` marca los que se repiten mes a mes (los fijos).
@@ -189,7 +190,8 @@ export default function Finanzas({ clientId }) {
         <Kpi label="Gastos" value={money(t.expense)} sub="todos los tipos" />
         <Kpi label="Gastos fijos" value={money(t.fijos)} sub="se repiten cada mes" />
         <Kpi label="Gastos puntuales" value={money(t.puntuales)} sub="una sola vez" />
-        <Kpi label="Comisiones" value={money(t.comisiones)} sub="closers, setters, afiliados" />
+        <Kpi label="Comisiones" value={money(t.comisiones)}
+          sub={productoActual().key === 'consultoria' ? 'a asesores y colaboradores' : 'closers, setters, afiliados'} />
       </div>
 
       {error && <FormNote>{error}</FormNote>}
@@ -227,7 +229,7 @@ export default function Finanzas({ clientId }) {
           <div className="helm-filter-row">
             <select className="helm-select" value={fRol} onChange={e => { setFRol(e.target.value); setFPersona('__all__') }}>
               <option value="__all__">Todos los roles</option>
-              {ROLES.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+              {rolesDelProducto().map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
             </select>
             <select className="helm-select" value={fPersona} onChange={e => setFPersona(e.target.value)}>
               <option value="__all__">Todas las personas</option>
@@ -382,7 +384,7 @@ function MovimientoModal({ people, contacts, onClose, onSave }) {
                 onChange={e => setForm(f => ({ ...f, person_role: e.target.value, person_id: '' }))}
               >
                 <option value="">Todos</option>
-                {ROLES.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+                {rolesDelProducto().map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
               </Select>
             </Field>
             <Field label={esComision ? 'Persona *' : 'Persona'} error={shown.person_id}>

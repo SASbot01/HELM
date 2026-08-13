@@ -67,8 +67,11 @@ export default function UsersAdmin() {
         <header className="helm-ua-head">
           <div>
             <button className="helm-btn" onClick={() => navigate('/admin')}><ArrowLeft size={15} /> Volver a HELM</button>
-            <h1>Usuarios</h1>
-            <p>Aprueba los registros pendientes y gestiona los accesos.</p>
+            <h1>Usuarios de toda la plataforma</h1>
+            <p>
+              Vista de operador: superadmins y accesos de <b>todos los negocios</b>, no solo el que
+              tenías abierto. Aprueba los registros pendientes y gestiona los accesos.
+            </p>
           </div>
         </header>
 

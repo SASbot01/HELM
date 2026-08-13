@@ -63,8 +63,18 @@
      Esas reglas son globales (button:focus-visible, ::selection) y también caen
      dentro de .helm, así que sin esto quedaban detalles naranjas con CUALQUIER
      tema y con cualquier color de marca. Apuntándolas al acento, el naranja
-     desaparece de HELM y sigue mandando en el resto de la app. */
-  --orange:     var(--cyan);
+     desaparece de HELM y sigue mandando en el resto de la app.
+
+     --brand-primary es el nombre bueno: describe qué es (el acento de marca),
+     no de qué color nació. --orange se queda como alias mientras el resto del
+     código lo siga usando — quitarlo es la segunda pasada, cuando un grep de
+     "--orange" en el repo no encuentre nada fuera de aquí y de index.css (esa
+     hoja es el panel legacy de Black Wolf, con "decenas de reglas" atadas al
+     nombre viejo por su propio comentario; renombrarla es un cambio aparte,
+     de más riesgo y cero beneficio funcional — ahí el valor ya es el verde
+     correcto, nunca naranja de verdad). */
+  --brand-primary: var(--cyan);
+  --orange:     var(--brand-primary);
   --yellow:     var(--amber);
   --gradient:   linear-gradient(135deg, var(--cyan), var(--violet));
   --on-primary: var(--on-accent);
@@ -298,7 +308,14 @@
 }
 .helm-top h1 { font-size: 20px; font-weight: 600; margin: 0; }
 .helm-top p { color: var(--text-mut); font-size: 13px; margin: 2px 0 0; }
-.helm-body { padding: 24px 28px 60px; }
+/* min-width: 0 rompe la trampa clásica del flex: sin él, una tabla ancha
+   dentro de .helm-tablewrap podía forzar a CRECER a .helm-body (y todo lo que
+   cuelga de .helm-main) en vez de quedarse quieta y dejar que solo la tabla
+   scrollee — eso es lo que se veía como "el scroll horizontal se lleva la
+   página entera, incluido el botón de menú". Con esto, el ancho lo manda el
+   viewport y el scroll se queda encerrado en .helm-tablewrap, que es donde
+   tiene que estar. */
+.helm-body { padding: 24px 28px 60px; min-width: 0; }
 
 .helm-select {
   background: var(--panel); border: 1px solid var(--border-2); color: var(--text);
@@ -332,6 +349,10 @@
 .helm-kpi .val { font-size: 28px; font-weight: 700; margin-top: 8px; letter-spacing: -0.5px; }
 .helm-kpi .sub { color: var(--text-dim); font-size: 12px; margin-top: 4px; }
 .helm-kpi .val.accent { background: linear-gradient(90deg, var(--cyan), var(--violet)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+/* El KPI que hay que ver antes que los demás: mismo tamaño de tarjeta que sus
+   vecinos, pero el número en rojo es lo único que hace falta para que un
+   asesor sepa, sin leer las otras tres, si hoy hay algo urgente. */
+.helm-kpi .val.danger { color: var(--red); }
 
 /* Tables ------------------------------------------------------------------- */
 .helm-panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
@@ -1072,7 +1093,29 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-cal-task.over:not(.done) .helm-cal-task-t { color: var(--red); }
 .helm-cal-task-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .helm-cal-task-a { flex-shrink: 0; font-size: 9.5px; font-weight: 700; color: var(--text-mut); }
-.helm-cal-mas { font-size: 10.5px; color: var(--text-mut); padding-left: 4px; }
+/* Antes era texto muerto: los días cargados eran justo los que no se podían
+   mirar. Ahora abre el día entero, así que se pinta como lo que es, un botón. */
+.helm-cal-mas {
+  font-size: 10.5px; color: var(--text-mut); padding: 2px 4px; text-align: left;
+  background: none; border: none; cursor: pointer; border-radius: 4px;
+}
+.helm-cal-mas:hover { color: var(--cyan); background: var(--hover); }
+.helm-cal-dia-head { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+/* Cuántas se han pasado de fecha ese día. Es lo único que justifica un punto
+   rojo en una rejilla: lo demás se lee entrando. */
+.helm-cal-alerta {
+  min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px;
+  background: var(--red); color: #fff; font-size: 9.5px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.helm-cal-rango { margin-left: auto; }
+.helm-cal-pend { font-size: 11.5px; color: var(--text-mut); white-space: nowrap; }
+.helm-cal-task-lock { flex-shrink: 0; color: var(--text-mut); }
+/* En semana solo hay una fila, así que el alto deja de competir: la celda crece
+   y caben las tareas del día sin recortar. */
+.helm-cal-grid.semana .helm-cal-dia { min-height: 260px; }
+.helm-cal-dia-lista { display: flex; flex-direction: column; gap: 6px; }
+
 .helm-cal-sinfecha { border: 1px dashed var(--border); border-radius: 10px; padding: 10px; }
 .helm-cal-sinfecha.over { border-color: var(--cyan); background: var(--hover); }
 .helm-cal-sinfecha b { display: block; font-size: 12px; color: var(--text-mut); margin-bottom: 6px; }
@@ -1085,6 +1128,45 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   .helm-cal-dias, .helm-cal-grid { min-width: 620px; }
 }
 
+/* ── Encargos a otros perfiles ──────────────────────────────────────────────
+   Lista y no tablero: arrastrar de columna una tarea que está haciendo otro
+   sería decidir por él si ya la ha terminado. */
+.helm-encargos { display: flex; flex-direction: column; gap: 8px; }
+.helm-encargo {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 11px 13px; border: 1px solid var(--border-2); border-radius: var(--radius-sm);
+  background: var(--panel); color: var(--text); cursor: pointer; transition: border-color .14s;
+}
+.helm-encargo:hover { border-color: var(--cyan); }
+.helm-encargo-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.helm-encargo-main b { font-size: 13.5px; font-weight: 600; }
+.helm-encargo-main small {
+  display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--text-dim);
+}
+.helm-encargo-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
+/* De dónde viene un encargo que ha caído en TU tablero. */
+.helm-task-externa { color: var(--cyan); }
+
+/* ── Colaboración entre perfiles ─────────────────────────────────────────── */
+.helm-colab-bloque { margin-top: 18px; }
+.helm-colab-bloque > b {
+  display: block; font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--text-mut); margin-bottom: 8px;
+}
+.helm-colab {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 6px;
+  border: 1px solid var(--border-2); border-radius: var(--radius-sm); background: var(--panel);
+}
+.helm-colab-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.helm-colab-main b { font-size: 13.5px; font-weight: 600; }
+.helm-colab-main small { font-size: 11.5px; color: var(--text-dim); }
+.helm-colab-acciones { display: flex; gap: 6px; flex-shrink: 0; }
+
+@media (max-width: 560px) {
+  .helm-encargo, .helm-colab { flex-direction: column; align-items: stretch; }
+  .helm-encargo-meta, .helm-colab-acciones { justify-content: flex-start; }
+}
+
 /* Drawer de tarea · footer y checklist */
 .helm-drawer-foot-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .helm-chk-block { margin-top: 22px; }
@@ -1092,6 +1174,13 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-chk-head b { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; }
 .helm-chk-head span { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-mut); }
 .helm-chk-list { display: flex; flex-direction: column; gap: 6px; }
+/* Generar guion con IA: tema + intención, en una tarjeta propia para que se
+   note que es la IA la que va a escribir, no un campo más del formulario. */
+.helm-genguion {
+  display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; margin-bottom: 10px;
+  border: 1px solid var(--border-2); border-radius: var(--radius-sm); background: var(--panel-2);
+}
+.helm-genguion .helm-field { margin-bottom: 8px; }
 .helm-chk-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--bg-1); border: 1px solid var(--border); }
 .helm-chk-item span { flex: 1; font-size: 13px; }
 .helm-chk-item.done span { color: var(--text-mut); text-decoration: line-through; }
@@ -1736,3 +1825,180 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-doc-verifactu b { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #2E7D5B; }
 .helm-doc-verifactu span { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #8a8a8a; word-break: break-all; }
 .helm-doc-verifactu small { font-size: 10px; color: #a0a0a0; max-width: 460px; line-height: 1.4; }
+
+/* Color de marca del perfil (Ajustes → Marca). El selector nativo trae un
+   borde y un padding propios de cada navegador: se recortan para que parezca
+   una muestra de color y no un control de sistema. */
+.helm-color-row { display: flex; align-items: center; gap: 8px; }
+.helm-color-row > :nth-child(2) { flex: 1; min-width: 0; max-width: 160px; }
+.helm-color-pick {
+  width: 38px; height: 38px; flex-shrink: 0; padding: 0; cursor: pointer;
+  background: none; border: 1px solid var(--border-2); border-radius: 9px;
+}
+.helm-color-pick::-webkit-color-swatch-wrapper { padding: 3px; }
+.helm-color-pick::-webkit-color-swatch { border: none; border-radius: 6px; }
+.helm-color-pick::-moz-color-swatch { border: none; border-radius: 6px; }
+
+/* Discord: el chat en vivo vive fuera de HELM, pero el botón tiene que estar
+   donde la gente lo busca. Mismo bloque en el panel y en la página pública. */
+.helm-discord {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  flex-wrap: wrap; padding: 14px 16px; border-radius: var(--radius-sm);
+  border: 1px solid rgba(88,101,242,0.35);
+  background: linear-gradient(180deg, rgba(88,101,242,0.12), rgba(88,101,242,0.02));
+}
+.helm-discord.compacto { padding: 11px 13px; }
+.helm-discord-txt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.helm-discord-txt b {
+  display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600;
+  color: var(--text);
+}
+.helm-discord-txt b svg { color: #5865F2; flex-shrink: 0; }
+.helm-discord-txt span { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; }
+/* El botón mantiene el azul de Discord aunque el perfil tenga otro color de
+   marca: es el color con el que la gente reconoce a dónde va. */
+.helm-discord .helm-btn.primary { background: #5865F2; border-color: #5865F2; color: #fff; }
+.helm-discord .helm-btn.primary:hover { background: #4752C4; border-color: #4752C4; }
+@media (max-width: 560px) {
+  .helm-discord { flex-direction: column; align-items: stretch; }
+  .helm-discord .helm-btn { justify-content: center; }
+}
+
+/* ── Scraper: cinco fuentes al mismo embudo ──────────────────────────────── */
+
+/* Las fuentes, en tarjetas. La pregunta de esta pantalla no es "rellena el
+   formulario", es "¿de dónde saco leads hoy?", y eso se decide comparando: por
+   eso cada tarjeta enseña qué da, qué cuesta y si está lista para usarse. */
+.helm-fuentes {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px; margin-bottom: 14px;
+}
+.helm-fuente {
+  display: flex; flex-direction: column; gap: 6px; text-align: left;
+  padding: 12px 13px; cursor: pointer;
+  border: 1px solid var(--border-2); border-radius: var(--radius-sm);
+  background: var(--panel); color: var(--text);
+  font-family: inherit; transition: border-color .14s, background .14s;
+}
+.helm-fuente:hover { border-color: var(--cyan); }
+/* La elegida se marca con el acento y un fondo, no solo con el borde: con cinco
+   en fila, un borde de 1px no se ve desde la distancia a la que se mira esto. */
+.helm-fuente.on { border-color: var(--cyan); background: var(--hover); }
+.helm-fuente-top { display: flex; align-items: center; gap: 7px; }
+.helm-fuente-top b { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; }
+.helm-fuente-top svg { color: var(--cyan); flex-shrink: 0; }
+/* Cuántos leads de esa fuente hay ahora mismo en la bandeja: el número que dice
+   si una fuente está aportando o solo hace bulto. */
+.helm-fuente-n {
+  font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: var(--radius-pill, 99px);
+  background: color-mix(in srgb, var(--cyan) 16%, transparent); color: var(--cyan);
+}
+.helm-fuente-claim { font-size: 11.5px; color: var(--text-dim); line-height: 1.45; }
+.helm-fuente-estado {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; color: var(--text-mut);
+}
+.helm-fuente-estado.warn { color: var(--amber); }
+.helm-fuente.falta { border-style: dashed; }
+
+/* Cada fuente pide campos distintos (dos, cuatro o una caja de texto), así que
+   el formulario fluye en vez de cuadricularse a un número fijo de columnas. */
+.helm-prosp-form {
+  display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
+  padding: 16px;
+}
+.helm-prosp-form .helm-field { flex: 1 1 190px; min-width: 150px; }
+.helm-prosp-form.ancho .helm-field { flex: 1 1 100%; }
+.helm-prosp-form > .helm-btn { height: 38px; }
+
+/* De qué fuente salió cada fila. Con cinco mezcladas en la misma bandeja, es lo
+   que explica por qué a este le falta el teléfono y a aquel no. */
+.helm-prosp-fuente {
+  font-size: 10.5px !important; font-weight: 600; letter-spacing: .02em;
+  padding: 1px 7px; border-radius: var(--radius-pill, 99px);
+  border: 1px solid var(--border-2); color: var(--text-dim) !important;
+}
+.helm-prosp-fuente.borme { border-color: color-mix(in srgb, var(--amber) 45%, transparent); color: var(--amber) !important; }
+.helm-prosp-fuente.osm { border-color: color-mix(in srgb, var(--green) 45%, transparent); color: var(--green) !important; }
+.helm-prosp-fuente.buscador,
+.helm-prosp-fuente.lista { border-color: color-mix(in srgb, var(--cyan) 45%, transparent); color: var(--cyan) !important; }
+.helm-prosp-acto { font-weight: 600; color: var(--text) !important; }
+.helm-prosp-lista { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+.helm-prosp-head { padding: 0 4px 4px; }
+.helm-prosp {
+  display: flex; align-items: flex-start; gap: 11px; padding: 11px 13px;
+  border: 1px solid var(--border-2); border-radius: var(--radius-sm);
+  background: var(--panel); cursor: pointer; transition: border-color .14s, background .14s;
+}
+.helm-prosp:hover { border-color: var(--cyan); }
+.helm-prosp.on { border-color: var(--cyan); background: var(--hover); }
+/* Lo ya importado o descartado no se puede volver a marcar: queda en la lista
+   para saber que pasó por aquí, no para volver a tocarlo. */
+.helm-prosp.usado { opacity: .6; cursor: default; }
+.helm-prosp.usado:hover { border-color: var(--border-2); }
+.helm-prosp > input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
+.helm-prosp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.helm-prosp-main > b { font-size: 13.5px; font-weight: 600; }
+.helm-prosp-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.helm-prosp-meta > span,
+.helm-prosp-meta > a {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11.5px; color: var(--text-dim); text-decoration: none; min-width: 0;
+}
+.helm-prosp-meta > a:hover { color: var(--cyan); text-decoration: underline; }
+.helm-prosp-tel { color: var(--text) !important; font-weight: 600; }
+/* Sin teléfono no hay a quién llamar: se dice, porque cambia si merece la pena. */
+.helm-prosp-sin { color: var(--text-mut) !important; font-style: italic; }
+
+/* Aparece solo con algo marcado: una barra fija con "importar 0" es ruido. */
+.helm-prosp-barra {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 14px; padding: 11px 14px;
+  border: 1px solid var(--cyan); border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+.helm-prosp-barra > b { font-size: 13px; margin-right: 2px; }
+.helm-prosp-barra select { max-width: 190px; }
+
+.helm-pasos { margin: 0 0 12px 18px; display: flex; flex-direction: column; gap: 6px; }
+.helm-pasos li { font-size: 13px; color: var(--text-dim); line-height: 1.55; }
+.helm-pasos a { color: var(--cyan); }
+
+.helm-prosp-hist { display: flex; flex-direction: column; gap: 6px; }
+.helm-prosp-histrow {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border: 1px solid var(--border-2); border-radius: var(--radius-sm); background: var(--panel);
+}
+.helm-prosp-histrow > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.helm-prosp-histrow b { font-size: 13px; font-weight: 600; }
+.helm-prosp-histrow small { font-size: 11.5px; color: var(--text-mut); }
+
+@media (max-width: 720px) {
+  .helm-prosp-form { grid-template-columns: 1fr; }
+  .helm-prosp-barra { position: static; }
+}
+
+/* Prospección · lo que sale de la web del negocio (segunda pasada) */
+.helm-prosp-enr {
+  display: flex; flex-direction: column; gap: 5px;
+  margin-top: 7px; padding-top: 7px; border-top: 1px dashed var(--border-2);
+}
+.helm-prosp-enr.vacio { font-size: 11.5px; color: var(--text-mut); font-style: italic; }
+.helm-prosp-personas { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Un nombre con cargo es el dato más valioso de la ficha: se marca. */
+.helm-prosp-persona {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border-radius: 20px; font-size: 11.5px;
+  background: var(--hover); border: 1px solid var(--border-2); color: var(--text-dim);
+}
+.helm-prosp-persona b { color: var(--text); font-weight: 600; }
+/* Los registros oficiales no tienen API abierta: se deja la búsqueda escrita
+   en vez de fingir que está automatizada. */
+.helm-prosp-osint { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 2px; }
+.helm-prosp-osint > span { font-size: 11px; color: var(--text-mut); }
+.helm-prosp-osint > a {
+  font-size: 11px; color: var(--text-dim); text-decoration: none;
+  padding: 1px 7px; border: 1px solid var(--border-2); border-radius: 5px;
+}
+.helm-prosp-osint > a:hover { color: var(--cyan); border-color: var(--cyan); }

@@ -11,6 +11,12 @@
 // debe fabricar) y darse de alta como sistema informático de facturación. Sin
 // esas dos piezas esto es integridad verificable, no conformidad legal — y así
 // se lo dice la UI a quien lo usa, en vez de callárselo.
+//
+// Fechas reales de la obligación (RD 1007/2023 + Orden HAC/1177/2024, aplazada
+// dos veces por el RD 254/2025 y el RDL 15/2025): 1 enero 2027 para Impuesto
+// de Sociedades, 1 julio 2027 para autónomos y el resto de obligados. Hasta
+// entonces esto sirve para presupuestar y facturar con trazabilidad, no como
+// sustituto de un SIF certificado.
 export async function sha256Hex(texto) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto))
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('')

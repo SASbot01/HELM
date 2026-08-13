@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<!--
+  La vista previa de /paginainicio para los bots que NO ejecutan JavaScript:
+  WhatsApp, Telegram, Twitter, Slack, LinkedIn, Discord y los buscadores.
+
+  La página real es la de React (src/pages/PaginaInicio.jsx), pero un bot solo
+  lee el HTML que le llega: si le sirviéramos el index.html de la SPA, la tarjeta
+  del enlace enseñaría el título del panel de gestión. Vercel manda aquí SOLO a
+  esos user-agents (ver vercel.json); una persona sigue viendo la página normal.
+
+  Si aun así entra alguien —un bot que se hace pasar por navegador, un enlace
+  copiado a mano— el script del final lo devuelve a la página buena.
+-->
+<title>Alex Silvestre — Aprende a dirigir la IA, no solo a usarla</title>
+<meta name="description" content="IA aplicada en español, sin humo y con datos. Empieza por la serie de YouTube." />
+
+<meta property="og:type" content="profile" />
+<meta property="og:site_name" content="Alex Silvestre" />
+<meta property="og:title" content="Aprende a dirigir la IA, no solo a usarla" />
+<meta property="og:description" content="IA aplicada en español, sin humo y con datos. Empieza por la serie de YouTube." />
+<meta property="og:image" content="https://www.s4sf.net/inicio/og.jpg" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:url" content="https://www.s4sf.net/paginainicio" />
+
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Aprende a dirigir la IA, no solo a usarla" />
+<meta name="twitter:description" content="IA aplicada en español, sin humo y con datos. Empieza por la serie de YouTube." />
+<meta name="twitter:image" content="https://www.s4sf.net/inicio/og.jpg" />
+
+<meta name="theme-color" content="#2A0A13" />
+<link rel="canonical" href="https://www.s4sf.net/paginainicio" />
+</head>
+<body style="margin:0;background:#2A0A13;color:#F6EAEC;font-family:system-ui,sans-serif">
+  <main style="max-width:440px;margin:0 auto;padding:40px 20px;text-align:center">
+    <h1 style="font-size:24px;line-height:1.2">Aprende a dirigir la IA, no solo a usarla</h1>
+    <p style="color:#D3AFB7;font-size:15px">IA aplicada en español, sin humo y con datos.</p>
+    <p><a style="color:#FF8FA3" href="https://www.youtube.com/@S4sf">Empieza por la serie de YouTube</a></p>
+    <p><a style="color:#FF8FA3" href="https://www.instagram.com/silvesttre.ai">Instagram · @silvesttre.ai</a></p>
+  </main>
+  <script>
+    // Una persona nunca debería ver esto. Si llega, a la página de verdad.
+    if (!/bot|crawler|spider|facebookexternalhit|WhatsApp|Telegram|Slack|Discord|Twitter|LinkedIn/i.test(navigator.userAgent)) {
+      location.replace('/paginainicio');
+    }
+  </script>
+</body>
+</html>

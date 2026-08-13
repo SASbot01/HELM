@@ -55,6 +55,9 @@ export default function SuperAdminLogin() {
           clientSlug: sa.user.clientSlug, guideSeen: sa.user.guideSeen === true,
           // Oficio y nivel de acceso: de aquí sale qué secciones ve en el menú.
           teamRole: sa.user.teamRole || null, level: sa.user.level || null,
+          // Quién es en el directorio del perfil: de aquí sale qué tareas
+          // privadas son suyas.
+          helmTeamId: sa.user.helmTeamId || null,
         }))
         localStorage.removeItem('bw_superadmin')
         if (sa.token) localStorage.setItem('bw_admin_jwt', sa.token)

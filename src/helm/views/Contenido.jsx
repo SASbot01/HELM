@@ -1,8 +1,8 @@
 // HELM — Contenido: calendario mensual de piezas programadas. Se llena desde el
 // chat con /programar-guion (el guion cae en su día) o a mano aquí.
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalIcon } from 'lucide-react'
-import { supabase, fetchRowsOrError } from '../lib'
+import { ChevronLeft, ChevronRight, Plus, Trash2, Calendar as CalIcon, Sparkles } from 'lucide-react'
+import { supabase, fetchRowsOrError, chatApi } from '../lib'
 import { Markdown } from '../md'
 import { Drawer, Modal, Field, Input, Textarea, Select, Empty, FormNote } from '../ui'
 import Adjuntos from '../Adjuntos'
@@ -247,6 +247,53 @@ function DiaDrawer({ iso, items, onClose, onAbrir, onEstado, onAñadir }) {
   )
 }
 
+// El "/reel-guion" que ya sabe escribir el chat, pero desde un formulario en
+// vez de una barra de texto: tema del video + intención, y la IA devuelve el
+// guion (hook, bullets, CTA) con la Biblia de la cuenta ya puesta.
+function GenerarGuion({ clientId, onGenerado }) {
+  const [abierto, setAbierto] = useState(false)
+  const [tema, setTema] = useState('')
+  const [intencion, setIntencion] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function generar() {
+    if (!tema.trim()) return setError('Dime el tema del video')
+    setBusy(true); setError(null)
+    try {
+      const peticion = `Tema: ${tema.trim()}` + (intencion.trim() ? `\nIntención: ${intencion.trim()}` : '')
+      const { message } = await chatApi.send(clientId, `/reel-guion ${peticion}`)
+      onGenerado(message.content)
+      setAbierto(false); setTema(''); setIntencion('')
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+
+  if (!abierto) {
+    return (
+      <button type="button" className="helm-btn" onClick={() => setAbierto(true)}>
+        <Sparkles size={14} /> Generar con IA
+      </button>
+    )
+  }
+  return (
+    <div className="helm-genguion">
+      <Field label="Tema del video">
+        <Input value={tema} onChange={e => setTema(e.target.value)} placeholder="La objeción del precio" autoFocus />
+      </Field>
+      <Field label="Intención del video" hint="Qué tiene que conseguir esta pieza">
+        <Input value={intencion} onChange={e => setIntencion(e.target.value)} placeholder="Vender la llamada, educar sobre X…" />
+      </Field>
+      {error && <FormNote>{error}</FormNote>}
+      <div className="helm-modal-actions">
+        <button type="button" className="helm-btn" onClick={() => setAbierto(false)} disabled={busy}>Cancelar</button>
+        <button type="button" className="helm-btn primary" onClick={generar} disabled={busy}>
+          {busy ? 'Generando…' : 'Generar guion'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // Detalle de una pieza: estado, responsable, adjuntos y el guion.
 function PieceDrawer({ piece, clientId, people, onClose, onEstado, onSaved, onDelete }) {
   const [f, setF] = useState({
@@ -321,7 +368,10 @@ function PieceDrawer({ piece, clientId, people, onClose, onEstado, onSaved, onDe
       <div className="helm-chk-block">
         <div className="helm-chk-head">
           <b>Guion</b>
-          <button className="helm-btn" onClick={() => setEditBody(e => !e)}>{editBody ? 'Ver' : 'Editar'}</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <GenerarGuion clientId={clientId} onGenerado={(texto) => { set('body', texto); setEditBody(false) }} />
+            <button className="helm-btn" onClick={() => setEditBody(e => !e)}>{editBody ? 'Ver' : 'Editar'}</button>
+          </div>
         </div>
         {editBody ? (
           <Textarea rows={16} value={f.body} onChange={e => set('body', e.target.value)} />
@@ -383,7 +433,13 @@ function AddModal({ clientId, people, day, onClose, onCreated }) {
           <Adjuntos clientId={clientId} carpeta="contenido" value={f.attachments}
             onChange={v => set('attachments', v)} accept="image/*,video/*,application/pdf" />
         </Field>
-        <Field label="Guion / notas (opcional)"><Textarea rows={5} value={f.body} onChange={e => set('body', e.target.value)} /></Field>
+        <div className="helm-chk-block">
+          <div className="helm-chk-head">
+            <b>Guion / notas (opcional)</b>
+            <GenerarGuion clientId={clientId} onGenerado={(texto) => set('body', texto)} />
+          </div>
+          <Textarea rows={5} value={f.body} onChange={e => set('body', e.target.value)} />
+        </div>
         <FormNote>{error}</FormNote>
         <div className="helm-modal-actions">
           <button type="button" className="helm-btn" onClick={onClose}>Cancelar</button>

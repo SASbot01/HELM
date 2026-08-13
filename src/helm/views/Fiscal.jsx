@@ -23,6 +23,19 @@ import {
 } from '../fiscal/modelos'
 import { avisosDeHoy, mensajeDe, enlaceWhatsApp, enlaceEmail } from '../fiscal/avisos'
 
+// El enlace de subida caduca (ver DIAS en api/documentos.js) pero eso vivía
+// invisible dentro del JWT. Un JWT no está cifrado, solo firmado: se puede
+// leer el "exp" sin verificar la firma, que es justo lo único que hace falta
+// para enseñarlo — la verificación de verdad la hace el servidor al usarlo.
+function caducaDelEnlace(url) {
+  try {
+    const token = String(url || '').split('/').pop()
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    if (!payload.exp) return null
+    return new Date(payload.exp * 1000).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })
+  } catch { return null }
+}
+
 const TABS = [
   { key: 'plazos', label: 'Plazos', icon: <CalendarClock size={15} /> },
   { key: 'avisos', label: 'Avisos de hoy', icon: <Send size={15} /> },
@@ -177,7 +190,8 @@ function Plazos({ obligaciones, nombreDe, perfiles, clientId, onCambio, onError 
       <div className="helm-grid helm-kpis">
         <Kpi label="Vencen esta semana" value={kpis.semana} accent={kpis.semana > 0} />
         <Kpi label="Pendientes de docs" value={kpis.pendientes} />
-        <Kpi label="Fuera de plazo" value={kpis.fuera} sub={kpis.fuera > 0 ? 'requiere atención' : undefined} />
+        <Kpi label="Fuera de plazo" value={kpis.fuera} tono={kpis.fuera > 0 ? 'danger' : undefined}
+          sub={kpis.fuera > 0 ? 'requiere atención' : undefined} />
         <Kpi label="Presentados" value={kpis.presentados} />
       </div>
 
@@ -361,6 +375,11 @@ function Avisos({ obligaciones, contactos, clientId, onError }) {
                 </div>
 
                 <pre className="helm-aviso-msg">{msg}</pre>
+                {enlace && caducaDelEnlace(enlace) && (
+                  <small style={{ display: 'block', color: 'var(--text-mut)', marginTop: -4, marginBottom: 4 }}>
+                    El enlace de subida caduca el {caducaDelEnlace(enlace)}.
+                  </small>
+                )}
 
                 <div className="helm-curso-acts">
                   {wa && (
@@ -452,7 +471,8 @@ function Direccion({ obligaciones, perfiles, equipo, nombreDe }) {
         />
         <Kpi label="Plazos gestionados" value={datos.total} />
         <Kpi label="Presentados" value={datos.aTiempo} />
-        <Kpi label="Fuera de plazo" value={datos.fuera} sub={datos.fuera ? 'sanción al cliente' : undefined} />
+        <Kpi label="Fuera de plazo" value={datos.fuera} tono={datos.fuera ? 'danger' : undefined}
+          sub={datos.fuera ? 'sanción al cliente' : undefined} />
       </div>
 
       {datos.porEstado.length > 0 && (

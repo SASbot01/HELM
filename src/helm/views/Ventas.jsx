@@ -99,8 +99,8 @@ export default function Ventas({ clientId }) {
   return (
     <div className="helm-grid" style={{ gap: 20 }}>
       <div className="helm-grid helm-kpis">
-        <Kpi label="Revenue total" value={money(totals.revenue)} accent sub="sin las canceladas" />
-        <Kpi label="Cash collected" value={money(totals.cash)} />
+        <Kpi label="Facturado total" value={money(totals.revenue)} accent sub="sin las canceladas" />
+        <Kpi label="Cobrado" value={money(totals.cash)} />
         <Kpi label="Pendiente de cobro" value={money(totals.pendiente)} sub="facturado − cobrado" />
         <Kpi label="Nº ventas" value={totals.count} sub={canceladas.length ? `${canceladas.length} canceladas aparte` : undefined} />
       </div>
@@ -116,7 +116,7 @@ export default function Ventas({ clientId }) {
               <thead>
                 <tr>
                   <th>Fecha</th><th>Cliente</th><th>Servicio</th><th>Equipo</th>
-                  <th>Cobro</th><th>Revenue</th><th>Cash</th><th></th>
+                  <th>Cobro</th><th>Facturado</th><th>Cobrado</th><th></th>
                 </tr>
               </thead>
               <tbody>
@@ -165,7 +165,7 @@ export default function Ventas({ clientId }) {
           {verCanceladas ? (
             <div className="helm-tablewrap">
               <table className="helm-table">
-                <thead><tr><th>Fecha</th><th>Cliente</th><th>Servicio</th><th>Revenue</th><th></th></tr></thead>
+                <thead><tr><th>Fecha</th><th>Cliente</th><th>Servicio</th><th>Facturado</th><th></th></tr></thead>
                 <tbody>
                   {canceladas.map(r => (
                     <tr key={r.id} className="helm-row-void">
@@ -367,10 +367,10 @@ function NuevaVentaModal({ contacts, services, people, onClose, onSave }) {
 
         <div className="helm-drawer-section">Importes</div>
         <div className="helm-form-2">
-          <Field label="Revenue (€)" error={shown.revenue} hint="Lo facturado en total">
+          <Field label="Facturado (€)" error={shown.revenue} hint="Lo facturado en total">
             <MoneyInput value={form.revenue} onChange={v => set('revenue', v)} />
           </Field>
-          <Field label="Cash collected (€)" error={shown.cash_collected} hint="Lo cobrado ya">
+          <Field label="Cobrado (€)" error={shown.cash_collected} hint="Lo cobrado ya">
             <MoneyInput value={form.cash_collected} onChange={v => set('cash_collected', v)} />
           </Field>
         </div>

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Link2, Blocks, Settings, Plus, Rocket, CalendarDays, Menu, X, Package, UserCog, PhoneCall, MessagesSquare, GraduationCap, FolderOpen, Layers, CalendarClock, BookOpen, FileText, Receipt, ShieldCheck } from 'lucide-react'
 import { listClients, createProfile, slugify, usersApi, brandOf } from './lib'
-import { productoActual, seccionDelProducto } from './producto'
+import { productoActual, seccionDelProducto, seccionSiempre } from './producto'
 import { Modal, Field, Input } from './ui'
 import Guia from './Guia'
 import Informe from './views/Informe'
@@ -31,7 +31,7 @@ import Marketing from './views/Marketing'
 import Ajustes from './views/Ajustes'
 import { PLUGINS, PLUGIN_MAP } from './plugins/registry'
 import { loadPermisos, puedeVer, accesoTotal, DEFAULT_VISIBLE, loadSecciones, saveSecciones, seccionEncendida, esOptIn } from './permisos'
-import { useHelmTheme } from './theme'
+import { useHelmTheme, acentoDe } from './theme'
 import './theme.css'
 
 const NAV = [
@@ -49,7 +49,10 @@ const NAV = [
   { key: 'contenido', label: 'Contenido', icon: CalendarDays, title: 'Contenido', sub: 'Tu calendario de contenido', C: Contenido },
   { key: 'llamadas', label: 'Llamadas', icon: PhoneCall, title: 'Llamadas', sub: 'Tu agenda de Google, con lo que pasó en cada una', C: Llamadas },
   { key: 'comunidad', label: 'Comunidad', icon: MessagesSquare, title: 'Comunidad', sub: 'El hilo común de todos los negocios de HELM', C: Comunidad },
-  { key: 'interna', label: 'Comunidad interna', icon: GraduationCap, title: 'Comunidad interna', sub: 'Tu comunidad y tu formación, con sus miembros', C: Interna },
+  // La clave sigue siendo 'interna' aunque el nombre sea "Formación": es la que
+  // está guardada en los permisos y en las secciones activas de cada perfil, y
+  // cambiarla dejaría a media plantilla sin acceso de un día para otro.
+  { key: 'interna', label: 'Formación', icon: GraduationCap, title: 'Formación', sub: 'Tus cursos, tu comunidad y sus miembros', C: Interna },
   { key: 'enlaces', label: 'Enlaces', icon: Link2, title: 'Enlaces', sub: 'Las URLs del negocio, a mano', C: Enlaces },
   { key: 'archivos', label: 'Archivos', icon: FolderOpen, title: 'Archivos', sub: 'Lo que subes, lo que escribe la IA y las Biblias', C: Archivos },
   { key: 'fiscal', label: 'Fiscal', icon: CalendarClock, title: 'Fiscal', sub: 'Plazos y modelos de tus clientes', C: Fiscal },
@@ -154,7 +157,10 @@ export default function HelmApp() {
   // La URL manda: /<slug> abre ese perfil. /admin entra sin slug y redirige
   // al último usado, para que la barra de direcciones siempre diga dónde estás.
   const { slug: urlSlug } = useParams()
-  const [view, setView] = useState('informe')
+  // Cada producto entra por su puerta: HELM por el Informe, el dominio del
+  // Scraper por el Scraper. Caer en una sección que ese producto ni siquiera
+  // tiene y rebotar a otra es un parpadeo feo en la primera pantalla.
+  const [view, setView] = useState(() => productoActual().vistaInicial || 'informe')
   const [clients, setClients] = useState([])
   const [clientId, setClientId] = useState(null)
   const [loadingClients, setLoadingClients] = useState(true)
@@ -308,7 +314,9 @@ export default function HelmApp() {
   // otros dos.
   const puede = useCallback(
     (key) => seccionDelProducto(key)
-      && seccionEncendida(secciones, key)
+      // `seccionSiempre` es para lo que ES el producto (el Scraper en
+      // scraper.s4sf.net): apagarlo dejaría el dominio en una pantalla vacía.
+      && (seccionSiempre(key) || seccionEncendida(secciones, key))
       && puedeVer(visible, clientSession?.teamRole, key, clientSession?.level),
     [secciones, visible, clientSession],
   )
@@ -367,7 +375,10 @@ export default function HelmApp() {
   const sub = isPlugin ? current.desc : current.sub
 
   return (
-    <div className="helm" data-theme={theme}>
+    // El color de marca del perfil pisa el acento del tema. Va como estilo en
+    // línea y no como clase porque es un dato del negocio, no una variante
+    // prevista: cada perfil trae el suyo.
+    <div className="helm" data-theme={theme} style={acentoDe(marca.color) || undefined}>
       <div className="helm-shell">
         {menuOpen && <div className="helm-side-backdrop" onClick={() => setMenuOpen(false)} />}
         <aside className={'helm-side' + (menuOpen ? ' open' : '')}>
@@ -408,9 +419,13 @@ export default function HelmApp() {
                 <navAjustes.icon /> {navAjustes.label}
               </div>
             )}
+            {/* Solo llega aquí un superadmin (ver isClient arriba) y lo que abre
+                es la lista de TODA la plataforma, no de este perfil — de ahí el
+                aviso en el propio nombre, para que no se confunda con el equipo
+                de este negocio mientras estás dentro de su panel. */}
             {!isClient && (
               <div className="helm-nav" onClick={() => navigate('/usersadmin')}>
-                <Users /> Usuarios
+                <Users /> Usuarios (toda la plataforma)
               </div>
             )}
             {/* Siempre a mano, no solo el primer día: en un equipo entra gente

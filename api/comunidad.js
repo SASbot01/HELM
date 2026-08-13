@@ -23,6 +23,27 @@ const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i
 const MIN_PASSWORD = 8
 const ESTADOS = ['pendiente', 'activo', 'bloqueado']
 
+/**
+ * El enlace de Discord que se guarda.
+ *
+ * Se acepta cualquier URL de Discord (discord.gg, discord.com/invite y el
+ * canal directo), pero solo de Discord: este campo acaba siendo un botón que
+ * se le enseña a los alumnos, y dejar pasar cualquier URL lo convierte en un
+ * sitio cómodo desde el que mandar a la gente a donde sea.
+ *
+ * Vacío borra el enlace, que es como se quita el botón.
+ */
+function discordValido(valor) {
+  const url = String(valor || '').trim()
+  if (!url) return ''
+  if (!/^https:\/\/(www\.)?(discord\.gg|discord\.com|discordapp\.com)\//i.test(url)) {
+    const e = new Error('El enlace de Discord tiene que empezar por https://discord.gg/ o https://discord.com/')
+    e.statusCode = 400
+    throw e
+  }
+  return url.slice(0, 300)
+}
+
 // Sesión de miembro: 30 días. No es el panel, es una comunidad — obligar a
 // entrar cada 12 horas para ver un curso es una molestia sin ganancia.
 const DIAS_SESION = 30
@@ -55,7 +76,7 @@ async function sesionMiembro(req) {
 async function porSlug(slug) {
   const { data: client } = await supabase
     .from('clients')
-    .select('id, slug, name, brand_name, brand_subtitle, logo_url, active')
+    .select('id, slug, name, brand_name, brand_subtitle, logo_url, primary_color, active')
     .eq('slug', String(slug || '').toLowerCase()).maybeSingle()
   if (!client || !client.active) return null
   const { data: cfg } = await supabase
@@ -67,7 +88,13 @@ const marcaDe = (client, cfg) => ({
   nombre: cfg?.name || client.brand_name || client.name,
   subtitulo: client.brand_subtitle || null,
   logo: client.logo_url || null,
+  // El color de marca del perfil, para que la página pública de la comunidad
+  // no se pinte con el acento de HELM.
+  color: client.primary_color || null,
   bienvenida: cfg?.welcome || null,
+  // La comunidad puede vivir en Discord: aquí solo viaja el enlace, y la
+  // formación y el muro siguen estando en HELM.
+  discord: cfg?.discord_url || null,
 })
 
 export default async function handler(req, res) {
@@ -185,7 +212,7 @@ export default async function handler(req, res) {
 
       if (req.method === 'GET' && action === 'me') {
         const { data: client } = await supabase.from('clients')
-          .select('id, slug, name, brand_name, brand_subtitle, logo_url').eq('id', miembro.client_id).single()
+          .select('id, slug, name, brand_name, brand_subtitle, logo_url, primary_color').eq('id', miembro.client_id).single()
         const { data: cfg } = await supabase.from('helm_community')
           .select('*').eq('client_id', miembro.client_id).maybeSingle()
         return res.status(200).json({
@@ -279,6 +306,7 @@ export default async function handler(req, res) {
           name: cfg?.name || '',
           welcome: cfg?.welcome || '',
           auto_approve: cfg?.auto_approve ?? false,
+          discord_url: cfg?.discord_url || '',
         },
         url: `${base}/c/${client.slug}`,
         cuenta,
@@ -294,9 +322,17 @@ export default async function handler(req, res) {
         name: String(b.name || '').trim().slice(0, 80) || null,
         welcome: String(b.welcome || '').trim().slice(0, 2000) || null,
         auto_approve: Boolean(b.auto_approve),
+        discord_url: discordValido(b.discord_url),
         updated_at: new Date().toISOString(),
       }, { onConflict: 'client_id' })
-      if (error) return res.status(500).json({ error: error.message })
+      if (error) {
+        // 42703 = falta la columna. Es siempre lo mismo: una migración sin
+        // aplicar. Decirlo así ahorra ir a buscar qué significa el código.
+        if (error.code === '42703') {
+          return res.status(500).json({ error: 'Falta aplicar migrations/helm_marca_color_discord.sql en Supabase.' })
+        }
+        return res.status(500).json({ error: error.message })
+      }
       return res.status(200).json({ ok: true })
     }
 

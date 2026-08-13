@@ -242,6 +242,9 @@ export const brandOf = (client) => ({
   name: (client?.brand_name || client?.name || productoActual().nombre).trim(),
   subtitle: (client?.brand_subtitle ?? DEFAULT_SUBTITLE),
   logo: client?.logo_url || '',
+  // Vacío = este perfil no ha elegido color y se queda con el acento del tema.
+  // Ver acentoDe() en theme.js: de aquí sale el color de TODO su panel.
+  color: (client?.primary_color || '').trim(),
 })
 
 // Sube el logo al bucket público. Se usa desde Ajustes (con perfil ya creado)
@@ -256,12 +259,15 @@ export async function uploadLogo(file, clientId) {
 
 // Guarda la marca del perfil. Devuelve la fila para refrescar la cabecera sin
 // recargar la página.
-export async function saveBrand(clientId, { brand_name, brand_subtitle, logo_url }) {
+export async function saveBrand(clientId, { brand_name, brand_subtitle, logo_url, primary_color }) {
   const { data, error } = await supabase.from('clients')
     .update({
       brand_name: brand_name?.trim() || null,
       brand_subtitle: brand_subtitle?.trim() || null,
       logo_url: logo_url || null,
+      // Null y no cadena vacía: es lo que lee `brandOf` como "sin color propio",
+      // y así vaciar el campo devuelve el perfil al acento del tema.
+      primary_color: primary_color?.trim() || null,
     })
     .eq('id', clientId)
     .select('id, slug, name, client_type, primary_color, logo_url, brand_name, brand_subtitle')
@@ -419,6 +425,24 @@ export const calendlyApi = {
   link: (clientId, token) => apiFetch('/api/calendly?action=link', { method: 'POST', body: { clientId, token } }),
   unlink: (clientId) => apiFetch(`/api/calendly?action=unlink&clientId=${clientId}`, { method: 'DELETE' }),
   eventos: (clientId) => apiFetch(`/api/calendly?action=eventos&clientId=${clientId}`),
+}
+
+// Scraper: leads de cinco fuentes al pipeline. Todo pasa por el servidor —las
+// claves de API no pueden acabar en el navegador y la importación deduplica
+// contra el CRM antes de escribir. `fuente` es la única diferencia entre una
+// búsqueda de Google Maps, una del BORME y una lista pegada a mano.
+export const prospeccionApi = {
+  status: (clientId) => apiFetch(`/api/prospeccion?action=status&clientId=${clientId}`),
+  guardarClave: (clientId, apiKey, fuente = 'maps') => apiFetch('/api/prospeccion?action=clave', { method: 'POST', body: { clientId, apiKey, fuente } }),
+  borrarClave: (clientId, fuente = 'maps') => apiFetch(`/api/prospeccion?action=clave&clientId=${clientId}&fuente=${fuente}`, { method: 'DELETE' }),
+  buscar: (clientId, body) => apiFetch('/api/prospeccion?action=buscar', { method: 'POST', body: { clientId, ...body } }),
+  lista: (clientId, estado = 'nuevo', fuente = 'todas') => apiFetch(`/api/prospeccion?action=lista&clientId=${clientId}&estado=${estado}&fuente=${fuente}`),
+  busquedas: (clientId, fuente = 'todas') => apiFetch(`/api/prospeccion?action=busquedas&clientId=${clientId}&fuente=${fuente}`),
+  importar: (clientId, body) => apiFetch('/api/prospeccion?action=importar', { method: 'POST', body: { clientId, ...body } }),
+  descartar: (clientId, ids) => apiFetch('/api/prospeccion?action=descartar', { method: 'POST', body: { clientId, ids } }),
+  // Segunda pasada sobre la web de cada negocio. En tandas: son webs de
+  // terceros y se leen de una en una.
+  enriquecer: (clientId, ids) => apiFetch('/api/prospeccion?action=enriquecer', { method: 'POST', body: { clientId, ids } }),
 }
 
 export const googleApi = {

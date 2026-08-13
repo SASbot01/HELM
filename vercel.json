@@ -8,6 +8,9 @@
     },
     "api/chat.js": {
       "maxDuration": 60
+    },
+    "api/prospeccion.js": {
+      "maxDuration": 60
     }
   },
   "rewrites": [
@@ -25,6 +28,28 @@
         }
       ],
       "destination": "/api/portal-meta?slug=:slug"
+    },
+    {
+      "source": "/paginainicio",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Ww]hats[Aa]pp|facebookexternalhit|[Ff]acebot|[Tt]witterbot|LinkedInBot|TelegramBot|Slackbot|Discordbot|Googlebot|bingbot|Applebot|[Ee]mbedly|Iframely|redditbot|Pinterest|SkypeUriPreview|vkShare|Mastodon|Bluesky).*"
+        }
+      ],
+      "destination": "/inicio/preview.html"
+    },
+    {
+      "source": "/:slug((?!(?:api|assets|login|registro|admin|usersadmin|primermap|silvestreai|c|f|d|paginainicio)(?:[/?#]|$))[a-z0-9][a-z0-9-]*)",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Ww]hats[Aa]pp|facebookexternalhit|[Ff]acebot|[Tt]witterbot|LinkedInBot|TelegramBot|Slackbot|Discordbot|Googlebot|bingbot|Applebot|[Ee]mbedly|Iframely|redditbot|Pinterest|SkypeUriPreview|vkShare|Mastodon|Bluesky).*"
+        }
+      ],
+      "destination": "/api/portal-meta?slug=:slug&tipo=panel"
     },
     {
       "source": "/((?!api/).*)",

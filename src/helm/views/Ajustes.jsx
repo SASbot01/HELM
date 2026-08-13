@@ -8,11 +8,11 @@ import {
 } from 'lucide-react'
 import { stripeApi, wooApi, chatApi, googleApi, calendlyApi, brandOf, saveBrand, uploadLogo, MAX_LOGO_MB, DEFAULT_SUBTITLE } from '../lib'
 import { Panel, Field, Input, Select, Tabs, Empty } from '../ui'
-import { TEMAS_ELEGIBLES, useHelmTheme } from '../theme'
+import { TEMAS_ELEGIBLES, useHelmTheme, acentoDe, normalizaHex } from '../theme'
 import {
   AREAS, SECCIONES, DEFAULT_MATRIX, DEFAULT_VISIBLE, OWNER_ROLE, loadPermisos, savePermisos,
 } from '../permisos'
-import { ROLES } from '../equipo/roles'
+import { rolesDelProducto } from '../equipo/roles'
 
 function Badge({ tone, children }) {
   return <span className={'helm-badge ' + (tone || '')}>{children}</span>
@@ -931,6 +931,7 @@ function MarcaCard({ clientId, client, onClientUpdate }) {
     brand_name: client?.brand_name || '',
     brand_subtitle: client?.brand_subtitle ?? '',
     logo_url: client?.logo_url || '',
+    primary_color: client?.primary_color || '',
   })
   const [busy, setBusy] = useState(false)
   const [subiendo, setSubiendo] = useState(false)
@@ -944,6 +945,10 @@ function MarcaCard({ clientId, client, onClientUpdate }) {
     subtitle: form.brand_subtitle.trim() || DEFAULT_SUBTITLE,
     logo: form.logo_url,
   }
+
+  // El acento que se aplicará. Null mientras el hex esté a medio escribir: así
+  // la vista previa no parpadea con cada tecla.
+  const acento = acentoDe(form.primary_color)
 
   async function elegirLogo(e) {
     const file = e.target.files?.[0]
@@ -995,7 +1000,7 @@ function MarcaCard({ clientId, client, onClientUpdate }) {
 
           {/* La misma pieza que la barra lateral, para ver el resultado antes
               de guardar y no a base de recargar. */}
-          <div className="helm-marca-preview">
+          <div className="helm-marca-preview" style={acento || undefined}>
             <span className="helm-marca-preview-lbl">Así se verá</span>
             <div className="helm-brand" style={{ padding: 0 }}>
               {previo.logo
@@ -1014,6 +1019,38 @@ function MarcaCard({ clientId, client, onClientUpdate }) {
           <Input value={form.brand_subtitle} onChange={e => set('brand_subtitle', e.target.value)}
             placeholder={DEFAULT_SUBTITLE} maxLength={40} />
         </Field>
+
+        {/* El color manda sobre el acento del tema en TODO este perfil: botones,
+            gráficas, etapas del CRM y la tarjeta que sale al compartir su enlace.
+            Vacío = se queda con el color del tema. */}
+        <Field
+          label="Color de marca"
+          hint="Manda sobre el color del tema en todo este perfil. Déjalo vacío para usar el del tema."
+        >
+          <div className="helm-color-row">
+            <input
+              type="color" className="helm-color-pick"
+              value={acentoDe(form.primary_color) ? normalizaHex(form.primary_color) : '#2FCB6A'}
+              onChange={e => set('primary_color', e.target.value)}
+              aria-label="Elegir color de marca"
+            />
+            <Input
+              value={form.primary_color}
+              onChange={e => set('primary_color', e.target.value)}
+              placeholder="#2FCB6A" maxLength={7}
+            />
+            {form.primary_color && (
+              <button type="button" className="helm-btn sm" onClick={() => set('primary_color', '')}>
+                <Trash2 size={13} /> Quitar
+              </button>
+            )}
+          </div>
+        </Field>
+        {form.primary_color && !acento && (
+          <small className="helm-settings-note">
+            Eso no es un color válido. Escríbelo en hex, como <code>#2FCB6A</code>.
+          </small>
+        )}
 
         {error && <div className="helm-formerror">{error}</div>}
         <button className="helm-btn primary" disabled={busy || subiendo} style={{ justifySelf: 'start' }}>
@@ -1123,7 +1160,7 @@ function PermisosCard({ clientId }) {
   }, [clientId])
 
   // Los roles configurables son todos menos el dueño, que siempre puede todo.
-  const roles = ROLES.filter(r => r.key !== OWNER_ROLE)
+  const roles = rolesDelProducto().filter(r => r.key !== OWNER_ROLE)
 
   const esVisibilidad = vista === 'visible'
   const filas = esVisibilidad ? SECCIONES : AREAS

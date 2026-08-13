@@ -196,7 +196,7 @@ export default function Informe({ clientId, onNavigate }) {
 
       <div className="helm-grid helm-kpis">
         <Kpi label="Facturado" value={money(d.revenue)} accent sub={sufijo} />
-        <Kpi label="Cobrado" value={money(d.cash)} sub="cash collected" />
+        <Kpi label="Cobrado" value={money(d.cash)} />
         <Kpi label="Ventas" value={d.ventas} sub={`ticket medio ${money(d.ticket)}`} />
         <Kpi label="Balance finanzas" value={money(d.balance)} sub="ingresos − gastos" />
         <Kpi label="Contactos CRM" value={contacts} sub="en pipeline" />

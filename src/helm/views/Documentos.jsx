@@ -472,7 +472,7 @@ function VistaImpresion({ doc, marca, onClose }) {
             <div>
               <b><ShieldCheck size={13} /> Registro íntegro, hash encadenado</b>
               <span>{doc.hash.slice(0, 24)}…</span>
-              <small>No es una factura VeriFactu conforme: falta la firma electrónica del despacho y el envío a la AEAT.</small>
+              <small>No es una factura VeriFactu conforme: falta la firma electrónica del despacho y el envío a la AEAT. La obligación real entra el 1 ene 2027 (Sociedades) / 1 jul 2027 (autónomos).</small>
             </div>
           </div>
         )}

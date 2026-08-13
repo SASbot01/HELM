@@ -12,6 +12,7 @@ import ComunidadPublica from './pages/ComunidadPublica.jsx'
 import PrimerMapa from './pages/PrimerMapa.jsx'
 import SilvestreValor from './pages/SilvestreValor.jsx'
 import PortalDocumentos from './pages/PortalDocumentos.jsx'
+import PaginaInicio from './pages/PaginaInicio.jsx'
 import './index.css'
 
 // App reducida a HELM: se entra por /login (superadmin) → /admin (Helm).
@@ -61,6 +62,10 @@ createRoot(document.getElementById('root')).render(
               /:slug/*, que si no leería "silvestreai" como slug de perfil. */}
           <Route path="/silvestreai" element={<Navigate to="/silvestreai/valor" replace />} />
           <Route path="/silvestreai/valor" element={<SilvestreValor />} />
+          {/* La cara pública de la marca: el enlace de la bio de Instagram.
+              Va ANTES de /:slug/* como todas las públicas — si no, "paginainicio"
+              se leería como el slug de un perfil y acabaría en el login. */}
+          <Route path="/paginainicio" element={<PaginaInicio />} />
           {/* HELM — app limpia (CRM · Ventas · Diario · Finanzas · Chat · Ajustes).
               /admin entra sin perfil fijado (redirige al último usado) y
               /<slug> abre directamente ese perfil: /silvestre, /enformaconhugo… */}

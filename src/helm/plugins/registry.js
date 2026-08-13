@@ -1,11 +1,12 @@
 // HELM — registro de plugins. Cada entrada describe un módulo instalable.
 // available:true → funcional, con vista propia; se puede activar y aparece en el menú.
 // available:false → en el catálogo como "próximamente".
-import { CheckSquare, Activity, MessageSquare, Mail, FileText, BookOpen, ClipboardList, Hash } from 'lucide-react'
+import { CheckSquare, Activity, MessageSquare, Mail, FileText, BookOpen, ClipboardList, Hash, MapPinned } from 'lucide-react'
 import Tareas from './Tareas'
 import Actividad from './Actividad'
 import Biblioteca from './Biblioteca'
 import Formularios from './Formularios'
+import Prospeccion from './Prospeccion'
 
 export const PLUGINS = [
   { key: 'tareas', name: 'Tareas', icon: CheckSquare, available: true, View: Tareas,
@@ -16,6 +17,8 @@ export const PLUGINS = [
     desc: 'Documentos y transcripciones que amplían el contexto de la IA del chat.' },
   { key: 'formularios', name: 'Formularios', icon: ClipboardList, available: true, View: Formularios,
     desc: 'Formularios de onboarding y satisfacción, con las respuestas pegadas al cliente.' },
+  { key: 'prospeccion', name: 'Scraper', icon: MapPinned, available: true, View: Prospeccion,
+    desc: 'Leads de cinco fuentes —Maps, Registro Mercantil, OpenStreetMap, buscador y tu propia lista— revisados y pasados al embudo sin copiar nada a mano.' },
   // ── Pendientes de decidir proveedor ──────────────────────────────────────
   // No se marcan como disponibles porque no funcionarían: los cuatro necesitan
   // una cuenta y unas credenciales externas que todavía no existen. Ver el

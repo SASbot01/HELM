@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Phone, Mail, Users, MessageSquare, StickyNote } from 'lucide-react'
 import { fetchRows, fetchRowsOrError, fmtDate } from '../lib'
 import { Panel, Empty } from '../ui'
-import { ROLES, withRole } from '../equipo/roles'
+import { rolesDelProducto, withRole } from '../equipo/roles'
 
 const ICON = { call: Phone, email: Mail, meeting: Users, whatsapp: MessageSquare, note: StickyNote }
 // El verbo de cada tipo, para que la frase se lea entera.
@@ -69,7 +69,7 @@ export default function Actividad({ clientId }) {
         <div style={{ display: 'flex', gap: 10 }}>
           <select className="helm-select" value={fRol} onChange={e => { setFRol(e.target.value); setFPersona('__all__') }}>
             <option value="__all__">Todos los roles</option>
-            {ROLES.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+            {rolesDelProducto().map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
           </select>
           <select className="helm-select" value={fPersona} onChange={e => setFPersona(e.target.value)}>
             <option value="__all__">Todo el equipo</option>

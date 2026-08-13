@@ -1,11 +1,17 @@
 // HELM — los roles de las personas del negocio.
 //
-// Un solo listado para todo el sistema: el Diario decide qué métricas pide con
-// él, Finanzas filtra las comisiones por él, Ventas asigna setter/closer/CSM y
-// Actividad escribe "el closer Juan añadió una nota". Si un rol se añade aquí,
-// aparece en las cinco secciones a la vez.
+// Un solo listado por producto para todo el sistema: el Diario decide qué
+// métricas pide con él, Finanzas filtra las comisiones por él, Ventas asigna
+// quién cerró y Actividad escribe "el closer Juan añadió una nota". Si un rol
+// se añade aquí, aparece en las cinco secciones a la vez.
+//
+// HELM (infoproducto) y Consultoria (despacho) son negocios distintos con
+// puestos distintos — un despacho no tiene "closers" ni "setters", tiene
+// asesores, contables y gestores laborales. En vez de un vocabulario
+// genérico a la fuerza, cada producto trae el suyo (ver producto.js).
+import { productoActual } from '../producto'
 
-export const ROLES = [
+const ROLES_HELM = [
   {
     key: 'dueno',
     label: 'Dueño',
@@ -70,15 +76,68 @@ export const ROLES = [
   },
 ]
 
-export const ROLE_MAP = Object.fromEntries(ROLES.map(r => [r.key, r]))
-export const roleLabel = (key) => ROLE_MAP[key]?.label || key || '—'
+// El Diario no existe en consultoria (no está en `secciones` de producto.js),
+// así que ninguno de estos roles necesita reportar nada ahí: `diario: []`.
+const ROLES_CONSULTORIA = [
+  {
+    key: 'dueno',
+    label: 'Dueño',
+    short: 'dueño',
+    desc: 'Ve y edita todo el despacho.',
+    diario: [],
+  },
+  {
+    key: 'asesor_fiscal',
+    label: 'Asesor fiscal',
+    short: 'asesor',
+    desc: 'Lleva cartera de clientes: plazos, modelos y avisos.',
+    diario: [],
+  },
+  {
+    key: 'contable',
+    label: 'Contable',
+    short: 'contable',
+    desc: 'Contabilidad, gastos y conciliación.',
+    diario: [],
+  },
+  {
+    key: 'gestor_laboral',
+    label: 'Gestor laboral',
+    short: 'gestor',
+    desc: 'Nóminas, seguros sociales y contratos.',
+    diario: [],
+  },
+  {
+    key: 'administrativo',
+    label: 'Administrativo',
+    short: 'administrativo',
+    desc: 'Papeleo, archivo y atención al cliente.',
+    diario: [],
+  },
+  {
+    key: 'otro',
+    label: 'Otro',
+    short: '',
+    desc: 'Cualquier otro perfil del despacho.',
+    diario: [],
+  },
+]
+
+/** La lista de roles del producto que se está sirviendo ahora mismo. */
+export function rolesDelProducto() {
+  return productoActual().key === 'consultoria' ? ROLES_CONSULTORIA : ROLES_HELM
+}
+
+/** El mismo listado, indexado por key, para lookups sueltos (roleLabel, withRole...). */
+export function roleMapDelProducto() {
+  return Object.fromEntries(rolesDelProducto().map(r => [r.key, r]))
+}
+
+export const roleLabel = (key) => roleMapDelProducto()[key]?.label || key || '—'
 
 // "el closer Juan", "Ana" si el rol no aporta nada. Se usa en Actividad.
 export function withRole(name, roleKey) {
-  const short = ROLE_MAP[roleKey]?.short
+  const short = roleMapDelProducto()[roleKey]?.short
   if (!name) return '—'
   return short ? `el ${short} ${name}` : name
 }
-
-// Roles que pueden cerrar o asistir una venta (setter / closer / CSM).
-export const SALE_ROLES = ['setter', 'closer', 'csm']

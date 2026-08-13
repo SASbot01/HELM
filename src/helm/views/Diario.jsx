@@ -12,12 +12,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { supabase, fetchRows, fetchRowsOrError, insertRow, deleteRow, fmtDate, todayISO } from '../lib'
 import { Panel, Empty, Modal, Field, Input, Select, Kpi, CountInput, FormNote } from '../ui'
-import { ROLES, ROLE_MAP, roleLabel } from '../equipo/roles'
+import { rolesDelProducto, roleMapDelProducto, roleLabel } from '../equipo/roles'
 import { marcarVendidos } from '../diario/ventas'
 
 // Roles que reportan algo. Los que no tienen métricas definidas (editor, otro)
 // no aparecen en el diario: no tendrían nada que rellenar.
-const ROLES_DIARIO = ROLES.filter(r => r.diario.length > 0)
+const rolesDiario = () => rolesDelProducto().filter(r => r.diario.length > 0)
 
 const EMPTY = { date: todayISO(), person_id: '', name: '', role: 'closer', metrics: {}, sales: [] }
 
@@ -40,7 +40,7 @@ export default function Diario({ clientId }) {
 
   // Cada rol tiene su tabla: mezclar columnas de closer y de setter en una sola
   // daría una rejilla medio vacía en la que no se lee nada.
-  const rol = ROLE_MAP[rolVista] || ROLES_DIARIO[0]
+  const rol = roleMapDelProducto()[rolVista] || rolesDiario()[0]
   const delRol = useMemo(() => (rows || []).filter(r => r.role === rolVista), [rows, rolVista])
 
   // Totales de las métricas de este rol, para la fila de KPIs.
@@ -63,7 +63,7 @@ export default function Diario({ clientId }) {
       client_id: clientId, date: form.date, name: form.name.trim(), role: form.role,
       person_id: form.person_id || null,
       sales: ventas,
-      ...Object.fromEntries((ROLE_MAP[form.role]?.diario || []).map(m => [m.field, Number(form.metrics[m.field]) || 0])),
+      ...Object.fromEntries((roleMapDelProducto()[form.role]?.diario || []).map(m => [m.field, Number(form.metrics[m.field]) || 0])),
     })
     setRows(rs => [row, ...(rs || [])])
     setRolVista(form.role)
@@ -105,7 +105,7 @@ export default function Diario({ clientId }) {
         action={
           <div style={{ display: 'flex', gap: 10 }}>
             <select className="helm-select" value={rolVista} onChange={e => setRolVista(e.target.value)}>
-              {ROLES_DIARIO.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+              {rolesDiario().map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
             </select>
             <button className="helm-btn primary" onClick={() => setOpen(true)}><Plus size={15} />Nuevo reporte</button>
           </div>
@@ -247,8 +247,8 @@ function ReporteModal({ clientId, people, onClose, onSave }) {
   const [error, setError] = useState(null)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
-  const activos = people.filter(p => p.active !== false && ROLE_MAP[p.role]?.diario.length)
-  const rol = ROLE_MAP[form.role] || ROLES_DIARIO[0]
+  const activos = people.filter(p => p.active !== false && roleMapDelProducto()[p.role]?.diario.length)
+  const rol = roleMapDelProducto()[form.role] || rolesDiario()[0]
 
   // Elegir a alguien del equipo trae su rol: el informe pedía que, si el
   // sistema ya sabe el rol, no lo vuelva a preguntar.
@@ -319,7 +319,7 @@ function ReporteModal({ clientId, people, onClose, onSave }) {
         {!form.person_id && (
           <Field label="Rol" hint={rol.desc}>
             <Select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value, metrics: {} }))}>
-              {ROLES_DIARIO.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+              {rolesDiario().map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
             </Select>
           </Field>
         )}

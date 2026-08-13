@@ -78,10 +78,14 @@ export default async function handler(req, res) {
     // de acceso. De él dependen las secciones que verá: sin esto, un closer
     // entraría al panel completo, con las finanzas del negocio incluidas.
     let teamRole = null
+    // Su ficha en el directorio de personas. Hace falta el id, y no solo el
+    // rol: es lo único que identifica a QUIÉN está mirando el panel, y sin eso
+    // no se puede enseñar a cada uno solo sus tareas privadas.
+    let helmTeamId = null
     if (source === 'team') {
       const [{ data }, { data: persona }] = await Promise.all([
         supabase.from('clients').select('id, name, slug').eq('id', teamRow.client_id).maybeSingle(),
-        supabase.from('helm_team').select('role, name').eq('login_id', teamRow.id).maybeSingle(),
+        supabase.from('helm_team').select('id, role, name').eq('login_id', teamRow.id).maybeSingle(),
       ])
       if (!data) {
         await writeAudit({ action: 'login.orphan_team', req, statusCode: 403, metadata: { email } })
@@ -89,6 +93,7 @@ export default async function handler(req, res) {
       }
       clientInfo = data
       teamRole = persona?.role || null
+      helmTeamId = persona?.id || null
     }
 
     const isSuperadmin = source === 'superadmins'
@@ -103,6 +108,9 @@ export default async function handler(req, res) {
           // secciones pinta.
           teamRole,
           level: row.role || null,
+          // Su ficha en el directorio del perfil: con ella el panel sabe cuáles
+          // de las tareas privadas son suyas.
+          helmTeamId,
         }
     delete user.password
     delete user.passwordHash

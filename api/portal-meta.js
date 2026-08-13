@@ -24,10 +24,13 @@ function resumen(texto, alternativa) {
   return limpio.length > 180 ? `${limpio.slice(0, 177)}…` : limpio
 }
 
-function pagina({ titulo, descripcion, imagen, url }) {
+function pagina({ titulo, descripcion, imagen, url, color }) {
   const tags = [
     `<title>${esc(titulo)}</title>`,
     `<meta name="description" content="${esc(descripcion)}">`,
+    // Algunas apps (Slack, Telegram) pintan una franja con este color al lado
+    // de la tarjeta. Es lo único del preview que se puede teñir sin imagen.
+    ...(color ? [`<meta name="theme-color" content="${esc(color)}">`] : []),
     `<meta property="og:type" content="website">`,
     `<meta property="og:site_name" content="${esc(titulo)}">`,
     `<meta property="og:title" content="${esc(titulo)}">`,
@@ -57,15 +60,30 @@ ${tags.join('\n')}
 </html>`
 }
 
+// Rutas que NO son el slug de un perfil aunque lo parezcan. El rewrite ya las
+// deja fuera, pero esto es la segunda barrera: si alguien afloja el patrón, el
+// peor caso es una tarjeta genérica y no una consulta rara a la base.
+const RESERVADAS = new Set([
+  'api', 'login', 'registro', 'admin', 'usersadmin', 'primermap', 'silvestreai',
+  'c', 'f', 'd', 'assets', 'manifest.json', 'robots.txt', 'favicon.ico',
+])
+
 export default async function handler(req, res) {
   const slug = String(req.query.slug || '').toLowerCase()
   const host = req.headers['x-forwarded-host'] || req.headers.host || ''
-  const url = `https://${host}/c/${encodeURIComponent(slug)}`
+  // `tipo=panel` → el enlace de entrada al panel (helm.s4sf.net/<slug>).
+  // Sin él, el de la comunidad (/c/<slug>), que es como nació este endpoint.
+  const esPanel = req.query.tipo === 'panel'
+  const url = esPanel
+    ? `https://${host}/${encodeURIComponent(slug)}`
+    : `https://${host}/c/${encodeURIComponent(slug)}`
 
-  const { data: client } = await supabase
-    .from('clients')
-    .select('id, name, brand_name, brand_subtitle, logo_url, active')
-    .eq('slug', slug).maybeSingle()
+  const { data: client } = slug && !RESERVADAS.has(slug)
+    ? await supabase
+      .from('clients')
+      .select('id, name, brand_name, brand_subtitle, logo_url, primary_color, active')
+      .eq('slug', slug).maybeSingle()
+    : { data: null }
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8')
   // Los bots reintentan a menudo y la marca no cambia cada minuto; cinco
@@ -73,11 +91,36 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'public, max-age=300')
 
   if (!client || !client.active) {
+    // El enlace del panel de un slug que no existe no es "comunidad no
+    // encontrada": lo más probable es una ruta de la app que se coló.
     return res.status(404).send(pagina({
-      titulo: 'Comunidad no encontrada',
+      titulo: esPanel ? 'Página no encontrada' : 'Comunidad no encontrada',
       descripcion: 'Este enlace ya no está disponible.',
       imagen: null,
       url,
+    }))
+  }
+
+  const logo = client.logo_url && /^https?:\/\//.test(client.logo_url)
+    ? client.logo_url
+    : (client.logo_url ? `https://${host}${client.logo_url}` : null)
+  const color = /^#[0-9a-f]{3,8}$/i.test(client.primary_color || '') ? client.primary_color : null
+
+  // El enlace del panel. Es el que se pasa al equipo, y hasta ahora se llevaba
+  // el HTML común de la app: salía "HELM — El puesto de mando de tu negocio"
+  // con el icono de HELM, aunque el perfil tuviera su propia marca. Aquí sale
+  // con el nombre, el logo y el color del negocio.
+  //
+  // La descripción no cuenta qué hay dentro a propósito: es un panel privado y
+  // el enlace acaba en grupos de WhatsApp donde no todos tienen acceso.
+  if (esPanel) {
+    const nombre = client.brand_name || client.name
+    return res.status(200).send(pagina({
+      titulo: client.brand_subtitle ? `${nombre} — ${client.brand_subtitle}` : nombre,
+      descripcion: `Panel de ${nombre}. Hay que entrar con tu cuenta.`,
+      imagen: logo,
+      url,
+      color,
     }))
   }
 
@@ -85,14 +128,12 @@ export default async function handler(req, res) {
     .from('helm_community').select('name, welcome').eq('client_id', client.id).maybeSingle()
 
   const nombre = cfg?.name || client.brand_name || client.name
-  const logo = client.logo_url && /^https?:\/\//.test(client.logo_url)
-    ? client.logo_url
-    : (client.logo_url ? `https://${host}${client.logo_url}` : null)
 
   return res.status(200).send(pagina({
     titulo: client.brand_subtitle ? `${nombre} — ${client.brand_subtitle}` : nombre,
     descripcion: resumen(cfg?.welcome, `Entra en la formación y la comunidad de ${nombre}.`),
     imagen: logo,
     url,
+    color,
   }))
 }

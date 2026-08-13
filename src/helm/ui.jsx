@@ -58,11 +58,15 @@ export function Select({ children, ...props }) {
   return <select className="helm-input" {...props}>{children}</select>
 }
 
-export function Kpi({ label, value, sub, accent }) {
+// `tono="danger"` es para el KPI que de verdad importa mirar primero — hoy
+// solo "fuera de plazo" en Fiscal. No es un accent más entre varios: en una
+// fila de tarjetas del mismo peso, la que implica riesgo de sanción tiene que
+// saltar a la vista antes de leer las otras tres.
+export function Kpi({ label, value, sub, accent, tono }) {
   return (
     <div className="helm-card helm-kpi">
       <div className="lbl">{label}</div>
-      <div className={'val' + (accent ? ' accent' : '')}>{value}</div>
+      <div className={'val' + (accent ? ' accent' : '') + (tono ? ' ' + tono : '')}>{value}</div>
       {sub != null && <div className="sub">{sub}</div>}
     </div>
   )

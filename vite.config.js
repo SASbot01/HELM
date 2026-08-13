@@ -65,6 +65,13 @@ export default defineConfig({
       origin: [
         'https://detrasdecamara.org', 'https://www.detrasdecamara.org',
         'https://web.enformaconhugo.com', 'https://enformaconhugo.com',
+        // La página de inicio de Alex (www.s4sf.net/paginainicio). Esta no
+        // llama a api/formularios.js: escribe en `crm_contacts` por Supabase,
+        // o sea por el proxy /sb de aquí abajo — y el preflight se comía igual,
+        // porque este CORS corre ANTES de cualquier proxy. Los dos hosts: el
+        // túnel sirve el dominio con y sin www, y el navegador manda el que
+        // haya escrito la persona en la barra.
+        'https://www.s4sf.net', 'https://s4sf.net',
         // El despliegue de Vercel de la landing de Hugo, mientras el dominio
         // definitivo no apunte a él. Va el host exacto y no un comodín de
         // *.vercel.app: eso abriría el endpoint a cualquier proyecto de Vercel

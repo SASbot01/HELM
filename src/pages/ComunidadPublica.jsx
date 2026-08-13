@@ -13,9 +13,10 @@ import {
 } from 'lucide-react'
 import { miembroApi, tokenMiembro, guardarTokenMiembro } from '../helm/lib'
 import { Markdown } from '../helm/md'
-import { useHelmTheme } from '../helm/theme'
+import { useHelmTheme, acentoDe } from '../helm/theme'
 import { useMarcaEnLaPestana } from '../helm/marcaPestana'
 import { Marca } from '../helm/marcaPestana.jsx'
+import BotonDiscord from '../helm/BotonDiscord'
 import '../helm/theme.css'
 
 // El vídeo de una lección puede ser de YouTube, de Vimeo o un archivo subido al
@@ -58,7 +59,13 @@ export default function ComunidadPublica() {
   const [sesion, setSesion] = useState(null)      // { miembro, marca }
   const [cargando, setCargando] = useState(true)
 
-  useMarcaEnLaPestana(sesion?.marca || portal?.marca)
+  const marca = sesion?.marca || portal?.marca
+  useMarcaEnLaPestana(marca)
+
+  // El color del perfil pisa el acento del tema, igual que en el panel. Para el
+  // alumno esta página es de su formación, no de HELM: que salga el verde de
+  // HELM en la pantalla por la que ha pagado es justo lo que hay que evitar.
+  const acento = acentoDe(marca?.color) || undefined
 
   // Al abrir: se pregunta por la comunidad y, si ya había sesión guardada, se
   // valida contra el servidor. Un token viejo de alguien a quien le han quitado
@@ -89,7 +96,7 @@ export default function ComunidadPublica() {
 
   if (cargando) {
     return (
-      <div className="helm helm-portal" data-theme={theme}>
+      <div className="helm helm-portal" data-theme={theme} style={acento}>
         <div className="helm-portal-box"><Loader2 size={20} className="helm-spin" /></div>
       </div>
     )
@@ -97,7 +104,7 @@ export default function ComunidadPublica() {
 
   if (portal?.error || !portal) {
     return (
-      <div className="helm helm-portal" data-theme={theme}>
+      <div className="helm helm-portal" data-theme={theme} style={acento}>
         <div className="helm-portal-box">
           <h1>No hemos encontrado esta comunidad</h1>
           <p>{portal?.error || 'Comprueba el enlace con quien te lo haya dado.'}</p>
@@ -108,7 +115,7 @@ export default function ComunidadPublica() {
 
   if (!portal.enabled) {
     return (
-      <div className="helm helm-portal" data-theme={theme}>
+      <div className="helm helm-portal" data-theme={theme} style={acento}>
         <div className="helm-portal-box">
           <Marca marca={portal.marca} />
           <h1>Todavía no está abierta</h1>
@@ -120,13 +127,13 @@ export default function ComunidadPublica() {
 
   if (!sesion) {
     return (
-      <div className="helm helm-portal" data-theme={theme}>
+      <div className="helm helm-portal" data-theme={theme} style={acento}>
         <Entrada slug={slug} marca={portal.marca} onDentro={setSesion} />
       </div>
     )
   }
 
-  return <Dentro slug={slug} sesion={sesion} theme={theme} onSalir={salir} />
+  return <Dentro slug={slug} sesion={sesion} theme={theme} acento={acento} onSalir={salir} />
 }
 
 
@@ -236,7 +243,7 @@ function Clases({ lecciones, onAbrir }) {
 }
 
 // ── Dentro: formación y muro ───────────────────────────────────────────────
-function Dentro({ slug, sesion, theme, onSalir }) {
+function Dentro({ slug, sesion, theme, acento, onSalir }) {
   const [tab, setTab] = useState('formacion')
   const [cursos, setCursos] = useState(null)
   const [leccion, setLeccion] = useState(null)
@@ -269,7 +276,7 @@ function Dentro({ slug, sesion, theme, onSalir }) {
   }
 
   return (
-    <div className="helm helm-portal-app" data-theme={theme}>
+    <div className="helm helm-portal-app" data-theme={theme} style={acento}>
       <header className="helm-portal-top">
         <Marca marca={sesion.marca} />
         <div className="helm-portal-top-acts">
@@ -352,6 +359,10 @@ function Dentro({ slug, sesion, theme, onSalir }) {
         {tab === 'muro' && (
           <div className="helm-panel">
             <div className="helm-settings-body">
+              {/* El muro es para los anuncios que quedan escritos; el ir y venir
+                  del día a día está en Discord. Va arriba porque es lo que la
+                  gente viene buscando cuando abre esta pestaña. */}
+              <BotonDiscord url={sesion.marca?.discord} nombre={sesion.marca?.nombre} />
               {mensajes === null ? <div className="helm-empty">Cargando…</div>
                 : mensajes.length === 0 ? <div className="helm-empty">Nadie ha escrito todavía. Rompe el hielo.</div>
                   : (

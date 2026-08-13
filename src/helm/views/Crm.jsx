@@ -143,6 +143,7 @@ export default function Crm({ clientId }) {
       total: all.length,
       openValue: sum(abiertos),
       wonValue: sum(won),
+      closed,
       winRate: closed ? Math.round((won.length / closed) * 100) : 0,
     }
   }, [rows, stages, pipeline, pipelines])
@@ -220,7 +221,16 @@ export default function Crm({ clientId }) {
         <Kpi label="Contactos" value={stats.total} />
         <Kpi label="Pipeline abierto" value={money(stats.openValue)} accent />
         <Kpi label="Ganado" value={money(stats.wonValue)} />
-        <Kpi label="Tasa de cierre" value={stats.winRate + '%'} />
+        {/* Con 0 cierres el % da 0 correctamente, pero un 0% al lado de "Ganado
+            0€" se lee como "no se ha cerrado nada" cuando en realidad es
+            "todavía no hay datos" — son dos mensajes distintos. Y con 1-2
+            cierres, un 100%/0% es matemáticamente cierto pero engañoso sin la
+            muestra al lado: el sub lo deja claro en vez de esconderlo. */}
+        <Kpi
+          label="Tasa de cierre"
+          value={stats.closed ? stats.winRate + '%' : '—'}
+          sub={stats.closed ? `de ${stats.closed} cerrado${stats.closed === 1 ? '' : 's'}` : 'sin cierres aún'}
+        />
       </div>
 
       {/* Con un solo pipeline el selector sobra y solo añade ruido; aparece

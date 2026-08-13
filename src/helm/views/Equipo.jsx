@@ -12,7 +12,7 @@ import {
   equipoApi, NIVELES_ACCESO,
 } from '../lib'
 import { Panel, Empty, Modal, Field, Input, Textarea, Select, Kpi, MoneyInput, FormNote } from '../ui'
-import { ROLES, roleLabel } from '../equipo/roles'
+import { rolesDelProducto, roleLabel } from '../equipo/roles'
 import MigracionPendiente from '../MigracionPendiente'
 
 const PAY_METHODS = ['Transferencia', 'Bizum', 'PayPal', 'Wise', 'Revolut', 'Stripe', 'Cripto']
@@ -63,7 +63,7 @@ export default function Equipo({ clientId }) {
       total: activos.length,
       conAcceso: activos.filter(p => p.login_id).length,
       fijos: activos.reduce((a, p) => a + (Number(p.fixed_fee) || 0), 0),
-      porRol: ROLES.map(r => ({ ...r, n: activos.filter(p => p.role === r.key).length })).filter(r => r.n > 0),
+      porRol: rolesDelProducto().map(r => ({ ...r, n: activos.filter(p => p.role === r.key).length })).filter(r => r.n > 0),
     }
   }, [rows])
 
@@ -139,7 +139,7 @@ export default function Equipo({ clientId }) {
           <div style={{ display: 'flex', gap: 10 }}>
             <select className="helm-select" value={rolFiltro} onChange={e => setRolFiltro(e.target.value)}>
               <option value="__all__">Todos los roles</option>
-              {ROLES.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+              {rolesDelProducto().map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
             </select>
             <button className="helm-btn primary" onClick={() => setEdit(EMPTY)}><Plus size={15} />Nueva persona</button>
           </div>
@@ -248,7 +248,7 @@ function PersonaModal({ inicial, onClose, onSave }) {
     try { await onSave(form) } catch (err) { setError(err.message); setSaving(false) }
   }
 
-  const rol = ROLES.find(r => r.key === form.role)
+  const rol = rolesDelProducto().find(r => r.key === form.role)
 
   return (
     <Modal title={form.id ? 'Editar persona' : 'Nueva persona'} onClose={onClose} wide>
@@ -259,7 +259,7 @@ function PersonaModal({ inicial, onClose, onSave }) {
           </Field>
           <Field label="Rol" hint={rol?.desc}>
             <Select value={form.role} onChange={e => set('role', e.target.value)}>
-              {ROLES.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+              {rolesDelProducto().map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
             </Select>
           </Field>
         </div>

@@ -34,6 +34,7 @@ export const AREAS = [
   { key: 'tareas', label: 'Tareas', desc: 'Plugin de tareas' },
   { key: 'biblioteca', label: 'Biblioteca', desc: 'Documentos de la IA' },
   { key: 'formularios', label: 'Formularios', desc: 'Constructor y respuestas' },
+  { key: 'prospeccion', label: 'Scraper', desc: 'Plugin de captación de leads' },
 ]
 
 // Punto de partida razonable: cada rol edita lo suyo. Es lo que se aplica
@@ -65,13 +66,16 @@ export const SECCIONES = [
   { key: 'contenido', label: 'Contenido', desc: 'Calendario de contenido' },
   { key: 'llamadas', label: 'Llamadas', desc: 'Agenda de llamadas' },
   { key: 'comunidad', label: 'Comunidad', desc: 'El hilo común de HELM' },
-  { key: 'interna', label: 'Comunidad interna', desc: 'Tu comunidad y tu formación' },
+  // La clave no cambia aunque el nombre sí: está guardada en los permisos de
+  // cada perfil. Ver el NAV de HelmApp.
+  { key: 'interna', label: 'Formación', desc: 'Tus cursos, tu comunidad y sus miembros' },
   { key: 'enlaces', label: 'Enlaces', desc: 'URLs del negocio' },
   { key: 'archivos', label: 'Archivos', desc: 'Documentos del negocio' },
   { key: 'plugins', label: 'Plugins', desc: 'Catálogo de módulos' },
   { key: 'tareas', label: 'Tareas', desc: 'Plugin de tareas' },
   { key: 'biblioteca', label: 'Biblioteca', desc: 'Documentos de la IA' },
   { key: 'formularios', label: 'Formularios', desc: 'Constructor y respuestas' },
+  { key: 'prospeccion', label: 'Scraper', desc: 'Leads de cinco fuentes al embudo' },
   { key: 'actividad', label: 'Actividad', desc: 'Timeline del equipo' },
   { key: 'fiscal', label: 'Fiscal', desc: 'Plazos y modelos de una asesoría' },
   { key: 'copiloto', label: 'Copiloto Fiscal', desc: 'IA con los plazos y clientes del despacho' },
@@ -96,6 +100,43 @@ const NIVELES_TOTALES = ['admin,ceo,director', 'admin']
 // ¿Este acceso manda sobre todo el perfil? Lo usan las pantallas que solo tienen
 // sentido para quien lleva el negocio (la guía de bienvenida, Ajustes…).
 export const accesoTotal = (nivel) => NIVELES_TOTALES.includes(nivel)
+
+/**
+ * Quién está mirando el panel ahora mismo.
+ *
+ * Tres respuestas posibles y las tres importan:
+ *   - superadmin → entra a todos los perfiles y lo ve todo.
+ *   - acceso total (dueño o admin del negocio) → ve todo lo de SU perfil.
+ *   - miembro del equipo → ve lo suyo, y `helmTeamId` dice quién es.
+ *
+ * `helmTeamId` viene vacío en las sesiones abiertas antes de que el login
+ * empezara a guardarlo, así que quien lo use tiene que contar con que puede no
+ * haber persona identificada — y no esconderle entonces media pantalla.
+ */
+export function sesionHelm() {
+  const vacia = { esSuperadmin: false, mandaEnTodo: false, helmTeamId: null, email: null, nombre: null }
+  if (typeof localStorage === 'undefined') return vacia
+
+  const superadmin = localStorage.getItem('bw_superadmin')
+  if (superadmin) {
+    return { esSuperadmin: true, mandaEnTodo: true, helmTeamId: null, email: superadmin, nombre: 'Equipo HELM' }
+  }
+
+  let s = null
+  try { s = JSON.parse(localStorage.getItem('bw_client') || 'null') } catch { return vacia }
+  if (!s) return vacia
+
+  return {
+    esSuperadmin: false,
+    // Sin rol de oficio es quien montó el negocio (y también las sesiones
+    // antiguas, que no guardaban nivel). Es el mismo criterio que usa HelmApp
+    // para la guía de bienvenida.
+    mandaEnTodo: accesoTotal(s.level) || !s.teamRole,
+    helmTeamId: s.helmTeamId || null,
+    email: s.email || null,
+    nombre: s.name || s.email || null,
+  }
+}
 
 // El dueño no se puede limitar: se contesta antes de mirar la matriz. Un
 // sistema donde el propietario puede quedarse sin acceso a su propio negocio
@@ -174,7 +215,7 @@ export const SECCIONES_FIJAS = ['ajustes', 'secciones']
 //
 // Las normales se apagan si molestan; estas se encienden si hacen falta.
 export const SECCIONES_SECTOR = ['fiscal']
-export const SECCIONES_MODULO = ['tareas', 'actividad', 'biblioteca', 'formularios']
+export const SECCIONES_MODULO = ['tareas', 'actividad', 'biblioteca', 'formularios', 'prospeccion']
 const OPT_IN = new Set([...SECCIONES_SECTOR, ...SECCIONES_MODULO])
 
 /** ¿Esta sección nace apagada? Lo necesita el interruptor, que va al revés. */

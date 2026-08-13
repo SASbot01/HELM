@@ -1,4 +1,8 @@
-// HELM — Comunidad interna: la comunidad y la formación DE ESTE perfil.
+// HELM — Formación: los cursos y la comunidad DE ESTE perfil.
+//
+// En el menú se llama "Formación" porque es a lo que entra la gente, pero la
+// clave de la sección sigue siendo 'interna' (está guardada en los permisos de
+// cada perfil) y las tablas siguen siendo helm_community*.
 //
 // Cuatro pestañas y una idea: esto es tu Discord y tu Skool, dentro de HELM.
 //   Muro      → lo que ven tus miembros al entrar; publicas como la marca.
@@ -22,6 +26,7 @@ import { Panel, Empty, Field, Input, Textarea, Select, Tabs, Modal, FormNote } f
 import { Markdown } from '../md'
 import Adjuntos from '../Adjuntos'
 import MigracionPendiente from '../MigracionPendiente'
+import BotonDiscord from '../BotonDiscord'
 
 const TABS = [
   { key: 'muro', label: 'Muro', icon: <MessageSquare size={15} /> },
@@ -59,7 +64,7 @@ export default function Interna({ clientId, client }) {
       )}
       {error && <div className="helm-formerror">{error}</div>}
 
-      {tab === 'muro' ? <Muro clientId={clientId} client={client} />
+      {tab === 'muro' ? <Muro clientId={clientId} client={client} discord={config?.config?.discord_url} />
         : tab === 'formacion' ? <Formacion clientId={clientId} />
           : tab === 'miembros' ? <Miembros clientId={clientId} onCambio={cargarConfig} />
             : <ConfigCard clientId={clientId} config={config} onGuardado={cargarConfig} />}
@@ -68,7 +73,7 @@ export default function Interna({ clientId, client }) {
 }
 
 // ── Muro ───────────────────────────────────────────────────────────────────
-function Muro({ clientId, client }) {
+function Muro({ clientId, client, discord }) {
   const [mensajes, setMensajes] = useState(null)
   const [texto, setTexto] = useState('')
   const [enviando, setEnviando] = useState(false)
@@ -114,6 +119,8 @@ function Muro({ clientId, client }) {
           Lo que publiques aquí lo verán todos tus miembros al entrar, y ellos pueden
           responder. Publicas como <b>{marca.name}</b>.
         </p>
+
+        {discord && <BotonDiscord url={discord} nombre={marca.name} compacto />}
 
         <form className="helm-chat-form" onSubmit={publicar} style={{ border: 'none', padding: 0 }}>
           <textarea
@@ -813,6 +820,20 @@ function ConfigCard({ clientId, config, onGuardado }) {
           <Textarea rows={4} value={f.welcome} onChange={e => set('welcome', e.target.value)}
             placeholder="Aquí dentro tienes la formación completa, el muro para preguntar y las sesiones en directo." />
         </Field>
+
+        <Field
+          label="Discord de la comunidad"
+          hint="La invitación a tu servidor. Sale como botón en el muro y en la página de tus alumnos."
+        >
+          <Input
+            value={f.discord_url || ''} onChange={e => set('discord_url', e.target.value)}
+            placeholder="https://discord.gg/tu-servidor" maxLength={300}
+          />
+        </Field>
+        <small className="helm-settings-note" style={{ marginTop: -8 }}>
+          El chat en vivo se queda en Discord, que es donde ya está tu gente. La formación
+          y el muro siguen aquí. Déjalo vacío y el botón no aparece.
+        </small>
 
         {error && <div className="helm-formerror">{error}</div>}
         <button className="helm-btn primary" disabled={busy} style={{ justifySelf: 'start' }}>
