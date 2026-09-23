@@ -360,7 +360,21 @@ export const chatApi = {
   send: (clientId, message) => apiFetch('/api/chat?action=send', { method: 'POST', body: { clientId, message } }),
   clearHistory: (clientId) => apiFetch(`/api/chat?action=history&clientId=${clientId}`, { method: 'DELETE' }),
   forget: (clientId, id) => apiFetch(`/api/chat?action=knowledge&id=${id}&clientId=${clientId}`, { method: 'DELETE' }),
-  health: () => apiFetch('/api/chat?action=health'),
+  // Con perfil: dice qué modelo atiende a ESE perfil (Claude o el local).
+  health: (clientId) => apiFetch(`/api/chat?action=health${clientId ? `&clientId=${clientId}` : ''}`),
+}
+
+// IA por perfil. Cada cliente elige si su IA corre en el modelo local del
+// servidor o en Claude con su propia clave de Anthropic y su propio modelo.
+// La clave se manda una vez y no vuelve: `status` solo devuelve los 4 últimos.
+export const MODELO_CLAUDE_DEFECTO = 'claude-opus-5'
+
+export const iaApi = {
+  status: (clientId) => apiFetch(`/api/ia?action=status&clientId=${clientId}`),
+  link: (clientId, apiKey, model) => apiFetch('/api/ia?action=link', { method: 'POST', body: { clientId, apiKey, model } }),
+  modelo: (clientId, model) => apiFetch('/api/ia?action=modelo', { method: 'POST', body: { clientId, model } }),
+  unlink: (clientId) => apiFetch(`/api/ia?action=unlink&clientId=${clientId}`, { method: 'DELETE' }),
+  test: (clientId) => apiFetch(`/api/ia?action=test&clientId=${clientId}`),
 }
 
 // Accesos al panel para la gente del equipo. Pasa por el servidor porque la
@@ -401,6 +415,18 @@ export const stripeApi = {
     apiFetch('/api/stripe?action=sync', { method: 'POST', body: { clientId, days } }),
 }
 
+// Instagram por perfil (sección Contenido). El token vive en el servidor y solo
+// vuelve enmascarado; las métricas se leen luego de helm_ig_media, no de Meta.
+export const instagramApi = {
+  status: (clientId) => apiFetch(`/api/instagram?action=status&clientId=${clientId}`),
+  authUrl: (clientId) => apiFetch(`/api/instagram?action=auth-url&clientId=${clientId}`),
+  link: (clientId, token) =>
+    apiFetch('/api/instagram?action=link', { method: 'POST', body: { clientId, token } }),
+  unlink: (clientId) => apiFetch(`/api/instagram?action=unlink&clientId=${clientId}`, { method: 'DELETE' }),
+  sync: (clientId, limite = 60) =>
+    apiFetch('/api/instagram?action=sync', { method: 'POST', body: { clientId, limite } }),
+}
+
 // Google (Calendar + Drive) por perfil. El refresh token se queda en el
 // servidor; aquí solo se pide la URL de autorización y se disparan las
 // sincronizaciones.
@@ -425,6 +451,18 @@ export const calendlyApi = {
   link: (clientId, token) => apiFetch('/api/calendly?action=link', { method: 'POST', body: { clientId, token } }),
   unlink: (clientId) => apiFetch(`/api/calendly?action=unlink&clientId=${clientId}`, { method: 'DELETE' }),
   eventos: (clientId) => apiFetch(`/api/calendly?action=eventos&clientId=${clientId}`),
+}
+
+// Telegram por perfil: hablar con la IA del perfil desde el móvil. El token
+// del bot nunca vuelve al navegador (solo @usuario y los cuatro últimos
+// caracteres); los chats autorizados y el código de /vincular sí, que es lo
+// que la tarjeta de Ajustes enseña.
+export const telegramApi = {
+  status: (clientId) => apiFetch(`/api/telegram?action=status&clientId=${clientId}`),
+  link: (clientId, token) => apiFetch('/api/telegram?action=link', { method: 'POST', body: { clientId, token } }),
+  unlink: (clientId) => apiFetch(`/api/telegram?action=unlink&clientId=${clientId}`, { method: 'DELETE' }),
+  codigo: (clientId) => apiFetch('/api/telegram?action=codigo', { method: 'POST', body: { clientId } }),
+  quitarChat: (clientId, chatId) => apiFetch(`/api/telegram?action=chat&clientId=${clientId}&chatId=${encodeURIComponent(chatId)}`, { method: 'DELETE' }),
 }
 
 // Scraper: leads de cinco fuentes al pipeline. Todo pasa por el servidor —las
@@ -465,105 +503,6 @@ export const googleApi = {
     apiFetch('/api/google?action=drive-import', { method: 'POST', body: { clientId, fileId, contactId } }),
 }
 
-// ── Comunidad ──────────────────────────────────────────────────────────────
-// El único hilo común a todos los perfiles. No se filtra por client_id a
-// propósito: el sentido de la sección es que la gente se lea entre negocios.
-
-export const COMMUNITY_PAGE = 200
-
-export async function fetchCommunity() {
-  const { data, error } = await supabase
-    .from('helm_community_messages')
-    .select('*')
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false })
-    .limit(COMMUNITY_PAGE)
-  if (error) {
-    console.warn('[helm] fetchCommunity', error.message)
-    const missing = error.code === '42P01' || /does not exist|schema cache/i.test(error.message || '')
-    return { rows: [], error: missing ? MISSING_TABLE : error.message }
-  }
-  // Se piden los últimos y se pintan en orden de conversación.
-  return { rows: (data || []).reverse(), error: null }
-}
-
-export async function postCommunity(msg) {
-  const { data, error } = await supabase.from('helm_community_messages').insert(msg).select().single()
-  if (error) { console.warn('[helm] postCommunity', error.message); throw error }
-  return data
-}
-
-// Borrado blando: el mensaje desaparece del hilo pero no deja un hueco en las
-// respuestas de los demás.
-export async function deleteCommunity(id) {
-  const { error } = await supabase.from('helm_community_messages')
-    .update({ deleted_at: new Date().toISOString() }).eq('id', id)
-  if (error) { console.warn('[helm] deleteCommunity', error.message); throw error }
-}
-
-// ── Comunidad interna (lado panel) ─────────────────────────────────────────
-// La comunidad y la formación de ESTE perfil, con sus miembros. Distinto de
-// fetchCommunity(), que es el hilo común de todos los negocios de HELM.
-export const internaApi = {
-  config: (clientId) => apiFetch(`/api/comunidad?action=admin-config&clientId=${clientId}`),
-  guardarConfig: (clientId, body) =>
-    apiFetch('/api/comunidad?action=admin-config', { method: 'POST', body: { clientId, ...body } }),
-  miembros: (clientId) => apiFetch(`/api/comunidad?action=miembros&clientId=${clientId}`),
-  estado: (clientId, memberId, status) =>
-    apiFetch('/api/comunidad?action=miembro-estado', { method: 'POST', body: { clientId, memberId, status } }),
-  aprobarTodos: (clientId) =>
-    apiFetch('/api/comunidad?action=aprobar-todos', { method: 'POST', body: { clientId } }),
-  borrarMiembro: (clientId, memberId) =>
-    apiFetch(`/api/comunidad?action=miembro&clientId=${clientId}&memberId=${memberId}`, { method: 'DELETE' }),
-  publicar: (clientId, body, parentId) =>
-    apiFetch('/api/comunidad?action=muro-owner', { method: 'POST', body: { clientId, body, parentId } }),
-}
-
-// ── Comunidad interna (lado miembro) ───────────────────────────────────────
-// El portal público. Sesión propia, guardada por comunidad: alguien puede ser
-// miembro de dos y no tiene por qué compartir sesión entre ellas. Y NO usa
-// apiFetch a propósito: ese redirige al login del panel al recibir un 401, que
-// es justo lo que no debe pasarle a un alumno.
-const MIEMBRO_KEY = (slug) => `helm_miembro_${slug}`
-export const tokenMiembro = (slug) => {
-  try { return localStorage.getItem(MIEMBRO_KEY(slug)) } catch { return null }
-}
-export const guardarTokenMiembro = (slug, token) => {
-  try {
-    if (token) localStorage.setItem(MIEMBRO_KEY(slug), token)
-    else localStorage.removeItem(MIEMBRO_KEY(slug))
-  } catch { /* incógnito: la sesión se pierde al cerrar, y ya */ }
-}
-
-async function miembroFetch(slug, path, { method = 'GET', body, conToken = true } = {}) {
-  const token = conToken ? tokenMiembro(slug) : null
-  const r = await fetch(path, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  })
-  const data = await r.json().catch(() => ({}))
-  if (!r.ok) {
-    const err = new Error(data?.error || `Error ${r.status}`)
-    err.statusCode = r.status
-    throw err
-  }
-  return data
-}
-
-export const miembroApi = {
-  portal: (slug) => miembroFetch(slug, `/api/comunidad?action=portal&slug=${encodeURIComponent(slug)}`, { conToken: false }),
-  registro: (slug, body) => miembroFetch(slug, '/api/comunidad?action=register', { method: 'POST', body: { slug, ...body }, conToken: false }),
-  login: (slug, body) => miembroFetch(slug, '/api/comunidad?action=login', { method: 'POST', body: { slug, ...body }, conToken: false }),
-  me: (slug) => miembroFetch(slug, '/api/comunidad?action=me'),
-  contenido: (slug) => miembroFetch(slug, '/api/comunidad?action=contenido'),
-  muro: (slug) => miembroFetch(slug, '/api/comunidad?action=muro'),
-  escribir: (slug, body, parentId) => miembroFetch(slug, '/api/comunidad?action=muro', { method: 'POST', body: { body, parentId } }),
-}
-
 // ── Onboarding ─────────────────────────────────────────────────────────────
 // Las respuestas viven en helm_onboarding (un documento por perfil y formulario).
 // Al completarlo, se regeneran los bloques de helm_knowledge con source
@@ -595,6 +534,21 @@ export const onboardingApi = {
     apiFetch('/api/onboarding?action=generate', { method: 'POST', body: { clientId, kind, dossier } }),
   saveBiblia: (clientId, kind, content) =>
     apiFetch('/api/onboarding?action=save', { method: 'POST', body: { clientId, kind, content } }),
+}
+
+// Equipos IA — equipo de Contenido: Agente Persona (base) + Agente 1 (ideas diarias).
+export const agentesApi = {
+  base: (clientId) => apiFetch(`/api/agentes-contenido?action=base&clientId=${clientId}`),
+  generarBase: (clientId) =>
+    apiFetch('/api/agentes-contenido?action=generar-base', { method: 'POST', body: { clientId } }),
+  saveBase: (clientId, content) =>
+    apiFetch('/api/agentes-contenido?action=save-base', { method: 'POST', body: { clientId, content } }),
+  ideas: (clientId, fecha) =>
+    apiFetch(`/api/agentes-contenido?action=ideas&clientId=${clientId}${fecha ? `&fecha=${fecha}` : ''}`),
+  historial: (clientId, limit = 14) =>
+    apiFetch(`/api/agentes-contenido?action=historial&clientId=${clientId}&limit=${limit}`),
+  investigar: (clientId, fecha) =>
+    apiFetch('/api/agentes-contenido?action=investigar', { method: 'POST', body: { clientId, fecha } }),
 }
 
 // Actividades de un contacto (timeline del CRM), más recientes primero.

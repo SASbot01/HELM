@@ -8,16 +8,48 @@ import Registro from './pages/Registro.jsx'
 import UsersAdmin from './pages/UsersAdmin.jsx'
 import HelmApp from './helm/HelmApp.jsx'
 import FormularioPublico from './pages/FormularioPublico.jsx'
-import ComunidadPublica from './pages/ComunidadPublica.jsx'
 import PrimerMapa from './pages/PrimerMapa.jsx'
 import SilvestreValor from './pages/SilvestreValor.jsx'
 import PortalDocumentos from './pages/PortalDocumentos.jsx'
 import PaginaInicio from './pages/PaginaInicio.jsx'
+import PaginaInicioHugo from './pages/PaginaInicioHugo.jsx'
 import './index.css'
 
 // App reducida a HELM: se entra por /login (superadmin) → /admin (Helm).
 // Todo lo demás (apex-operations, ClientApp, MID, ERP, landings, funnels…)
 // se retiró del routing.
+
+// El dominio raíz es la cara pública de la marca y los subdominios son el
+// producto, pero el túnel sirve todos los hostnames desde este mismo build:
+// la decisión no puede estar en el servidor, se toma aquí mirando el hostname.
+//
+// Cada marca con dominio propio entra aquí con su página. Añadir una es añadir
+// una línea; mientras el dominio no apunte al túnel, /paginainicio (ver
+// PaginaInicioPorHost más abajo) sirve para verla y para el enlace de la bio.
+const PORTADAS_POR_DOMINIO = {
+  's4sf.net': PaginaInicio,
+  'www.s4sf.net': PaginaInicio,
+  'enformaconhugo.com': PaginaInicioHugo,
+  'www.enformaconhugo.com': PaginaInicioHugo,
+}
+
+// Qué hay en `/`: la portada de la marca si entras por su dominio, y el panel
+// si entras por helm. o consultoria. (o en local, donde se trabaja el producto).
+function Raiz() {
+  const Portada = PORTADAS_POR_DOMINIO[window.location.hostname]
+  return Portada ? <Portada /> : <Navigate to="/admin" replace />
+}
+
+// La misma ruta /paginainicio sirve la portada de quien la pida, mirando por
+// qué dominio ha entrado. Es la misma tabla que Raiz: así el enlace de la bio
+// de cada marca puede compartir el mismo path sin que una pise a la otra, y
+// funciona tanto si el dominio ya apunta al túnel como si de momento se
+// enseña con el hostname de Helm. Por defecto sale la de Alex, que es la
+// dueña histórica de esta ruta.
+function PaginaInicioPorHost() {
+  const Portada = PORTADAS_POR_DOMINIO[window.location.hostname] || PaginaInicio
+  return <Portada />
+}
 
 // Scroll al top en cada cambio de ruta, respetando anclas #hash.
 function ScrollToTop() {
@@ -38,7 +70,7 @@ createRoot(document.getElementById('root')).render(
       <BrowserRouter>
         <ScrollToTop />
         <Routes>
-          <Route path="/" element={<Navigate to="/admin" replace />} />
+          <Route path="/" element={<Raiz />} />
           <Route path="/login" element={<SuperAdminLogin />} />
           {/* Registro público (crea negocio + acceso pendientes de aprobación). */}
           <Route path="/registro" element={<Registro />} />
@@ -50,9 +82,6 @@ createRoot(document.getElementById('root')).render(
           {/* Formulario público que rellena el cliente. Va ANTES de /:slug/*,
               que si no se lo tragaría como si fuese el slug de un perfil. */}
           <Route path="/f/:formId" element={<FormularioPublico />} />
-          {/* Portal público de la comunidad interna de un perfil. Va ANTES de
-              /:slug/* por lo mismo que /f/: si no, se lo tragaría. */}
-          <Route path="/c/:slug" element={<ComunidadPublica />} />
           {/* El portal donde el cliente de una asesoria sube su documentacion.
               El token del enlace es lo que autentica; va ANTES de /:slug/* como
               todas las publicas. */}
@@ -62,10 +91,13 @@ createRoot(document.getElementById('root')).render(
               /:slug/*, que si no leería "silvestreai" como slug de perfil. */}
           <Route path="/silvestreai" element={<Navigate to="/silvestreai/valor" replace />} />
           <Route path="/silvestreai/valor" element={<SilvestreValor />} />
-          {/* La cara pública de la marca: el enlace de la bio de Instagram.
-              Va ANTES de /:slug/* como todas las públicas — si no, "paginainicio"
-              se leería como el slug de un perfil y acabaría en el login. */}
-          <Route path="/paginainicio" element={<PaginaInicio />} />
+          {/* La cara pública de la marca: el enlace de la bio de Instagram. Un
+              solo path para todas las marcas — PaginaInicioPorHost mira el
+              dominio y decide cuál enseña, así que enformaconhugo.com y s4sf.net
+              sirven la misma ruta con contenido distinto. Va ANTES de /:slug/*
+              como todas las públicas — si no, "paginainicio" se leería como el
+              slug de un perfil y acabaría en el login. */}
+          <Route path="/paginainicio" element={<PaginaInicioPorHost />} />
           {/* HELM — app limpia (CRM · Ventas · Diario · Finanzas · Chat · Ajustes).
               /admin entra sin perfil fijado (redirige al último usado) y
               /<slug> abre directamente ese perfil: /silvestre, /enformaconhugo… */}

@@ -2,17 +2,17 @@
 // Se monta en /admin. Gestiona un perfil (cliente) a la vez, con selector arriba.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Link2, Blocks, Settings, Plus, Rocket, CalendarDays, Menu, X, Package, UserCog, PhoneCall, MessagesSquare, GraduationCap, FolderOpen, Layers, CalendarClock, BookOpen, FileText, Receipt, ShieldCheck } from 'lucide-react'
+import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Link2, Blocks, Settings, Plus, Rocket, Menu, X, Package, UserCog, PhoneCall, FolderOpen, Layers, CalendarClock, BookOpen, FileText, Receipt, ShieldCheck, Compass, ScrollText, Instagram } from 'lucide-react'
 import { listClients, createProfile, slugify, usersApi, brandOf } from './lib'
 import { productoActual, seccionDelProducto, seccionSiempre } from './producto'
 import { Modal, Field, Input } from './ui'
 import Guia from './Guia'
 import Informe from './views/Informe'
 import Onboarding from './views/Onboarding'
-import Contenido from './views/Contenido'
+import Guiones from './views/Guiones'
+import ContenidoSocial from './views/ContenidoSocial'
+import Estrategia from './views/Estrategia'
 import Llamadas from './views/Llamadas'
-import Comunidad from './views/Comunidad'
-import Interna from './views/Interna'
 import Crm from './views/Crm'
 import Servicios from './views/Servicios'
 import Documentos from './views/Documentos'
@@ -27,7 +27,6 @@ import Archivos from './views/Archivos'
 import Secciones from './views/Secciones'
 import Fiscal from './views/Fiscal'
 import Copiloto from './views/Copiloto'
-import Marketing from './views/Marketing'
 import Ajustes from './views/Ajustes'
 import { PLUGINS, PLUGIN_MAP } from './plugins/registry'
 import { loadPermisos, puedeVer, accesoTotal, DEFAULT_VISIBLE, loadSecciones, saveSecciones, seccionEncendida, esOptIn } from './permisos'
@@ -46,18 +45,19 @@ const NAV = [
   { key: 'diario', label: 'Diario', icon: ClipboardList, title: 'Diario', sub: 'Reportes de closer y setter', C: Diario },
   { key: 'finanzas', label: 'Finanzas', icon: Wallet, title: 'Finanzas', sub: 'Ingresos, gastos y balance', C: Finanzas },
   { key: 'chat', label: 'Chat', icon: MessageSquare, title: 'Chat', sub: 'Tu copywriter con la memoria de este perfil', C: Chat },
-  { key: 'contenido', label: 'Contenido', icon: CalendarDays, title: 'Contenido', sub: 'Tu calendario de contenido', C: Contenido },
+  // "Contenido" era esto: el calendario de piezas. Ahora se llama Guiones (es
+  // donde se escribe lo que vas a grabar) y el nombre Contenido pasa a la
+  // sección de abajo, la de métricas. La CLAVE sigue siendo 'contenido' a
+  // propósito: es la que está guardada en los permisos y las secciones activas
+  // de cada perfil.
+  { key: 'contenido', label: 'Guiones', icon: ScrollText, title: 'Guiones', sub: 'Lo que vas a grabar, día a día', C: Guiones },
+  { key: 'contenido-social', label: 'Contenido', icon: Instagram, title: 'Contenido', sub: 'Tu Instagram: visitas, métricas y qué vídeos ganan', C: ContenidoSocial },
+  { key: 'estrategia', label: 'Estrategia', icon: Compass, title: 'Estrategia', sub: 'Tu evergreen y tus lanzamientos', C: Estrategia },
   { key: 'llamadas', label: 'Llamadas', icon: PhoneCall, title: 'Llamadas', sub: 'Tu agenda de Google, con lo que pasó en cada una', C: Llamadas },
-  { key: 'comunidad', label: 'Comunidad', icon: MessagesSquare, title: 'Comunidad', sub: 'El hilo común de todos los negocios de HELM', C: Comunidad },
-  // La clave sigue siendo 'interna' aunque el nombre sea "Formación": es la que
-  // está guardada en los permisos y en las secciones activas de cada perfil, y
-  // cambiarla dejaría a media plantilla sin acceso de un día para otro.
-  { key: 'interna', label: 'Formación', icon: GraduationCap, title: 'Formación', sub: 'Tus cursos, tu comunidad y sus miembros', C: Interna },
   { key: 'enlaces', label: 'Enlaces', icon: Link2, title: 'Enlaces', sub: 'Las URLs del negocio, a mano', C: Enlaces },
   { key: 'archivos', label: 'Archivos', icon: FolderOpen, title: 'Archivos', sub: 'Lo que subes, lo que escribe la IA y las Biblias', C: Archivos },
   { key: 'fiscal', label: 'Fiscal', icon: CalendarClock, title: 'Fiscal', sub: 'Plazos y modelos de tus clientes', C: Fiscal },
   { key: 'copiloto', label: 'Copiloto Fiscal', icon: ShieldCheck, title: 'Copiloto Fiscal', sub: 'Pregúntale por plazos, clientes y avisos', C: Copiloto },
-  { key: 'marketing', label: 'Marketing', icon: TrendingUp, title: 'Marketing', sub: 'Qué campaña trae leads y cuál trae ventas', C: Marketing },
   { key: 'secciones', label: 'Secciones', icon: Layers, title: 'Secciones', sub: 'Qué partes del panel usa este negocio', C: Secciones },
   { key: 'ajustes', label: 'Ajustes', icon: Settings, title: 'Ajustes', sub: 'Integraciones y IA de este perfil', C: Ajustes },
 ]
@@ -160,7 +160,16 @@ export default function HelmApp() {
   // Cada producto entra por su puerta: HELM por el Informe, el dominio del
   // Scraper por el Scraper. Caer en una sección que ese producto ni siquiera
   // tiene y rebotar a otra es un parpadeo feo en la primera pantalla.
-  const [view, setView] = useState(() => productoActual().vistaInicial || 'informe')
+  const [view, setView] = useState(() => {
+    // Vuelta del OAuth de Instagram (?instagram=ok|error): el callback no puede
+    // devolver a una vista concreta porque la vista no va en la URL, así que se
+    // detecta aquí y se abre la sección que lo pidió. Sin esto, el aviso de
+    // "cuenta conectada" lo pinta una pantalla que nadie está mirando.
+    try {
+      if (new URLSearchParams(window.location.search).has('instagram')) return 'contenido-social'
+    } catch { /* sin window (SSR, tests): la vista inicial de siempre */ }
+    return productoActual().vistaInicial || 'informe'
+  })
   const [clients, setClients] = useState([])
   const [clientId, setClientId] = useState(null)
   const [loadingClients, setLoadingClients] = useState(true)
@@ -170,7 +179,7 @@ export default function HelmApp() {
   const [guardandoSecciones, setGuardandoSecciones] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)   // menú lateral en móvil
-  const [theme] = useHelmTheme()                    // verde | blanco | negro
+  const [theme] = useHelmTheme()                    // negro (base) | verde | azul | rojo | blanco
 
   // Cambiar de vista cierra el menú móvil.
   const go = (key) => { setView(key); setMenuOpen(false) }

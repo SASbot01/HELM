@@ -1,0 +1,297 @@
+/* ============================================================================
+   HELM — Estrategia / Lanzamientos.
+   Hoja hermana del bloque .helm-est-* de theme.css: allí vive el evergreen
+   (Ronda de Stories, Ronda de Reels) y aquí lo que cambia de un lanzamiento —
+   los quince guiones, las fases y los números.
+
+   Dos reglas heredadas de theme.css y que aquí tampoco se rompen:
+     · Ningún color a pelo. Todo por variable, para que los cinco temas y el
+       color de marca de cada perfil sigan mandando sin tocar una regla.
+     · Nada de scroll horizontal en el cuerpo: si una tabla es ancha, scrollea
+       dentro de su propio contenedor.
+   ============================================================================ */
+
+/* ── Cabecera: selector de playbook ──────────────────────────────────────── */
+/* El playbook es de QUIÉN es el lanzamiento, no una pestaña más: por eso va
+   arriba del todo y separado de la navegación por secciones. */
+.helm-lanz-top { display: flex; flex-direction: column; gap: 12px; }
+
+.helm-lanz-pbs { display: flex; flex-wrap: wrap; gap: 8px; }
+.helm-lanz-pb {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 9px 14px; border-radius: var(--radius-sm);
+  background: var(--panel); border: 1px solid var(--border);
+  color: var(--text-dim); cursor: pointer; text-align: left;
+  transition: background .16s cubic-bezier(.32,.72,0,1), border-color .16s, transform .16s;
+}
+.helm-lanz-pb:hover { background: var(--panel-2); border-color: var(--border-2); }
+.helm-lanz-pb:active { transform: scale(.985); }
+.helm-lanz-pb.active {
+  background: var(--hover); border-color: var(--cyan); color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--cyan);
+}
+.helm-lanz-pb b { font-size: 13px; font-weight: 600; }
+.helm-lanz-pb span { font-size: 11px; color: var(--text-mut); }
+
+/* ── Hero y fichas ───────────────────────────────────────────────────────── */
+.helm-lanz-hero { display: flex; flex-direction: column; gap: 8px; }
+
+/* Los números del lanzamiento (17 plazas, 1.997 €, 33.949 €) se leen mejor en
+   cifra grande que en una fila de tabla: es lo primero que se mira. */
+.helm-lanz-cifras {
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.helm-lanz-cifra {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 12px 14px; border-radius: var(--radius-sm);
+  background: var(--panel); border: 1px solid var(--border);
+}
+.helm-lanz-cifra .lbl {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--text-mut); font-weight: 600;
+}
+.helm-lanz-cifra .val {
+  font-size: 22px; font-weight: 700; color: var(--text);
+  font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+}
+.helm-lanz-cifra .val.accent {
+  background: var(--gradient); -webkit-background-clip: text;
+  background-clip: text; -webkit-text-fill-color: transparent;
+}
+.helm-lanz-kpi-txt { font-size: 12px; color: var(--text-dim); line-height: 1.55; }
+
+.helm-lanz-ficha { display: grid; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.helm-lanz-ficha > div { display: grid; grid-template-columns: minmax(120px, 200px) 1fr; gap: 12px; padding: 9px 12px; background: var(--panel); }
+.helm-lanz-ficha-t { font-size: 12px; color: var(--text-mut); font-weight: 600; }
+.helm-lanz-ficha > div > span:last-child { font-size: 12.5px; color: var(--text-dim); line-height: 1.55; }
+
+/* ── Los tres cambios y los cuatro modelos ───────────────────────────────── */
+.helm-lanz-cambios, .helm-lanz-modelos, .helm-lanz-grupos, .helm-lanz-riesgos {
+  display: grid; gap: 10px;
+}
+.helm-lanz-cambios { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.helm-lanz-cambio { padding: 12px 14px; border-radius: var(--radius-sm); background: var(--panel); border: 1px solid var(--border); }
+.helm-lanz-cambio-n { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--cyan); }
+.helm-lanz-cambio b { display: block; font-size: 13px; margin: 4px 0 5px; color: var(--text); }
+.helm-lanz-cambio p { margin: 0; font-size: 12.5px; color: var(--text-mut); line-height: 1.6; }
+
+.helm-lanz-modelos { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.helm-lanz-modelo {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 12px 14px; border-radius: var(--radius-sm);
+  background: var(--panel); border: 1px solid var(--border);
+}
+/* El modelo elegido no se marca con un color más: se marca con el borde de
+   acento, que es lo único reservado a "esto es lo que se hace". */
+.helm-lanz-modelo.ok { border-color: var(--cyan); background: var(--panel-2); }
+.helm-lanz-modelo b { font-size: 13px; color: var(--text); }
+.helm-lanz-modelo-como { font-size: 12px; color: var(--text-dim); line-height: 1.55; }
+.helm-lanz-modelo p { margin: 0; font-size: 12px; color: var(--text-mut); line-height: 1.55; }
+.helm-lanz-modelo-flag {
+  align-self: flex-start; font-size: 10.5px; font-weight: 600;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--hover); color: var(--text-dim); border: 1px solid var(--border-2);
+}
+.helm-lanz-modelo.ok .helm-lanz-modelo-flag { color: var(--cyan); border-color: var(--cyan); }
+
+/* ── Los quince guiones ──────────────────────────────────────────────────── */
+.helm-lanz-bloque { display: flex; flex-direction: column; gap: 10px; }
+.helm-lanz-bloque-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.helm-lanz-count { font-size: 11px; color: var(--text-mut); font-variant-numeric: tabular-nums; }
+
+.helm-lanz-filtros { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+.helm-lanz-guiones {
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(285px, 1fr));
+}
+
+.helm-lanz-guion {
+  position: relative; display: flex; flex-direction: column; gap: 8px;
+  padding: 13px 14px; border-radius: var(--radius-sm);
+  background: var(--panel); border: 1px solid var(--border);
+  transition: background .18s cubic-bezier(.32,.72,0,1), border-color .18s, transform .18s;
+}
+.helm-lanz-guion:hover { background: var(--panel-2); border-color: var(--border-2); }
+/* El carril de la pieza, como una pestaña de color en el canto izquierdo. Es
+   el mismo código de color que los frames del evergreen (helm-est-dot). */
+.helm-lanz-guion::before {
+  content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px;
+  border-radius: 0 3px 3px 0; background: var(--text-mut);
+}
+.helm-lanz-guion.dar::before { background: var(--green); }
+.helm-lanz-guion.conectar::before { background: var(--amber); }
+.helm-lanz-guion.vender::before { background: var(--violet); }
+
+.helm-lanz-guion-open {
+  display: flex; flex-direction: column; gap: 7px; text-align: left;
+  background: none; border: 0; padding: 0; cursor: pointer; color: inherit; width: 100%;
+}
+.helm-lanz-guion-open:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; border-radius: 6px; }
+
+.helm-lanz-guion-head { display: flex; align-items: baseline; gap: 8px; }
+.helm-lanz-id {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500;
+  color: var(--cyan); flex-shrink: 0;
+}
+.helm-lanz-guion-t { font-size: 13.5px; font-weight: 600; color: var(--text); line-height: 1.35; }
+
+/* La intención es lo que el dueño pidió ver sin abrir nada: qué tiene que
+   conseguir la pieza. Va con más peso que los metadatos, no como pie. */
+.helm-lanz-guion-int { font-size: 12.5px; color: var(--text-dim); line-height: 1.55; margin: 0; }
+
+.helm-lanz-guion-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 11px; color: var(--text-mut); }
+.helm-lanz-guion-meta .sep { opacity: .45; }
+.helm-lanz-guion-meta .mono { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+.helm-lanz-guion-meta .cal { color: var(--text-dim); }
+
+.helm-lanz-guion-pie { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.helm-lanz-guion-cta {
+  font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: var(--hover); color: var(--text-dim); border: 1px solid var(--border);
+}
+.helm-lanz-guion-acts { display: flex; gap: 6px; }
+
+.helm-lanz-tipo {
+  font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--text-mut);
+}
+
+.helm-lanz-flags { display: flex; gap: 5px; flex-wrap: wrap; }
+.helm-lanz-flag {
+  font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 999px;
+  border: 1px solid var(--border-2); color: var(--text-mut);
+}
+.helm-lanz-flag.editado { color: var(--amber); border-color: var(--amber); }
+.helm-lanz-flag.aud { color: var(--text-dim); }
+.helm-lanz-grabado { color: var(--green); display: inline-flex; align-items: center; gap: 4px; font-size: 11px; }
+
+/* ── Detalle del guion (dentro del modal) ────────────────────────────────── */
+.helm-lanz-detalle { display: flex; flex-direction: column; gap: 14px; }
+.helm-lanz-detalle-meta { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11.5px; color: var(--text-mut); }
+.helm-lanz-h4 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-mut); margin: 0; }
+
+.helm-lanz-ganchos { display: flex; flex-direction: column; gap: 7px; }
+.helm-lanz-gancho {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 9px 11px; border-radius: var(--radius-sm);
+  background: var(--panel); border: 1px solid var(--border);
+}
+/* El gancho que se graba es el único dato accionable de los tres: se marca
+   con el acento y los otros dos se quedan en gris, que es su papel — reserva. */
+.helm-lanz-gancho.ok { border-color: var(--cyan); background: var(--panel-2); }
+.helm-lanz-gancho-n { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-mut); flex-shrink: 0; margin-top: 2px; }
+.helm-lanz-gancho.ok .helm-lanz-gancho-n { color: var(--cyan); }
+.helm-lanz-gancho-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.helm-lanz-gancho-f { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-mut); font-weight: 600; }
+.helm-lanz-gancho-t { font-size: 12.5px; color: var(--text-dim); line-height: 1.55; }
+
+/* La tabla de tiempos es lo que se lee con el móvil en la mano el día del
+   rodaje: la columna del tiempo va monoespaciada y tabular para que los
+   bloques se alineen y se puedan seguir de un vistazo. */
+.helm-lanz-tiempos { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.helm-lanz-tiempos td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--text-dim); line-height: 1.55; }
+.helm-lanz-tiempos tr:last-child td { border-bottom: 0; }
+.helm-lanz-tiempos td:first-child {
+  font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums;
+  font-size: 11px; color: var(--cyan); white-space: nowrap; width: 1%;
+}
+.helm-lanz-tiempos .helm-lanz-paso { display: block; font-size: 10.5px; color: var(--text-mut); margin-bottom: 2px; }
+.helm-lanz-tiempos .ve { display: block; margin-top: 4px; color: var(--text-mut); font-size: 11.5px; }
+
+.helm-lanz-anuncio { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--panel-2); border: 1px solid var(--border-2); }
+.helm-lanz-anuncio-txt { font-size: 12.5px; color: var(--text-dim); line-height: 1.6; margin: 0; }
+.helm-lanz-anuncio-pie { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11.5px; color: var(--text-mut); }
+
+/* ── Calendario y línea de tiempo ────────────────────────────────────────── */
+.helm-lanz-timeline { display: flex; flex-direction: column; gap: 4px; }
+.helm-lanz-tl-seg { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--radius-sm); border: 1px solid transparent; }
+.helm-lanz-tl-seg.helm-lanz-tl-hoy { border-color: var(--cyan); background: var(--panel-2); }
+.helm-lanz-tl-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-mut); flex-shrink: 0; }
+.helm-lanz-tl-seg.helm-lanz-tl-hoy .helm-lanz-tl-dot { background: var(--cyan); box-shadow: 0 0 0 4px color-mix(in srgb, var(--cyan) 22%, transparent); }
+.helm-lanz-tl-rango { font-size: 11px; color: var(--text-mut); font-variant-numeric: tabular-nums; margin-left: auto; }
+
+.helm-lanz-fase { display: flex; flex-direction: column; gap: 8px; padding: 13px 14px; border-radius: var(--radius-sm); background: var(--panel); border: 1px solid var(--border); }
+.helm-lanz-fase.ok { border-color: var(--cyan); }
+.helm-lanz-fase-head { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.helm-lanz-fase-n { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--cyan); }
+.helm-lanz-fase-tit { font-size: 13.5px; font-weight: 600; color: var(--text); }
+.helm-lanz-fase-estado { margin-left: auto; font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--hover); color: var(--text-mut); border: 1px solid var(--border); }
+.helm-lanz-fase.ok .helm-lanz-fase-estado { color: var(--cyan); border-color: var(--cyan); }
+.helm-lanz-fase-resumen { font-size: 12.5px; color: var(--text-mut); line-height: 1.6; margin: 0; }
+
+/* ── Tablas propias, leads, riesgos, listas ──────────────────────────────── */
+.helm-lanz-table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 460px; }
+.helm-lanz-table th { text-align: left; padding: 9px 12px; background: var(--panel); color: var(--text-mut); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
+.helm-lanz-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--text-dim); vertical-align: top; line-height: 1.55; }
+.helm-lanz-table tr:last-child td { border-bottom: 0; }
+.helm-lanz-table .mono { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.helm-lanz-grupos { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.helm-lanz-grupo { padding: 12px 14px; border-radius: var(--radius-sm); background: var(--panel); border: 1px solid var(--border); }
+.helm-lanz-grupo b { display: block; font-size: 13px; color: var(--text); margin-bottom: 5px; }
+.helm-lanz-grupo-quien { font-size: 12px; color: var(--text-dim); line-height: 1.55; margin: 0 0 5px; }
+.helm-lanz-grupo-como { font-size: 12px; color: var(--text-mut); line-height: 1.55; margin: 0; }
+
+.helm-lanz-riesgos { grid-template-columns: 1fr; }
+.helm-lanz-riesgo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--panel); border: 1px solid var(--border); }
+.helm-lanz-riesgo-si { font-size: 12.5px; color: var(--text); line-height: 1.55; }
+.helm-lanz-riesgo-ent { font-size: 12.5px; color: var(--text-mut); line-height: 1.55; }
+
+.helm-lanz-lista { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
+.helm-lanz-lista li { font-size: 12.5px; color: var(--text-dim); line-height: 1.55; }
+
+.helm-lanz-checklist { display: flex; flex-direction: column; gap: 6px; }
+.helm-lanz-check { display: flex; gap: 9px; align-items: flex-start; font-size: 12.5px; color: var(--text-dim); line-height: 1.55; }
+.helm-lanz-check svg { flex-shrink: 0; margin-top: 2px; color: var(--text-mut); }
+
+.helm-lanz-necesito { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+
+.helm-lanz-alarma {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 12px 14px; border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--amber) 10%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent);
+}
+.helm-lanz-alarma b { font-size: 13px; color: var(--amber); }
+.helm-lanz-alarma p { margin: 0; font-size: 12.5px; color: var(--text-dim); line-height: 1.6; }
+
+.helm-lanz-dos { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+
+/* ── Edición y volcado ───────────────────────────────────────────────────── */
+.helm-lanz-editor { display: flex; flex-direction: column; gap: 12px; }
+.helm-lanz-edit-ganchos { display: flex; flex-direction: column; gap: 7px; }
+.helm-lanz-edit-gancho { display: flex; gap: 9px; align-items: flex-start; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--panel); border: 1px solid var(--border); }
+.helm-lanz-edit-gancho-radio { margin-top: 3px; flex-shrink: 0; accent-color: var(--cyan); }
+.helm-lanz-edit-tabla { display: flex; flex-direction: column; gap: 9px; }
+.helm-lanz-edit-fila { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: var(--radius-sm); background: var(--panel); border: 1px solid var(--border); }
+.helm-lanz-edit-fila-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--text-mut); }
+
+.helm-lanz-volcar-todo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.helm-lanz-aviso {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; border-radius: var(--radius-sm);
+  background: var(--panel-2); border: 1px solid var(--border-2);
+  font-size: 12.5px; color: var(--text-dim);
+}
+.helm-lanz-aviso-x { margin-left: auto; background: none; border: 0; color: var(--text-mut); cursor: pointer; display: inline-flex; }
+.helm-lanz-busy { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-mut); }
+.helm-lanz-spin { animation: helmLanzSpin .9s linear infinite; }
+@keyframes helmLanzSpin { to { transform: rotate(360deg); } }
+
+.helm-lanz-vacio { padding: 24px 16px; text-align: center; font-size: 12.5px; color: var(--text-mut); }
+
+/* ── Móvil ───────────────────────────────────────────────────────────────── */
+@media (max-width: 720px) {
+  .helm-lanz-guiones { grid-template-columns: 1fr; }
+  .helm-lanz-riesgo { grid-template-columns: 1fr; gap: 5px; }
+  .helm-lanz-ficha > div { grid-template-columns: 1fr; gap: 2px; }
+  /* Áreas de pulsación cómodas: en el móvil esto se usa de pie, en un rodaje. */
+  .helm-lanz-pb { min-height: 44px; justify-content: center; flex: 1 1 140px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .helm-lanz-pb, .helm-lanz-guion { transition: none; }
+  .helm-lanz-spin { animation: none; }
+}

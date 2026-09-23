@@ -1,0 +1,108 @@
+/* HELM — Contenido (Instagram): la cuenta, sus piezas y el estudio de las que
+   funcionan. Todo con las variables del tema: aquí no hay ni un color a pelo,
+   así que la sección cambia sola con el tema y con el color de marca. */
+
+/* La cabecera de la cuenta ------------------------------------------------- */
+.helm-ig-cuenta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.helm-ig-avatar {
+  width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0; overflow: hidden;
+  display: grid; place-items: center;
+  background: var(--panel-2); border: 1px solid var(--border-2); color: var(--text-dim);
+}
+.helm-ig-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.helm-ig-cuenta-txt { min-width: 0; flex: 1; }
+.helm-ig-cuenta-txt b { display: block; font-size: 15px; }
+.helm-ig-cuenta-txt span { font-size: 12.5px; color: var(--text-dim); }
+.helm-ig-cuenta-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+/* El icono gira mientras se traen las métricas: la llamada tarda varios
+   segundos y sin señal de vida parece que el botón no ha hecho nada. */
+.helm-ig-girando { animation: helm-ig-spin 1s linear infinite; }
+@keyframes helm-ig-spin { to { transform: rotate(360deg); } }
+
+/* Conectar ---------------------------------------------------------------- */
+.helm-ig-conectar { display: flex; flex-direction: column; gap: 14px; max-width: 720px; }
+.helm-ig-conectar p { font-size: 13.5px; color: var(--text-dim); line-height: 1.55; }
+.helm-ig-conectar p b { color: var(--text); }
+.helm-ig-token { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.helm-ig-token .helm-field { flex: 1; min-width: 260px; margin: 0; }
+
+/* Filtros ----------------------------------------------------------------- */
+.helm-ig-filtros { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+/* La tabla de piezas ------------------------------------------------------- */
+.helm-ig-tabla td { vertical-align: middle; }
+.helm-ig-fila { cursor: pointer; }
+.helm-ig-caption { max-width: 320px; color: var(--text-dim); }
+.helm-ig-caption i { color: var(--text-mut); }
+
+/* Miniatura --------------------------------------------------------------- */
+.helm-ig-thumb {
+  position: relative; overflow: hidden; flex-shrink: 0;
+  border-radius: 8px; background: var(--panel-2); border: 1px solid var(--border);
+}
+.helm-ig-thumb.sm { width: 40px; height: 52px; }
+.helm-ig-thumb.md { width: 56px; height: 72px; }
+.helm-ig-thumb.lg { width: 132px; height: 168px; border-radius: var(--radius-sm); }
+.helm-ig-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.helm-ig-thumb-ph { width: 100%; height: 100%; display: grid; place-items: center; color: var(--text-mut); }
+.helm-ig-thumb-play {
+  position: absolute; right: 3px; bottom: 3px; display: grid; place-items: center;
+  width: 17px; height: 17px; border-radius: 50%;
+  background: rgba(var(--scrim), .65); color: #fff;
+}
+
+/* Los ganadores ----------------------------------------------------------- */
+.helm-ig-top { display: grid; gap: 10px; }
+.helm-ig-top-card {
+  display: flex; align-items: center; gap: 12px; cursor: pointer;
+  padding: 10px; border-radius: var(--radius-sm);
+  background: var(--panel-2); border: 1px solid var(--border);
+}
+.helm-ig-top-card:hover { background: var(--hover); }
+/* La posición va en el acento (marca del perfil o blanco del tema base): es la
+   única jerarquía de la lista y tiene que leerse antes que el número. */
+.helm-ig-top-pos {
+  width: 26px; height: 26px; flex-shrink: 0; display: grid; place-items: center;
+  border-radius: 50%; font-size: 12px; font-weight: 700;
+  background: linear-gradient(135deg, var(--cyan), var(--violet)); color: var(--on-accent);
+}
+.helm-ig-top-txt { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.helm-ig-top-txt b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.helm-ig-top-txt span { font-size: 13px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.helm-ig-top-txt small { font-size: 11.5px; color: var(--text-mut); }
+
+/* Qué tienen en común ------------------------------------------------------ */
+.helm-ig-patrones { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
+.helm-ig-patron h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-mut); margin-bottom: 10px; }
+.helm-ig-barra { display: grid; grid-template-columns: 1fr 90px 52px; align-items: center; gap: 10px; margin-bottom: 8px; }
+.helm-ig-barra-lbl { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* El "· 1 pieza" al lado del día: una media de un solo dato no es una media, y
+   la letra pequeña es lo que evita que alguien cambie su calendario por ella. */
+.helm-ig-barra-lbl small { color: var(--text-mut); font-size: 11px; }
+.helm-ig-barra-riel { height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
+.helm-ig-barra-fill { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--violet)); }
+.helm-ig-barra b { font-size: 12.5px; text-align: right; font-variant-numeric: tabular-nums; }
+
+.helm-ig-lecturas { display: grid; gap: 16px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border); }
+.helm-ig-lecturas h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-mut); margin-bottom: 10px; }
+.helm-ig-notas { list-style: none; display: grid; gap: 8px; }
+.helm-ig-notas li { font-size: 13.5px; color: var(--text-dim); line-height: 1.5; padding-left: 14px; position: relative; }
+.helm-ig-notas li::before { content: '·'; position: absolute; left: 3px; color: var(--cyan); font-weight: 700; }
+.helm-ig-notas b { color: var(--text); }
+
+/* La ficha de una pieza ---------------------------------------------------- */
+.helm-ig-detalle { display: flex; flex-direction: column; gap: 16px; }
+.helm-ig-metricas { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.helm-ig-metricas > div {
+  display: flex; align-items: center; gap: 7px; padding: 9px 11px;
+  border-radius: var(--radius-sm); background: var(--panel-2); border: 1px solid var(--border);
+}
+.helm-ig-metricas svg { color: var(--text-mut); flex-shrink: 0; }
+.helm-ig-metricas b { font-size: 14px; font-variant-numeric: tabular-nums; }
+.helm-ig-metricas span { font-size: 11.5px; color: var(--text-mut); }
+.helm-ig-pie { font-size: 13.5px; line-height: 1.55; color: var(--text-dim); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+@media (max-width: 720px) {
+  .helm-ig-caption { max-width: 160px; }
+  .helm-ig-barra { grid-template-columns: 1fr 60px 46px; }
+}

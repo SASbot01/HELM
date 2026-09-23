@@ -26,7 +26,8 @@ export const AREAS = [
   { key: 'ventas', label: 'Ventas', desc: 'Registrar y cancelar ventas' },
   { key: 'diario', label: 'Diario', desc: 'Reportes diarios' },
   { key: 'finanzas', label: 'Finanzas', desc: 'Movimientos y comisiones' },
-  { key: 'contenido', label: 'Contenido', desc: 'Calendario y piezas' },
+  { key: 'contenido', label: 'Guiones', desc: 'Calendario y piezas' },
+  { key: 'estrategia', label: 'Estrategia', desc: 'Evergreen y lanzamientos' },
   { key: 'onboarding', label: 'Onboarding', desc: 'Respuestas y Biblia' },
   { key: 'enlaces', label: 'Enlaces', desc: 'URLs del negocio' },
   { key: 'archivos', label: 'Archivos', desc: 'Documentos del negocio' },
@@ -63,12 +64,12 @@ export const SECCIONES = [
   { key: 'diario', label: 'Diario', desc: 'Reportes diarios' },
   { key: 'finanzas', label: 'Finanzas', desc: 'Ingresos, gastos y comisiones' },
   { key: 'chat', label: 'Chat IA', desc: 'El copywriter del perfil' },
-  { key: 'contenido', label: 'Contenido', desc: 'Calendario de contenido' },
+  // La clave no cambia aunque el nombre sí (ver el NAV de HelmApp): está
+  // guardada en los permisos de cada perfil.
+  { key: 'contenido', label: 'Guiones', desc: 'Calendario de piezas y guiones' },
+  { key: 'contenido-social', label: 'Contenido', desc: 'Instagram: visitas y vídeos ganadores' },
+  { key: 'estrategia', label: 'Estrategia', desc: 'Evergreen y lanzamientos' },
   { key: 'llamadas', label: 'Llamadas', desc: 'Agenda de llamadas' },
-  { key: 'comunidad', label: 'Comunidad', desc: 'El hilo común de HELM' },
-  // La clave no cambia aunque el nombre sí: está guardada en los permisos de
-  // cada perfil. Ver el NAV de HelmApp.
-  { key: 'interna', label: 'Formación', desc: 'Tus cursos, tu comunidad y sus miembros' },
   { key: 'enlaces', label: 'Enlaces', desc: 'URLs del negocio' },
   { key: 'archivos', label: 'Archivos', desc: 'Documentos del negocio' },
   { key: 'plugins', label: 'Plugins', desc: 'Catálogo de módulos' },
@@ -76,6 +77,7 @@ export const SECCIONES = [
   { key: 'biblioteca', label: 'Biblioteca', desc: 'Documentos de la IA' },
   { key: 'formularios', label: 'Formularios', desc: 'Constructor y respuestas' },
   { key: 'prospeccion', label: 'Scraper', desc: 'Leads de cinco fuentes al embudo' },
+  { key: 'equipos-ia', label: 'Equipos IA', desc: 'Agentes: de onboarding a plan de grabación' },
   { key: 'actividad', label: 'Actividad', desc: 'Timeline del equipo' },
   { key: 'fiscal', label: 'Fiscal', desc: 'Plazos y modelos de una asesoría' },
   { key: 'copiloto', label: 'Copiloto Fiscal', desc: 'IA con los plazos y clientes del despacho' },
@@ -87,7 +89,8 @@ export const DEFAULT_VISIBLE = {
   closer: ['crm', 'diario', 'tareas'],
   setter: ['crm', 'diario', 'tareas'],
   csm: ['crm', 'diario', 'tareas', 'formularios', 'biblioteca'],
-  editor: ['contenido', 'tareas', 'biblioteca'],
+  // El editor ve la estrategia que ejecuta: sin ella graba a ciegas.
+  editor: ['contenido', 'contenido-social', 'estrategia', 'tareas', 'biblioteca', 'equipos-ia'],
   otro: ['tareas'],
 }
 
@@ -215,7 +218,7 @@ export const SECCIONES_FIJAS = ['ajustes', 'secciones']
 //
 // Las normales se apagan si molestan; estas se encienden si hacen falta.
 export const SECCIONES_SECTOR = ['fiscal']
-export const SECCIONES_MODULO = ['tareas', 'actividad', 'biblioteca', 'formularios', 'prospeccion']
+export const SECCIONES_MODULO = ['tareas', 'actividad', 'biblioteca', 'formularios', 'prospeccion', 'equipos-ia']
 const OPT_IN = new Set([...SECCIONES_SECTOR, ...SECCIONES_MODULO])
 
 /** ¿Esta sección nace apagada? Lo necesita el interruptor, que va al revés. */

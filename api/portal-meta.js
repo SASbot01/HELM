@@ -1,11 +1,12 @@
-// HELM — la tarjeta que sale al compartir el enlace de una comunidad.
+// HELM — la tarjeta que sale al compartir el enlace de una comunidad, de un
+// panel o de un formulario.
 //
-// El portal /c/<slug> ya se pinta con la marca del perfil, pero eso pasa en el
+// Esas páginas ya se pintan con la marca del perfil, pero eso pasa en el
 // navegador. Cuando alguien pega el enlace en WhatsApp, Telegram o LinkedIn, el
 // bot que genera la vista previa NO ejecuta JavaScript: se lleva el index.html
 // tal cual, que es común a toda la app y dice "HELM — El puesto de mando de tu
-// negocio", con el icono de HELM. Por eso el enlace del curso no respetaba la
-// marca aunque la página sí.
+// negocio", con el icono de HELM. Por eso el enlace no respetaba la marca
+// aunque la página sí.
 //
 // Aquí se sirve, solo para esos bots (el rewrite de vercel.json filtra por
 // user-agent), un HTML mínimo con las etiquetas Open Graph del perfil. Las
@@ -69,14 +70,59 @@ const RESERVADAS = new Set([
 ])
 
 export default async function handler(req, res) {
-  const slug = String(req.query.slug || '').toLowerCase()
   const host = req.headers['x-forwarded-host'] || req.headers.host || ''
-  // `tipo=panel` → el enlace de entrada al panel (helm.s4sf.net/<slug>).
-  // Sin él, el de la comunidad (/c/<slug>), que es como nació este endpoint.
-  const esPanel = req.query.tipo === 'panel'
-  const url = esPanel
-    ? `https://${host}/${encodeURIComponent(slug)}`
-    : `https://${host}/c/${encodeURIComponent(slug)}`
+  res.setHeader('Content-Type', 'text/html; charset=utf-8')
+  res.setHeader('Cache-Control', 'public, max-age=300')
+
+  // El enlace de un formulario (/f/<formId>) es otro caso aparte: el id es
+  // global y no de un perfil por slug, así que se busca en helm_forms y de ahí
+  // se saca el perfil. Es el mismo problema que el resto de este archivo: sin
+  // esto, el enlace del lead magnet enseñaba "HELM — El puesto de mando de tu
+  // negocio" con el icono verde de HELM, y quien lo recibía pensaba que era spam.
+  if (req.query.tipo === 'formulario') {
+    const formId = String(req.query.formId || '')
+    const url = `https://${host}/f/${encodeURIComponent(formId)}`
+
+    const { data: form } = formId
+      ? await supabase.from('helm_forms')
+        .select('client_id, title, description, active').eq('id', formId).maybeSingle()
+      : { data: null }
+
+    const { data: client } = form
+      ? await supabase.from('clients')
+        .select('name, brand_name, brand_subtitle, logo_url, primary_color, active')
+        .eq('id', form.client_id).maybeSingle()
+      : { data: null }
+
+    if (!form || form.active === false || !client || !client.active) {
+      return res.status(404).send(pagina({
+        titulo: 'Formulario no encontrado',
+        descripcion: 'Este enlace ya no está disponible.',
+        imagen: null,
+        url,
+      }))
+    }
+
+    const logo = client.logo_url && /^https?:\/\//.test(client.logo_url)
+      ? client.logo_url
+      : (client.logo_url ? `https://${host}${client.logo_url}` : null)
+    const color = /^#[0-9a-f]{3,8}$/i.test(client.primary_color || '') ? client.primary_color : null
+    const nombre = client.brand_name || client.name
+
+    return res.status(200).send(pagina({
+      titulo: form.title ? `${form.title} — ${nombre}` : nombre,
+      descripcion: resumen(form.description, `Formulario de ${nombre}.`),
+      imagen: logo,
+      url,
+      color,
+    }))
+  }
+
+  const slug = String(req.query.slug || '').toLowerCase()
+  // El enlace de entrada al panel (helm.s4sf.net/<slug>). Este endpoint nació
+  // para la comunidad interna (/c/<slug>); al retirarse esa sección solo queda
+  // el panel, así que `tipo=panel` ya no distingue nada y se ignora.
+  const url = `https://${host}/${encodeURIComponent(slug)}`
 
   const { data: client } = slug && !RESERVADAS.has(slug)
     ? await supabase
@@ -85,16 +131,10 @@ export default async function handler(req, res) {
       .eq('slug', slug).maybeSingle()
     : { data: null }
 
-  res.setHeader('Content-Type', 'text/html; charset=utf-8')
-  // Los bots reintentan a menudo y la marca no cambia cada minuto; cinco
-  // minutos de caché ahorran una consulta por cada vez que se reenvía el enlace.
-  res.setHeader('Cache-Control', 'public, max-age=300')
-
   if (!client || !client.active) {
-    // El enlace del panel de un slug que no existe no es "comunidad no
-    // encontrada": lo más probable es una ruta de la app que se coló.
+    // Un slug que no existe es, casi siempre, una ruta de la app que se coló.
     return res.status(404).send(pagina({
-      titulo: esPanel ? 'Página no encontrada' : 'Comunidad no encontrada',
+      titulo: 'Página no encontrada',
       descripcion: 'Este enlace ya no está disponible.',
       imagen: null,
       url,
@@ -113,25 +153,10 @@ export default async function handler(req, res) {
   //
   // La descripción no cuenta qué hay dentro a propósito: es un panel privado y
   // el enlace acaba en grupos de WhatsApp donde no todos tienen acceso.
-  if (esPanel) {
-    const nombre = client.brand_name || client.name
-    return res.status(200).send(pagina({
-      titulo: client.brand_subtitle ? `${nombre} — ${client.brand_subtitle}` : nombre,
-      descripcion: `Panel de ${nombre}. Hay que entrar con tu cuenta.`,
-      imagen: logo,
-      url,
-      color,
-    }))
-  }
-
-  const { data: cfg } = await supabase
-    .from('helm_community').select('name, welcome').eq('client_id', client.id).maybeSingle()
-
-  const nombre = cfg?.name || client.brand_name || client.name
-
+  const nombre = client.brand_name || client.name
   return res.status(200).send(pagina({
     titulo: client.brand_subtitle ? `${nombre} — ${client.brand_subtitle}` : nombre,
-    descripcion: resumen(cfg?.welcome, `Entra en la formación y la comunidad de ${nombre}.`),
+    descripcion: `Panel de ${nombre}. Hay que entrar con tu cuenta.`,
     imagen: logo,
     url,
     color,
