@@ -20,7 +20,18 @@ import { promisify } from 'node:util'
 import { mkdir, stat, unlink } from 'node:fs/promises'
 import path from 'node:path'
 import { createClient } from '@supabase/supabase-js'
-import { llmChat } from '../api/_lib/llm.js'
+
+// El límite de tiempo del modelo, ANTES de cargar llm.js: ese módulo lo lee al
+// importarse. Por eso la importación de abajo es dinámica.
+//
+// El valor por defecto de HELM es 85 s, que es lo correcto para el chat: nadie
+// espera minuto y medio mirando una pantalla. Aquí es al revés — esto corre en
+// segundo plano, sin nadie delante, y en CPU sin GPU un modelo de 7B tarda
+// varios minutos en escribir el JSON de un guion largo. Con 85 s el etiquetado
+// no llegaba a terminar nunca.
+process.env.HELM_LLM_TIMEOUT_MS ||= '600000'
+
+const { llmChat } = await import('../api/_lib/llm.js')
 
 const ejecuta = promisify(execFile)
 
@@ -211,6 +222,24 @@ async function transcribir(job) {
 
 const ROLES = ['gancho', 'planteamiento', 'remate', 'venta']
 
+// Los valores que puede tomar cada etiqueta. Esto NO es documentación: se
+// comprueba, y si el modelo devuelve otra cosa se le pide de nuevo.
+//
+// Hizo falta porque en el primer reel real el modelo puso "planteamiento" en
+// `estructura` —que es un papel de frase, no una estructura— y se guardó tal
+// cual. Una etiqueta inventada es peor que una vacía: ensucia la gráfica y
+// nadie se da cuenta de que ese valor no significa nada.
+const GANCHOS_VALIDOS = ['pregunta', 'dato', 'error comun', 'contrarian',
+  'historia', 'promesa', 'lista', 'demostracion']
+const ESTRUCTURAS_VALIDAS = ['problema-solucion', 'lista', 'historia',
+  'comparacion', 'tutorial', 'opinion']
+
+// Sin acentos y en minúsculas, para comparar: el modelo escribe "Error Común"
+// tan a menudo como "error comun".
+const normaliza = (v) => String(v || '')
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase().trim()
+
 const SISTEMA = `Eres un analista de guiones de vídeo corto. Lees la transcripción de un reel y la clasificas.
 
 Devuelves SOLO un objeto JSON, sin texto alrededor y sin vallas de código, con esta forma exacta:
@@ -262,27 +291,41 @@ async function etiquetar(job) {
     ? frases.map((f, i) => `${i}. ${f.texto}`).join('\n')
     : reel.transcripcion.split(/(?<=[.!?])\s+/).map((t, i) => `${i}. ${t}`).join('\n')
 
-  // Dos intentos: si el primero no devuelve JSON válido, se le dice qué
-  // falló y se repite. Más de dos, en un modelo local, es tirar el tiempo.
+  // Tres intentos: si el JSON no vale —por forma o porque una etiqueta no está
+  // en su lista— se le dice EXACTAMENTE qué falló y se repite. Decirle el
+  // motivo es lo que hace que el segundo intento acierte; repetir la misma
+  // petición a secas suele devolver el mismo error.
   let out = null
   let ultimoFallo = ''
-  for (let intento = 1; intento <= 2; intento++) {
+  for (let intento = 1; intento <= 3; intento++) {
     const aviso = ultimoFallo ? `\n\nEl intento anterior falló: ${ultimoFallo}. Devuelve SOLO el JSON.` : ''
     const txt = await llmChat({
       system: SISTEMA + contexto,
       messages: [{ role: 'user', content: `Transcripción numerada:\n\n${numeradas}${aviso}` }],
       temperature: 0.2,
-      maxTokens: 2000,
+      maxTokens: 1200,
     })
     try {
       const j = sacaJson(txt)
       if (!j || typeof j !== 'object') throw new Error('no es un objeto')
       if (!Array.isArray(j.frases)) throw new Error('falta la lista "frases"')
+      const g = normaliza(j.tipo_gancho)
+      if (!GANCHOS_VALIDOS.includes(g)) {
+        throw new Error(`tipo_gancho "${j.tipo_gancho}" no está en la lista (${GANCHOS_VALIDOS.join(', ')})`)
+      }
+      const e = normaliza(j.estructura)
+      if (!ESTRUCTURAS_VALIDAS.includes(e)) {
+        throw new Error(`estructura "${j.estructura}" no está en la lista (${ESTRUCTURAS_VALIDAS.join(', ')})`)
+      }
+      // Se guardan ya normalizados: así la gráfica agrupa bien aunque el
+      // modelo haya escrito "Error Común" con mayúsculas y tilde.
+      j.tipo_gancho = g
+      j.estructura = e
       out = j
       break
     } catch (e) {
       ultimoFallo = String(e.message).slice(0, 160)
-      if (intento === 2) throw new Error(`El modelo no devolvió JSON válido: ${ultimoFallo}`)
+      if (intento === 3) throw new Error(`El modelo no devolvió un JSON válido: ${ultimoFallo}`)
     }
   }
 
