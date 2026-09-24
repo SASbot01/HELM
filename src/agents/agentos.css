@@ -21,15 +21,6 @@
 .ag-top h1 { font-size: 1.7rem; font-weight: 700; letter-spacing: -.02em; margin: 0; }
 .ag-top p { color: var(--text-secondary); margin: 4px 0 0; font-size: .92rem; }
 
-.ag-tabs { display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap; }
-.ag-tab {
-  background: transparent; border: 1px solid transparent; color: var(--text-secondary);
-  padding: 8px 14px; border-radius: var(--radius-sm); cursor: pointer;
-  font: inherit; font-weight: 600; font-size: .9rem;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-.ag-tab:hover { background: var(--bg-card-hover); color: var(--text); }
-.ag-tab.activa { background: var(--text); color: var(--bg); }
 
 /* ── Piezas comunes ──────────────────────────────────────────────────────── */
 .ag-card {
@@ -54,7 +45,7 @@
 .ag-btn.peligro { color: var(--danger); }
 .ag-btn.sm { padding: 6px 10px; font-size: .82rem; }
 .ag-btn:disabled { opacity: .5; cursor: not-allowed; }
-.ag-btn:focus-visible, .ag-tab:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.ag-btn:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
 
 .ag-error {
   background: var(--toast-bg-error); color: var(--toast-text-error);
@@ -236,3 +227,111 @@
 .ag-asigna { display: flex; align-items: center; gap: 10px; }
 .ag-asigna span { font-size: .8rem; font-weight: 600; color: var(--text-secondary); flex: none; }
 .ag-asigna select { width: auto; flex: 1; padding: 7px 10px; font-size: .85rem; }
+
+
+/* ════════════════════════════════════════════════════════════════════════
+   EL LANZADOR
+   Una casilla por agente. La rejilla es lo que convierte esto en un sitio
+   del que se entra y se sale, en vez de en una pantalla con pestañas.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.ag-top.dentro { align-items: flex-start; }
+.ag-volver {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: .82rem; font-weight: 600; color: var(--text-secondary);
+  text-decoration: none; margin-bottom: 8px;
+}
+.ag-volver:hover { color: var(--orange); }
+
+/* ── El pulso ───────────────────────────────────────────────────────────── */
+/* Seis cifras en una tira. Si algo va mal se ve antes de entrar a ningún
+   sitio, que es justo lo que uno quiere saber al abrir el taller. */
+.ag-pulso {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 1px; background: var(--border); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden; margin-bottom: 30px;
+  box-shadow: var(--shadow-md);
+}
+.ag-pulso-it {
+  background: var(--bg-card); padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.ag-pulso-it b {
+  font-size: 1.5rem; font-weight: 700; letter-spacing: -.025em;
+  font-variant-numeric: tabular-nums; line-height: 1.1;
+}
+.ag-pulso-it span { font-size: .76rem; color: var(--text-secondary); font-weight: 500; }
+.ag-pulso-it.mal b { color: var(--danger); }
+.ag-pulso-it.vivo b { color: var(--orange); }
+
+.ag-seccion {
+  font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-muted); margin: 0 0 12px;
+}
+
+/* ── La rejilla de casillas ─────────────────────────────────────────────── */
+.ag-rejilla {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 14px; margin-bottom: 34px;
+}
+.ag-rejilla.recursos { grid-template-columns: repeat(auto-fill, minmax(288px, 1fr)); }
+
+.ag-casilla {
+  display: flex; flex-direction: column; gap: 7px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px;
+  box-shadow: var(--shadow-md);
+  text-decoration: none; color: var(--text);
+  min-height: 176px;
+  transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
+}
+/* La casilla se levanta al pasar por encima. Dos píxeles y una sombra más
+   alta: lo justo para que se lea como un objeto que se puede coger. */
+a.ag-casilla:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--border-hover);
+}
+a.ag-casilla:hover .ag-cas-flecha { transform: translateX(3px); }
+.ag-casilla:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+
+.ag-cas-ico {
+  width: 38px; height: 38px; border-radius: 11px; flex: none;
+  display: grid; place-items: center; margin-bottom: 3px;
+  background: color-mix(in srgb, var(--orange) 12%, transparent);
+  color: var(--orange);
+}
+.ag-casilla h3 { font-size: 1rem; font-weight: 650; margin: 0; letter-spacing: -.01em; }
+.ag-casilla p { font-size: .85rem; color: var(--text-secondary); margin: 0; line-height: 1.5; }
+.ag-casilla footer {
+  margin-top: auto; padding-top: 10px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.ag-cas-num { font-size: .82rem; color: var(--text-secondary); }
+.ag-cas-num b { font-size: 1.05rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.ag-cas-flecha { color: var(--text-muted); transition: transform var(--transition-base); flex: none; }
+
+/* Los que están por construir se ven, pero no engañan: sin sombra, sin
+   levantarse y sin flecha. Se lee que no se puede entrar. */
+.ag-casilla.pendiente {
+  box-shadow: none; background: transparent;
+  border-style: dashed; cursor: default;
+}
+.ag-casilla.pendiente .ag-cas-ico {
+  background: var(--bg-card-light); color: var(--text-muted);
+}
+.ag-casilla.pendiente h3 { color: var(--text-secondary); }
+/* El detalle va en TODAS las casillas y siempre en el mismo sitio: es lo que
+   mantiene el pie de todas a la misma altura dentro de la fila. */
+.ag-cas-detalle {
+  font-size: .78rem; color: var(--text-muted); line-height: 1.5;
+  margin: 4px 0 0;
+}
+.ag-casilla footer {
+  margin-top: auto; padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+/* El icono del agente que funciona lleva el acento de verdad; el de los que
+   están por construir se queda en gris. La diferencia se ve de lejos. */
+.ag-cas-ico { background: color-mix(in srgb, var(--orange) 15%, transparent); }

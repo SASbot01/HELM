@@ -112,7 +112,7 @@ createRoot(document.getElementById('root')).render(
           {/* Agent OS — el taller del operador. Solo superadmin: la propia
               página lo comprueba y api/agents.js lo exige en el servidor. Va
               ANTES de /:slug/*, que si no leería "agents" como slug de perfil. */}
-          <Route path="/agents" element={<AgentOS />} />
+          <Route path="/agents/*" element={<AgentOS />} />
           {/* HELM — app limpia (CRM · Ventas · Diario · Finanzas · Chat · Ajustes).
               /admin entra sin perfil fijado (redirige al último usado) y
               /<slug> abre directamente ese perfil: /silvestre, /enformaconhugo… */}

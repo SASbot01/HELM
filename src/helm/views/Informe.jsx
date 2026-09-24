@@ -1,6 +1,7 @@
 // HELM — Informe: qué se ha facturado, filtrable por periodo y por programa.
 import { useEffect, useMemo, useState } from 'react'
 import { Rocket, ArrowRight, X } from 'lucide-react'
+import { Evolucion, PorPrograma } from './informe/Graficas'
 import { supabase, money, fmtDate, getOnboarding, isSaleCancelled, cuotasPendientes } from '../lib'
 import { Kpi, Panel, Empty } from '../ui'
 import { seccionDelProducto } from '../producto'
@@ -158,8 +159,37 @@ export default function Informe({ clientId, onNavigate }) {
     const ingresos = fin.filter(e => Number(e.amount) > 0).reduce((a, e) => a + Number(e.amount), 0)
     const gastos = fin.filter(e => Number(e.amount) < 0).reduce((a, e) => a + Number(e.amount), 0)
 
+    // Serie mes a mes para la gráfica de evolución. Se construye desde los
+    // meses que EXISTEN entre la primera y la última venta del rango, no solo
+    // desde los que tienen ventas: sin los meses vacíos la línea miente, porque
+    // une agosto con octubre como si septiembre no hubiera pasado.
+    const porMes = {}
+    for (const v of filtradas) {
+      const k = (v.date || '').slice(0, 7)
+      if (!k) continue
+      porMes[k] = porMes[k] || { facturado: 0, cobrado: 0 }
+      porMes[k].facturado += Number(v.revenue) || 0
+      porMes[k].cobrado += Number(v.cash_collected) || 0
+    }
+    const claves = Object.keys(porMes).sort()
+    const serie = []
+    if (claves.length) {
+      const [ay, am] = claves[0].split('-').map(Number)
+      const [zy, zm] = claves[claves.length - 1].split('-').map(Number)
+      const cursor = new Date(Date.UTC(ay, am - 1, 1))
+      const fin = new Date(Date.UTC(zy, zm - 1, 1))
+      while (cursor <= fin && serie.length < 36) {
+        const k = cursor.toISOString().slice(0, 7)
+        serie.push({
+          mes: cursor.toLocaleDateString('es-ES', { month: 'short', timeZone: 'UTC' }),
+          ...(porMes[k] || { facturado: 0, cobrado: 0 }),
+        })
+        cursor.setUTCMonth(cursor.getUTCMonth() + 1)
+      }
+    }
+
     return {
-      revenue, cash, ventas: filtradas.length,
+      revenue, cash, ventas: filtradas.length, serie,
       ticket: filtradas.length ? revenue / filtradas.length : 0,
       balance: ingresos + gastos,
       planes, porCobrar,
@@ -203,6 +233,13 @@ export default function Informe({ clientId, onNavigate }) {
         {d.planes.length > 0 && (
           <Kpi label="Pendiente en cuotas" value={money(d.porCobrar)} sub={`${d.planes.length} plan${d.planes.length === 1 ? '' : 'es'} de pago`} />
         )}
+      </div>
+
+      {/* Las gráficas van justo detrás de las cifras y delante de las tablas:
+          primero el titular, luego la forma, y el detalle al final. */}
+      <div className="helm-grafs">
+        <Evolucion serie={d.serie} />
+        <PorPrograma tabla={d.tabla} />
       </div>
 
       {d.planes.length > 0 && (

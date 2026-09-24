@@ -42,3 +42,5 @@ landing-bootcamp-fba/
 .env.server.bak-*
 .dist-build/
 .dist-nuevo/
+__pycache__/
+.dist-socio/

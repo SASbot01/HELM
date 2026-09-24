@@ -2387,3 +2387,40 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 @media (prefers-reduced-motion: reduce) {
   .helm-kcard:hover, .helm-kcard:active, .helm-cal-task:hover { transform: none; }
 }
+
+/* ── Gráficas del Informe ────────────────────────────────────────────────── */
+/* Dos columnas en pantalla ancha y una en estrecha. La de evolución manda
+   sobre la de reparto: responde la pregunta que se hace uno al abrir. */
+.helm-grafs {
+  display: grid; gap: var(--sp-4);
+  grid-template-columns: 1.45fr 1fr;
+}
+@media (max-width: 900px) { .helm-grafs { grid-template-columns: 1fr; } }
+
+.helm-graf { padding: var(--sp-4) var(--sp-4) var(--sp-3); min-width: 0; }
+.helm-graf > header { margin-bottom: var(--sp-3); }
+.helm-graf h3 { font-size: 14px; font-weight: 650; margin: 0; letter-spacing: -.01em; }
+.helm-graf header p { font-size: 12px; color: var(--text-dim); margin: 2px 0 0; }
+.helm-graf-pie { font-size: 11.5px; color: var(--text-mut); margin: var(--sp-2) 0 0; }
+.helm-graf-vacio { font-size: 13px; color: var(--text-mut); text-align: center; padding: 40px 0; margin: 0; }
+
+.helm-graf-leyenda { display: flex; gap: var(--sp-4); margin-bottom: var(--sp-2); }
+.helm-graf-leyenda span {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px; font-weight: 600; color: var(--text-dim);
+}
+.helm-graf-leyenda i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+
+/* El globo del ratón. Los importes en cifras tabulares para que no bailen al
+   moverse por la serie. */
+.helm-graf-globo {
+  background: var(--panel); border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm); box-shadow: var(--elev-2);
+  padding: 9px 11px; display: flex; flex-direction: column; gap: 3px;
+  font-size: 12px; color: var(--text);
+}
+.helm-graf-globo b { font-weight: 700; }
+.helm-graf-globo span { display: inline-flex; align-items: center; gap: 6px; color: var(--text-dim); }
+.helm-graf-globo i { width: 9px; height: 3px; border-radius: 2px; display: inline-block; flex: none; }
+.helm-graf-globo em { font-style: normal; font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; }
+.helm-graf-globo .sec { color: var(--text-mut); font-size: 11px; padding-top: 2px; }
