@@ -189,7 +189,7 @@ export default function Lista({
       <div className={'helm-lista-progreso' + (items.length && grabadas === items.length ? ' completo' : '')}>
         <b>{grabadas} de {items.length} grabadas</b>
         <div className="helm-lista-barra" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-          <span style={{ width: pct + '%' }} />
+          <span style={{ '--p': pct / 100 }} />
         </div>
         <small>{pct}%{hayFiltros && ` · ${visibles.length} en la vista`}</small>
       </div>

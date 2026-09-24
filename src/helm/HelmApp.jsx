@@ -2,7 +2,7 @@
 // Se monta en /admin. Gestiona un perfil (cliente) a la vez, con selector arriba.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Link2, Blocks, Settings, Plus, Rocket, Menu, X, Package, UserCog, PhoneCall, FolderOpen, Layers, CalendarClock, BookOpen, FileText, Receipt, ShieldCheck, Compass, ScrollText, Instagram } from 'lucide-react'
+import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Link2, Blocks, Settings, Plus, Rocket, Menu, X, Package, UserCog, PhoneCall, FolderOpen, Layers, CalendarClock, BookOpen, FileText, Receipt, ShieldCheck, ScrollText, Instagram } from 'lucide-react'
 import { listClients, createProfile, slugify, usersApi, brandOf } from './lib'
 import { productoActual, seccionDelProducto, seccionSiempre } from './producto'
 import { Modal, Field, Input } from './ui'
@@ -11,7 +11,6 @@ import Informe from './views/Informe'
 import Onboarding from './views/Onboarding'
 import Guiones from './views/Guiones'
 import ContenidoSocial from './views/ContenidoSocial'
-import Estrategia from './views/Estrategia'
 import Llamadas from './views/Llamadas'
 import Crm from './views/Crm'
 import Servicios from './views/Servicios'
@@ -52,7 +51,6 @@ const NAV = [
   // de cada perfil.
   { key: 'contenido', label: 'Guiones', icon: ScrollText, title: 'Guiones', sub: 'Lo que vas a grabar, día a día', C: Guiones },
   { key: 'contenido-social', label: 'Contenido', icon: Instagram, title: 'Contenido', sub: 'Tu Instagram: visitas, métricas y qué vídeos ganan', C: ContenidoSocial },
-  { key: 'estrategia', label: 'Estrategia', icon: Compass, title: 'Estrategia', sub: 'Tu evergreen y tus lanzamientos', C: Estrategia },
   { key: 'llamadas', label: 'Llamadas', icon: PhoneCall, title: 'Llamadas', sub: 'Tu agenda de Google, con lo que pasó en cada una', C: Llamadas },
   { key: 'enlaces', label: 'Enlaces', icon: Link2, title: 'Enlaces', sub: 'Las URLs del negocio, a mano', C: Enlaces },
   { key: 'archivos', label: 'Archivos', icon: FolderOpen, title: 'Archivos', sub: 'Lo que subes, lo que escribe la IA y las Biblias', C: Archivos },

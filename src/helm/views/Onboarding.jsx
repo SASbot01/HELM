@@ -192,7 +192,7 @@ function ContentForm({ clientId, schema = ONBOARDING_CONTENIDO, formKey = 'conte
       </div>
 
       <div className="helm-onb-progress">
-        <div className="helm-onb-progress-bar"><span style={{ width: pct + '%' }} /></div>
+        <div className="helm-onb-progress-bar"><span style={{ '--p': pct / 100 }} /></div>
         <div className="helm-onb-progress-txt">{progress.done}/{progress.total} respondidas · {pct}%</div>
       </div>
 

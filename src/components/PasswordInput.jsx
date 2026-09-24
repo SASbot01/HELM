@@ -10,7 +10,9 @@ const toggleBtnStyle = {
   border: 'none',
   padding: 6,
   cursor: 'pointer',
-  color: 'rgba(255,255,255,0.55)',
+  // Del token, no a pelo: con el color escrito en blanco el ojo desaparecía
+  // sobre las superficies claras y el campo parecía estar cortado.
+  color: 'var(--text-secondary)',
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -41,6 +43,10 @@ const PasswordInput = forwardRef(function PasswordInput(
   const [shown, setShown] = useState(false)
 
   const computedInputStyle = {
+    // El input tiene que ocupar el contenedor entero: si no, se queda con su
+    // ancho por defecto y el botón del ojo —que va posicionado contra el
+    // contenedor— aparece flotando fuera del campo.
+    width: '100%',
     ...(inputStyle || {}),
     paddingRight: 40,
   }

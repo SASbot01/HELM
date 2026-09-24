@@ -5,94 +5,59 @@
 
 /* Theme system — añadido feature/vt-hover (Valen 2026-05-10) */
 @import url('./styles/themes.css');
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 *,
 *::before,
 *::after { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
-  /* El acento global. Se llamaba --orange por el panel antiguo de Black Wolf y
-     el nombre se queda (lo usan decenas de reglas de esta hoja), pero el color
-     es el verde de HELM: la app es HELM, y el naranja solo asomaba ya en el
-     anillo de foco y la selección de texto — detalles sueltos que se veían
-     naranjas sobre pantallas verdes con cualquier tema. Dentro de .helm este
-     valor lo pisa el tema activo o el color de marca (ver helm/theme.css). */
-  --orange: #2FCB6A;
-  --yellow: #FBBF24;
-  --black: #000000;
-  --white: #F5F5F5;
-  --bg: #050510;
-  --bg-card: rgba(255,255,255,0.02);
-  --bg-card-hover: rgba(255,255,255,0.05);
-  --bg-card-solid: #0a0a14;
-  --bg-card-light: rgba(255,255,255,0.04);
-  --bg-sidebar: rgba(5,5,16,0.95);
-  --border: rgba(255,255,255,0.06);
-  --border-hover: rgba(255,255,255,0.12);
-  --border-focus: #F5F5F5;
-  --text: #E4E4E7;
-  --text-secondary: rgba(255,255,255,0.5);
-  --text-muted: rgba(255,255,255,0.25);
-  --text-dark: #000000;
-  --gradient: linear-gradient(135deg, var(--orange), color-mix(in srgb, var(--orange) 70%, #000));
-  --glow: rgba(245, 245, 245, 0.08);
+  /* ── La paleta de HELM ────────────────────────────────────────────────────
+     La misma que helm/theme.css, para que la aplicación sea UNA. Antes esta
+     hoja era el panel antiguo de Black Wolf, con su propia paleta oscura: por
+     eso el login, el registro, los formularios públicos y el portal se veían
+     de otro color que el panel, y cambiar el tema de HELM no los tocaba.
+
+     Los NOMBRES se quedan como estaban (--orange, --bg-card, --text-dark…):
+     los usan cientos de reglas de este fichero. Lo que cambia son los valores.
+     --orange no es naranja desde hace tiempo; ahora es el verde salvia. */
+  --orange: #5A6E50;
+  --yellow: #8A5E1E;
+  --black: #1C1D19;
+  --white: #FFFFFF;
+  --bg: #EAE9E4;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F6F5F2;
+  --bg-card-solid: #FFFFFF;
+  --bg-card-light: #F6F5F2;
+  --bg-sidebar: rgba(234,233,228,0.95);
+  --border: rgba(28,29,25,0.10);
+  --border-hover: rgba(28,29,25,0.20);
+  --border-focus: #5A6E50;
+  --text: #1C1D19;
+  --text-secondary: #565951;
+  --text-muted: #82857B;
+  /* El texto que va ENCIMA del acento. Sobre el verde salvia va blanco. */
+  --text-dark: #FFFFFF;
+  /* Plano a propósito: el acento aparece cuando significa algo, no de adorno. */
+  --gradient: var(--orange);
+  --glow: transparent;
   --radius: 16px;
   --radius-sm: 10px;
   --radius-lg: 20px;
   --radius-xs: 6px;
-  --success: #22C55E;
-  --danger: #EF4444;
-  --warning: #FFB800;
+  --success: #3F6B45;
+  --danger: #A6402F;
+  --warning: #8A5E1E;
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --transition-base: 0.25s var(--ease-out-expo);
 }
-:root.theme-light {
-  --orange:           #1E40AF;   /* YC navy → accent global de light */
-  --yellow:           #D4A017;   /* YC gold */
-  --black:            #0F172A;
-  --white:            #FFFFFF;
-  --bg:               #FFFFFF;
-  --bg-card:          #FFFFFF;
-  --bg-card-hover:    #F8FAFC;
-  --bg-card-solid:    #FFFFFF;
-  --bg-card-light:    #F8FAFC;
-  --bg-sidebar:       rgba(255,255,255,0.95);
-  --border:           #E2E8F0;
-  --border-hover:     #CBD5E1;
-  --border-focus:     #1E40AF;
-  --text:             #0F172A;
-  --text-secondary:   #475569;
-  --text-muted:       #94A3B8;
-  --text-dark:        #FFFFFF;
-  --gradient:         linear-gradient(135deg, #1E40AF, #D4A017);
-  --glow:             rgba(30,64,175,0.12);
-  --success:          #16A34A;
-  --danger:           #DC2626;
-  --warning:          #D97706;
-}
-:root.theme-dark {
-  --orange: #2FCB6A;
-  --yellow: #FBBF24;
-  --bg: #050510;
-  --bg-card: rgba(255,255,255,0.02);
-  --bg-card-hover: rgba(255,255,255,0.05);
-  --bg-card-solid: #0a0a14;
-  --bg-card-light: rgba(255,255,255,0.04);
-  --bg-sidebar: rgba(5,5,16,0.95);
-  --border: rgba(255,255,255,0.06);
-  --border-hover: rgba(255,255,255,0.12);
-  --border-focus: #F5F5F5;
-  --text: #E4E4E7;
-  --text-secondary: rgba(255,255,255,0.5);
-  --text-muted: rgba(255,255,255,0.25);
-  --text-dark: #000000;
-  --gradient: linear-gradient(135deg, var(--orange), color-mix(in srgb, var(--orange) 70%, #000));
-  --glow: rgba(245, 245, 245, 0.08);
-  --success: #22C55E;
-  --danger: #EF4444;
-  --warning: #FFB800;
-}
+
+/* Las clases .theme-light y .theme-dark se quedan apuntando a la misma paleta:
+   HELM tiene un solo aspecto. Se mantienen los selectores, y no se borran, para
+   que nada se quede sin estilo si algún componente todavía pone la clase. */
+:root.theme-light, :root.theme-dark { color-scheme: light; }
 html { font-size: calc(15px * var(--ax-font-scale, 1)); }
 body {
-  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  font-family: 'Archivo', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
@@ -274,24 +239,22 @@ button {
   justify-content: center;
   position: relative;
   overflow: hidden;
-  background:
-    radial-gradient(1000px 620px at 100% -10%, rgba(34,197,94,0.34), transparent 58%),
-    radial-gradient(760px 520px at -8% 110%, rgba(15,120,70,0.24), transparent 55%),
-    #05100A;
+  background: var(--bg);
 }
 .admin-login-glow {
   position: absolute;
   width: 600px; height: 600px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(47,203,106,0.12) 0%, transparent 70%);
+  background: none;
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
 .admin-login-card {
-  background: rgba(8,23,16,0.92);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 2px rgba(28,29,25,0.04), 0 8px 24px -16px rgba(28,29,25,0.18);
   padding: 48px 40px;
   width: 100%;
   max-width: 420px;
@@ -306,17 +269,16 @@ button {
   border-radius: 50%;
   object-fit: contain;
   margin-bottom: 20px;
-  filter: drop-shadow(0 0 20px rgba(255,255,255,0.1));
 }
 .admin-login-title {
   font-size: 1.8rem;
   font-weight: 800;
   letter-spacing: 4px;
-  color: #fff;
+  color: var(--text);
   margin-bottom: 6px;
 }
 .admin-login-subtitle {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.9rem;
   margin-bottom: 32px;
 }
@@ -329,38 +291,38 @@ button {
 }
 .admin-input-group label {
   font-size: 0.8rem;
-  color: #888;
+  color: var(--text-secondary);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
 .admin-input-group input {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   padding: 12px 14px;
-  color: #fff;
+  color: var(--text);
   font-size: 0.95rem;
   font-family: inherit;
   transition: border-color 0.2s, box-shadow 0.2s;
   outline: none;
 }
 .admin-input-group input:focus {
-  border-color: #fff;
-  box-shadow: 0 0 0 3px rgba(255,255,255,0.08);
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--orange) 24%, transparent);
 }
 .admin-login-error {
-  background: rgba(239, 68, 68, 0.15);
-  color: #EF4444;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
   padding: 10px;
   border-radius: 8px;
   font-size: 0.85rem;
 }
 .admin-login-btn {
-  background: #fff;
-  color: #000;
+  background: var(--orange);
+  color: var(--text-dark);
   border: none;
-  border-radius: 100px;
+  border-radius: var(--radius-sm);
   padding: 14px;
   font-weight: 700;
   font-size: 1rem;
@@ -370,12 +332,11 @@ button {
   letter-spacing: 1px;
 }
 .admin-login-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(255,255,255,0.15);
+  filter: brightness(1.06);
 }
 .admin-login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.admin-login-alt { margin-top: 18px; text-align: center; font-size: 0.85rem; color: rgba(255,255,255,0.55); }
-.admin-login-alt a { color: #fff; font-weight: 600; text-decoration: none; }
+.admin-login-alt { margin-top: 18px; text-align: center; font-size: 0.85rem; color: var(--text-secondary); }
+.admin-login-alt a { color: var(--orange); font-weight: 600; text-decoration: none; }
 .admin-login-alt a:hover { text-decoration: underline; }
 .admin-login-ok {
   background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.3);
@@ -799,7 +760,7 @@ button {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(5,5,16,0.6);
+    background: var(--bg-overlay);
     backdrop-filter: blur(4px);
     z-index: 199;
   }

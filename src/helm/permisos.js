@@ -27,7 +27,6 @@ export const AREAS = [
   { key: 'diario', label: 'Diario', desc: 'Reportes diarios' },
   { key: 'finanzas', label: 'Finanzas', desc: 'Movimientos y comisiones' },
   { key: 'contenido', label: 'Guiones', desc: 'Calendario y piezas' },
-  { key: 'estrategia', label: 'Estrategia', desc: 'Evergreen y lanzamientos' },
   { key: 'onboarding', label: 'Onboarding', desc: 'Respuestas y Biblia' },
   { key: 'enlaces', label: 'Enlaces', desc: 'URLs del negocio' },
   { key: 'archivos', label: 'Archivos', desc: 'Documentos del negocio' },
@@ -68,7 +67,6 @@ export const SECCIONES = [
   // guardada en los permisos de cada perfil.
   { key: 'contenido', label: 'Guiones', desc: 'Calendario de piezas y guiones' },
   { key: 'contenido-social', label: 'Contenido', desc: 'Instagram: visitas y vídeos ganadores' },
-  { key: 'estrategia', label: 'Estrategia', desc: 'Evergreen y lanzamientos' },
   { key: 'llamadas', label: 'Llamadas', desc: 'Agenda de llamadas' },
   { key: 'enlaces', label: 'Enlaces', desc: 'URLs del negocio' },
   { key: 'archivos', label: 'Archivos', desc: 'Documentos del negocio' },
@@ -90,7 +88,7 @@ export const DEFAULT_VISIBLE = {
   setter: ['crm', 'diario', 'tareas'],
   csm: ['crm', 'diario', 'tareas', 'formularios', 'biblioteca'],
   // El editor ve la estrategia que ejecuta: sin ella graba a ciegas.
-  editor: ['contenido', 'contenido-social', 'estrategia', 'tareas', 'biblioteca', 'equipos-ia'],
+  editor: ['contenido', 'contenido-social', 'tareas', 'biblioteca', 'equipos-ia'],
   otro: ['tareas'],
 }
 

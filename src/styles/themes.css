@@ -1,110 +1,129 @@
 /* ============================================================
-   THEME SYSTEM - Global CSS Variables
-   Dark Mode + Light Mode Support
+   HELM — variables globales
+   Un solo tema. Este fichero es la capa de más abajo: lo importa index.css
+   antes que nada, y define los tokens que el resto de hojas dan por hechos.
+
+   Antes se llamaba "Theme System — Dark Mode + Light Mode Support" y declaraba
+   una paleta oscura para `:root, html.theme-dark, body.theme-dark,
+   [data-theme="dark"]`. Junto con index.css y helm/theme.css eran TRES paletas
+   compitiendo por las mismas variables, y ganaba la que tuviera el selector más
+   específico: por eso el panel podía ser claro y el login seguir negro.
+
+   Ahora las tres dicen lo mismo. Los selectores antiguos se mantienen para que
+   nada se quede sin estilo si algún componente todavía pone esas clases, pero
+   todos apuntan a la misma paleta: no hay modo oscuro que activar.
    ============================================================ */
 
-/* ─── DARK MODE (Default) ─── */
 :root,
 html.theme-dark,
 body.theme-dark,
-[data-theme="dark"] {
-  /* Primary Colors */
-  /* Acento global. El nombre viene del panel antiguo de Black Wolf; el color
-     es el verde de HELM (ver index.css). Dentro de .helm manda el tema activo. */
-  --orange: #2FCB6A;
-  --yellow: #FBBF24;
-  
-  /* Backgrounds */
-  --bg: #050510;
-  --bg-card: rgba(255, 255, 255, 0.02);
-  --bg-card-hover: rgba(255, 255, 255, 0.05);
-  --bg-card-solid: #0a0a14;
-  --bg-card-light: rgba(255, 255, 255, 0.04);
-  --bg-sidebar: rgba(5, 5, 16, 0.95);
-  --bg-elevated: rgba(10, 10, 20, 0.98);
-  --bg-overlay: rgba(0, 0, 0, 0.7);
-  
-  /* Borders & Dividers */
-  --border: rgba(255, 255, 255, 0.06);
-  --border-hover: rgba(255, 255, 255, 0.12);
-  --border-focus: rgba(255, 255, 255, 0.2);
-  --border-strong: rgba(255, 255, 255, 0.15);
-  
-  /* Text Colors */
-  --text: #E4E4E7;
-  --text-secondary: rgba(255, 255, 255, 0.5);
-  --text-tertiary: rgba(255, 255, 255, 0.35);
-  --text-muted: rgba(255, 255, 255, 0.25);
-  --text-dark: #000000;
+html.theme-light,
+body.theme-light,
+[data-theme="dark"],
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* Acento. Uno solo: verde salvia. El nombre --orange viene del panel antiguo
+     de Black Wolf y se queda porque lo usan cientos de reglas. */
+  --orange: #5A6E50;
+  --yellow: #8A5E1E;
+
+  /* Fondos. El fondo cálido y la tarjeta blanca son lo que dibuja la tarjeta;
+     por eso casi no hacen falta bordes. */
+  --bg: #EAE9E4;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F6F5F2;
+  --bg-card-solid: #FFFFFF;
+  --bg-card-light: #F6F5F2;
+  --bg-sidebar: rgba(234, 233, 228, 0.95);
+  --bg-elevated: #FFFFFF;
+  --bg-overlay: rgba(28, 29, 25, 0.45);
+
+  /* Bordes */
+  --border: rgba(28, 29, 25, 0.10);
+  --border-hover: rgba(28, 29, 25, 0.20);
+  --border-focus: #5A6E50;
+  --border-strong: rgba(28, 29, 25, 0.24);
+
+  /* Texto */
+  --text: #1C1D19;
+  --text-secondary: #565951;
+  --text-tertiary: #6E7168;
+  --text-muted: #82857B;
+  /* El texto que va ENCIMA del acento: sobre el verde salvia, blanco. */
+  --text-dark: #FFFFFF;
   --text-inverted: #FFFFFF;
-  
-  /* Semantic Colors */
-  --success: #22C55E;
-  --danger: #EF4444;
-  --warning: #F59E0B;
-  --info: #3B82F6;
-  --error: #DC2626;
 
-  /* Toast Colors */
-  --toast-bg-error: #2a0f10;
-  --toast-bg-success: #0b2516;
-  --toast-bg-warning: #2a1f05;
-  --toast-bg-info: #0d1b2b;
-  --toast-text-error: #fecaca;
-  --toast-text-success: #bbf7d0;
-  --toast-text-warning: #fde68a;
-  --toast-text-info: #dbeafe;
-  --toast-border-error: #7f1d1d;
-  --toast-border-success: #14532d;
-  --toast-border-warning: #78350f;
-  --toast-border-info: #1e3a8a;
+  /* Señal. Elegidos contra el beige para que ninguno se confunda con el
+     acento: el error tira a terracota y el aviso a ámbar tostado. */
+  --success: #3F6B45;
+  --danger: #A6402F;
+  --warning: #8A5E1E;
+  --info: #3E5E72;
+  --error: #A6402F;
 
-  /* Tooltip Colors */
-  --tooltip-bg: #0f172a;
-  --tooltip-text: #ffffff;
+  /* Avisos: fondo tenue del mismo tono, texto oscuro para que se lea. */
+  --toast-bg-error: #F7ECE9;
+  --toast-bg-success: #EAF0EA;
+  --toast-bg-warning: #F7F0E2;
+  --toast-bg-info: #E9EFF3;
+  --toast-text-error: #7E3122;
+  --toast-text-success: #2F5134;
+  --toast-text-warning: #6A4715;
+  --toast-text-info: #2F4857;
+  --toast-border-error: #E3C6BE;
+  --toast-border-success: #C9D8C9;
+  --toast-border-warning: #E5D6B4;
+  --toast-border-info: #C6D5DE;
+
+  /* Tooltip: oscuro a propósito, es lo único que flota sobre todo. */
+  --tooltip-bg: #1C1D19;
+  --tooltip-text: #FFFFFF;
   --tooltip-border: rgba(255, 255, 255, 0.12);
-  
-  /* Accent Colors */
-  --accent-purple: #8B5CF6;
-  --accent-green: #22C55E;
-  --accent-red: #EF4444;
-  
-  /* Message Colors */
-  --msg-user-bg: rgba(47, 203, 106, 0.1);
-  --msg-user-text: #2FCB6A;
-  --msg-assistant-bg: rgba(139, 92, 246, 0.1);
-  --msg-assistant-text: #E4E4E7;
-  
-  /* UI Elements */
-  --gradient: linear-gradient(135deg, var(--orange), color-mix(in srgb, var(--orange) 70%, #000));
-  --glow: rgba(245, 245, 245, 0.08);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
-  --shadow-focus: 0 0 0 3px color-mix(in srgb, var(--orange) 20%, transparent);
-  
-  /* Radius */
+
+  /* Acentos secundarios, alineados con la paleta. */
+  --accent-purple: #6B5B7B;
+  --accent-green: #3F6B45;
+  --accent-red: #A6402F;
+
+  /* Mensajes del chat */
+  --msg-user-bg: color-mix(in srgb, #5A6E50 12%, transparent);
+  --msg-user-text: #3F5238;
+  --msg-assistant-bg: #F6F5F2;
+  --msg-assistant-text: #1C1D19;
+
+  /* Superficie. En claro la sombra no es adorno: una tarjeta blanca sobre
+     fondo claro sin sombra no existe. Plano el degradado: el acento aparece
+     cuando significa algo. */
+  --gradient: var(--orange);
+  --glow: transparent;
+  --shadow-sm: 0 1px 2px rgba(28, 29, 25, 0.06);
+  --shadow-md: 0 1px 2px rgba(28, 29, 25, 0.04), 0 8px 24px -16px rgba(28, 29, 25, 0.18);
+  --shadow-lg: 0 8px 24px rgba(28, 29, 25, 0.10), 0 24px 64px -32px rgba(28, 29, 25, 0.24);
+  --shadow-focus: 0 0 0 3px color-mix(in srgb, var(--orange) 24%, transparent);
+
+  /* Radios */
   --radius: 16px;
   --radius-sm: 10px;
   --radius-lg: 20px;
   --radius-xs: 6px;
   --radius-pill: 9999px;
-  
-  /* Transitions */
+
+  /* Movimiento: arranca rápido y frena largo. */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --transition-base: 0.25s var(--ease-out-expo);
   --transition-fast: 0.15s var(--ease-out-expo);
   --transition-slow: 0.4s var(--ease-out-expo);
-  
-  /* Input & Form */
-  --input-bg: rgba(255, 255, 255, 0.03);
-  --input-border: rgba(255, 255, 255, 0.08);
+
+  /* Campos: el campo se hunde respecto a la tarjeta, no se ilumina. */
+  --input-bg: #EFEEE9;
+  --input-border: rgba(28, 29, 25, 0.12);
   --input-border-focus: color-mix(in srgb, var(--orange) 50%, transparent);
-  --input-text: #E4E4E7;
-  --input-placeholder: rgba(255, 255, 255, 0.3);
-  
-  /* Disabled State */
-  --disabled-bg: rgba(255, 255, 255, 0.02);
-  --disabled-border: rgba(255, 255, 255, 0.04);
-  --disabled-text: rgba(255, 255, 255, 0.15);
+  --input-text: #1C1D19;
+  --input-placeholder: #9A9D93;
+
+  /* Deshabilitado */
+  --disabled-bg: #F1F0EC;
+  --disabled-border: rgba(28, 29, 25, 0.07);
+  --disabled-text: #A8ABA1;
 }
