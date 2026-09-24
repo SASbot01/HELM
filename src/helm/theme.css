@@ -26,49 +26,46 @@
 /* Las variables se declaran también en .helm-swatch, que necesita la paleta
    sin heredar el layout de .helm. */
 .helm, .helm-swatch {
-  /* Fondo cálido y tarjeta blanca: el contraste entre los dos es lo que
-     dibuja la tarjeta, así que casi no hacen falta bordes. */
-  --bg:        #EAE9E4;
-  --bg-1:      #E3E2DC;
-  --panel:     #FFFFFF;
-  --panel-2:   #F6F5F2;
-  --hover:     #EFEEE9;
-  --border:    rgba(28,29,25,0.10);
-  --border-2:  rgba(28,29,25,0.20);
-  --text:      #1C1D19;
-  --text-dim:  #565951;
-  --text-mut:  #82857B;
+  /* Puesto de mando. Fondo casi negro con tinte azul, paneles que se separan
+     por luminosidad y un solo acento cian. El fondo NO es negro puro: un negro
+     absoluto con texto claro vibra y cansa a los diez minutos. */
+  --bg:        #080C10;
+  --bg-1:      #0C1218;
+  --panel:     #101820;
+  --panel-2:   #16212B;
+  --hover:     #1E2C38;
+  /* Los bordes llevan el tinte del acento, no gris: es lo que hace que la
+     rejilla de paneles se lea como un instrumento y no como una tabla. */
+  --border:    rgba(96,186,214,0.14);
+  --border-2:  rgba(96,186,214,0.32);
+  --text:      #D8E6F0;
+  --text-dim:  #8AA0B2;
+  --text-mut:  #5C7284;
 
-  /* El acento, uno solo. Verde salvia: raro en software, y sobre el beige
-     funciona sin gritar. --violet vale lo mismo a propósito (ver cabecera). */
-  --cyan:      #5A6E50;
-  --violet:    #5A6E50;
+  /* Un solo acento. --violet vale lo mismo a propósito: así los degradados
+     "cyan→violet" que quedan en el código salen planos. */
+  --cyan:      #35D0E8;
+  --violet:    #35D0E8;
 
-  /* Señal, no decoración. Elegidos contra el beige para que ninguno se
-     confunda con el acento: el error tira a terracota y el aviso a ámbar
-     tostado, los dos lejos del verde. */
-  --green:     #3F6B45;
-  --red:       #A6402F;
-  --amber:     #8A5E1E;
-  --pink:      #8A5A6B;
+  /* Señal, no decoración. */
+  --green:     #3FD68C;
+  --red:       #FF6B5E;
+  --amber:     #FFC155;
+  --pink:      #E86BA8;
 
-  --on-accent: #FFFFFF;
-  --scrim:     28,29,25;
+  --on-accent: #04121A;
+  --scrim:     2,8,12;
   --glow-1:    transparent;
   --glow-2:    transparent;
-  --shadow:    0 1px 2px rgba(28,29,25,0.04), 0 8px 24px -16px rgba(28,29,25,0.18);
-  --radius:    16px;
-  --radius-sm: 10px;
+  /* En oscuro la elevación se ve por luminosidad (el panel es más claro que el
+     fondo), así que la sombra es mínima: solo asienta el objeto. */
+  --shadow:    0 1px 2px rgba(0,0,0,0.5);
+  --radius:    10px;
+  --radius-sm: 7px;
 
-  /* Puente con index.css (el panel legacy de Black Wolf), que pinta el anillo
-     de foco y la selección de texto con su naranja. Apuntándolos al acento,
-     ese naranja desaparece de HELM. */
   --brand-primary: var(--cyan);
   --orange:     var(--brand-primary);
   --yellow:     var(--amber);
-  /* Plano a propósito: un degradado de acento es decoración, y aquí el color
-     solo aparece cuando significa algo. Una línea mata los degradados de
-     toda la aplicación. */
   --gradient:   var(--cyan);
   --on-primary: var(--on-accent);
   --on-secondary: var(--on-accent);
@@ -76,9 +73,12 @@
 
 .helm {
   font-family: 'Archivo', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  /* Casillas, radios y barras nativas: sin esto las pinta el navegador con su
-     propio color. */
   accent-color: var(--cyan);
+  /* Fondo liso. Aquí había una rejilla de líneas finas para dar aire de
+     instrumento, y se quitó: un campo de rejilla decorativo es uno de los
+     tells más reconocibles de una interfaz generada por IA, y encima no
+     informa de nada. El carácter lo dan las esquinas de los paneles, los
+     rótulos en monoespaciada y la tira de cifras, que sí son estructura. */
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
@@ -2148,9 +2148,9 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 
   /* Elevación en dos capas: un contacto de 1px muy cerrado y una sombra ancha
      y casi invisible. Una sola sombra gorda se ve barata; dos suaves, no. */
-  --elev-1: 0 1px 2px rgba(var(--scrim), .16), 0 1px 3px rgba(var(--scrim), .10);
-  --elev-2: 0 2px 4px rgba(var(--scrim), .14), 0 6px 16px rgba(var(--scrim), .14);
-  --elev-3: 0 8px 24px rgba(var(--scrim), .22), 0 24px 64px rgba(var(--scrim), .28);
+  --elev-1: 0 1px 2px rgba(0,0,0,.45);
+  --elev-2: 0 2px 6px rgba(0,0,0,.5), 0 8px 20px -10px rgba(0,0,0,.6);
+  --elev-3: 0 12px 28px -6px rgba(0,0,0,.66), 0 32px 64px -24px rgba(0,0,0,.7);
 
   --radius-lg: 22px;
   --radius-xs: 8px;
@@ -2424,3 +2424,79 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-graf-globo i { width: 9px; height: 3px; border-radius: 2px; display: inline-block; flex: none; }
 .helm-graf-globo em { font-style: normal; font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; }
 .helm-graf-globo .sec { color: var(--text-mut); font-size: 11px; padding-top: 2px; }
+
+/* ════════════════════════════════════════════════════════════════════════
+   CHAPA DE INSTRUMENTO
+   Esto es lo que diferencia un puesto de mando de una web con tarjetas. No
+   son colores: es que cada panel se lee como un aparato — esquinas marcadas,
+   rótulo en monoespaciada y las cifras alineadas como en una lectura.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Las esquinas. Dos trazos cortos arriba a la izquierda y abajo a la derecha,
+   en el acento a media opacidad. Es el detalle que hace que un rectángulo
+   parezca un visor y no un div. */
+.helm-card, .helm-panel { position: relative; }
+.helm-card::before, .helm-panel::before,
+.helm-card::after,  .helm-panel::after {
+  content: ''; position: absolute; width: 9px; height: 9px;
+  border: 1px solid var(--brand-primary); opacity: .34; pointer-events: none;
+  transition: opacity var(--t-medio) var(--ease);
+}
+.helm-card::before, .helm-panel::before {
+  top: -1px; left: -1px; border-right: 0; border-bottom: 0;
+  border-top-left-radius: var(--radius);
+}
+.helm-card::after, .helm-panel::after {
+  bottom: -1px; right: -1px; border-left: 0; border-top: 0;
+  border-bottom-right-radius: var(--radius);
+}
+.helm-card:hover::before, .helm-card:hover::after { opacity: .85; }
+
+/* Los rótulos, en monoespaciada y versalitas. Un panel de instrumento no
+   titula, etiqueta. */
+.helm-panel-head h2, .helm-kpi .lbl, .helm-table th, .helm-navlabel {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  font-weight: 500;
+}
+.helm-panel-head h2 { font-size: 11px; color: var(--text-dim); }
+.helm-kpi .lbl { font-size: 9.5px; color: var(--text-mut); }
+.helm-table th { font-size: 9.5px; }
+
+/* Las cifras. Grandes, apretadas y tabulares: es lo que se lee de lejos. */
+.helm-kpi .val {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 500; letter-spacing: -.03em;
+}
+
+/* El KPI deja de ser una tarjeta suelta y pasa a ser una celda de una tira
+   continua: menos bordes, más lectura seguida. */
+.helm-kpis {
+  gap: 1px !important;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.helm-kpis .helm-card {
+  border: 0; border-radius: 0; box-shadow: none;
+  background: var(--panel);
+}
+.helm-kpis .helm-card::before, .helm-kpis .helm-card::after { display: none; }
+.helm-kpis .helm-card:hover { background: var(--panel-2); }
+
+/* El menú lateral, como una columna de instrumento: la sección activa se
+   marca con un bloque lleno, no con un fondo suave. */
+.helm-side { background: var(--bg-1); }
+.helm-nav.active { background: var(--panel-2); color: var(--text); }
+.helm-nav.active::before {
+  content: ''; position: absolute; left: -14px; top: 50%; transform: translateY(-50%);
+  width: 2px; height: 100%; border-radius: 0;
+  background: var(--brand-primary);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--brand-primary) 60%, transparent);
+}
+
+/* Cabecera de la app: una línea de acento bajo el borde, como el canto
+   iluminado de una consola. */
+.helm-top { border-bottom: 1px solid var(--border); }

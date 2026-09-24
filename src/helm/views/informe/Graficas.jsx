@@ -4,22 +4,23 @@
 //   Evolución    ¿vamos a más o a menos, y cuánto de lo facturado se cobra?
 //   Por programa ¿de dónde sale el dinero?
 //
-// Sobre los colores: NO son el verde de la marca. El salvia de HELM tiene un
-// croma de 0.052 y el mínimo para que un color de dato no se lea como gris es
-// 0.1 — comprobado con el validador, no a ojo. Sirve para la interfaz, no para
-// una serie. Estos dos son los mismos que usa el Agent OS y pasan los cinco
-// checks: banda de luminosidad, croma, separación con daltonismo (ΔE 9.5),
-// contraste contra la tarjeta y separación con visión normal (ΔE 27.5).
+// Sobre los colores: NO son el cian del acento. Un color de dato tiene otro
+// trabajo que un color de interfaz, y sobre fondo oscuro la banda de
+// luminosidad que se puede usar es estrecha (L 0.48–0.67): el cian del acento
+// se sale por arriba y deslumbra. Estos dos están medidos con el validador,
+// no elegidos a ojo, y pasan los cinco checks contra el panel oscuro:
+// luminosidad, croma, separación con daltonismo (ΔE 16.4), visión normal
+// (ΔE 24.3) y contraste.
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
 
-export const COLOR_FACTURADO = '#04996A'
-export const COLOR_COBRADO = '#C2410C'
+export const COLOR_FACTURADO = '#0894AC'
+export const COLOR_COBRADO = '#C25A32'
 
-const EJE = { fill: '#82857B', fontSize: 11 }
-const REJILLA = 'rgba(28,29,25,0.08)'
+const EJE = { fill: '#5C7284', fontSize: 11 }
+const REJILLA = 'rgba(96,186,214,0.10)'
 
 // Los nombres de programa que escribe la gente son larguísimos ("Asesoría
 // semestral Enformaconhugo 🏋 Fraccionado 3 plazos."). En el eje se recortan:
@@ -40,7 +41,7 @@ function EtiquetaPrograma({ x, y, payload }) {
   return (
     <text
       x={x} y={y} dy={4} textAnchor="end"
-      fill="#82857B" fontSize={11}
+      fill="#5C7284" fontSize={11}
     >
       {recorta(payload.value, 22)}
     </text>
@@ -119,13 +120,13 @@ export function Evolucion({ serie }) {
               </linearGradient>
             </defs>
             <CartesianGrid stroke={REJILLA} vertical={false} />
-            <XAxis dataKey="mes" tick={EJE} axisLine={{ stroke: 'rgba(28,29,25,0.14)' }} tickLine={false} />
+            <XAxis dataKey="mes" tick={EJE} axisLine={{ stroke: 'rgba(96,186,214,0.18)' }} tickLine={false} />
             <YAxis tickFormatter={corto} tick={EJE} axisLine={false} tickLine={false} width={46} />
-            <Tooltip content={<Globo />} cursor={{ stroke: 'rgba(28,29,25,0.18)' }} />
+            <Tooltip content={<Globo />} cursor={{ stroke: 'rgba(96,186,214,0.28)' }} />
             <Area
               type="monotone" dataKey="facturado" name="Facturado"
               stroke={COLOR_FACTURADO} strokeWidth={2} fill="url(#helm-g-fact)"
-              dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: '#FFFFFF' }}
+              dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: '#101820' }}
             />
             {/* Discontinua a propósito: cuando todo lo facturado está
                 cobrado las dos líneas coinciden, y con las dos continuas la
@@ -133,7 +134,7 @@ export function Evolucion({ serie }) {
             <Area
               type="monotone" dataKey="cobrado" name="Cobrado"
               stroke={COLOR_COBRADO} strokeWidth={2} strokeDasharray="5 4" fill="none"
-              dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: '#FFFFFF' }}
+              dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: '#101820' }}
             />
           </AreaChart>
         </ResponsiveContainer>
@@ -163,7 +164,7 @@ export function PorPrograma({ tabla }) {
               axisLine={false} tickLine={false} interval={0}
             />
             <Tooltip
-              cursor={{ fill: 'rgba(28,29,25,0.04)' }}
+              cursor={{ fill: 'rgba(96,186,214,0.06)' }}
               content={({ active, payload, label }) => {
                 if (!active || !payload?.length) return null
                 const f = payload[0].payload

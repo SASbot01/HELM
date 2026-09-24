@@ -2,7 +2,7 @@
 // Se monta en /admin. Gestiona un perfil (cliente) a la vez, con selector arriba.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Link2, Blocks, Settings, Plus, Rocket, Menu, X, Package, UserCog, PhoneCall, FolderOpen, Layers, CalendarClock, BookOpen, FileText, Receipt, ShieldCheck, ScrollText, Instagram } from 'lucide-react'
+import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Link2, Blocks, Settings, Plus, Rocket, Menu, X, Package, UserCog, PhoneCall, FolderOpen, Layers, CalendarClock, BookOpen, FileText, Receipt, ShieldCheck, ScrollText } from 'lucide-react'
 import { listClients, createProfile, slugify, usersApi, brandOf } from './lib'
 import { productoActual, seccionDelProducto, seccionSiempre } from './producto'
 import { Modal, Field, Input } from './ui'
@@ -10,7 +10,6 @@ import Guia from './Guia'
 import Informe from './views/Informe'
 import Onboarding from './views/Onboarding'
 import Guiones from './views/Guiones'
-import ContenidoSocial from './views/ContenidoSocial'
 import Llamadas from './views/Llamadas'
 import Crm from './views/Crm'
 import Servicios from './views/Servicios'
@@ -50,7 +49,6 @@ const NAV = [
   // propósito: es la que está guardada en los permisos y las secciones activas
   // de cada perfil.
   { key: 'contenido', label: 'Guiones', icon: ScrollText, title: 'Guiones', sub: 'Lo que vas a grabar, día a día', C: Guiones },
-  { key: 'contenido-social', label: 'Contenido', icon: Instagram, title: 'Contenido', sub: 'Tu Instagram: visitas, métricas y qué vídeos ganan', C: ContenidoSocial },
   { key: 'llamadas', label: 'Llamadas', icon: PhoneCall, title: 'Llamadas', sub: 'Tu agenda de Google, con lo que pasó en cada una', C: Llamadas },
   { key: 'enlaces', label: 'Enlaces', icon: Link2, title: 'Enlaces', sub: 'Las URLs del negocio, a mano', C: Enlaces },
   { key: 'archivos', label: 'Archivos', icon: FolderOpen, title: 'Archivos', sub: 'Lo que subes, lo que escribe la IA y las Biblias', C: Archivos },
@@ -158,16 +156,7 @@ export default function HelmApp() {
   // Cada producto entra por su puerta: HELM por el Informe, el dominio del
   // Scraper por el Scraper. Caer en una sección que ese producto ni siquiera
   // tiene y rebotar a otra es un parpadeo feo en la primera pantalla.
-  const [view, setView] = useState(() => {
-    // Vuelta del OAuth de Instagram (?instagram=ok|error): el callback no puede
-    // devolver a una vista concreta porque la vista no va en la URL, así que se
-    // detecta aquí y se abre la sección que lo pidió. Sin esto, el aviso de
-    // "cuenta conectada" lo pinta una pantalla que nadie está mirando.
-    try {
-      if (new URLSearchParams(window.location.search).has('instagram')) return 'contenido-social'
-    } catch { /* sin window (SSR, tests): la vista inicial de siempre */ }
-    return productoActual().vistaInicial || 'informe'
-  })
+  const [view, setView] = useState(() => productoActual().vistaInicial || 'informe')
   const [clients, setClients] = useState([])
   const [clientId, setClientId] = useState(null)
   const [loadingClients, setLoadingClients] = useState(true)

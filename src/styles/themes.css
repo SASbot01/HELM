@@ -11,7 +11,7 @@
 
    Ahora las tres dicen lo mismo. Los selectores antiguos se mantienen para que
    nada se quede sin estilo si algún componente todavía pone esas clases, pero
-   todos apuntan a la misma paleta: no hay modo oscuro que activar.
+   todos apuntan a la misma paleta: no hay tema que elegir.
    ============================================================ */
 
 :root,
@@ -21,91 +21,90 @@ html.theme-light,
 body.theme-light,
 [data-theme="dark"],
 [data-theme="light"] {
-  color-scheme: light;
+  color-scheme: dark;
 
-  /* Acento. Uno solo: verde salvia. El nombre --orange viene del panel antiguo
-     de Black Wolf y se queda porque lo usan cientos de reglas. */
-  --orange: #5A6E50;
-  --yellow: #8A5E1E;
+  /* Acento. Uno solo: cian. El nombre --orange viene del panel antiguo de
+     Black Wolf y se queda porque lo usan cientos de reglas. */
+  --orange: #35D0E8;
+  --yellow: #FFC155;
 
-  /* Fondos. El fondo cálido y la tarjeta blanca son lo que dibuja la tarjeta;
-     por eso casi no hacen falta bordes. */
-  --bg: #EAE9E4;
-  --bg-card: #FFFFFF;
-  --bg-card-hover: #F6F5F2;
-  --bg-card-solid: #FFFFFF;
-  --bg-card-light: #F6F5F2;
-  --bg-sidebar: rgba(234, 233, 228, 0.95);
-  --bg-elevated: #FFFFFF;
-  --bg-overlay: rgba(28, 29, 25, 0.45);
+  /* Fondos. Escalera de luminosidad: fondo → panel → panel elevado. En oscuro
+     es la luminosidad, y no la sombra, lo que separa un plano del siguiente. */
+  --bg: #080C10;
+  --bg-card: #101820;
+  --bg-card-hover: #16212B;
+  --bg-card-solid: #101820;
+  --bg-card-light: #0C1218;
+  --bg-sidebar: rgba(8, 12, 16, 0.95);
+  --bg-elevated: #16212B;
+  --bg-overlay: rgba(2, 8, 12, 0.72);
 
   /* Bordes */
-  --border: rgba(28, 29, 25, 0.10);
-  --border-hover: rgba(28, 29, 25, 0.20);
-  --border-focus: #5A6E50;
-  --border-strong: rgba(28, 29, 25, 0.24);
+  --border: rgba(96,186,214,0.14);
+  --border-hover: rgba(96,186,214,0.32);
+  --border-focus: #35D0E8;
+  --border-strong: rgba(96,186,214,0.42);
 
   /* Texto */
-  --text: #1C1D19;
-  --text-secondary: #565951;
-  --text-tertiary: #6E7168;
-  --text-muted: #82857B;
-  /* El texto que va ENCIMA del acento: sobre el verde salvia, blanco. */
-  --text-dark: #FFFFFF;
+  --text: #D8E6F0;
+  --text-secondary: #8AA0B2;
+  --text-tertiary: #6E8496;
+  --text-muted: #5C7284;
+  /* El texto que va ENCIMA del acento: sobre el cian, casi negro. */
+  --text-dark: #04121A;
   --text-inverted: #FFFFFF;
 
-  /* Señal. Elegidos contra el beige para que ninguno se confunda con el
-     acento: el error tira a terracota y el aviso a ámbar tostado. */
-  --success: #3F6B45;
-  --danger: #A6402F;
-  --warning: #8A5E1E;
-  --info: #3E5E72;
-  --error: #A6402F;
+  /* Señal. Elegidos para que ninguno se confunda con el cian del acento. */
+  --success: #3FD68C;
+  --danger: #FF6B5E;
+  --warning: #FFC155;
+  --info: #58A8C8;
+  --error: #FF6B5E;
 
-  /* Avisos: fondo tenue del mismo tono, texto oscuro para que se lea. */
-  --toast-bg-error: #F7ECE9;
-  --toast-bg-success: #EAF0EA;
-  --toast-bg-warning: #F7F0E2;
-  --toast-bg-info: #E9EFF3;
-  --toast-text-error: #7E3122;
-  --toast-text-success: #2F5134;
-  --toast-text-warning: #6A4715;
-  --toast-text-info: #2F4857;
-  --toast-border-error: #E3C6BE;
-  --toast-border-success: #C9D8C9;
-  --toast-border-warning: #E5D6B4;
-  --toast-border-info: #C6D5DE;
+  /* Avisos: fondo muy oscuro del mismo tono y el texto en el color vivo. */
+  --toast-bg-error: #2A1512;
+  --toast-bg-success: #0F2419;
+  --toast-bg-warning: #2A2110;
+  --toast-bg-info: #101F28;
+  --toast-text-error: #FF6B5E;
+  --toast-text-success: #3FD68C;
+  --toast-text-warning: #FFC155;
+  --toast-text-info: #7FC4DC;
+  --toast-border-error: #5A2A22;
+  --toast-border-success: #1E4630;
+  --toast-border-warning: #55411C;
+  --toast-border-info: #22414F;
 
-  /* Tooltip: oscuro a propósito, es lo único que flota sobre todo. */
-  --tooltip-bg: #1C1D19;
+  /* Tooltip: un escalón por encima del panel, que es lo que flota sobre todo. */
+  --tooltip-bg: #16212B;
   --tooltip-text: #FFFFFF;
   --tooltip-border: rgba(255, 255, 255, 0.12);
 
   /* Acentos secundarios, alineados con la paleta. */
-  --accent-purple: #6B5B7B;
-  --accent-green: #3F6B45;
-  --accent-red: #A6402F;
+  --accent-purple: #9B7BD4;
+  --accent-green: #3FD68C;
+  --accent-red: #FF6B5E;
 
   /* Mensajes del chat */
-  --msg-user-bg: color-mix(in srgb, #5A6E50 12%, transparent);
-  --msg-user-text: #3F5238;
-  --msg-assistant-bg: #F6F5F2;
-  --msg-assistant-text: #1C1D19;
+  --msg-user-bg: color-mix(in srgb, #35D0E8 14%, transparent);
+  --msg-user-text: #35D0E8;
+  --msg-assistant-bg: #16212B;
+  --msg-assistant-text: #D8E6F0;
 
-  /* Superficie. En claro la sombra no es adorno: una tarjeta blanca sobre
-     fondo claro sin sombra no existe. Plano el degradado: el acento aparece
-     cuando significa algo. */
+  /* Superficie. En oscuro la sombra casi no hace falta —el panel ya es más
+     claro que el fondo— y solo asienta el objeto. Plano el degradado: el
+     acento aparece cuando significa algo, no de adorno. */
   --gradient: var(--orange);
   --glow: transparent;
-  --shadow-sm: 0 1px 2px rgba(28, 29, 25, 0.06);
-  --shadow-md: 0 1px 2px rgba(28, 29, 25, 0.04), 0 8px 24px -16px rgba(28, 29, 25, 0.18);
-  --shadow-lg: 0 8px 24px rgba(28, 29, 25, 0.10), 0 24px 64px -32px rgba(28, 29, 25, 0.24);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.45);
+  --shadow-md: 0 1px 2px rgba(0,0,0,.45), 0 8px 20px -12px rgba(0,0,0,.6);
+  --shadow-lg: 0 12px 28px -6px rgba(0,0,0,.66), 0 32px 64px -24px rgba(0,0,0,.7);
   --shadow-focus: 0 0 0 3px color-mix(in srgb, var(--orange) 24%, transparent);
 
   /* Radios */
-  --radius: 16px;
-  --radius-sm: 10px;
-  --radius-lg: 20px;
+  --radius: 10px;
+  --radius-sm: 7px;
+  --radius-lg: 14px;
   --radius-xs: 6px;
   --radius-pill: 9999px;
 
@@ -115,15 +114,15 @@ body.theme-light,
   --transition-fast: 0.15s var(--ease-out-expo);
   --transition-slow: 0.4s var(--ease-out-expo);
 
-  /* Campos: el campo se hunde respecto a la tarjeta, no se ilumina. */
-  --input-bg: #EFEEE9;
-  --input-border: rgba(28, 29, 25, 0.12);
+  /* Campos: el campo se HUNDE respecto al panel (más oscuro), no se ilumina. */
+  --input-bg: #0C1218;
+  --input-border: rgba(96,186,214,0.14);
   --input-border-focus: color-mix(in srgb, var(--orange) 50%, transparent);
-  --input-text: #1C1D19;
-  --input-placeholder: #9A9D93;
+  --input-text: #D8E6F0;
+  --input-placeholder: #4E6476;
 
   /* Deshabilitado */
-  --disabled-bg: #F1F0EC;
-  --disabled-border: rgba(28, 29, 25, 0.07);
-  --disabled-text: #A8ABA1;
+  --disabled-bg: #0E141A;
+  --disabled-border: rgba(96,186,214,0.08);
+  --disabled-text: #445A6C;
 }

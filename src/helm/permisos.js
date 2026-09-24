@@ -66,7 +66,6 @@ export const SECCIONES = [
   // La clave no cambia aunque el nombre sí (ver el NAV de HelmApp): está
   // guardada en los permisos de cada perfil.
   { key: 'contenido', label: 'Guiones', desc: 'Calendario de piezas y guiones' },
-  { key: 'contenido-social', label: 'Contenido', desc: 'Instagram: visitas y vídeos ganadores' },
   { key: 'llamadas', label: 'Llamadas', desc: 'Agenda de llamadas' },
   { key: 'enlaces', label: 'Enlaces', desc: 'URLs del negocio' },
   { key: 'archivos', label: 'Archivos', desc: 'Documentos del negocio' },
@@ -88,7 +87,7 @@ export const DEFAULT_VISIBLE = {
   setter: ['crm', 'diario', 'tareas'],
   csm: ['crm', 'diario', 'tareas', 'formularios', 'biblioteca'],
   // El editor ve la estrategia que ejecuta: sin ella graba a ciegas.
-  editor: ['contenido', 'contenido-social', 'tareas', 'biblioteca', 'equipos-ia'],
+  editor: ['contenido', 'tareas', 'biblioteca', 'equipos-ia'],
   otro: ['tareas'],
 }
 

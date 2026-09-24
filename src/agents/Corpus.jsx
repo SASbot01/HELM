@@ -173,21 +173,21 @@ export default function Corpus({ identidades }) {
             ) : (
               <ResponsiveContainer width="100%" height={380}>
                 <ScatterChart margin={{ top: 12, right: 20, bottom: 28, left: 12 }}>
-                  <CartesianGrid stroke="rgba(28,29,25,0.08)" strokeDasharray="0" vertical={false} />
+                  <CartesianGrid stroke="rgba(96,186,214,0.10)" strokeDasharray="0" vertical={false} />
                   <XAxis
                     type="number" dataKey="x" domain={['dataMin - 86400000', 'dataMax + 86400000']}
                     tickFormatter={fecha} name="Publicado"
-                    tick={{ fill: '#82857B', fontSize: 11 }}
-                    axisLine={{ stroke: 'rgba(28,29,25,0.14)' }} tickLine={false}
+                    tick={{ fill: '#5C7284', fontSize: 11 }}
+                    axisLine={{ stroke: 'rgba(96,186,214,0.18)' }} tickLine={false}
                   />
                   <YAxis
                     type="number" dataKey="y" name="Vistas"
                     tickFormatter={(v) => v >= 1000 ? `${Math.round(v / 1000)}k` : v}
-                    tick={{ fill: '#82857B', fontSize: 11 }}
+                    tick={{ fill: '#5C7284', fontSize: 11 }}
                     axisLine={false} tickLine={false} width={48}
                   />
                   <Tooltip
-                    cursor={{ stroke: 'rgba(28,29,25,0.18)', strokeWidth: 1 }}
+                    cursor={{ stroke: 'rgba(96,186,214,0.28)', strokeWidth: 1 }}
                     content={({ active, payload }) => {
                       if (!active || !payload?.length) return null
                       const p = payload[0].payload
@@ -208,7 +208,7 @@ export default function Corpus({ identidades }) {
                       <circle
                         cx={p.cx} cy={p.cy} r={7}
                         fill={p.payload.g.color}
-                        stroke="#FFFFFF" strokeWidth={2}
+                        stroke="#101820" strokeWidth={2}
                         style={{ cursor: 'pointer' }}
                       />
                     )}

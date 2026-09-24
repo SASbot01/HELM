@@ -18,43 +18,43 @@
 
      Los NOMBRES se quedan como estaban (--orange, --bg-card, --text-dark…):
      los usan cientos de reglas de este fichero. Lo que cambia son los valores.
-     --orange no es naranja desde hace tiempo; ahora es el verde salvia. */
-  --orange: #5A6E50;
-  --yellow: #8A5E1E;
-  --black: #1C1D19;
+     --orange no es naranja desde hace tiempo; ahora es el cian del acento. */
+  --orange: #35D0E8;
+  --yellow: #FFC155;
+  --black: #04121A;
   --white: #FFFFFF;
-  --bg: #EAE9E4;
-  --bg-card: #FFFFFF;
-  --bg-card-hover: #F6F5F2;
-  --bg-card-solid: #FFFFFF;
-  --bg-card-light: #F6F5F2;
-  --bg-sidebar: rgba(234,233,228,0.95);
-  --border: rgba(28,29,25,0.10);
-  --border-hover: rgba(28,29,25,0.20);
-  --border-focus: #5A6E50;
-  --text: #1C1D19;
-  --text-secondary: #565951;
-  --text-muted: #82857B;
-  /* El texto que va ENCIMA del acento. Sobre el verde salvia va blanco. */
-  --text-dark: #FFFFFF;
+  --bg: #080C10;
+  --bg-card: #101820;
+  --bg-card-hover: #16212B;
+  --bg-card-solid: #101820;
+  --bg-card-light: #0C1218;
+  --bg-sidebar: rgba(8,12,16,0.95);
+  --border: rgba(96,186,214,0.14);
+  --border-hover: rgba(96,186,214,0.32);
+  --border-focus: #35D0E8;
+  --text: #D8E6F0;
+  --text-secondary: #8AA0B2;
+  --text-muted: #5C7284;
+  /* El texto que va ENCIMA del acento. Sobre el cian va casi negro. */
+  --text-dark: #04121A;
   /* Plano a propósito: el acento aparece cuando significa algo, no de adorno. */
   --gradient: var(--orange);
   --glow: transparent;
-  --radius: 16px;
-  --radius-sm: 10px;
-  --radius-lg: 20px;
+  --radius: 10px;
+  --radius-sm: 7px;
+  --radius-lg: 14px;
   --radius-xs: 6px;
-  --success: #3F6B45;
-  --danger: #A6402F;
-  --warning: #8A5E1E;
+  --success: #3FD68C;
+  --danger: #FF6B5E;
+  --warning: #FFC155;
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --transition-base: 0.25s var(--ease-out-expo);
 }
 
-/* Las clases .theme-light y .theme-dark se quedan apuntando a la misma paleta:
-   HELM tiene un solo aspecto. Se mantienen los selectores, y no se borran, para
+/* .theme-light y .theme-dark apuntan a la misma paleta: HELM tiene un solo
+   aspecto y no hay tema que elegir. Se mantienen los selectores, y no se borran, para
    que nada se quede sin estilo si algún componente todavía pone la clase. */
-:root.theme-light, :root.theme-dark { color-scheme: light; }
+:root.theme-light, :root.theme-dark { color-scheme: dark; }
 html { font-size: calc(15px * var(--ax-font-scale, 1)); }
 body {
   font-family: 'Archivo', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
