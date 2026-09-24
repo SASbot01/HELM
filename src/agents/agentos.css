@@ -1,0 +1,238 @@
+/* Agent OS — /agents.
+   Toma los tokens de styles/themes.css e index.css, que ya son la paleta única
+   de HELM. Aquí no se escribe ni un color a pelo salvo los de la gráfica, que
+   viven en ganchos.js porque están validados como conjunto. */
+
+.ag {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  padding: 28px 24px 64px;
+  max-width: 1240px;
+  margin: 0 auto;
+}
+@media (max-width: 720px) { .ag { padding: 20px 16px 48px; } }
+
+/* ── Cabecera y pestañas ─────────────────────────────────────────────────── */
+.ag-top {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 22px;
+}
+.ag-top h1 { font-size: 1.7rem; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+.ag-top p { color: var(--text-secondary); margin: 4px 0 0; font-size: .92rem; }
+
+.ag-tabs { display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap; }
+.ag-tab {
+  background: transparent; border: 1px solid transparent; color: var(--text-secondary);
+  padding: 8px 14px; border-radius: var(--radius-sm); cursor: pointer;
+  font: inherit; font-weight: 600; font-size: .9rem;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.ag-tab:hover { background: var(--bg-card-hover); color: var(--text); }
+.ag-tab.activa { background: var(--text); color: var(--bg); }
+
+/* ── Piezas comunes ──────────────────────────────────────────────────────── */
+.ag-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 18px;
+}
+.ag-lista { display: flex; flex-direction: column; gap: 12px; }
+
+.ag-btn {
+  background: var(--bg-card); color: var(--text);
+  border: 1px solid var(--border-hover); border-radius: var(--radius-sm);
+  padding: 9px 14px; font: inherit; font-weight: 600; font-size: .88rem;
+  cursor: pointer; text-decoration: none; display: inline-flex; align-items: center;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.ag-btn:hover:not(:disabled) { background: var(--bg-card-hover); }
+.ag-btn.primario { background: var(--orange); color: var(--text-dark); border-color: var(--orange); }
+.ag-btn.primario:hover:not(:disabled) { filter: brightness(1.06); }
+.ag-btn.peligro { color: var(--danger); }
+.ag-btn.sm { padding: 6px 10px; font-size: .82rem; }
+.ag-btn:disabled { opacity: .5; cursor: not-allowed; }
+.ag-btn:focus-visible, .ag-tab:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+
+.ag-error {
+  background: var(--toast-bg-error); color: var(--toast-text-error);
+  border: 1px solid var(--toast-border-error); border-radius: var(--radius-sm);
+  padding: 10px 12px; font-size: .88rem; margin: 0 0 12px;
+}
+.ag-vacio { color: var(--text-muted); font-size: .9rem; padding: 26px 4px; text-align: center; }
+.ag-aviso { color: var(--text-secondary); font-size: .85rem; }
+
+.ag-punto { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+.ag-punto.grande { width: 13px; height: 13px; }
+
+.ag-tema {
+  font-size: .74rem; font-weight: 600; padding: 2px 8px; border-radius: var(--radius-pill);
+  background: var(--bg-card-light); color: var(--text-secondary); border: 1px solid var(--border);
+}
+
+.ag-estado { font-size: .78rem; font-weight: 600; }
+.ag-estado.ok     { color: var(--success); }
+.ag-estado.mal    { color: var(--danger); }
+.ag-estado.espera { color: var(--text-secondary); }
+
+/* ── Formularios ─────────────────────────────────────────────────────────── */
+.ag-form { display: flex; flex-direction: column; gap: 14px; }
+.ag-form h2 { font-size: 1.1rem; margin: 0; letter-spacing: -.01em; }
+.ag-form label, .ag-pegar label { display: flex; flex-direction: column; gap: 5px; }
+.ag-form label > span, .ag-pegar label > b { font-size: .82rem; font-weight: 700; }
+.ag-form label > small, .ag-pegar label > span {
+  font-size: .8rem; color: var(--text-secondary); line-height: 1.45; font-weight: 400;
+}
+.ag input, .ag textarea, .ag select {
+  background: var(--input-bg); border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm); padding: 10px 12px;
+  color: var(--input-text); font: inherit; font-size: .9rem; width: 100%;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.ag textarea { resize: vertical; line-height: 1.55; }
+.ag input:focus, .ag textarea:focus, .ag select:focus {
+  outline: none; border-color: var(--border-focus); box-shadow: var(--shadow-focus);
+}
+.ag input::placeholder, .ag textarea::placeholder { color: var(--input-placeholder); }
+.ag-dos { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 640px) { .ag-dos { grid-template-columns: 1fr; } }
+.ag-form-pie { display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
+.ag-buscar { max-width: 340px; }
+
+/* ── Pegar enlaces ───────────────────────────────────────────────────────── */
+.ag-pegar { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+.ag-pegar textarea { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: .82rem; }
+.ag-pegar-pie { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
+
+/* ── Filtros y leyenda ───────────────────────────────────────────────────── */
+.ag-filtros { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.ag-filtros select { width: auto; min-width: 190px; }
+.ag-cuenta { font-size: .86rem; color: var(--text-secondary); margin-right: auto; }
+.ag-cuenta b { color: var(--text); font-weight: 600; }
+
+.ag-leyenda { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.ag-leyenda-it {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-pill); padding: 5px 11px 5px 8px;
+  font: inherit; font-size: .8rem; font-weight: 600; color: var(--text);
+  cursor: pointer; transition: opacity var(--transition-fast);
+}
+.ag-leyenda-it.apagado { opacity: .38; }
+.ag-leyenda-it:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+
+/* ── La gráfica ──────────────────────────────────────────────────────────── */
+.ag-grafica { padding: 16px 12px 10px; }
+.ag-pie-grafica {
+  font-size: .8rem; color: var(--text-muted); text-align: center; margin: 6px 0 0;
+}
+.ag-tooltip {
+  background: var(--bg-card); border: 1px solid var(--border-hover);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow-lg);
+  padding: 9px 11px; max-width: 260px;
+  display: flex; flex-direction: column; gap: 3px;
+  font-size: .82rem; color: var(--text);
+}
+.ag-tooltip b { font-weight: 700; }
+.ag-tooltip em { font-style: normal; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.ag-tooltip .rec { color: var(--text-muted); font-size: .78rem; line-height: 1.4; }
+
+/* ── Tablas ──────────────────────────────────────────────────────────────── */
+.ag-tabla-caja { overflow-x: auto; padding: 14px; }
+.ag-tabla-caja h3 { font-size: .95rem; margin: 0 0 10px; }
+.ag-tabla { width: 100%; border-collapse: collapse; font-size: .86rem; }
+.ag-tabla th {
+  text-align: left; font-weight: 700; font-size: .75rem; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--text-muted);
+  padding: 8px 10px; border-bottom: 1px solid var(--border);
+}
+.ag-tabla td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.ag-tabla tr:last-child td { border-bottom: none; }
+.ag-tabla .num { text-align: right; font-variant-numeric: tabular-nums; }
+.ag-tabla td small { display: block; color: var(--text-muted); font-size: .76rem; margin-top: 2px; }
+.ag-detalle { color: var(--text-muted); font-size: .8rem; max-width: 380px; }
+.ag-link {
+  background: none; border: none; padding: 0; font: inherit; font-weight: 600;
+  color: var(--text); text-align: left; cursor: pointer; text-decoration: underline;
+  text-decoration-color: var(--border-hover); text-underline-offset: 3px;
+}
+.ag-link:hover { text-decoration-color: var(--orange); }
+
+/* ── Identidades y memoria ───────────────────────────────────────────────── */
+.ag-lista-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.ag-lista-top p { color: var(--text-secondary); font-size: .88rem; margin: 0; max-width: 62ch; }
+.ag-ident, .ag-nota-it { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.ag-ident h3 { font-size: 1rem; margin: 0 0 3px; }
+.ag-ident p, .ag-nota-it p { color: var(--text-secondary); font-size: .88rem; margin: 0 0 4px; line-height: 1.5; }
+.ag-ident small, .ag-nota-it small { color: var(--text-muted); font-size: .78rem; }
+.ag-ident-acc { display: flex; gap: 6px; flex: none; }
+.ag-nota-it > div { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
+
+/* ── KPIs del agente ─────────────────────────────────────────────────────── */
+.ag-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.ag-kpi { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; }
+.ag-kpi span { font-size: .78rem; color: var(--text-secondary); font-weight: 600; }
+.ag-kpi b { font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+
+/* ── Panel del guion ─────────────────────────────────────────────────────── */
+.ag-panel-fondo {
+  position: fixed; inset: 0; background: var(--bg-overlay);
+  display: flex; justify-content: flex-end; z-index: 60;
+}
+.ag-panel {
+  background: var(--bg-card); width: min(560px, 100%); height: 100%;
+  overflow-y: auto; box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column;
+}
+.ag-panel > header {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 16px 18px; border-bottom: 1px solid var(--border); background: var(--bg-card);
+}
+.ag-panel > header > div { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ag-panel-cuerpo { padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+.ag-url {
+  font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: .76rem;
+  color: var(--text-secondary); word-break: break-all; text-decoration: none;
+}
+.ag-url:hover { color: var(--orange); }
+.ag-nota {
+  background: var(--bg-card-light); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 12px;
+  font-size: .85rem; color: var(--text-secondary); margin: 0;
+}
+.ag-cta { font-size: .88rem; margin: 0; color: var(--text-secondary); }
+.ag-cta b { color: var(--text); }
+
+.ag-metricas { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; align-items: end; }
+.ag-metricas label { display: flex; flex-direction: column; gap: 4px; }
+.ag-metricas label span { font-size: .75rem; color: var(--text-secondary); font-weight: 600; }
+.ag-metricas input { padding: 8px 10px; font-size: .85rem; }
+.ag-metricas .ag-btn { grid-column: 1 / -1; justify-content: center; }
+
+/* Los cuatro papeles, arriba del guion: el color se explica antes de usarse. */
+.ag-roles { display: flex; flex-wrap: wrap; gap: 12px; font-size: .78rem; color: var(--text-secondary); }
+.ag-roles span { display: inline-flex; align-items: center; gap: 6px; }
+.ag-roles i { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
+
+.ag-guion { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.ag-guion li { display: grid; grid-template-columns: 3px 1fr; gap: 11px; padding: 7px 0; align-items: start; }
+.ag-rol { width: 3px; border-radius: 2px; align-self: stretch; min-height: 18px; }
+.ag-frase { font-size: .9rem; line-height: 1.6; }
+/* El gancho es lo único que se destaca: es la frase que decide si el vídeo
+   funciona, y en una lista de treinta hay que encontrarla de un vistazo. */
+.ag-guion li.rol-gancho .ag-frase { font-weight: 650; }
+.ag-guion li.rol-venta .ag-frase { color: var(--text-secondary); }
+
+.ag-transcripcion { font-size: .9rem; line-height: 1.65; color: var(--text-secondary); margin: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ag * { transition: none !important; animation: none !important; }
+}
+
+/* Asignar la identidad desde el panel del guion. */
+.ag-asigna { display: flex; align-items: center; gap: 10px; }
+.ag-asigna span { font-size: .8rem; font-weight: 600; color: var(--text-secondary); flex: none; }
+.ag-asigna select { width: auto; flex: 1; padding: 7px 10px; font-size: .85rem; }

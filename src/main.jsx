@@ -13,6 +13,10 @@ import SilvestreValor from './pages/SilvestreValor.jsx'
 import PortalDocumentos from './pages/PortalDocumentos.jsx'
 import PaginaInicio from './pages/PaginaInicio.jsx'
 import PaginaInicioHugo from './pages/PaginaInicioHugo.jsx'
+import Clase from './pages/Clase.jsx'
+import Gracias from './pages/inicio/socio/Gracias.jsx'
+import Legal from './pages/inicio/socio/Legal.jsx'
+import AgentOS from './agents/AgentOS.jsx'
 import './index.css'
 
 // App reducida a HELM: se entra por /login (superadmin) → /admin (Helm).
@@ -98,6 +102,17 @@ createRoot(document.getElementById('root')).render(
               como todas las públicas — si no, "paginainicio" se leería como el
               slug de un perfil y acabaría en el login. */}
           <Route path="/paginainicio" element={<PaginaInicioPorHost />} />
+          {/* Socio IA (s4sf.net): la masterclass como salida secundaria, la
+              página de después de reservar la auditoría y las legales del
+              formulario. Públicas, así que ANTES de /:slug/*. */}
+          <Route path="/clase" element={<Clase />} />
+          <Route path="/gracias" element={<Gracias />} />
+          <Route path="/privacidad" element={<Legal pagina="privacidad" />} />
+          <Route path="/aviso-legal" element={<Legal pagina="aviso-legal" />} />
+          {/* Agent OS — el taller del operador. Solo superadmin: la propia
+              página lo comprueba y api/agents.js lo exige en el servidor. Va
+              ANTES de /:slug/*, que si no leería "agents" como slug de perfil. */}
+          <Route path="/agents" element={<AgentOS />} />
           {/* HELM — app limpia (CRM · Ventas · Diario · Finanzas · Chat · Ajustes).
               /admin entra sin perfil fijado (redirige al último usado) y
               /<slug> abre directamente ese perfil: /silvestre, /enformaconhugo… */}

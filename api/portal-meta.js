@@ -66,7 +66,8 @@ ${tags.join('\n')}
 // peor caso es una tarjeta genérica y no una consulta rara a la base.
 const RESERVADAS = new Set([
   'api', 'login', 'registro', 'admin', 'usersadmin', 'primermap', 'silvestreai',
-  'c', 'f', 'd', 'assets', 'manifest.json', 'robots.txt', 'favicon.ico',
+  'agents', 'clase', 'gracias', 'privacidad', 'aviso-legal', 'paginainicio',
+  'f', 'd', 'assets', 'manifest.json', 'robots.txt', 'favicon.ico',
 ])
 
 export default async function handler(req, res) {
