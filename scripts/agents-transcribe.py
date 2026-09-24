@@ -17,6 +17,12 @@ import json
 import os
 import sys
 
+# Dónde vive el modelo. Se fija aquí y no en el servicio de systemd para que
+# funcione igual lanzado a mano que por el worker, y sobre todo para que NO
+# dependa del usuario que lo ejecute: el modelo pesa 464 MB y, sin esto, cada
+# usuario se lo descargaba otra vez en su propio ~/.cache.
+os.environ.setdefault("HF_HOME", "/home/s4sf/helm-agents/modelos")
+
 
 def salir(payload, codigo=0):
     json.dump(payload, sys.stdout, ensure_ascii=False)
