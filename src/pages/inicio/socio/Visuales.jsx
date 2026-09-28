@@ -1,8 +1,7 @@
 // Las piezas visuales de Socio IA. Todo es SVG y CSS en línea: sin imágenes ni
 // librerías, así que no pesa y se ve nítido en cualquier pantalla.
 //
-// Ninguna lleva cifras: son esquemas de CÓMO funciona, no resultados. Los
-// resultados reales van en el caso de Detrás de Cámara, y solo los del brief.
+// Ninguna lleva cifras: son esquemas de CÓMO funciona, no resultados.
 
 const HEX = 'M0,-26 L22.5,-13 L22.5,13 L0,26 L-22.5,13 L-22.5,-13 Z'
 
@@ -78,11 +77,11 @@ export function SistemaVivo({ actividad = false }) {
 // Lo que hace el sistema solo, fase a fase. Es ilustrativo: sin nombres ni
 // cifras, porque no es el registro de ningún cliente.
 const ACTIVIDAD = [
-  { f: 'Captación', c: '', t: 'Comentan «MECANISMO» → mensaje con el enlace enviado' },
-  { f: 'Filtro', c: 'rojo', t: 'Formulario: encaja → elige hora para la llamada' },
-  { f: 'Filtro', c: 'rojo', t: 'Se quedó a medias → seguimiento automático enviado' },
-  { f: 'Venta', c: 'oro', t: 'Pago confirmado → registrado en el CRM' },
-  { f: 'Entrega', c: '', t: 'Accesos y bienvenida enviados al nuevo alumno' },
+  { f: 'Captación', c: '', t: 'Formulario rellenado desde un Reel → contacto nuevo en el CRM, con su UTM' },
+  { f: 'Filtro', c: 'rojo', t: 'Encaja → reserva llamada → evento creado en Google Calendar' },
+  { f: 'Venta', c: 'oro', t: 'Pago en Stripe → venta registrada y contacto en «Ganado»' },
+  { f: 'Entrega', c: '', t: 'Cuota del mes pendiente → aparece en Finanzas' },
+  { f: 'Contenido', c: '', t: '3 ideas de reels para hoy, con el tono de tu marca' },
 ]
 
 // ── El espejo: la conversación que se muere ─────────────────────────────────

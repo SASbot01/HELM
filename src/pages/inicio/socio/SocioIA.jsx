@@ -25,31 +25,33 @@ import { useCabeceraPublica } from '../cabecera.js'
 import { useFuentesSocio } from './fuentes.js'
 import './socio.css'
 
-// [REVISAR] Qué se monta y qué deja de hacer el cliente en cada fase.
+// [REVISAR] Qué se monta y qué deja de hacer el cliente en cada fase. Cada
+// «monto» sale de algo que HELM hace hoy (ver src/helm): nada de respuestas
+// automáticas por DM ni envíos de email, que HELM no tiene.
 const FASES = [
   {
     n: 'Contenido',
-    monto: 'Guiones y calendario de publicación a partir de lo que ya sabes.',
+    monto: 'Tu Biblia de marca y de contenido, y guiones escritos con el estilo de los creadores que más venden en tu nicho.',
     dejas: 'pensar cada día qué publicar.',
   },
   {
     n: 'Captación',
-    monto: 'Respuestas automáticas a comentarios y mensajes, y la página donde te dejan sus datos.',
-    dejas: 'contestar mensajes uno a uno.',
+    monto: 'La página y el formulario donde te dejan sus datos. Cada contacto entra solo en tu CRM, sabiendo de qué Reel viene.',
+    dejas: 'copiar contactos a mano de un sitio a otro.',
   },
   {
     n: 'Filtro de contactos',
-    monto: 'Preguntas que separan a quien puede comprar de quien solo mira, y seguimiento a los que se quedan a medias.',
+    monto: 'Preguntas que separan a quien puede comprar de quien solo mira, y una agenda donde solo reserva llamada quien encaja.',
     dejas: 'hablar con gente que no va a comprar.',
   },
   {
     n: 'Venta',
-    monto: 'El paso que cierra: webinar, llamada o página de pago, con su guion y su seguimiento.',
-    dejas: 'perseguir a los que dijeron «me lo pienso».',
+    monto: 'El paso que cierra —webinar, llamada o página de pago— con su guion, y un pipeline donde ves en qué punto está cada persona.',
+    dejas: 'perderle la pista a los que dijeron «me lo pienso».',
   },
   {
     n: 'Entrega y operaciones',
-    monto: 'Altas, accesos, avisos y cada venta registrada en tu CRM.',
+    monto: 'Cada pago de Stripe registrado solo, cuotas y renovaciones controladas, facturas con un clic y el reporte diario de tu equipo.',
     dejas: 'hacer a mano lo que se repite con cada cliente.',
   },
 ]
@@ -156,7 +158,7 @@ export default function SocioIA() {
           <SistemaVivo actividad />
           <p className="so-prueba">
             <ShieldCheck size={16} aria-hidden="true" />
-            <span>Montado en <b>Detrás de Cámara</b>: tanda de <b className="oro">17 plazas</b> a <b className="oro">1.900&nbsp;€</b></span>
+            <span>Todo corre en <b>HELM</b>: CRM, llamadas, cobros, finanzas y contenido en un solo panel</span>
           </p>
         </div>
       </header>
@@ -198,35 +200,6 @@ export default function SocioIA() {
               </li>
             ))}
           </ol>
-        </section>
-
-        {/* ── 4. Caso real ─────────────────────────────────────────────── */}
-        <section className="so-sec ancho so-caso-sec">
-          <div data-reveal>
-            <Eyebrow n="03">Caso real</Eyebrow>
-            <h2>Detrás de Cámara</h2>
-            <p className="so-intro">Formación de filmmaking de Abel.</p>
-          </div>
-          <div className="so-caso" data-reveal>
-            <div className="so-caso-cifras">
-              <div><b className="oro">17</b><span>plazas en la tanda de septiembre de 2026</span></div>
-              <div><b className="oro">1.900&nbsp;€</b><span>por plaza</span></div>
-              <div><b className="oro">1&nbsp;€</b><span>reserva para entrar al webinar</span></div>
-            </div>
-            <div className="so-caso-embudo">
-              <h3>El embudo que montamos</h3>
-              <ol>
-                <li><span>1</span>Captación</li>
-                <li><span>2</span>Reserva de 1&nbsp;€</li>
-                <li><span>3</span>Webinar</li>
-                <li><span>4</span>Llamada</li>
-                <li className="fin"><span>5</span>Venta</li>
-              </ol>
-            </div>
-            <Pendiente bloque>punto de partida de Detrás de Cámara antes de Socio IA</Pendiente>
-            <Pendiente bloque>resultado: plazas vendidas / facturación de la tanda</Pendiente>
-            <Pendiente bloque>cita o vídeo de Abel</Pendiente>
-          </div>
         </section>
 
         {/* ── 5. Cómo trabajamos ──────────────────────────────────────── */}
