@@ -14,6 +14,7 @@ import PortalDocumentos from './pages/PortalDocumentos.jsx'
 import PaginaInicio from './pages/PaginaInicio.jsx'
 import PaginaInicioHugo from './pages/PaginaInicioHugo.jsx'
 import Clase from './pages/Clase.jsx'
+import SocioIA from './pages/inicio/socio/SocioIA.jsx'
 import Gracias from './pages/inicio/socio/Gracias.jsx'
 import Legal from './pages/inicio/socio/Legal.jsx'
 import AgentOS from './agents/AgentOS.jsx'
@@ -102,10 +103,13 @@ createRoot(document.getElementById('root')).render(
               como todas las públicas — si no, "paginainicio" se leería como el
               slug de un perfil y acabaría en el login. */}
           <Route path="/paginainicio" element={<PaginaInicioPorHost />} />
-          {/* Socio IA (s4sf.net): la masterclass como salida secundaria, la
+          {/* s4sf.net: la página de la bio también en /clase (es el enlace al
+              que manda el formulario de /empresas a quien no encaja), Socio IA
+              en /empresas —el botón «¿Eres una empresa o negocio?»—, la
               página de después de reservar la auditoría y las legales del
               formulario. Públicas, así que ANTES de /:slug/*. */}
           <Route path="/clase" element={<Clase />} />
+          <Route path="/empresas" element={<SocioIA />} />
           <Route path="/gracias" element={<Gracias />} />
           <Route path="/privacidad" element={<Legal pagina="privacidad" />} />
           <Route path="/aviso-legal" element={<Legal pagina="aviso-legal" />} />

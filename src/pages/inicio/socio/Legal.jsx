@@ -73,7 +73,7 @@ export default function Legal({ pagina }) {
   return (
     <div className="so">
       <main className="so-legal">
-        <a className="so-volver" href="/">← Volver</a>
+        <a className="so-volver" href="/empresas">← Volver</a>
         {pagina === 'privacidad' ? <Privacidad /> : <AvisoLegal />}
       </main>
       <Pie />

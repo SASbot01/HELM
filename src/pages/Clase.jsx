@@ -1,38 +1,34 @@
-// /clase — la masterclass gratis, como salida SECUNDARIA.
-//
-//   s4sf.net/clase
-//
-// Hasta septiembre de 2026 esto era la página principal (el enlace de la bio).
-// Ahora la principal vende Socio IA (ver inicio/socio/SocioIA.jsx) y aquí llega quien
-// no encaja en el formulario, o quien viene a por la clase. Se ha movido tal
-// cual; lo único nuevo es el aviso de arriba, para quien SÍ tiene un producto
-// de 1.000 € o más y ha acabado aquí por el camino largo.
-//
-// Lo que sigue es el comentario original de la página:
+// PÁGINA DE LA BIO — s4sf.net, s4sf.net/paginainicio y s4sf.net/clase.
 //
 // Es el destino del enlace de la bio de Instagram: alguien ve un Reel, pulsa el
-// enlace y aterriza aquí. Todo lo que hay en pantalla existe para que haga UNA
-// de estas cosas, por este orden de valor:
+// enlace y aterriza aquí. Entre el 23 y el 28 de septiembre de 2026 la portada
+// fue la página de Socio IA; ahora vuelve a ser esta, y Socio IA vive en
+// /empresas, detrás del botón de «¿Eres una empresa o negocio?».
 //
-//   1. Ver la clase gratuita → deja nombre y correo, y se abre la masterclass
-//      entera. Es el único sitio de la página donde se pide algo.
-//   2. Irse a YouTube        → donde se enseña a fondo.
-//   3. Seguir en Instagram   → el contacto más barato y el más frágil.
+// Todo lo que hay en pantalla existe para que haga UNA de estas cosas:
 //
-// Hubo una masterclass en directo (28/08/2026) y mientras tuvo fecha mandaba
-// sobre todo lo demás. Ya se dio, así que en su sitio va la grabación —el
-// mismo contenido sin fecha— detrás del formulario: el vídeo es lo que se
-// regala, el correo es lo que se cobra por él, y sin correo no hay a quién
-// avisar de la siguiente. Cuando haya fecha nueva se recupera de git la sala
-// de espera (asientos, cuenta atrás y enlace de calendario; su CSS sigue en
-// inicio.css) y `./inicio/crm.js` no se toca: el alta de leads es la misma.
+//   1. Charla gratis             → deja nombre y correo, y se abre la
+//                                  masterclass entera. El único sitio de la
+//                                  página donde se pide algo.
+//   2. Irse a YouTube            → donde se enseña a fondo.
+//   3. ¿Eres una empresa o negocio? → /empresas, donde se vende HELM montado
+//                                  y llevado por Alex.
+//
+// Instagram ya no tiene botón: quien llega aquí viene de Instagram. El handle
+// sigue encima de la foto como firma.
+//
+// Hubo una masterclass en directo (28/08/2026). Ya se dio, así que en su sitio
+// va la grabación —el mismo contenido sin fecha— detrás del formulario: el
+// vídeo es lo que se regala, el correo es lo que se cobra por él. Cuando haya
+// fecha nueva se recupera de git la sala de espera (asientos, cuenta atrás y
+// enlace de calendario; su CSS sigue en inicio.css) y `./inicio/crm.js` no se
+// toca: el alta de leads es la misma.
 import { useEffect, useState } from 'react'
-import { Youtube, Instagram, ChevronRight, PlayCircle, Lock, Check } from 'lucide-react'
+import { Youtube, Building2, ChevronRight, PlayCircle, Lock, Check } from 'lucide-react'
 import { useCabeceraPublica } from './inicio/cabecera.js'
 import { altaLead, marcaComunidad, contarApuntados } from './inicio/crm.js'
 import { track } from './inicio/socio/track.js'
 import './inicio/inicio.css'
-import './inicio/clase.css'
 
 // Lo que se cambia cada dos por tres, junto y arriba: enlaces y handle.
 const HANDLE = 'silvesttre.ia'
@@ -102,11 +98,6 @@ export default function Clase() {
   return (
     <div className="ini">
       <main className="ini-card">
-        <a className="ini-aviso" href="/" onClick={() => track('clic_cta', { donde: 'clase-aviso' })}>
-          <span>¿Tienes un producto de 1.000 € o más?</span>
-          <b>Pide tu auditoría <ChevronRight size={16} /></b>
-        </a>
-
         {/* El handle va DENTRO de la foto, arriba a la izquierda: es la firma
             de la cuenta y lo primero que reconoce quien llega de Instagram. */}
         <div className="ini-marco">
@@ -149,8 +140,8 @@ export default function Clase() {
             <a className="ini-btn on" href={CLASE} target="_blank" rel="noopener noreferrer">
               <span className="ini-btn-icono"><PlayCircle size={20} /></span>
               <span className="ini-btn-txt">
-                <b>Ver clase gratuita</b>
-                <small>Ya tienes acceso — la masterclass entera</small>
+                <b>Charla gratis</b>
+                <small>Ya tienes acceso — la clase entera, una hora</small>
               </span>
               <ChevronRight className="ini-flecha" size={20} />
             </a>
@@ -158,8 +149,8 @@ export default function Clase() {
             <button className="ini-btn on" onClick={alFormulario}>
               <span className="ini-btn-icono"><PlayCircle size={20} /></span>
               <span className="ini-btn-txt">
-                <b>Ver clase gratuita</b>
-                <small>La masterclass entera · solo tu nombre y tu correo</small>
+                <b>Charla gratis</b>
+                <small>Una hora de clase · solo tu nombre y tu correo</small>
               </span>
               <ChevronRight className="ini-flecha" size={20} />
             </button>
@@ -174,11 +165,15 @@ export default function Clase() {
             <ChevronRight className="ini-flecha" size={20} />
           </a>
 
-          <a className="ini-btn" href={INSTAGRAM} target="_blank" rel="noopener noreferrer">
-            <span className="ini-btn-icono"><Instagram size={20} /></span>
+          <a
+            className="ini-btn"
+            href="/empresas"
+            onClick={() => track('clic_cta', { donde: 'bio-empresa' })}
+          >
+            <span className="ini-btn-icono"><Building2 size={20} /></span>
             <span className="ini-btn-txt">
-              <b>Sígueme en Instagram</b>
-              <small>@{HANDLE}</small>
+              <b>¿Eres una empresa o negocio?</b>
+              <small>Monto y llevo HELM, el sistema que vende por ti</small>
             </span>
             <ChevronRight className="ini-flecha" size={20} />
           </a>

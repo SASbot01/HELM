@@ -494,11 +494,16 @@
 .ini-cuenta b { display: block; font-size: 17px; color: var(--marca-palido); }
 .ini-cuenta span { display: block; font-size: 9.5px; color: var(--papel-mut); text-transform: uppercase; letter-spacing: .04em; margin-top: 1px; }
 
-/* El Discord manda: más grande que un ini-btn normal, porque en esta pantalla
-   es la única acción que de verdad hace falta pulsar. */
-.ini-btn.discord.grande { padding: 16px; box-shadow: 0 18px 40px -16px rgba(88, 101, 242, .95); }
-.ini-btn.discord.grande .ini-btn-icono { width: 48px; height: 48px; }
-.ini-btn.discord.grande .ini-btn-txt b { font-size: 16px; }
+/* La acción principal de esta pantalla, más grande que un ini-btn normal:
+   cuando se llega aquí es lo único que de verdad hace falta pulsar. Va suelto
+   de `.on` y de `.discord` porque el botón que manda cambia según la pantalla
+   —el vídeo tras dejar el correo, el Discord en la sala del directo— y el
+   tamaño no debería depender del color. */
+.ini-btn.grande { padding: 16px; }
+.ini-btn.grande .ini-btn-icono { width: 48px; height: 48px; }
+.ini-btn.grande .ini-btn-txt b { font-size: 16px; }
+.ini-btn.on.grande { box-shadow: 0 18px 40px -16px rgba(var(--marca-rgb), 0.95); }
+.ini-btn.discord.grande { box-shadow: 0 18px 40px -16px rgba(88, 101, 242, .95); }
 
 /* El calendario baja de categoría a propósito: es un enlace de texto, no un
    botón del mismo peso que Discord. */
