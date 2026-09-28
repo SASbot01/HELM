@@ -1,9 +1,10 @@
-// SOCIO IA — la página principal de s4sf.net.
+// SOCIO IA — s4sf.net/empresas, detrás del botón «¿Eres una empresa o negocio?»
+// de la página de la bio. Vende el sistema montado sobre HELM y llevado por Alex.
 //
 // Un solo objetivo: que un negocio que encaja reserve la auditoría de 30 min.
 // Todo lo que hay en pantalla empuja hacia el formulario (#auditoria); no hay
 // más salidas que compitan con él (YouTube e Instagram se quitaron a propósito;
-// la clase gratis vive en /clase y solo se ofrece a quien no encaja).
+// la clase gratis vive en la bio y solo se ofrece aquí a quien no encaja).
 //
 // Embudo: Reel → comenta MECANISMO → DM con enlace (?k=mecanismo&utm_…) → aquí
 //   → formulario de 5 preguntas → encaja → calendario → /gracias
@@ -20,6 +21,7 @@ import Formulario from './Formulario.jsx'
 import Pendiente from './Pendiente.jsx'
 import Pie from './Pie.jsx'
 import { SistemaVivo, ChatVisto, GraficoCobro } from './Visuales.jsx'
+import { SeccionHelm } from './Helm.jsx'
 import { useReveal, useBotonFijo } from './reveal.js'
 import { useCabeceraPublica } from '../cabecera.js'
 import { useFuentesSocio } from './fuentes.js'
@@ -60,27 +62,35 @@ const FASES = [
 const PROCESO = [
   { t: 'Auditoría', d: '30 minutos. Miramos tu producto y dónde se te escapa la gente.', dato: 'Gratis' },
   { t: 'Te digo si encajamos', d: 'Si no, te lo digo en la llamada y te llevas la auditoría igual.', dato: 'Sin compromiso' },
-  { t: 'Montaje', d: 'Monto el sistema completo: de tu contenido a la entrega.', dato: '30 días · 1.000 €' },
-  { t: 'Lo llevo yo', d: 'Lo mantengo y lo mejoro. Cobro solo sobre lo que crezcas.', dato: '12 meses · %' },
+  { t: 'Montaje', d: 'Monto HELM con tu oferta, tus datos y tu equipo: de tu contenido a la entrega.', dato: '30 días · 1.000 €' },
+  { t: 'Lo llevo yo', d: 'Lo mantengo y lo mejoro mirando los números del panel contigo. Cobro solo sobre lo que crezcas.', dato: '12 meses · %' },
 ]
 
 // [REVISAR] Todas las respuestas: cortas, para que las valide Alex.
 const PREGUNTAS = [
   {
+    q: '¿Qué es HELM?',
+    a: 'El panel donde vive tu sistema: CRM, agenda de llamadas, ventas y comisiones, cuotas, facturas, finanzas y contenido con IA. Lo uso para llevar cada negocio, y tú lo tienes abierto para ver cómo va el tuyo cuando quieras.',
+  },
+  {
     q: '¿Por qué cobras porcentaje?',
-    a: 'Porque así solo gano si tú ganas. Los 1.000 € cubren el montaje; el resto depende de que tu facturación suba.',
+    a: 'Porque así solo gano si tú ganas. Los 1.000 € cubren el montaje; el resto depende de que tu facturación suba. Y como cada venta queda registrada en HELM, los dos vemos el mismo número.',
   },
   {
     q: '¿Qué pasa si no crece mi facturación?',
     a: 'Que no me llevo porcentaje. Solo cobro sobre lo que supere lo que facturas hoy. Los 1.000 € del montaje no dependen del resultado.',
   },
   {
-    q: '¿Tengo que grabar yo el contenido?',
-    a: 'Sí: la cara y el producto son tuyos, porque la gente compra a personas. Yo te preparo qué grabar y cómo, para que te lleve el mínimo tiempo.',
+    q: '¿Tengo que dejar las herramientas que ya uso?',
+    a: 'No. HELM se conecta a Stripe, WooCommerce, Google Calendar, Google Drive, Calendly, Instagram y Telegram. Lo que cambia es que todo acaba en un mismo sitio.',
   },
   {
-    q: '¿Qué herramientas de IA usáis?',
-    a: 'Claude y otras, según la fase. Lo importante no es la herramienta: es que el sistema funcione aunque mañana cambiemos de herramienta.',
+    q: '¿Tengo que grabar yo el contenido?',
+    a: 'Sí: la cara y el producto son tuyos, porque la gente compra a personas. Yo te preparo qué grabar y cómo, con guiones basados en lo que ya funciona en tu nicho, para que te lleve el mínimo tiempo.',
+  },
+  {
+    q: '¿Qué IA usáis? ¿Y mis datos?',
+    a: 'Tú eliges: un modelo privado que corre en el servidor, sin que tus datos salgan de ahí, o Claude con tu propia clave. Lo importante no es la herramienta: es que el sistema funcione aunque mañana cambiemos de modelo.',
   },
   {
     q: '¿Qué pasa en la llamada de auditoría?',
@@ -123,7 +133,7 @@ export default function SocioIA() {
   // al entrar y se quitan al salir.
   useCabeceraPublica({
     titulo: 'Socio IA — Alex Silvestre',
-    descripcion: 'Monto con IA el sistema que vende tu producto y lo llevo yo. 1.000 € por el montaje y después porcentaje solo sobre lo que crezcas. 5 plazas.',
+    descripcion: 'Monto sobre HELM el sistema que vende tu producto —CRM, llamadas, cobros, finanzas y contenido con IA— y lo llevo yo. 1.000 € por el montaje y después porcentaje solo sobre lo que crezcas. 5 plazas.',
     imagen: '/socio/og.jpg',
     colorBarra: '#0a0a0c',
   })
@@ -143,7 +153,8 @@ export default function SocioIA() {
           <p className="so-tag"><span className="so-hex" aria-hidden="true" /> SOCIO IA · {PLAZAS_TOTALES} plazas</p>
           <h1>{linea1} <em>{linea2}</em></h1>
           <p className="so-sub">
-            Contenido, captación, filtro, venta y entrega <b>funcionando en 30 días</b>.
+            Contenido, captación, filtro, venta y entrega <b>funcionando en 30 días</b>,
+            todo en un mismo panel: <b>HELM</b>.
             Cobro <b className="oro">1.000&nbsp;€</b> por montarlo y después voy a porcentaje de lo que crezcas.
           </p>
           <BotonAuditoria donde="hero" />
@@ -176,6 +187,7 @@ export default function SocioIA() {
               <li data-reveal><span className="so-x" aria-hidden="true"><X size={16} /></span>Publicas, pero los que te escriben no compran.</li>
               <li data-reveal><span className="so-x" aria-hidden="true"><X size={16} /></span>Tu lanzamiento depende de que tú estés encima de todo.</li>
               <li data-reveal><span className="so-x" aria-hidden="true"><X size={16} /></span>Tienes contactos guardados a los que nadie hace seguimiento.</li>
+              <li data-reveal><span className="so-x" aria-hidden="true"><X size={16} /></span>Para saber cuánto has cobrado este mes tienes que abrir cinco sitios.</li>
             </ul>
           </div>
           <p className="so-remate" data-reveal>
@@ -201,6 +213,9 @@ export default function SocioIA() {
             ))}
           </ol>
         </section>
+
+        {/* ── 4. El sistema: HELM ──────────────────────────────────────── */}
+        <SeccionHelm Eyebrow={Eyebrow} />
 
         {/* ── 5. Cómo trabajamos ──────────────────────────────────────── */}
         <section className="so-sec ancho">

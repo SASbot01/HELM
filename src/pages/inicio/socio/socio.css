@@ -573,3 +573,106 @@ body { margin: 0; }
   .so-vivo-log { display: block; }
 }
 .so-garantia::before { top: -30px; }
+
+/* ── 03 · El sistema: HELM ─────────────────────────────────────────────────
+   Un panel de muestra, los módulos en cuatro trabajos, la IA, las
+   integraciones y el antes/después. Mismo papel de colores: rojo acento,
+   oro solo para lo que se cobra (la columna «Ganado»). */
+.so-helm-sec .so-intro b { color: var(--txt); }
+
+/* El panel de muestra: una ventana de app, sin cifras. */
+.so-panel {
+  margin: 0 0 28px; border-radius: 18px; overflow: hidden;
+  background: #0f0f13; border: 1px solid var(--linea-2);
+  box-shadow: 0 40px 80px -40px rgba(0, 0, 0, .95), 0 0 0 1px rgba(228, 54, 43, .08);
+}
+.so-panel-barra { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--linea); background: #131318; }
+.so-panel-barra i { width: 9px; height: 9px; border-radius: 50%; background: var(--linea-2); }
+.so-panel-barra span { margin-left: 8px; font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--txt-3); }
+/* En el móvil el menú no cabe: el panel se queda con el Informe y el CRM. */
+.so-panel-cuerpo { display: grid; grid-template-columns: 1fr; min-height: 200px; }
+.so-panel-menu { display: none; }
+.so-panel-cuerpo > .so-panel-menu { flex-direction: column; gap: 4px; padding: 14px 10px; border-right: 1px solid var(--linea); font-size: 12px; color: var(--txt-3); }
+.so-panel-menu b { font: 900 17px/1 var(--titular); letter-spacing: .08em; color: var(--txt); margin-bottom: 10px; }
+.so-panel-menu span { padding: 5px 7px; border-radius: 7px; }
+.so-panel-menu span.on { background: rgba(228, 54, 43, .15); color: var(--rojo-txt); }
+.so-panel-main { padding: 14px; display: grid; gap: 14px; align-content: start; min-width: 0; }
+.so-panel-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.so-panel-kpis > div { padding: 10px; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--linea); min-width: 0; }
+.so-panel-kpis small { display: block; font-size: 10.5px; color: var(--txt-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 8px; }
+.so-panel-bar { display: block; height: 6px; border-radius: 3px; background: var(--bg-3); overflow: hidden; }
+.so-panel-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--rojo), var(--oro)); transform-origin: left; animation: so-barra 2.4s cubic-bezier(.2, .7, .2, 1) both; }
+@keyframes so-barra { from { transform: scaleX(0); } }
+.so-panel-kanban { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.so-panel-kanban > div { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--linea); min-height: 104px; min-width: 0; }
+.so-panel-kanban small { font-size: 10.5px; color: var(--txt-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.so-panel-kanban > div.fin { border-color: rgba(232, 185, 58, .45); }
+.so-panel-kanban > div.fin small { color: var(--oro); }
+.so-panel-ficha { height: 22px; border-radius: 6px; background: var(--bg-3); border: 1px solid var(--linea-2); }
+.so-panel-kanban > div.fin .so-panel-ficha { background: rgba(232, 185, 58, .12); border-color: rgba(232, 185, 58, .35); }
+/* La ficha que viaja de «Lead» a «Ganado»: una venta cerrándose sola. */
+.so-panel-viaja {
+  position: absolute; top: 29px; left: 8px; width: calc(25% - 22px); height: 22px; border-radius: 6px;
+  background: var(--rojo); box-shadow: 0 6px 18px -6px rgba(228, 54, 43, .9);
+  animation: so-viaja 6s cubic-bezier(.6, 0, .3, 1) infinite;
+}
+@keyframes so-viaja {
+  0%, 12% { transform: translateX(0); background: var(--rojo); }
+  30%, 40% { transform: translateX(calc(100% + 22px)); background: var(--rojo); }
+  58%, 66% { transform: translateX(calc(200% + 44px)); background: var(--rojo); }
+  84%, 100% { transform: translateX(calc(300% + 66px)); background: var(--oro); box-shadow: 0 6px 18px -6px rgba(232, 185, 58, .9); }
+}
+.so-panel figcaption { padding: 8px 14px 10px; border-top: 1px solid var(--linea); font-size: 11px; color: var(--txt-3); letter-spacing: .08em; text-transform: uppercase; text-align: center; }
+
+/* Los cuatro trabajos */
+.so-helm-grupos { display: grid; gap: 14px; }
+.so-helm-grupo { padding: 20px; border-radius: var(--radio); background: var(--bg-2); border: 1px solid var(--linea); }
+.so-helm-grupo header { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px dashed var(--linea-2); }
+.so-helm-grupo h3 { font-size: 30px; margin: 0; }
+.so-helm-grupo header p { margin: 2px 0 0; color: var(--txt-2); font-size: 15px; }
+.so-helm-grupo ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.so-helm-grupo li { display: flex; gap: 12px; align-items: flex-start; font-size: 14.5px; line-height: 1.4; color: var(--txt-2); }
+.so-helm-grupo li b { display: block; color: var(--txt); font-size: 15.5px; margin-bottom: 1px; }
+.so-helm-ico { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: rgba(228, 54, 43, .12); color: var(--rojo-txt); }
+.so-helm-ico.grande { width: 46px; height: 46px; border-radius: 13px; margin-bottom: 12px; }
+
+/* La IA */
+.so-helm-ia {
+  margin-top: 14px; padding: 22px; border-radius: 20px; display: grid; gap: 18px;
+  background: radial-gradient(120% 100% at 0% 0%, rgba(228, 54, 43, .12), transparent 55%), var(--bg-2);
+  border: 1px solid rgba(228, 54, 43, .3);
+}
+.so-helm-ia h3 { font-size: 30px; margin: 0 0 6px; }
+.so-helm-ia p { margin: 0; color: var(--txt-2); }
+.so-helm-ia ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.so-helm-ia li { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; line-height: 1.4; color: var(--txt-2); }
+.so-helm-ia li svg { flex: none; margin-top: 2px; color: var(--rojo-txt); }
+.so-helm-ia li b { color: var(--txt); }
+
+/* Integraciones */
+.so-helm-integ { margin-top: 28px; text-align: center; }
+.so-helm-integ small { display: block; margin-bottom: 12px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--txt-3); }
+.so-helm-integ ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.so-helm-integ li { padding: 7px 13px; border-radius: 999px; border: 1px solid var(--linea-2); background: var(--bg-2); font-size: 14px; color: var(--txt-2); }
+
+/* Hoy / con HELM */
+.so-antes { margin-top: 36px; border-radius: var(--radio); border: 1px solid var(--linea); overflow: hidden; }
+.so-antes-cab, .so-antes-fila { display: grid; grid-template-columns: 1fr 20px 1fr; gap: 10px; align-items: center; padding: 13px 16px; }
+.so-antes-cab { background: var(--bg-3); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--txt-3); }
+.so-antes-cab span:last-child { grid-column: 3; color: #4ade80; }
+.so-antes-fila { border-top: 1px solid var(--linea); font-size: 15px; line-height: 1.35; }
+.so-antes-fila .antes { color: var(--txt-3); text-decoration: line-through; text-decoration-color: rgba(228, 54, 43, .6); }
+.so-antes-fila .despues { color: var(--txt); }
+.so-antes-fila svg { color: var(--rojo-txt); }
+
+@media (min-width: 640px) {
+  .so-helm-grupos { grid-template-columns: 1fr 1fr; }
+  .so-panel-cuerpo { grid-template-columns: 120px 1fr; min-height: 260px; }
+  .so-panel-menu { display: flex; }
+}
+@media (min-width: 960px) {
+  .so-helm-grupos { grid-template-columns: repeat(4, 1fr); }
+  .so-helm-ia { grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; padding: 32px; }
+  .so-antes { max-width: 820px; margin-left: auto; margin-right: auto; }
+  .so-antes-fila { font-size: 16px; }
+}
