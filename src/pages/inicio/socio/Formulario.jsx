@@ -103,11 +103,11 @@ export default function Formulario() {
         <h3 className="so-form-q">Ahora mismo no encajas en Socio IA, pero esto te sirve</h3>
         <p className="so-form-ayuda">{motivo}</p>
         <p className="so-form-ayuda">
-          Mientras tanto, la clase gratis te enseña a montar la base tú. Cuando lo
+          Mientras tanto, la charla gratis te enseña a montar la base tú. Cuando lo
           tengas, vuelve y lo hablamos.
         </p>
         <a className="so-btn" href="/clase" onClick={() => track('clic_cta', { donde: 'no-encaja-clase' })}>
-          Ver la clase gratis <ArrowRight size={20} />
+          Ver la charla gratis <ArrowRight size={20} />
         </a>
       </div>
     )

@@ -334,7 +334,7 @@ function PuertaClase({ acceso, setAcceso }) {
         onChange={e => setF(s => ({ ...s, email: e.target.value }))}
       />
       <button className="ini-btn on" disabled={estado === 'enviando' || !f.email.trim()}>
-        <b>{estado === 'enviando' ? 'Un momento…' : 'Ver la clase gratis'}</b>
+        <b>{estado === 'enviando' ? 'Un momento…' : 'Ver la charla gratis'}</b>
       </button>
       {error && <span className="ini-error">{error}</span>}
     </form>
