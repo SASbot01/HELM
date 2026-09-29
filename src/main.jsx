@@ -15,6 +15,7 @@ import PaginaInicio from './pages/PaginaInicio.jsx'
 import PaginaInicioHugo from './pages/PaginaInicioHugo.jsx'
 import Clase from './pages/Clase.jsx'
 import SocioIA from './pages/inicio/socio/SocioIA.jsx'
+import AIParaTodo from './pages/aiparatodo/AIParaTodo.jsx'
 import Gracias from './pages/inicio/socio/Gracias.jsx'
 import Legal from './pages/inicio/socio/Legal.jsx'
 import AgentOS from './agents/AgentOS.jsx'
@@ -112,6 +113,8 @@ createRoot(document.getElementById('root')).render(
               formulario. Públicas, así que ANTES de /:slug/*. */}
           <Route path="/clase" element={<Clase />} />
           <Route path="/empresas" element={<SocioIA />} />
+          {/* AI para todo: la comunidad gratis de la bio, con sus rutas dentro. */}
+          <Route path="/aiparatodo/*" element={<AIParaTodo />} />
           <Route path="/gracias" element={<Gracias />} />
           <Route path="/privacidad" element={<Legal pagina="privacidad" />} />
           <Route path="/aviso-legal" element={<Legal pagina="aviso-legal" />} />
