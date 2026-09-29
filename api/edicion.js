@@ -15,6 +15,14 @@
 //   POST ?action=borrar       &clientId=   → { tabla: cliente|pedido|cobro, id }
 //   POST ?action=sincronizar  &clientId=   → el Agente Montador contra el Drive
 //   POST ?action=hoja         &clientId=   → { id } la hoja de montaje del pedido
+//   POST ?action=visto        &clientId=   → { ids } el editor abre encargos nuevos
+//   POST ?action=mesa         &clientId=   → { activo, nombre } este perfil es (o
+//                                            deja de ser) una mesa de edición
+//
+// Editor compartido (migración 085): un perfil dado de alta como «mesa de
+// edición» recibe los pedidos que le envían los demás (editor_client_id). Los
+// ve en su resumen como `recibidos`, los mueve de estado y pide su hoja; no los
+// edita ni los borra, porque son del perfil que los envió.
 import { supabase } from './lib/supabase.js'
 import { applyCors } from './_lib/auth.js'
 import { requireProfileAccess } from './_lib/access.js'
@@ -46,6 +54,45 @@ async function propia(tabla, id, clientId) {
   if (error) throw error
   if (!data) throw falla('No existe en este perfil', 404)
   return data
+}
+
+// Un pedido que ha llegado a la mesa de este perfil desde otro.
+async function recibido(id, clientId) {
+  const { data, error } = await supabase.from(TABLAS.pedido).select('*').eq('id', id).eq('editor_client_id', clientId).maybeSingle()
+  if (error) throw error
+  if (!data) throw falla('No existe en este perfil', 404)
+  return data
+}
+// Propio o recibido: para lo que puede hacer el editor (estado, hoja, visto).
+const pedidoAccesible = (id, clientId) => propia('pedido', id, clientId).catch(() => recibido(id, clientId))
+
+// Las mesas de edición activas, con el nombre que se enseña al enviar.
+async function mesas() {
+  const { data, error } = await supabase.from('helm_edicion_editores')
+    .select('client_id, nombre, clients(name)').eq('activo', true)
+  if (error) throw error
+  return (data || []).map(m => ({ id: m.client_id, nombre: m.nombre || m.clients?.name || 'Editor' }))
+}
+
+// Los encargos que tiene esta mesa, con el perfil de origen y su guion (con la
+// fase real en el Drive de ese perfil).
+async function recibidosDe(clientId) {
+  const { data, error } = await supabase.from(TABLAS.pedido)
+    .select('*, clients!helm_edicion_pedidos_client_id_fkey(name, slug)')
+    .eq('editor_client_id', clientId).order('entrega', { nullsFirst: false })
+  if (error) throw error
+  const filas = data || []
+  const guiones = new Map()
+  for (const origen of new Set(filas.filter(p => p.guion_id).map(p => p.client_id))) {
+    for (const g of await guionesDe(origen)) guiones.set(g.id, g)
+  }
+  return filas.map(({ clients: c, ...p }) => {
+    const g = p.guion_id ? guiones.get(p.guion_id) : null
+    return {
+      ...p, recibido: true, origen: { id: p.client_id, nombre: c?.name || 'Otro perfil', slug: c?.slug || '' },
+      guion_info: g ? { id: g.id, fecha: g.date, titulo: g.title, tipo: g.tipo, fase: g.fase, guion: g.body || '' } : null,
+    }
+  })
 }
 
 async function guarda(tabla, clientId, id, fila) {
@@ -128,6 +175,21 @@ async function sincronizar(clientId) {
   return cambios
 }
 
+// En la mesa del editor, el agente solo avanza lo que le han enviado: los
+// guiones de cada perfil siguen siendo de ese perfil.
+async function sincronizarRecibidos(clientId) {
+  const cambios = []
+  for (const p of await recibidosDe(clientId)) {
+    const objetivo = estadoPorFase(p.guion_info?.fase)
+    if (!objetivo || ESTADOS.indexOf(objetivo) <= ESTADOS.indexOf(p.estado)) continue
+    const fila = { estado: objetivo, ...(objetivo === 'entregado' ? { entregado_at: ahora() } : {}) }
+    const guardado = await guarda('pedido', p.client_id, p.id, fila)
+    if (objetivo === 'entregado') await cobroAlEntregar(guardado)
+    cambios.push({ tipo: 'avanza', titulo: p.titulo, de: p.estado, estado: objetivo })
+  }
+  return cambios
+}
+
 // ── El Agente Montador: la hoja de montaje ──────────────────────────────────
 async function hojaDeMontaje(clientId, pedido) {
   let guion = null
@@ -187,23 +249,31 @@ export default async function handler(req, res) {
   try {
     const clientId = String(req.query?.clientId || '')
     if (!clientId) return res.status(400).json({ error: 'Falta el perfil' })
-    await requireProfileAccess(req, clientId)
+    const auth = await requireProfileAccess(req, clientId)
     const accion = String(req.query?.action || '')
     const b = req.body || {}
 
     if (accion === 'resumen') {
-      const [cl, pe, co, guiones, carpetas] = await Promise.all([
+      const todas = await mesas()
+      const soyMesa = todas.some(m => m.id === clientId)
+      const [cl, pe, co, guiones, carpetas, recibidos] = await Promise.all([
         supabase.from(TABLAS.cliente).select('*').eq('client_id', clientId).order('nombre'),
         supabase.from(TABLAS.pedido).select('*').eq('client_id', clientId).order('entrega', { nullsFirst: false }),
         supabase.from(TABLAS.cobro).select('*').eq('client_id', clientId).order('vence', { nullsFirst: false }),
         guionesDe(clientId),
         carpetasDe(clientId).catch(() => null),
+        soyMesa ? recibidosDe(clientId) : [],
       ])
       for (const r of [cl, pe, co]) if (r.error) throw r.error
       return res.status(200).json({
         clientes: cl.data || [], pedidos: pe.data || [], cobros: co.data || [],
         guiones: guiones.map(g => ({ id: g.id, fecha: g.date, titulo: g.title, tipo: g.tipo, fase: g.fase, guion: g.body || '' })),
         drive: carpetas ? { conectado: true, url: `https://drive.google.com/drive/folders/${carpetas.raiz}` } : { conectado: false },
+        // A quién se le puede enviar (todas las mesas menos la propia) y, si
+        // este perfil es una mesa, lo que le ha llegado.
+        editores: todas.filter(m => m.id !== clientId),
+        soyMesa, recibidos,
+        esSuperadmin: Boolean(auth.superadmin || auth.role === 'superadmin'),
       })
     }
 
@@ -223,7 +293,7 @@ export default async function handler(req, res) {
 
     if (accion === 'pedido') {
       if (!texto(b.titulo)) throw falla('El título es obligatorio')
-      if (b.id) await propia('pedido', b.id, clientId)
+      const antes = b.id ? await propia('pedido', b.id, clientId) : null
       const fila = {
         titulo: texto(b.titulo, 200), cliente_id: b.cliente_id || null, guion_id: b.guion_id || null,
         formato: ['short', 'largo', 'revision'].includes(b.formato) ? b.formato : 'short',
@@ -232,15 +302,23 @@ export default async function handler(req, res) {
         precio: numero(b.precio), notas_estilo: texto(b.notas_estilo), editor_id: b.editor_id || null,
         drive_url: texto(b.drive_url, 600),
       }
+      // Enviar a una mesa de edición (o retirarlo). Al cambiar de mesa vuelve a
+      // salirle como nuevo al editor.
+      const editor = b.editor_client_id || null
+      if (editor !== (antes?.editor_client_id || null)) {
+        if (editor && (editor === clientId || !(await mesas()).some(m => m.id === editor))) throw falla('Ese editor no recibe encargos')
+        Object.assign(fila, { editor_client_id: editor, enviado_at: editor ? ahora() : null, visto_at: null })
+      }
       return res.status(200).json({ pedido: await guarda('pedido', clientId, b.id, fila) })
     }
 
     if (accion === 'estado') {
       if (!ESTADOS.includes(b.estado)) throw falla('Estado desconocido')
-      const antes = await propia('pedido', b.id, clientId)
+      const antes = await pedidoAccesible(b.id, clientId)
       const fila = { estado: b.estado }
       if (b.estado === 'entregado' && antes.estado !== 'entregado') fila.entregado_at = ahora()
-      const pedido = await guarda('pedido', clientId, b.id, fila)
+      // Se guarda en el perfil dueño del pedido, sea este o el que lo envió.
+      const pedido = await guarda('pedido', antes.client_id, b.id, fila)
       const cobro = b.estado === 'entregado' ? await cobroAlEntregar(pedido) : null
       return res.status(200).json({ pedido, cobro })
     }
@@ -295,11 +373,38 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true })
     }
 
-    if (accion === 'sincronizar') return res.status(200).json({ cambios: await sincronizar(clientId) })
+    if (accion === 'sincronizar') {
+      const cambios = await sincronizar(clientId)
+      if ((await mesas()).some(m => m.id === clientId)) cambios.push(...(await sincronizarRecibidos(clientId)))
+      return res.status(200).json({ cambios })
+    }
+
+    if (accion === 'visto') {
+      const ids = (Array.isArray(b.ids) ? b.ids : []).filter(Boolean).slice(0, 200)
+      if (ids.length) {
+        const { error } = await supabase.from(TABLAS.pedido).update({ visto_at: ahora() })
+          .in('id', ids).eq('editor_client_id', clientId).is('visto_at', null)
+        if (error) throw error
+      }
+      return res.status(200).json({ ok: true })
+    }
+
+    // Dar de alta este perfil como mesa de edición. Es montar la estructura
+    // del negocio, así que es del superadmin.
+    if (accion === 'mesa') {
+      if (!(auth.superadmin || auth.role === 'superadmin')) throw falla('Solo el administrador de HELM puede hacerlo', 403)
+      const { data: c } = await supabase.from('clients').select('name').eq('id', clientId).maybeSingle()
+      const { error } = await supabase.from('helm_edicion_editores').upsert({
+        client_id: clientId, nombre: texto(b.nombre, 120) || c?.name || 'Editor', activo: b.activo !== false,
+      })
+      if (error) throw error
+      return res.status(200).json({ ok: true })
+    }
 
     if (accion === 'hoja') {
-      const pedido = await propia('pedido', b.id, clientId)
-      return res.status(200).json({ pedido: await hojaDeMontaje(clientId, pedido) })
+      const pedido = await pedidoAccesible(b.id, clientId)
+      // La IA y el guion son los del perfil dueño del pedido.
+      return res.status(200).json({ pedido: await hojaDeMontaje(pedido.client_id, pedido) })
     }
 
     return res.status(400).json({ error: `Acción desconocida: ${accion}` })
