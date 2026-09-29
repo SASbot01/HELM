@@ -32,7 +32,7 @@ export function SistemaVivo({ actividad = false }) {
       <svg viewBox="0 36 440 100" role="img" aria-hidden="true">
         <defs>
           <linearGradient id="so-linea" gradientUnits="userSpaceOnUse" x1="40" y1="0" x2="400" y2="0">
-            <stop offset="0" stopColor="#e4362b" stopOpacity=".9" />
+            <stop offset="0" stopColor="#A62B46" stopOpacity=".9" />
             <stop offset="1" stopColor="#e8b93a" stopOpacity=".9" />
           </linearGradient>
           <filter id="so-brillo" x="-50%" y="-50%" width="200%" height="200%">
