@@ -33,7 +33,7 @@ import './inicio/inicio.css'
 
 // Lo que se cambia cada dos por tres, junto y arriba: enlaces y handle.
 const HANDLE = 'silvesttre.ia'
-const YOUTUBE = 'https://www.youtube.com/@S4sf'
+const YOUTUBE = 'https://www.youtube.com/@silvesttre-ai'
 const INSTAGRAM = `https://www.instagram.com/${HANDLE}`
 // La comunidad. El enlace NO se enseña antes de dejar el correo: un Discord
 // abierto en la página se lleva a la gente sin que quede el email.
@@ -41,7 +41,7 @@ const COMUNIDAD = 'https://discord.gg/EbYATEK8n'
 // La grabación de la masterclass, que es el premio del formulario.
 // ⚠️ Apunta al canal mientras no esté el enlace del vídeo concreto: un enlace
 // roto pierde a quien lo pulsa, y el canal al menos lo deja donde está todo.
-const CLASE = 'https://www.youtube.com/@S4sf'
+const CLASE = 'https://www.youtube.com/@silvesttre-ai'
 // Con qué se anota en el CRM quién pidió esta clase. Va en las notas del
 // contacto, igual que se anotaba el directo, para poder distinguir luego a
 // quien vino por la grabación de quien vino por otra cosa.
