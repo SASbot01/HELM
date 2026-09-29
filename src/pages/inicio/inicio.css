@@ -640,7 +640,7 @@
    planta a la derecha, grande. */
 @media (min-width: 980px) {
   .ini-hacker { place-items: center end; padding-right: 3vw; }
-  .ini-ascii { font-size: clamp(11px, 1.05vw, 15px); color: rgba(190, 50, 82, 0.26); }
+  .ini-ascii { font-size: clamp(9px, 0.8vw, 13px); color: rgba(200, 56, 90, 0.42); -webkit-mask-image: none; mask-image: none; }
   .ini-term { font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {

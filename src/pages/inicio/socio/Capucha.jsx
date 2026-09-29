@@ -1,7 +1,7 @@
-// La capucha en ASCII de la bio (../capucha.txt), aquí como remate del cierre
+// La máscara en ASCII de la bio (../mascara.txt), aquí como remate del cierre
 // de /empresas: el mismo aire pantera en las dos páginas. Decoración pura; la
 // `@` del fichero marca los ojos, que se pintan como bloques y brillan.
-import arte from '../capucha.txt?raw'
+import arte from '../mascara.txt?raw'
 
 const TROZOS = arte.split(/(@+)/)
 

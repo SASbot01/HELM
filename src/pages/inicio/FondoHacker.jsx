@@ -1,12 +1,13 @@
-// El fondo de la página de la bio de Alex: una figura encapuchada en ASCII,
-// sin cara y con dos ojos rojos, sobre negro y granate. El aire es de hacker /
-// pantera; la figura es propia (generada de una silueta, ver capucha.txt), no
-// la máscara de ninguna serie.
+// El fondo de la página de la bio de Alex: la máscara de Mr. Robot bajo la
+// capucha, en ASCII, con los ojos en rojo, sobre negro y granate. Sacada de
+// una foto de la máscara (mascara.txt), a petición de Alex; si algún día hay
+// que quitarla por ser de la serie, la capucha propia está en el historial de
+// git (capucha.txt, commit d6b5b42).
 //
-// Es decoración pura: aria-hidden, sin eventos y detrás de todo. En capucha.txt
+// Es decoración pura: aria-hidden, sin eventos y detrás de todo. En mascara.txt
 // la `@` marca los ojos: se pintan aparte, como bloques sólidos, para que
 // brillen.
-import arte from './capucha.txt?raw'
+import arte from './mascara.txt?raw'
 
 const TROZOS = arte.split(/(@+)/)
 
