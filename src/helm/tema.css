@@ -102,3 +102,76 @@
 .helm .helm-tab.active svg { color: var(--cyan) !important; stroke: currentColor !important; }
 /* Un enlace con aspecto de botón no se subraya. */
 .helm a.helm-btn { text-decoration: none; }
+
+/* ============================================================================
+   Pasada de diseño (skill frontend-design de Anthropic)
+
+   Plan: el color y las familias los fija el brief (medianoche, grafito, cian
+   eléctrico, dorado titanio; Space Grotesk + Inter). Lo que quedaba libre se
+   gastaba en tics de interfaz generada, y eso es lo que cambia aquí:
+     · Rótulos en MAYÚSCULAS espaciadas y en monoespaciada encima de todo
+       (NEGOCIO, FACTURADO, INGRESOS POR MES…) → frase normal, en Inter.
+     · El mismo radio y la misma sombra en todas las cajas → radio por nivel:
+       paneles 16px, piezas de dentro 10px, píldoras redondas.
+     · Esquinas decorativas en los paneles y tarjetas que se elevan al pasar
+       el ratón → fuera. Nada se mueve si no se ha tocado.
+   Lo memorable va en un solo sitio: las cifras. Grandes, en Space Grotesk,
+   la principal en cian. Todo lo demás, callado.
+   ============================================================================ */
+
+/* ── Rótulos: frase normal, no versalitas ───────────────────────────────── */
+.helm-panel-head h2, .helm-kpi .lbl, .helm-table th, .helm-navlabel,
+.helm-drawer-section, .helm-cal-dow, .helm-kv > div:first-child,
+.helm-substages small, .helm-lead-summary small, .helm-form-resp-head small,
+.helm-tablon .helm-col-head, .helm-ticket-prio, .helm-link-cat, .helm-badge,
+.helm-est-table th, .helm-eq-bloque-t, .helm-doc-lineas-head, .helm-guia-step,
+.helm-onb-card-tag, .helm-onb-part, .helm-est-kicker, .helm-eq-idea-tag,
+.helm-est-modal-sub, .helm-est-frame-carril, .helm-brand span,
+.ed-datos dt {
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+/* Los que vienen escritos en mayúsculas en el propio JSX (NEGOCIO, PLUGINS,
+   OPERATING LAYER): se bajan y se capitaliza solo la primera letra. */
+.helm-navlabel, .helm-brand span { text-transform: lowercase; }
+.helm-navlabel::first-letter, .helm-brand span::first-letter { text-transform: uppercase; }
+
+.helm-navlabel { font-size: 12px; font-weight: 600; color: var(--text-mut); padding-left: 10px; }
+.helm-brand b { font-family: var(--titular); letter-spacing: -.01em; font-size: 19px; }
+.helm-brand span { font-size: 12px; font-weight: 500; color: var(--text-mut); margin-top: 2px; }
+.helm-panel-head h2 { font-family: var(--titular); font-size: 16px; font-weight: 600; color: var(--text); }
+.helm-table th { font-size: 12px; font-weight: 600; color: var(--text-mut); }
+.helm-drawer-section, .helm-kv > div:first-child { font-size: 12.5px; font-weight: 600; color: var(--text-dim); }
+.helm-cal-dow { font-size: 12px; font-weight: 600; }
+.ed-datos dt { font-size: 12px; font-weight: 500; color: var(--text-mut); }
+
+/* ── Las cifras: lo único que alza la voz ───────────────────────────────── */
+.helm-kpi .lbl { font-size: 13px; font-weight: 500; color: var(--text-dim); }
+.helm-kpi .val {
+  font-family: var(--titular); font-size: 34px; font-weight: 600;
+  letter-spacing: -.03em; line-height: 1.05; margin-top: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.helm-kpi .val.accent { color: var(--cyan); text-shadow: 0 0 28px rgba(56, 189, 248, 0.35); }
+.helm-kpi .sub { font-size: 12.5px; color: var(--text-mut); margin-top: 6px; }
+
+/* ── Radio por nivel, sin decoración ────────────────────────────────────── */
+.helm-panel, .helm-card, .ed-agente, .ed-dep { border-radius: 16px; }
+.helm-kcard, .ed-tarjeta, .ed-cal-dia, .ed-datos div, .ed-hoja-txt, .helm-input { border-radius: 10px; }
+.helm-card::before, .helm-panel::before, .helm-card::after, .helm-panel::after { display: none !important; }
+.helm-panel, .helm-card { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03); }
+
+/* Nada se eleva solo por pasar el ratón: el borde basta para decir «esto se
+   pulsa». La respuesta al clic (abrir, arrastrar) sí se mueve. */
+.ed-tarjeta:hover, .ed-cliente:hover, .helm-kcard:hover { transform: none; }
+
+/* El menú: el activo lleva una línea de luz a la izquierda y nada más. */
+.helm-nav.active { position: relative; }
+.helm-nav.active::before {
+  content: ''; position: absolute; left: -14px; top: 10px; bottom: 10px; width: 2px; border-radius: 2px;
+  background: var(--cyan); box-shadow: 0 0 12px var(--cyan);
+}
+
+/* Los contadores de Edición, en la cifra de la casa y no en monoespaciada. */
+.ed-col-cab small, .ed-turno { font-family: var(--titular); letter-spacing: 0; }
