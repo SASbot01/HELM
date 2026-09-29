@@ -28,6 +28,7 @@ import { Youtube, Building2, ChevronRight, PlayCircle, Lock, Check } from 'lucid
 import { useCabeceraPublica } from './inicio/cabecera.js'
 import { altaLead, marcaComunidad, contarApuntados } from './inicio/crm.js'
 import { track } from './inicio/socio/track.js'
+import FondoHacker from './inicio/FondoHacker.jsx'
 import './inicio/inicio.css'
 
 // Lo que se cambia cada dos por tres, junto y arriba: enlaces y handle.
@@ -103,7 +104,7 @@ export default function Clase() {
   }
 
   return (
-    <div className="ini">
+    <div className="ini ini--pantera">
       <main className="ini-card">
         {/* El handle va DENTRO de la foto, arriba a la izquierda: es la firma
             de la cuenta y lo primero que reconoce quien llega de Instagram. */}
@@ -194,6 +195,8 @@ export default function Clase() {
           © {new Date().getFullYear()} Alex Silvestre · IA aplicada
         </p>
       </main>
+      {/* Detrás de todo en escritorio; al final de la página en el móvil. */}
+      <FondoHacker />
     </div>
   )
 }

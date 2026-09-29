@@ -547,3 +547,102 @@
      4,2:1, por debajo del mínimo legible para un texto de 15px. */
   --sobre-marca-rgb: 10, 11, 12;
 }
+
+/* ── La bio de Alex: pantera ───────────────────────────────────────────────
+   Negro casi puro con el granate entrando como luz por los bordes, y detrás
+   una figura encapuchada en ASCII (FondoHacker.jsx) con los ojos en rojo.
+   Solo en `.ini--pantera`: la página de Hugo comparte esta hoja y no lo lleva. */
+.ini--pantera {
+  --fondo: #050203;
+  position: relative;
+  isolation: isolate;
+  overflow-x: clip;
+  background:
+    radial-gradient(900px 560px at 50% -12%, rgba(126, 31, 53, 0.55), transparent 62%),
+    radial-gradient(720px 520px at 108% 112%, rgba(126, 31, 53, 0.34), transparent 60%),
+    radial-gradient(560px 520px at -14% 58%, rgba(70, 10, 24, 0.5), transparent 62%),
+    var(--fondo);
+}
+.ini-hacker {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden;
+  display: grid; place-items: center;
+}
+/* Líneas de monitor viejo por encima de todo el fondo. */
+.ini-hacker::after {
+  content: ''; position: absolute; inset: 0;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.28) 0 1px, transparent 1px 3px);
+}
+.ini-ascii {
+  margin: 0;
+  font: 700 clamp(7.5px, 2.05vw, 13px)/1.06 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.02em;
+  white-space: pre;
+  color: rgba(190, 50, 82, 0.2);
+  text-shadow: 0 0 8px rgba(166, 43, 70, 0.35);
+  -webkit-mask-image: radial-gradient(ellipse 70% 75% at 50% 42%, #000 45%, transparent 100%);
+  mask-image: radial-gradient(ellipse 70% 75% at 50% 42%, #000 45%, transparent 100%);
+  transform: translateY(-6vh);
+  animation: ini-parpadeo 7s steps(1) infinite;
+}
+.ini-ojo {
+  color: #ff2446;
+  text-shadow: 0 0 6px #ff2446, 0 0 22px rgba(255, 36, 70, 0.85), 0 0 48px rgba(255, 36, 70, 0.45);
+  animation: ini-ojos 5.5s ease-in-out infinite;
+}
+.ini-term {
+  position: absolute; margin: 0;
+  font: 600 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: rgba(255, 143, 163, 0.32);
+  letter-spacing: 0.04em;
+}
+.ini-term.arriba { top: 14px; right: 16px; }
+.ini-term.abajo { bottom: 12px; left: 16px; }
+.ini-cursor { animation: ini-cursor 1s steps(1) infinite; }
+@keyframes ini-cursor { 50% { opacity: 0; } }
+/* Un fallo de señal de vez en cuando: casi siempre quieto. */
+@keyframes ini-parpadeo {
+  0%, 91%, 100% { opacity: 1; transform: translateY(-6vh); }
+  92% { opacity: .55; transform: translate(-3px, -6vh); }
+  93% { opacity: 1; transform: translate(2px, -6vh); }
+  94% { opacity: .8; transform: translateY(-6vh); }
+}
+/* Los ojos respiran y parpadean una vez por ciclo. */
+@keyframes ini-ojos {
+  0%, 100% { opacity: 1; }
+  45% { opacity: .7; }
+  60%, 62% { opacity: .05; }
+}
+/* Cristal oscuro en lo que se lee encima del fondo: sin él, la figura se ve a
+   través de los botones y el texto pierde contraste. */
+.ini--pantera .ini-btn:not(.on),
+.ini--pantera .ini-lista,
+.ini--pantera .ini-dato {
+  background: rgba(12, 4, 7, 0.74);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+.ini--pantera .ini-btn:not(.on):hover { background: rgba(28, 8, 14, 0.8); }
+/* En el móvil la tarjeta ocupa todo el ancho y no queda hueco a los lados:
+   detrás, la figura solo manchaba el texto. Así que se va al FINAL de la
+   página, debajo del pie, y se descubre al hacer scroll: la capucha mirando. */
+@media (max-width: 979px) {
+  .ini--pantera { padding-bottom: 0; flex-direction: column; align-items: center; }
+  .ini-hacker {
+    position: relative; inset: auto; z-index: 0;
+    width: 100vw; margin: 8px -20px 0; padding: 34px 0 44px;
+    place-items: end center;
+  }
+  .ini-ascii { transform: none; animation: none; font-size: 2.05vw; color: rgba(190, 50, 82, 0.3); }
+  .ini-term.arriba { top: 6px; right: 16px; }
+  .ini-term.abajo { bottom: 14px; }
+}
+/* En escritorio la figura sale del centro, donde la tapa la tarjeta, y se
+   planta a la derecha, grande. */
+@media (min-width: 980px) {
+  .ini-hacker { place-items: center end; padding-right: 3vw; }
+  .ini-ascii { font-size: clamp(11px, 1.05vw, 15px); color: rgba(190, 50, 82, 0.26); }
+  .ini-term { font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ini-ascii, .ini-ojo, .ini-cursor { animation: none; }
+}
