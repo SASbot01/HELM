@@ -1,7 +1,7 @@
 // Edición → Panel: cómo va el mes de un vistazo.
 import { useMemo, useState } from 'react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
-import { Clapperboard, RefreshCw, Timer, FolderOpen, ArrowRight, Sparkles } from 'lucide-react'
+import { Clapperboard, RefreshCw, Timer, FolderOpen, ArrowRight, Sparkles, Inbox } from 'lucide-react'
 import { Kpi, Panel, Empty } from '../ui'
 import {
   edicionApi, eur, estadoCobro, mismoMes, diasHasta, cuandoLabel, fechaCorta,
@@ -122,6 +122,28 @@ export default function PanelEdicion({ clientId, datos, clientePor, recargar, ab
       </div>
 
       <AgenteMontador clientId={clientId} datos={datos} recargar={recargar} nuevoPedido={nuevoPedido} />
+      {datos.esSuperadmin && !datos.soyMesa && <HacerMesa clientId={clientId} recargar={recargar} />}
+    </div>
+  )
+}
+
+// Solo para el administrador de HELM: convertir este perfil en la mesa de un
+// editor compartido. Desde ese momento, los demás perfiles pueden enviarle
+// pedidos y aquí aparece la bandeja de Encargos.
+function HacerMesa({ clientId, recargar }) {
+  const [enviando, setEnviando] = useState(false)
+  const [error, setError] = useState(null)
+  async function hacer() {
+    if (!window.confirm('¿Este perfil es el de un editor? Los demás perfiles podrán enviarle pedidos desde su Edición.')) return
+    setEnviando(true)
+    try { await edicionApi.mesa(clientId, true); recargar() } catch (e) { setError(e.message); setEnviando(false) }
+  }
+  return (
+    <div className="ed-mesa">
+      <Inbox size={18} />
+      <p><b>¿Es el perfil de un editor?</b> Hazlo mesa de edición: los demás perfiles podrán enviarle sus guiones y él los recibirá en «Encargos».</p>
+      {error && <span className="ed-rojo">{error}</span>}
+      <button className="helm-btn" onClick={hacer} disabled={enviando}>{enviando ? 'Un momento…' : 'Hacer mesa de edición'}</button>
     </div>
   )
 }

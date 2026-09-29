@@ -10,7 +10,7 @@
 //
 // Lo usa el rol «editor» (ver permisos.js) y cualquiera que lleve el perfil.
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { LayoutDashboard, CalendarDays, ScrollText, Users, Wallet } from 'lucide-react'
+import { LayoutDashboard, CalendarDays, ScrollText, Users, Wallet, Inbox } from 'lucide-react'
 import { Tabs, FormNote, Empty } from '../ui'
 import { edicionApi } from '../edicion/comun'
 import PanelEdicion from '../edicion/PanelEdicion'
@@ -18,6 +18,7 @@ import Pedidos from '../edicion/Pedidos'
 import Guiones from '../edicion/Guiones'
 import Clientes from '../edicion/Clientes'
 import Cobros from '../edicion/Cobros'
+import Encargos from '../edicion/Encargos'
 import { PedidoForm, PedidoDrawer } from '../edicion/PedidoForm'
 import '../edicion/edicion.css'
 
@@ -30,15 +31,17 @@ const PESTANAS = [
 ]
 
 export default function Edicion({ clientId }) {
-  const [tab, setTab] = useState('panel')
+  const [tab, setTab] = useState(null)
   const [datos, setDatos] = useState(null)
   const [error, setError] = useState(null)
   // El pedido que se está creando (objeto con valores iniciales) o abierto.
   const [nuevo, setNuevo] = useState(null)
   const [abierto, setAbierto] = useState(null)
 
+  // En la mesa de un editor, lo que le envían los demás perfiles entra en sus
+  // pedidos (con `recibido` y su `origen`): es su carga de trabajo real.
   const cargar = useCallback(() => edicionApi.resumen(clientId)
-    .then(d => { setDatos(d); setError(null) })
+    .then(d => { setDatos({ ...d, pedidos: [...d.pedidos, ...(d.recibidos || [])] }); setError(null) })
     .catch(e => setError(e.message)), [clientId])
   useEffect(() => { setDatos(null); cargar() }, [cargar])
 
@@ -46,7 +49,9 @@ export default function Edicion({ clientId }) {
   const pon = useCallback((lista, fila) => setDatos(d => {
     if (!d) return d
     const hay = d[lista].some(x => x.id === fila.id)
-    return { ...d, [lista]: hay ? d[lista].map(x => (x.id === fila.id ? fila : x)) : [...d[lista], fila] }
+    // Se mezcla con lo que había: la API no devuelve los campos calculados de
+    // un encargo recibido (origen, guion), y no deben perderse.
+    return { ...d, [lista]: hay ? d[lista].map(x => (x.id === fila.id ? { ...x, ...fila } : x)) : [...d[lista], fila] }
   }), [])
   const quita = useCallback((lista, id) => setDatos(d => (d ? { ...d, [lista]: d[lista].filter(x => x.id !== id) } : d)), [])
 
@@ -64,8 +69,16 @@ export default function Edicion({ clientId }) {
     } catch (e) { setError(e.message); cargar() }
   }
 
+  // El editor entra directo a sus encargos; el resto, al panel.
+  useEffect(() => { if (datos && !tab) setTab(datos.soyMesa ? 'encargos' : 'panel') }, [datos, tab])
+
   if (error && !datos) return <FormNote>{error}</FormNote>
   if (!datos) return <Empty>Cargando el puesto de edición…</Empty>
+
+  const pestanas = datos.soyMesa
+    ? [{ key: 'encargos', label: 'Encargos', icon: <Inbox size={14} /> }, ...PESTANAS]
+    : PESTANAS
+  const nuevos = datos.pedidos.filter(p => p.recibido && !p.visto_at).length
 
   const comun = {
     clientId, datos, clientePor, pedidoPorGuion, pon, quita, recargar: cargar,
@@ -76,10 +89,14 @@ export default function Edicion({ clientId }) {
   return (
     <div className="ed">
       <div className="ed-barra">
-        <Tabs tabs={PESTANAS} value={tab} onChange={setTab} />
+        <Tabs
+          tabs={pestanas.map(t => (t.key === 'encargos' && nuevos ? { ...t, label: <>Encargos <b className="ed-nuevos">{nuevos}</b></> } : t))}
+          value={tab} onChange={setTab}
+        />
       </div>
       {error && <FormNote>{error}</FormNote>}
 
+      {tab === 'encargos' && <Encargos {...comun} />}
       {tab === 'panel' && <PanelEdicion {...comun} />}
       {tab === 'pedidos' && <Pedidos {...comun} />}
       {tab === 'guiones' && <Guiones {...comun} />}

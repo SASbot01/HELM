@@ -1,6 +1,6 @@
 // Edición → alta y ficha de un pedido.
-import { useMemo, useState } from 'react'
-import { FolderOpen, ScrollText, Sparkles, Trash2, Pencil, Check } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { FolderOpen, ScrollText, Sparkles, Trash2, Pencil, Check, Send, Inbox, Eye, EyeOff } from 'lucide-react'
 import { Modal, Drawer, Field, Input, Textarea, Select, MoneyInput, CountInput, FormNote } from '../ui'
 import {
   edicionApi, ESTADOS, FORMATOS, FASES, TIPOS, eur, fechaCorta, cuandoLabel, hoyISO, formatoCorto,
@@ -8,7 +8,7 @@ import {
 
 const VACIO = {
   titulo: '', cliente_id: '', guion_id: '', formato: 'short', estado: 'guion',
-  entrega: '', clips: '1', precio: '', notas_estilo: '', drive_url: '',
+  entrega: '', clips: '1', precio: '', notas_estilo: '', drive_url: '', editor_client_id: '',
 }
 
 export function PedidoForm({ clientId, datos, clientePor, pedidoPorGuion, inicial, onClose, onGuardado }) {
@@ -16,6 +16,7 @@ export function PedidoForm({ clientId, datos, clientePor, pedidoPorGuion, inicia
     ...VACIO, ...inicial,
     clips: String(inicial.clips ?? 1), precio: inicial.precio != null ? String(inicial.precio) : '',
     cliente_id: inicial.cliente_id || '', guion_id: inicial.guion_id || '',
+    editor_client_id: inicial.editor_client_id || '',
   }))
   const [error, setError] = useState(null)
   const [guardando, setGuardando] = useState(false)
@@ -46,6 +47,7 @@ export function PedidoForm({ clientId, datos, clientePor, pedidoPorGuion, inicia
       const r = await edicionApi.pedido(clientId, {
         ...f, id: inicial.id, clips: Number(f.clips) || 1, precio: Number(f.precio) || 0,
         cliente_id: f.cliente_id || null, guion_id: f.guion_id || null,
+        editor_client_id: f.editor_client_id || null,
       })
       onGuardado(r.pedido)
     } catch (err) { setError(err.message); setGuardando(false) }
@@ -83,6 +85,14 @@ export function PedidoForm({ clientId, datos, clientePor, pedidoPorGuion, inicia
           <Field label="Clips"><CountInput value={f.clips} onChange={v => set('clips', v)} /></Field>
           <Field label="Precio acordado"><MoneyInput value={f.precio} onChange={v => set('precio', v)} placeholder="0" /></Field>
         </div>
+        {datos.editores?.length > 0 && (
+          <Field label="Enviar al editor" hint="Le llega a su sección Edición con el guion, las notas y el Drive. Tú ves cómo avanza.">
+            <Select value={f.editor_client_id} onChange={e => set('editor_client_id', e.target.value)}>
+              <option value="">No enviar (lo edita este perfil)</option>
+              {datos.editores.map(ed => <option key={ed.id} value={ed.id}>{ed.nombre}</option>)}
+            </Select>
+          </Field>
+        )}
         <Field label="Estado">
           <Select value={f.estado} onChange={e => set('estado', e.target.value)}>
             {ESTADOS.map(x => <option key={x.key} value={x.key}>{x.label}</option>)}
@@ -107,7 +117,17 @@ export function PedidoForm({ clientId, datos, clientePor, pedidoPorGuion, inicia
 export function PedidoDrawer({ clientId, datos, clientePor, pedido, pon, quita, cambiarEstado, nuevoPedido, onClose }) {
   const [hojaEstado, setHojaEstado] = useState(null)   // null | 'generando' | error
   const [verGuion, setVerGuion] = useState(false)
-  const guion = pedido.guion_id ? datos.guiones.find(g => g.id === pedido.guion_id) : null
+  // Un encargo recibido trae su guion (es de otro perfil); uno propio lo
+  // busca en el calendario de este.
+  const guion = pedido.guion_info || (pedido.guion_id ? datos.guiones.find(g => g.id === pedido.guion_id) : null)
+  const editor = pedido.editor_client_id ? datos.editores?.find(e => e.id === pedido.editor_client_id) : null
+
+  // Abrirlo es haberlo visto: el perfil que lo envió deja de verlo como nuevo.
+  useEffect(() => {
+    if (pedido.recibido && !pedido.visto_at) {
+      edicionApi.visto(clientId, [pedido.id]).then(() => pon('pedidos', { id: pedido.id, visto_at: new Date().toISOString() })).catch(() => {})
+    }
+  }, [pedido.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const cliente = clientePor.get(pedido.cliente_id)
   const cobros = datos.cobros.filter(c => c.pedido_id === pedido.id)
 
@@ -132,13 +152,22 @@ export function PedidoDrawer({ clientId, datos, clientePor, pedido, pon, quita, 
       title={pedido.titulo}
       sub={[cliente?.nombre, formatoCorto(pedido.formato), pedido.entrega && `${fechaCorta(pedido.entrega)} · ${cuandoLabel(pedido.entrega)}`].filter(Boolean).join(' · ')}
       onClose={onClose}
-      footer={(
+      footer={pedido.recibido ? null : (
         <div className="ed-form-acc">
           <button className="helm-btn" onClick={borrar}><Trash2 size={14} /> Borrar</button>
           <button className="helm-btn" onClick={() => { onClose(); nuevoPedido(pedido) }}><Pencil size={14} /> Editar</button>
         </div>
       )}
     >
+      {pedido.recibido && (
+        <p className="ed-banda"><Inbox size={14} /> Encargo de <b>{pedido.origen?.nombre}</b>{pedido.enviado_at && ` · enviado el ${fechaCorta(pedido.enviado_at.slice(0, 10))}`}</p>
+      )}
+      {!pedido.recibido && pedido.editor_client_id && (
+        <p className="ed-banda">
+          <Send size={14} /> Enviado a <b>{editor?.nombre || 'el editor'}</b>
+          <span className="ed-visto">{pedido.visto_at ? <><Eye size={13} /> lo ha visto</> : <><EyeOff size={13} /> aún no lo ha abierto</>}</span>
+        </p>
+      )}
       <div className="ed-pasos" role="list">
         {ESTADOS.map((e, i) => (
           <button
@@ -151,11 +180,19 @@ export function PedidoDrawer({ clientId, datos, clientePor, pedido, pon, quita, 
         ))}
       </div>
 
+      {/* Precio y cobro son del perfil que encarga: al editor no le tocan. */}
       <dl className="ed-datos">
         <div><dt>Clips</dt><dd>{pedido.clips}</dd></div>
-        <div><dt>Precio</dt><dd>{eur(pedido.precio)}</dd></div>
-        <div><dt>Cobro</dt><dd>{cobros.length ? cobros.map(c => (c.estado === 'cobrado' ? 'Cobrado' : 'Pendiente')).join(', ') : 'Se abre al entregar'}</dd></div>
+        <div><dt>Entrega</dt><dd>{pedido.entrega ? fechaCorta(pedido.entrega) : '—'}</dd></div>
+        {pedido.recibido
+          ? <div><dt>Formato</dt><dd>{formatoCorto(pedido.formato)}</dd></div>
+          : <div><dt>Precio</dt><dd>{eur(pedido.precio)}</dd></div>}
       </dl>
+      {!pedido.recibido && Number(pedido.precio) > 0 && (
+        <p className="ed-suave" style={{ margin: '-6px 0 14px' }}>
+          Cobro: {cobros.length ? cobros.map(c => (c.estado === 'cobrado' ? 'cobrado' : 'pendiente')).join(', ') : 'se abre solo al entregar'}.
+        </p>
+      )}
 
       <div className="ed-enlaces">
         {pedido.drive_url && <a className="helm-btn" href={pedido.drive_url} target="_blank" rel="noopener noreferrer"><FolderOpen size={14} /> Material</a>}

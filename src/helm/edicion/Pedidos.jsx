@@ -1,6 +1,6 @@
 // Edición → Pedidos: el mes en calendario y el flujo en tablero.
 import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Plus, CalendarDays, Columns3, ScrollText } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, CalendarDays, Columns3, ScrollText, Send, Inbox } from 'lucide-react'
 import { Panel } from '../ui'
 import { ESTADOS, eur, fechaCorta, cuandoLabel, diasHasta, formatoCorto, hoyISO, FASES } from './comun'
 
@@ -145,7 +145,9 @@ function Tablero({ datos, clientePor, abrirPedido, cambiarEstado }) {
                 onClick={() => abrirPedido(p)}
               >
                 <b>{p.titulo}</b>
-                <small>{[clientePor.get(p.cliente_id)?.nombre, formatoCorto(p.formato), p.clips > 1 && `${p.clips} clips`].filter(Boolean).join(' · ')}</small>
+                <small>{[p.recibido ? p.origen?.nombre : clientePor.get(p.cliente_id)?.nombre, formatoCorto(p.formato), p.clips > 1 && `${p.clips} clips`].filter(Boolean).join(' · ')}</small>
+                {p.recibido && !p.visto_at && <span className="ed-nuevo-tag"><Inbox size={11} /> Nuevo</span>}
+                {!p.recibido && p.editor_client_id && <span className="ed-enviado"><Send size={11} /> {datos.editores?.find(x => x.id === p.editor_client_id)?.nombre || 'Editor'}{p.visto_at ? ' · visto' : ''}</span>}
                 <div className="ed-tarjeta-pie">
                   {p.entrega
                     ? <span className={'ed-cuenta' + (e.key !== 'entregado' && n < 0 ? ' vencido' : e.key !== 'entregado' && n <= 1 ? ' ya' : '')}>{e.key === 'entregado' ? fechaCorta(p.entrega) : cuandoLabel(p.entrega)}</span>

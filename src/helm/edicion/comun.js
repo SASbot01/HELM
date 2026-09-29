@@ -28,6 +28,8 @@ export const edicionApi = {
   borrar: (c, tabla, id) => api('borrar', c, { tabla, id }),
   sincronizar: (c) => api('sincronizar', c, {}),
   hoja: (c, id) => api('hoja', c, { id }),
+  visto: (c, ids) => api('visto', c, { ids }),
+  mesa: (c, activo = true) => api('mesa', c, { activo }),
 }
 
 // El flujo de un pedido, en orden.

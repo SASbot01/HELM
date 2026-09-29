@@ -238,3 +238,42 @@
 .ed-mensaje { margin: 12px 0 16px; padding: 14px; border-radius: var(--radius-sm); background: rgba(7, 11, 20, 0.6); border: 1px solid var(--border); }
 
 @media (prefers-reduced-motion: reduce) { .ed-turno i, .ed-gira { animation: none; } }
+
+/* ── Editor compartido: encargos, envíos y mesa ────────────────────────── */
+.ed-nuevos { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 6px; margin-left: 6px; border-radius: 999px; font-size: 11px; font-weight: 700; color: #1a1406; background: linear-gradient(135deg, #facc15, #eab308); }
+.ed-origen-titulo { display: inline-flex; align-items: center; gap: 4px; }
+.ed-encargos { list-style: none; margin: 0; padding: 6px; }
+.ed-encargos li {
+  position: relative; display: grid; grid-template-columns: 1fr auto auto auto; gap: 12px; align-items: center;
+  padding: 12px 14px 12px 22px; border-radius: var(--radius-sm); cursor: pointer; transition: background .12s;
+}
+.ed-encargos li:hover { background: var(--hover); }
+.ed-encargos li.nuevo { background: rgba(250, 204, 21, 0.05); }
+.ed-encargos li.hecho { opacity: .6; }
+.ed-encargo-txt b { display: block; font-size: 14.5px; font-weight: 600; }
+.ed-encargo-txt small { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 3px; font-size: 12px; color: var(--text-mut); }
+.ed-encargos .helm-btn { padding: 6px 9px; }
+.ed-punto { position: absolute; left: 8px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+.ed-nuevo-tag, .ed-enviado {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; margin-right: 6px; padding: 2px 8px;
+  border-radius: 999px; font-size: 11px; font-weight: 600;
+}
+.ed-nuevo-tag { color: #1a1406; background: linear-gradient(135deg, #facc15, #eab308); }
+.ed-enviado { color: var(--cyan); background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); margin-top: 0; }
+.ed-tarjeta .ed-enviado { margin-top: 8px; }
+.ed-banda {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; padding: 10px 12px;
+  border-radius: var(--radius-sm); font-size: 13px; color: var(--text-dim);
+  background: rgba(56, 189, 248, 0.07); border: 1px solid rgba(56, 189, 248, 0.22);
+}
+.ed-banda svg { color: var(--cyan); }
+.ed-banda b { color: var(--text); }
+.ed-visto { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-mut); }
+.ed-mesa {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 18px; border-radius: var(--radius);
+  border: 1px dashed var(--border-2); color: var(--text-dim); font-size: 13.5px;
+}
+.ed-mesa svg { color: var(--cyan); flex: none; }
+.ed-mesa p { margin: 0; flex: 1; min-width: 240px; }
+.ed-mesa b { color: var(--text); }
+@media (max-width: 720px) { .ed-encargos li { grid-template-columns: 1fr auto; } .ed-encargos li > .helm-btn { display: none; } }

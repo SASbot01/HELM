@@ -3,7 +3,7 @@
 // Agent OS); aquí se ve en qué fase está cada uno en Drive y de cada guion sale
 // su pedido de edición.
 import { useMemo, useState } from 'react'
-import { FolderOpen, Plus, ArrowRight, ScrollText } from 'lucide-react'
+import { FolderOpen, Plus, ArrowRight, ScrollText, Send } from 'lucide-react'
 import { Panel, Empty } from '../ui'
 import { FASES, TIPOS, fechaCorta, estadoLabel, hoyISO } from './comun'
 
@@ -65,15 +65,27 @@ export default function Guiones({ datos, pedidoPorGuion, abrirPedido, nuevoPedid
                   </div>
                   {p ? (
                     <button className="helm-btn" onClick={(e) => { e.stopPropagation(); abrirPedido(p) }}>
+                      {p.editor_client_id && <span className="ed-enviado"><Send size={12} /> {datos.editores?.find(x => x.id === p.editor_client_id)?.nombre || 'Editor'}</span>}
                       <span className={'ed-estado e-' + p.estado}>{estadoLabel(p.estado)}</span> <ArrowRight size={13} />
                     </button>
                   ) : (
-                    <button
-                      className="helm-btn primary"
-                      onClick={(e) => { e.stopPropagation(); nuevoPedido({ guion_id: g.id, titulo: g.titulo, entrega: g.fecha >= hoy ? g.fecha : '' }) }}
-                    >
-                      <Plus size={14} /> Pedido
-                    </button>
+                    <div className="ed-acciones" onClick={e => e.stopPropagation()}>
+                      {/* Con editor compartido, lo normal es mandárselo: va primero. */}
+                      {datos.editores?.map(ed => (
+                        <button
+                          key={ed.id} className="helm-btn primary"
+                          onClick={() => nuevoPedido({ guion_id: g.id, titulo: g.titulo, entrega: g.fecha >= hoy ? g.fecha : '', editor_client_id: ed.id })}
+                        >
+                          <Send size={14} /> Enviar a {ed.nombre}
+                        </button>
+                      ))}
+                      <button
+                        className={'helm-btn' + (datos.editores?.length ? '' : ' primary')}
+                        onClick={() => nuevoPedido({ guion_id: g.id, titulo: g.titulo, entrega: g.fecha >= hoy ? g.fecha : '' })}
+                      >
+                        <Plus size={14} /> Pedido
+                      </button>
+                    </div>
                   )}
                 </div>
                 {abiertoEste && <p className="ed-pre ed-guion-cuerpo">{g.guion || 'Sin texto.'}</p>}
