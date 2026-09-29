@@ -91,3 +91,12 @@
 
 /* Las tarjetas que se pulsan responden al pasar por encima. */
 .helm-kcard:hover, .helm-plugin:hover, .ag-card:hover { border-color: var(--border-2); }
+
+/* index.css tiene una regla global y antigua que pinta con --on-primary (el
+   texto para ir SOBRE el acento) cualquier pestaña «.active», con !important.
+   Las pestañas de HELM no llevan fondo de acento, así que el texto salía
+   oscuro sobre oscuro. Aquí se devuelve al texto normal. */
+.helm .helm-tab.active, .helm .helm-vista-tab.active { color: var(--text) !important; }
+.helm .helm-tab.active svg { color: var(--cyan) !important; stroke: currentColor !important; }
+/* Un enlace con aspecto de botón no se subraya. */
+.helm a.helm-btn { text-decoration: none; }
