@@ -612,6 +612,16 @@
   45% { opacity: .7; }
   60%, 62% { opacity: .05; }
 }
+/* «AI» al otro lado de la máscara. */
+.ini-ai {
+  margin: 0; white-space: pre;
+  font: 800 clamp(8px, 2.2vw, 18px)/1.02 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: rgba(166, 43, 70, 0.4);
+}
+.ini-ai-borde { color: #ff5a78; text-shadow: 0 0 6px rgba(255, 36, 70, 0.8), 0 0 20px rgba(255, 36, 70, 0.4); }
+@media (min-width: 980px) {
+  .ini-ai { position: absolute; left: 3vw; top: 50%; transform: translateY(-50%); font-size: clamp(10px, 1.08vw, 18px); }
+}
 /* Cristal oscuro en lo que se lee encima del fondo: sin él, la figura se ve a
    través de los botones y el texto pierde contraste. */
 .ini--pantera .ini-btn:not(.on),
@@ -633,6 +643,8 @@
     place-items: end center;
   }
   .ini-ascii { transform: none; animation: none; font-size: 2.05vw; color: rgba(190, 50, 82, 0.3); }
+  .ini-hacker { gap: 22px; }
+  .ini-ai { font-size: 3.4vw; }
   .ini-term.arriba { top: 6px; right: 16px; }
   .ini-term.abajo { bottom: 14px; }
 }

@@ -8,12 +8,19 @@
 // la `@` marca los ojos: se pintan aparte, como bloques sólidos, para que
 // brillen.
 import arte from './mascara.txt?raw'
+// «AI» en grande, al otro lado: el contorno en $ (brilla) y el relleno en
+// binario (apagado). Sale de la tipografía DejaVu Sans Bold pasada a ASCII.
+import ai from './ai.txt?raw'
 
 const TROZOS = arte.split(/(@+)/)
+const TROZOS_AI = ai.split(/(\$+)/)
 
 export default function FondoHacker() {
   return (
     <div className="ini-hacker" aria-hidden="true">
+      <pre className="ini-ai">
+        {TROZOS_AI.map((t, i) => (t.startsWith('$') ? <span key={i} className="ini-ai-borde">{t}</span> : t))}
+      </pre>
       <pre className="ini-ascii">
         {TROZOS.map((t, i) => (t.startsWith('@') ? <span key={i} className="ini-ojo">{'█'.repeat(t.length)}</span> : t))}
       </pre>
