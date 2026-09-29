@@ -180,6 +180,8 @@
 .ini-btn .ini-flecha { margin-left: auto; opacity: .55; transition: transform .16s, opacity .16s; }
 .ini-btn:hover { background: rgba(var(--papel-rgb), 0.09); border-color: rgba(var(--marca-claro-rgb), 0.4); transform: translateY(-2px); }
 .ini-btn:hover .ini-flecha { opacity: 1; transform: translateX(3px); }
+/* La charla despliega su formulario: la flecha apunta abajo mientras está abierto. */
+.ini-btn .ini-flecha.abierta, .ini-btn:hover .ini-flecha.abierta { opacity: 1; transform: rotate(90deg); }
 .ini-btn:active { transform: translateY(0); }
 
 /* El primario es UNO. Dos botones igual de fuertes son cero botones fuertes:

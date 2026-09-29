@@ -74,6 +74,10 @@ export default function Clase() {
   })
 
   const [acceso, setAcceso] = useState(accesoGuardado)
+  // El formulario vive DENTRO del botón de la charla: no se ve hasta que se
+  // pulsa, y se despliega justo debajo. Una página de enlaces con un formulario
+  // siempre abierto al final parecía pedir el correo antes de ofrecer nada.
+  const [abierta, setAbierta] = useState(false)
   useEffect(() => {
     track('vista_pagina', { pagina: 'clase' })
     // Su tipografía se carga solo aquí: la principal no la usa y no tiene por
@@ -85,11 +89,14 @@ export default function Clase() {
     return () => l.remove()
   }, [])
 
-  // El botón primario no abre el vídeo: baja al formulario, que es donde se
-  // hace lo que promete. Abrir otra pestaña para pedir el correo pierde a la
-  // mitad por el camino.
+  // El botón primario no abre el vídeo: despliega el formulario debajo, que
+  // es donde se hace lo que promete. Abrir otra pestaña para pedir el correo
+  // pierde a la mitad por el camino. Pulsarlo otra vez lo recoge.
   const alFormulario = () => {
-    document.getElementById('clase')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (abierta) { setAbierta(false); return }
+    setAbierta(true)
+    track('clic_cta', { donde: 'bio-charla' })
+    setTimeout(() => document.getElementById('clase')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60)
     // El foco, además del scroll: en el móvil abre el teclado y deja claro que
     // hay que escribir. Sin esto, el salto parece que no ha hecho nada.
     setTimeout(() => document.getElementById('clase-email')?.focus({ preventScroll: true }), 420)
@@ -146,15 +153,16 @@ export default function Clase() {
               <ChevronRight className="ini-flecha" size={20} />
             </a>
           ) : (
-            <button className="ini-btn on" onClick={alFormulario}>
+            <button className="ini-btn on" onClick={alFormulario} aria-expanded={abierta} aria-controls="clase">
               <span className="ini-btn-icono"><PlayCircle size={20} /></span>
               <span className="ini-btn-txt">
                 <b>Charla gratis</b>
                 <small>Una hora de clase · solo tu nombre y tu correo</small>
               </span>
-              <ChevronRight className="ini-flecha" size={20} />
+              <ChevronRight className={'ini-flecha' + (abierta ? ' abierta' : '')} size={20} />
             </button>
           )}
+          {!acceso && abierta && <PuertaClase acceso={acceso} setAcceso={setAcceso} />}
 
           <a className="ini-btn" href={YOUTUBE} target="_blank" rel="noopener noreferrer">
             <span className="ini-btn-icono"><Youtube size={20} /></span>
@@ -179,7 +187,8 @@ export default function Clase() {
           </a>
         </div>
 
-        <PuertaClase acceso={acceso} setAcceso={setAcceso} />
+        {/* Con el correo ya dejado, la sala de la clase va aquí abajo. */}
+        {acceso && <PuertaClase acceso={acceso} setAcceso={setAcceso} />}
 
         <p className="ini-pie">
           © {new Date().getFullYear()} Alex Silvestre · IA aplicada
@@ -228,7 +237,12 @@ function PuertaClase({ acceso, setAcceso }) {
       // emocional. El portal dura 1.1s: lo justo para sentirse un salto, no
       // una espera.
       setEstado('warp')
-      setTimeout(() => { setAcceso(nuevo); setEstado(null) }, 1100)
+      setTimeout(() => {
+        setAcceso(nuevo); setEstado(null)
+        // La sala se pinta abajo del todo, no donde estaba el formulario: se
+        // lleva a la persona hasta ella para que no se quede sin ver la clase.
+        setTimeout(() => document.getElementById('clase')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
+      }, 1100)
     } catch (err) {
       setError(err.message)
       setEstado(null)
