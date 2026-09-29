@@ -66,9 +66,11 @@
 }
 .helm h1, .helm h2, .helm h3, .helm-kpi .val, .helm-top h1 { font-family: var(--titular); }
 
-/* Cristal en las superficies. */
-.helm-card, .helm-panel, .helm-kpi, .helm-plugin, .helm-modal, .helm-drawer,
-.helm-kcard, .helm-tabs, .helm-search, .helm-onb-section, .ag-card {
+/* Cristal solo en superficies «hoja». Un backdrop-filter convierte al
+   elemento en el marco de sus hijos con position: fixed, así que en un panel
+   que abre un modal dentro (Clientes, Servicios…) el modal se colocaba
+   respecto al panel y salía cortado. Los contenedores van sin blur. */
+.helm-kpi, .helm-modal, .helm-drawer, .helm-kcard, .helm-tabs, .helm-search {
   -webkit-backdrop-filter: var(--vidrio);
   backdrop-filter: var(--vidrio);
 }

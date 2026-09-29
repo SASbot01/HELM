@@ -4,6 +4,11 @@
 
 .ed { display: flex; flex-direction: column; gap: 18px; }
 .ed-barra { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+/* Seis pestañas no caben en un móvil: la barra se desplaza sola en vez de
+   ensanchar la página. */
+.ed-barra .helm-tabs { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.ed-barra .helm-tabs::-webkit-scrollbar { display: none; }
+.ed-barra .helm-tab { flex: none; }
 .ed-oro { color: var(--amber) !important; }
 .ed-rojo { color: var(--red) !important; }
 .ed-suave { color: var(--text-mut); font-size: 13px; }
@@ -57,7 +62,6 @@
     radial-gradient(600px 200px at 0% 0%, rgba(56, 189, 248, 0.12), transparent 60%),
     var(--panel);
   border: 1px solid var(--border-2);
-  -webkit-backdrop-filter: var(--vidrio); backdrop-filter: var(--vidrio);
 }
 .ed-agente-ico { width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; color: var(--cyan); background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); }
 .ed-agente-cab { display: flex; align-items: center; gap: 10px; }
