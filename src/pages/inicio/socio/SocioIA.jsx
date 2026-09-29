@@ -21,56 +21,26 @@ import Formulario from './Formulario.jsx'
 import Pendiente from './Pendiente.jsx'
 import Pie from './Pie.jsx'
 import { SistemaVivo, ChatVisto, GraficoCobro } from './Visuales.jsx'
-import { SeccionHelm } from './Helm.jsx'
+import { SeccionEquipo, SeccionHelm } from './Helm.jsx'
+import Capucha from './Capucha.jsx'
 import { useReveal, useBotonFijo } from './reveal.js'
 import { useCabeceraPublica } from '../cabecera.js'
 import { useFuentesSocio } from './fuentes.js'
 import './socio.css'
 
-// [REVISAR] Qué se monta y qué deja de hacer el cliente en cada fase. Cada
-// «monto» sale de algo que HELM hace hoy (ver src/helm): nada de respuestas
-// automáticas por DM ni envíos de email, que HELM no tiene.
-const FASES = [
-  {
-    n: 'Contenido',
-    monto: 'Tu Biblia de marca y de contenido, y guiones escritos con el estilo de los creadores que más venden en tu nicho.',
-    dejas: 'pensar cada día qué publicar.',
-  },
-  {
-    n: 'Captación',
-    monto: 'La página y el formulario donde te dejan sus datos. Cada contacto entra solo en tu CRM, sabiendo de qué Reel viene.',
-    dejas: 'copiar contactos a mano de un sitio a otro.',
-  },
-  {
-    n: 'Filtro de contactos',
-    monto: 'Preguntas que separan a quien puede comprar de quien solo mira, y una agenda donde solo reserva llamada quien encaja.',
-    dejas: 'hablar con gente que no va a comprar.',
-  },
-  {
-    n: 'Venta',
-    monto: 'El paso que cierra —webinar, llamada o página de pago— con su guion, y un pipeline donde ves en qué punto está cada persona.',
-    dejas: 'perderle la pista a los que dijeron «me lo pienso».',
-  },
-  {
-    n: 'Entrega y operaciones',
-    monto: 'Cada pago de Stripe registrado solo, cuotas y renovaciones controladas, facturas con un clic y el reporte diario de tu equipo.',
-    dejas: 'hacer a mano lo que se repite con cada cliente.',
-  },
-]
-
 // Los pasos desde que rellenas el formulario. Salen de la oferta del brief.
 const PROCESO = [
   { t: 'Auditoría', d: '30 minutos. Miramos tu producto y dónde se te escapa la gente.', dato: 'Gratis' },
   { t: 'Te digo si encajamos', d: 'Si no, te lo digo en la llamada y te llevas la auditoría igual.', dato: 'Sin compromiso' },
-  { t: 'Montaje', d: 'Monto HELM con tu oferta, tus datos y tu equipo: de tu contenido a la entrega.', dato: '30 días · 1.000 €' },
-  { t: 'Lo llevo yo', d: 'Lo mantengo y lo mejoro mirando los números del panel contigo. Cobro solo sobre lo que crezcas.', dato: '12 meses · %' },
+  { t: 'Montaje', d: 'Pongo a tu equipo a trabajar con tu oferta, tus datos y tus cuentas: del contenido a la entrega.', dato: '30 días · 1.000 €' },
+  { t: 'Lo superviso yo', d: 'Dirijo al equipo y lo mejoro mirando los números del panel contigo. Cobro solo sobre lo que crezcas.', dato: '12 meses · %' },
 ]
 
 // [REVISAR] Todas las respuestas: cortas, para que las valide Alex.
 const PREGUNTAS = [
   {
     q: '¿Qué es HELM?',
-    a: 'El panel donde vive tu sistema: CRM, agenda de llamadas, ventas y comisiones, cuotas, facturas, finanzas y contenido con IA. Lo uso para llevar cada negocio, y tú lo tienes abierto para ver cómo va el tuyo cuando quieras.',
+    a: 'El panel donde trabaja tu equipo: CRM, agenda de llamadas, cobros y comisiones, cuotas, finanzas y el contenido. Tú lo tienes abierto para ver cómo va tu negocio cuando quieras.',
   },
   {
     q: '¿Por qué cobras porcentaje?',
@@ -86,11 +56,15 @@ const PREGUNTAS = [
   },
   {
     q: '¿Tengo que grabar yo el contenido?',
-    a: 'Sí: la cara y el producto son tuyos, porque la gente compra a personas. Yo te preparo qué grabar y cómo, con guiones basados en lo que ya funciona en tu nicho, para que te lleve el mínimo tiempo.',
+    a: 'Sí: la cara y el producto son tuyos, porque la gente compra a personas. El equipo te deja los guiones escritos, basados en lo que ya funciona en tu nicho, para que te lleve el mínimo tiempo.',
   },
   {
-    q: '¿Qué IA usáis? ¿Y mis datos?',
-    a: 'Tú eliges: un modelo privado que corre en el servidor, sin que tus datos salgan de ahí, o Claude con tu propia clave. Lo importante no es la herramienta: es que el sistema funcione aunque mañana cambiemos de modelo.',
+    q: '¿Los empleados son personas?',
+    a: 'Son agentes: cada uno hace un trabajo concreto con tu información, siempre igual y a cualquier hora. Detrás estoy yo, que los superviso y respondo por lo que hacen. Tú hablas conmigo, no con una máquina.',
+  },
+  {
+    q: '¿Y mis datos?',
+    a: 'Se quedan en tu panel. Si lo prefieres, todo corre en un servidor propio sin mandar nada a terceros.',
   },
   {
     q: '¿Qué pasa en la llamada de auditoría?',
@@ -98,7 +72,7 @@ const PREGUNTAS = [
   },
   {
     q: '¿Por qué solo 5 plazas?',
-    a: 'Porque cada sistema lo llevo yo. Con más de 5 negocios a la vez no podría llevarlos bien.',
+    a: 'Porque cada equipo lo superviso yo. Con más de 5 negocios a la vez no podría hacerlo bien.',
   },
 ]
 
@@ -132,10 +106,10 @@ export default function SocioIA() {
   // En HELM el <head> es el del panel: título, OG y tipografías se ponen aquí
   // al entrar y se quitan al salir.
   useCabeceraPublica({
-    titulo: 'Socio IA — Alex Silvestre',
-    descripcion: 'Monto sobre HELM el sistema que vende tu producto —CRM, llamadas, cobros, finanzas y contenido con IA— y lo llevo yo. 1.000 € por el montaje y después porcentaje solo sobre lo que crezcas. 5 plazas.',
+    titulo: 'Tu equipo digital — Alex Silvestre',
+    descripcion: 'Un equipo para cada parte de tu negocio digital —estratega, guionista, setter, seguimiento, administración, analista…— trabajando en HELM y supervisado por mí. 1.000 € por el montaje y después porcentaje solo sobre lo que crezcas. 5 plazas.',
     imagen: '/socio/og.jpg',
-    colorBarra: '#0a0a0c',
+    colorBarra: '#050203',
   })
   useFuentesSocio()
   useReveal()
@@ -145,16 +119,17 @@ export default function SocioIA() {
   return (
     <div className="so">
       <div className="so-grano" aria-hidden="true" />
+      <div className="so-lineas" aria-hidden="true" />
 
       {/* ── 1. Hero ─────────────────────────────────────────────────────── */}
       <header className="so-hero" id="so-hero">
         <div className="so-hero-glow" aria-hidden="true" />
         <div className="so-hero-txt">
-          <p className="so-tag"><span className="so-hex" aria-hidden="true" /> SOCIO IA · {PLAZAS_TOTALES} plazas</p>
+          <p className="so-tag"><span className="so-hex" aria-hidden="true" /> TU EQUIPO DIGITAL · {PLAZAS_TOTALES} plazas</p>
           <h1>{linea1} <em>{linea2}</em></h1>
           <p className="so-sub">
-            Contenido, captación, filtro, venta y entrega <b>funcionando en 30 días</b>,
-            todo en un mismo panel: <b>HELM</b>.
+            Un equipo para cada parte de tu negocio —contenido, captación, venta y entrega—
+            <b>trabajando en 30 días</b>.
             Cobro <b className="oro">1.000&nbsp;€</b> por montarlo y después voy a porcentaje de lo que crezcas.
           </p>
           <BotonAuditoria donde="hero" />
@@ -169,7 +144,7 @@ export default function SocioIA() {
           <SistemaVivo actividad />
           <p className="so-prueba">
             <ShieldCheck size={16} aria-hidden="true" />
-            <span>Todo corre en <b>HELM</b>: CRM, llamadas, cobros, finanzas y contenido en un solo panel</span>
+            <span>Diez empleados, un solo panel: <b>HELM</b>. Y los superviso yo</span>
           </p>
         </div>
       </header>
@@ -195,26 +170,10 @@ export default function SocioIA() {
           </p>
         </section>
 
-        {/* ── 3. El mecanismo: las 5 fases ─────────────────────────────── */}
-        <section className="so-sec ancho">
-          <div data-reveal>
-            <Eyebrow n="02">El mecanismo</Eyebrow>
-            <h2>Un sistema. <em>5 fases.</em></h2>
-            <p className="so-intro">La IA es la herramienta. Lo que te llevas es el sistema funcionando.</p>
-          </div>
-          <ol className="so-fases">
-            {FASES.map((f, i) => (
-              <li key={f.n} data-reveal style={{ '--i': i }}>
-                <span className="so-fase-n" aria-hidden="true">{i + 1}</span>
-                <h3>{f.n}</h3>
-                <p className="so-fase-monto"><small>Monto</small>{f.monto}</p>
-                <p className="so-fase-dejas"><small>Dejas de</small>{f.dejas}</p>
-              </li>
-            ))}
-          </ol>
-        </section>
+        {/* ── 3. El equipo: un empleado por cada parte del proceso ─────── */}
+        <SeccionEquipo Eyebrow={Eyebrow} />
 
-        {/* ── 4. El sistema: HELM ──────────────────────────────────────── */}
+        {/* ── 4. Dónde trabajan: HELM ──────────────────────────────────── */}
         <SeccionHelm Eyebrow={Eyebrow} />
 
         {/* ── 5. Cómo trabajamos ──────────────────────────────────────── */}
@@ -328,6 +287,8 @@ export default function SocioIA() {
 
         {/* ── 10. Cierre ───────────────────────────────────────────────── */}
         <section className="so-sec so-cierre" id="so-cierre">
+          <Capucha />
+          <p className="so-term">root@s4sf:~$ ./equipo --empezar<span className="so-cursor">_</span></p>
           <h2>Tú pones el producto. <em>¿Lo vemos?</em></h2>
           <BotonAuditoria donde="cierre" />
           <p className="so-nota">Si no encajamos, te lo digo en la llamada y te llevas la auditoría igual.</p>

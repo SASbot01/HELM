@@ -40,7 +40,7 @@ export const INSTAGRAM = `https://www.instagram.com/${HANDLE}`
 // prueban con ?t=b / ?t=c en el enlace (test A/B), y la variante viaja con
 // cada evento y con cada envío del formulario.
 export const TITULARES = {
-  a: ['Tú pones el producto.', 'Yo monto y llevo todo lo que lo vende.'],
+  a: ['Tú pones el producto.', 'Mi equipo monta y lleva todo lo que lo vende.'],
   b: ['Monto con IA el sistema que vende tu formación.', 'Y lo llevo yo.'],
   c: ['Tu producto ya funciona.', 'Te falta el sistema que lo vende sin ti.'],
 }
