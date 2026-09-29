@@ -19,6 +19,8 @@ import Gracias from './pages/inicio/socio/Gracias.jsx'
 import Legal from './pages/inicio/socio/Legal.jsx'
 import AgentOS from './agents/AgentOS.jsx'
 import './index.css'
+// El tema de HELM va después de theme.css (que carga HelmApp) para mandar sobre él.
+import './helm/tema.css'
 
 // App reducida a HELM: se entra por /login (superadmin) → /admin (Helm).
 // Todo lo demás (apex-operations, ClientApp, MID, ERP, landings, funnels…)

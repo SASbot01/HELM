@@ -1,0 +1,93 @@
+/* ============================================================================
+   HELM — tema «medianoche»: lujo futurista en modo oscuro.
+
+   Se carga DESPUÉS de theme.css (ver main.jsx) y solo redefine tokens y unas
+   pocas superficies: toda la interfaz ya pinta con variables, así que cambiar
+   el tema es cambiar esto y nada más.
+
+     fondo       azul medianoche (#070b14 / #0a0f1d), nunca negro puro
+     superficies grafito azulado translúcido (#0f172a / #111827) con cristal
+                 sutil: backdrop-blur y borde de 1px en #1e293b
+     acento      cian eléctrico #38bdf8 — lo activo, lo primario, las gráficas
+     valor       dorado titanio #facc15 — SOLO «pendiente», VIP y cifras clave
+     tipografía  Inter para leer, Space Grotesk para titulares y cifras
+     forma       rounded-xl (12px) y microinteracciones cortas
+   ============================================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+.helm, .helm-swatch {
+  --bg:        #070b14;
+  --bg-1:      #0a0f1d;
+  --panel:     rgba(15, 23, 42, 0.72);   /* #0f172a con cristal */
+  --panel-2:   #111827;
+  --hover:     rgba(30, 41, 59, 0.85);
+  --border:    rgba(30, 41, 59, 0.9);    /* #1e293b */
+  --border-2:  rgba(56, 189, 248, 0.28);
+  --text:      #e2e8f0;
+  --text-dim:  #94a3b8;
+  --text-mut:  #64748b;
+
+  --cyan:      #38bdf8;
+  --violet:    #00d2ff;                   /* el segundo cian: degradados vivos */
+
+  --green:     #34d399;
+  --red:       #f2545b;                   /* rojo neón, apagado */
+  --amber:     #facc15;                   /* dorado titanio */
+  --pink:      #f472b6;
+
+  --on-accent: #041220;
+  --scrim:     3, 6, 14;
+  --shadow:    0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.7);
+  --radius:    12px;
+  --radius-sm: 9px;
+  --radius-xs: 8px;
+
+  /* Los tokens globales que usa el Agent OS embebido (agentos.css). */
+  --bg-card:        var(--panel);
+  --bg-card-hover:  var(--hover);
+  --text-secondary: var(--text-dim);
+  --text-muted:     var(--text-mut);
+  --border-hover:   var(--border-2);
+  --accent:         var(--cyan);
+  --radius-lg:      16px;
+
+  --vidrio: blur(14px) saturate(140%);
+  --titular: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+}
+
+.helm {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  /* La luz: dos halos de cian muy bajos arriba, sobre el azul medianoche. */
+  background:
+    radial-gradient(1100px 620px at 18% -12%, rgba(56, 189, 248, 0.09), transparent 60%),
+    radial-gradient(900px 560px at 100% 0%, rgba(0, 210, 255, 0.05), transparent 55%),
+    var(--bg);
+  background-attachment: fixed;
+}
+.helm h1, .helm h2, .helm h3, .helm-kpi .val, .helm-top h1 { font-family: var(--titular); }
+
+/* Cristal en las superficies. */
+.helm-card, .helm-panel, .helm-kpi, .helm-plugin, .helm-modal, .helm-drawer,
+.helm-kcard, .helm-tabs, .helm-search, .helm-onb-section, .ag-card {
+  -webkit-backdrop-filter: var(--vidrio);
+  backdrop-filter: var(--vidrio);
+}
+.helm-modal, .helm-drawer { background: rgba(15, 23, 42, 0.94); }
+.helm-side {
+  background: linear-gradient(180deg, rgba(10, 15, 29, 0.92), rgba(7, 11, 20, 0.92));
+  -webkit-backdrop-filter: var(--vidrio);
+  backdrop-filter: var(--vidrio);
+}
+
+/* El botón primario, en cian con un halo corto. */
+.helm .helm-btn.primary {
+  background: linear-gradient(135deg, var(--cyan), var(--violet));
+  color: var(--on-accent);
+  border-color: transparent;
+  box-shadow: 0 8px 22px -10px rgba(56, 189, 248, 0.75);
+  transition: transform var(--t-rapido, 120ms) var(--ease, ease), box-shadow var(--t-medio, 200ms) var(--ease, ease);
+}
+.helm .helm-btn.primary:hover { transform: translateY(-1px); box-shadow: 0 12px 28px -10px rgba(56, 189, 248, 0.9); }
+
+/* Las tarjetas que se pulsan responden al pasar por encima. */
+.helm-kcard:hover, .helm-plugin:hover, .ag-card:hover { border-color: var(--border-2); }
