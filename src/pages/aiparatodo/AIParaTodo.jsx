@@ -1,34 +1,33 @@
 // AI PARA TODO — s4sf.net/aiparatodo
 //
-// La comunidad gratuita de Alex: sustituye a la «Charla gratis» de la bio.
+// La comunidad gratuita de Alex, desde el botón principal de la bio.
 //
-//   /aiparatodo                      portada: qué es, fundador, llamada y la
-//                                    puerta (nombre y correo para entrar)
-//   /aiparatodo/comunidad            pantalla 1: las casillas (Skills, News,
-//                                    Guía completa de Claude)
-//   /aiparatodo/skills               el foro de skills, por temas
-//   /aiparatodo/skills/<post>        un post, con cada skill, su instalación
-//                                    y prompts de ejemplo para copiar
+//   /aiparatodo                              portada: título, sigue al creador,
+//                                            qué hay dentro y las 4 secciones
+//   /aiparatodo/<seccion>                    el foro de la sección: temas e hilos
+//   /aiparatodo/<seccion>/<tema>             un tema
+//   /aiparatodo/<seccion>/<tema>/<hilo>      un hilo
 //
-// Todo lo de dentro pide haber dejado el correo (se guarda en el navegador,
-// como la bio). El alta entra en el CRM del perfil silvestre, pipeline
-// «Página de inicio», con la nota de dónde vino.
+// Todo se recorre sin dejar nada hasta la lista de hilos, como un foro abierto.
+// LEER un hilo pide nombre y correo (una vez; se recuerda en el navegador). El
+// alta entra en el CRM del perfil silvestre, pipeline «Página de inicio».
 import { useEffect, useState } from 'react'
-import { Routes, Route, Link, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Routes, Route, Link, Navigate, useParams } from 'react-router-dom'
 import {
-  ArrowRight, ArrowLeft, Lock, Instagram, Youtube, PhoneCall, Library, Users, Sparkles,
-  Newspaper, BookOpen, Copy, Check, Github, Terminal, ChevronRight, Palette, MessageSquare,
+  ArrowRight, ArrowLeft, Lock, Instagram, Sparkles, Newspaper, BookOpen, Users,
+  Copy, Check, Github, Terminal, ChevronRight, MessageSquare, Hash,
 } from 'lucide-react'
 import { useCabeceraPublica } from '../inicio/cabecera.js'
 import { altaLead } from '../inicio/crm.js'
 import { track } from '../inicio/socio/track.js'
 import mascara from '../inicio/mascara.txt?raw'
 import aiArte from '../inicio/ai.txt?raw'
-import { FUNDADOR, LLAMADA, ZONAS, TEMAS, POSTS, postPorSlug } from './contenido.js'
+import { FUNDADOR, SECCIONES, seccionPorClave, postPorSlug, hilosDe, CAPITULOS } from './contenido.js'
 import './aip.css'
 
 const LLAVE = 's4sf.aiparatodo'
 const EVENTO = 'Entró en AI para todo (comunidad)'
+const ICONOS = { skills: Sparkles, news: Newspaper, comunidad: Users, guia: BookOpen }
 
 function accesoGuardado() {
   try { return JSON.parse(localStorage.getItem(LLAVE) || 'null') } catch { return null }
@@ -38,7 +37,7 @@ export default function AIParaTodo() {
   const [acceso, setAcceso] = useState(accesoGuardado)
   useCabeceraPublica({
     titulo: 'AI para todo — la comunidad de IA de Alex Silvestre',
-    descripcion: 'Skills, guías y novedades de IA en español, gratis. Deja tu correo y entra.',
+    descripcion: 'Skills para Claude, noticias, comunidad y la guía completa de Claude. En español y gratis.',
     imagen: '/inicio/og.jpg', colorBarra: '#050203',
   })
   useEffect(() => {
@@ -49,18 +48,15 @@ export default function AIParaTodo() {
     return () => l.remove()
   }, [])
 
-  const dentro = (el) => (acceso ? el : <Navigate to="/aiparatodo#entrar" replace />)
-
   return (
     <div className="aip">
       <Fondo />
-      <Cabecera acceso={acceso} />
+      <Cabecera />
       <Routes>
-        <Route index element={<Portada acceso={acceso} setAcceso={setAcceso} />} />
-        <Route path="comunidad" element={dentro(<Comunidad acceso={acceso} />)} />
-        <Route path="skills" element={dentro(<Foro />)} />
-        <Route path="skills/:tema" element={dentro(<Foro />)} />
-        <Route path="skills/:tema/:slug" element={dentro(<Post />)} />
+        <Route index element={<Portada />} />
+        <Route path=":seccion" element={<Foro />} />
+        <Route path=":seccion/:tema" element={<Foro />} />
+        <Route path=":seccion/:tema/:slug" element={<Hilo acceso={acceso} setAcceso={setAcceso} />} />
         <Route path="*" element={<Navigate to="/aiparatodo" replace />} />
       </Routes>
       <Pie />
@@ -82,7 +78,7 @@ function Fondo() {
   )
 }
 
-function Cabecera({ acceso }) {
+function Cabecera() {
   return (
     <header className="aip-cab">
       <Link to="/aiparatodo" className="aip-logo">
@@ -90,104 +86,156 @@ function Cabecera({ acceso }) {
         <span>para todo</span>
       </Link>
       <nav className="aip-nav">
-        <Link to={acceso ? '/aiparatodo/comunidad' : '/aiparatodo#entrar'}><Users size={15} /> Comunidad</Link>
-        <Link to={acceso ? '/aiparatodo/skills' : '/aiparatodo#entrar'}><Library size={15} /> Bóveda</Link>
-        <a href={FUNDADOR.instagram} target="_blank" rel="noopener noreferrer"><Instagram size={15} /> Fundador</a>
-        <a className="aip-nav-cta" href={LLAMADA} onClick={() => track('clic_cta', { donde: 'aip-nav-llamada' })}><PhoneCall size={15} /> Agenda llamada</a>
+        {SECCIONES.map(s => {
+          const Icono = ICONOS[s.key]
+          return <Link key={s.key} to={`/aiparatodo/${s.key}`}><Icono size={15} /> {s.key === 'guia' ? 'Guía' : s.titulo}</Link>
+        })}
+        <a className="aip-nav-cta" href={FUNDADOR.instagram} target="_blank" rel="noopener noreferrer"><Instagram size={15} /> Sigue al creador</a>
       </nav>
     </header>
   )
 }
 
-// ── Portada ─────────────────────────────────────────────────────────────────
-function Portada({ acceso, setAcceso }) {
-  const navigate = useNavigate()
+// ── Portada: una frase, el creador, qué hay y las cuatro puertas ───────────
+function Portada() {
   useEffect(() => { track('vista_pagina', { pagina: 'aiparatodo' }) }, [])
-  useEffect(() => {
-    if (window.location.hash === '#entrar') setTimeout(() => document.getElementById('entrar')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
-  }, [])
-
   return (
-    <main className="aip-main">
-      <section className="aip-hero">
-        <p className="aip-kicker"><span className="aip-punto" /> root@s4sf:~$ ./aiparatodo --gratis</p>
-        <h1>Toda la IA que te sirve.<br /><em>En español y gratis.</em></h1>
-        <p className="aip-sub">
-          Skills para Claude, guías y novedades explicadas sin humo, para que la IA trabaje en tu negocio
-          y no solo en tus conversaciones. Deja tu correo y entras.
-        </p>
-        <div className="aip-hero-acc">
-          {acceso
-            ? <button className="aip-btn" onClick={() => navigate('/aiparatodo/comunidad')}>Entrar en la comunidad <ArrowRight size={18} /></button>
-            : <a className="aip-btn" href="#entrar" onClick={(e) => { e.preventDefault(); document.getElementById('entrar')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }}>Quiero entrar <ArrowRight size={18} /></a>}
-          <a className="aip-btn sec" href={LLAMADA}><PhoneCall size={17} /> Agenda una llamada</a>
-        </div>
-      </section>
-
-      <section className="aip-sec">
-        <h2 className="aip-h2"><span>01</span> Qué hay dentro</h2>
-        <div className="aip-zonas">
-          {ZONAS.map(z => <Zona key={z.key} z={z} bloqueada={!acceso} />)}
-        </div>
-      </section>
-
-      <section className="aip-sec aip-dos">
-        <article className="aip-card aip-fundador">
-          <img src={FUNDADOR.foto} alt={FUNDADOR.nombre} loading="lazy" width="1100" height="1338" />
-          <div>
-            <h2 className="aip-h2 sin"><span>02</span> Sigue a nuestro fundador</h2>
-            <p><b>{FUNDADOR.nombre}</b> monta sistemas con IA para negocios digitales y enseña cómo, paso a paso y con datos.</p>
-            <div className="aip-fila">
-              <a className="aip-btn sec" href={FUNDADOR.instagram} target="_blank" rel="noopener noreferrer"><Instagram size={16} /> {FUNDADOR.handle}</a>
-              <a className="aip-btn sec" href={FUNDADOR.youtube} target="_blank" rel="noopener noreferrer"><Youtube size={16} /> YouTube</a>
-            </div>
-          </div>
-        </article>
-        <article className="aip-card aip-llamada">
-          <h2 className="aip-h2 sin"><span>03</span> Agenda una llamada</h2>
-          <p>¿Tienes un negocio y quieres que la IA trabaje en él? En 30 minutos miramos dónde se te escapa el tiempo y el dinero.</p>
-          <a className="aip-btn" href={LLAMADA} onClick={() => track('clic_cta', { donde: 'aip-llamada' })}>Reservar mi llamada <ArrowRight size={18} /></a>
-        </article>
-      </section>
-
-      <section className="aip-sec">
-        <article className="aip-card aip-boveda">
-          <Library size={22} />
-          <div>
-            <h2 className="aip-h2 sin"><span>04</span> La bóveda</h2>
-            <p>Todo lo que publicamos queda aquí, ordenado por temas como un foro: cada skill con qué hace, cómo se instala y prompts listos para copiar.</p>
-          </div>
-        </article>
-      </section>
-
-      {!acceso && <Puerta setAcceso={setAcceso} />}
+    <main className="aip-main aip-portada">
+      <h1>IA sin humo.</h1>
+      <a
+        className="aip-btn" href={FUNDADOR.instagram} target="_blank" rel="noopener noreferrer"
+        onClick={() => track('clic_cta', { donde: 'aip-creador' })}
+      >
+        <Instagram size={18} /> Sigue a nuestro creador
+      </a>
+      <p className="aip-sub">
+        Skills para Claude, las novedades que importan, una comunidad para preguntar y enseñar lo que
+        montas, y la guía completa de Claude. En español y gratis. Entra donde quieras: para leer un
+        hilo solo te pedimos el correo.
+      </p>
+      <div className="aip-zonas">
+        {SECCIONES.map(s => {
+          const Icono = ICONOS[s.key]
+          const n = hilosDe(s.key).length
+          return (
+            <Link key={s.key} className="aip-zona" to={`/aiparatodo/${s.key}`}>
+              <span className="aip-zona-ico"><Icono size={22} /></span>
+              <h3>{s.titulo}</h3>
+              <p>{s.desc}</p>
+              <span className="aip-zona-pie">{s.temas.length} tema{s.temas.length === 1 ? '' : 's'} · {n} hilo{n === 1 ? '' : 's'} <ArrowRight size={14} /></span>
+            </Link>
+          )
+        })}
+      </div>
     </main>
   )
 }
 
-function Zona({ z, bloqueada }) {
-  const Icono = { skills: Sparkles, news: Newspaper, guia: BookOpen }[z.key] || Sparkles
-  const cuerpo = (
-    <>
-      <span className="aip-zona-ico"><Icono size={22} /></span>
-      <h3>{z.titulo}</h3>
-      <p>{z.desc}</p>
-      <span className="aip-zona-pie">
-        {!z.activa ? <span className="aip-pronto">Próximamente</span>
-          : bloqueada ? <><Lock size={13} /> Deja tu correo</> : <>Entrar <ArrowRight size={14} /></>}
-      </span>
-    </>
+// ── El foro de una sección ──────────────────────────────────────────────────
+function Foro() {
+  const { seccion: sk, tema } = useParams()
+  const s = seccionPorClave(sk)
+  useEffect(() => { if (s) track('vista_pagina', { pagina: 'aiparatodo-foro', seccion: sk, tema }) }, [s, sk, tema])
+  if (!s) return <Navigate to="/aiparatodo" replace />
+  const t = tema ? s.temas.find(x => x.key === tema) : null
+  if (tema && !t) return <Navigate to={`/aiparatodo/${sk}`} replace />
+  const hilos = hilosDe(sk, tema)
+
+  return (
+    <main className="aip-main">
+      <nav className="aip-migas">
+        <Link to="/aiparatodo">Inicio</Link><ChevronRight size={14} />
+        {t ? <><Link to={`/aiparatodo/${sk}`}>{s.titulo}</Link><ChevronRight size={14} /><span>{t.nombre}</span></> : <span>{s.titulo}</span>}
+      </nav>
+      <section className="aip-sec">
+        <h1 className="aip-h1">{t ? t.nombre : s.titulo}</h1>
+        <p className="aip-sub">{t ? t.desc : s.desc}</p>
+
+        <div className={'aip-foro' + (s.temas.length > 1 ? '' : ' sin-temas')}>
+          {s.temas.length > 1 && (
+            <aside className="aip-temas">
+              <Link className={'aip-tema' + (!tema ? ' on' : '')} to={`/aiparatodo/${sk}`}><MessageSquare size={15} /> Todos</Link>
+              {s.temas.map(x => (
+                <Link key={x.key} className={'aip-tema' + (tema === x.key ? ' on' : '')} to={`/aiparatodo/${sk}/${x.key}`}>
+                  <Hash size={15} /> {x.nombre} <b>{hilosDe(sk, x.key).length}</b>
+                </Link>
+              ))}
+            </aside>
+          )}
+
+          <div className="aip-hilos">
+            <div className="aip-hilos-cab"><span>Tema</span><span>Hilo</span><span /></div>
+            {hilos.map(h => (
+              <Link key={h.slug} className="aip-hilo" to={`/aiparatodo/${sk}/${h.tema}/${h.slug}`}>
+                <span className="aip-etiqueta">{s.temas.find(x => x.key === h.tema)?.nombre}</span>
+                <div>
+                  <b>{h.n ? `${h.n} · ` : ''}{h.titulo}</b>
+                  {h.resumen && <small>{h.resumen}</small>}
+                  <small className="aip-meta">{FUNDADOR.nombre}{h.fecha ? ` · ${new Date(h.fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}` : ''}{h.lectura ? ` · ${h.lectura}` : ''}</small>
+                </div>
+                <span className="aip-candado">{h.pronto ? <span className="aip-pronto">pronto</span> : <Lock size={15} />}</span>
+              </Link>
+            ))}
+            {hilos.length === 0 && (
+              <div className="aip-hilo vacio">
+                <span className="aip-etiqueta">{t ? t.nombre : s.titulo}</span>
+                <div><b>Los primeros hilos están en camino</b><small>Sigue a nuestro creador para enterarte cuando se abran.</small></div>
+                <span />
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+    </main>
   )
-  if (!z.activa) return <div className="aip-zona off">{cuerpo}</div>
-  return <Link className="aip-zona" to={bloqueada ? '/aiparatodo#entrar' : z.ruta}>{cuerpo}</Link>
 }
 
-// ── La puerta: nombre y correo ──────────────────────────────────────────────
+// ── Un hilo: detrás del correo ──────────────────────────────────────────────
+function Hilo({ acceso, setAcceso }) {
+  const { seccion: sk, tema, slug } = useParams()
+  const s = seccionPorClave(sk)
+  const h = hilosDe(sk, tema).find(x => x.slug === slug)
+  const p = postPorSlug(slug)
+  useEffect(() => { if (h && acceso) track('vista_pagina', { pagina: 'aiparatodo-hilo', slug }) }, [h, acceso, slug])
+  if (!s || !h) return <Navigate to={`/aiparatodo/${sk || ''}`} replace />
+  const t = s.temas.find(x => x.key === tema)
+
+  return (
+    <main className="aip-main aip-post">
+      <nav className="aip-migas">
+        <Link to="/aiparatodo">Inicio</Link><ChevronRight size={14} />
+        <Link to={`/aiparatodo/${sk}`}>{s.titulo}</Link><ChevronRight size={14} />
+        {s.temas.length > 1 && <><Link to={`/aiparatodo/${sk}/${tema}`}>{t?.nombre}</Link><ChevronRight size={14} /></>}
+        <span>{h.titulo}</span>
+      </nav>
+
+      <header className="aip-post-cab">
+        <p className="aip-kicker"><span className="aip-punto" /> {t?.nombre}{p ? ` · ${p.skills.length} skills · ${p.lectura}` : ''}</p>
+        <h1 className="aip-h1">{p ? p.gancho : h.titulo}</h1>
+        {p && <p className="aip-sub">{p.resumen}</p>}
+      </header>
+
+      {!acceso ? <Puerta setAcceso={setAcceso} />
+        : p ? <CuerpoPost p={p} />
+          : (
+            <section className="aip-card aip-pronto-card">
+              <p>Este {sk === 'guia' ? 'capítulo' : 'hilo'} se publica pronto. Te avisamos al correo que dejaste.</p>
+              {sk === 'guia' && (
+                <ol>{CAPITULOS.map(c => <li key={c.slug} className={c.slug === slug ? 'on' : ''}><span>{c.n}</span> {c.titulo}</li>)}</ol>
+              )}
+            </section>
+          )}
+
+      <Link className="aip-volver" to={`/aiparatodo/${sk}`}><ArrowLeft size={16} /> Volver a {s.titulo}</Link>
+    </main>
+  )
+}
+
+// ── La puerta: nombre y correo para leer ────────────────────────────────────
 function Puerta({ setAcceso }) {
   const [f, setF] = useState({ nombre: '', email: '' })
   const [estado, setEstado] = useState(null)
   const [error, setError] = useState(null)
-  const navigate = useNavigate()
 
   async function entrar(e) {
     e.preventDefault()
@@ -198,123 +246,32 @@ function Puerta({ setAcceso }) {
       try { localStorage.setItem(LLAVE, JSON.stringify(acceso)) } catch { /* modo incógnito */ }
       track('lead', { donde: 'aiparatodo' })
       setAcceso(acceso)
-      navigate('/aiparatodo/comunidad')
     } catch (err) {
       setError(err.message); setEstado(null)
     }
   }
 
   return (
-    <section className="aip-sec" id="entrar">
-      <form className="aip-card aip-puerta" onSubmit={entrar}>
-        <p className="aip-kicker"><Lock size={13} /> acceso restringido</p>
-        <h2>Deja tu correo y <em>entra</em></h2>
-        <p>Nombre y correo, nada más. Te avisamos cuando haya skills y guías nuevas.</p>
-        <div className="aip-campos">
-          <input placeholder="Tu nombre" value={f.nombre} maxLength={80} autoComplete="given-name" onChange={e => setF(s => ({ ...s, nombre: e.target.value }))} />
-          <input type="email" placeholder="Tu correo" required value={f.email} maxLength={160} autoComplete="email" inputMode="email" onChange={e => setF(s => ({ ...s, email: e.target.value }))} />
-          <button className="aip-btn" disabled={estado === 'enviando' || !f.email.trim()}>
-            {estado === 'enviando' ? 'Abriendo…' : <>Entrar <ArrowRight size={18} /></>}
-          </button>
-        </div>
-        {error && <p className="aip-error">{error}</p>}
-      </form>
-    </section>
+    <form className="aip-card aip-puerta" onSubmit={entrar}>
+      <p className="aip-kicker"><Lock size={13} /> contenido para miembros</p>
+      <h2>Deja tu correo para leerlo</h2>
+      <p>Una sola vez: con tu nombre y tu correo se abren todos los hilos. Te avisamos cuando haya nuevos.</p>
+      <div className="aip-campos">
+        <input placeholder="Tu nombre" value={f.nombre} maxLength={80} autoComplete="given-name" onChange={e => setF(s => ({ ...s, nombre: e.target.value }))} />
+        <input type="email" placeholder="Tu correo" required value={f.email} maxLength={160} autoComplete="email" inputMode="email" onChange={e => setF(s => ({ ...s, email: e.target.value }))} />
+        <button className="aip-btn" disabled={estado === 'enviando' || !f.email.trim()}>
+          {estado === 'enviando' ? 'Abriendo…' : <>Leer <ArrowRight size={18} /></>}
+        </button>
+      </div>
+      {error && <p className="aip-error">{error}</p>}
+    </form>
   )
 }
 
-// ── Pantalla 1: las casillas ────────────────────────────────────────────────
-function Comunidad({ acceso }) {
-  useEffect(() => { track('vista_pagina', { pagina: 'aiparatodo-comunidad' }) }, [])
+// ── El cuerpo de un post de skills ──────────────────────────────────────────────────────────────
+function CuerpoPost({ p }) {
   return (
-    <main className="aip-main">
-      <section className="aip-sec">
-        <p className="aip-kicker"><span className="aip-punto" /> acceso concedido{acceso?.nombre ? ` · ${acceso.nombre}` : ''}</p>
-        <h1 className="aip-h1">Bienvenido a <em>AI para todo</em></h1>
-        <p className="aip-sub">Elige por dónde empezar. Vamos abriendo zonas nuevas cada pocas semanas.</p>
-        <div className="aip-zonas grandes">
-          {ZONAS.map(z => <Zona key={z.key} z={z} bloqueada={false} />)}
-        </div>
-      </section>
-    </main>
-  )
-}
-
-// ── El foro de skills ───────────────────────────────────────────────────────
-function Foro() {
-  const { tema: temaUrl } = useParams()
-  const tema = temaUrl || 'todos'
-  const posts = POSTS.filter(p => tema === 'todos' || p.tema === tema)
-  const nombreTema = (k) => TEMAS.find(t => t.key === k)?.nombre || k
-
-  return (
-    <main className="aip-main">
-      <nav className="aip-migas">
-        <Link to="/aiparatodo/comunidad">Comunidad</Link><ChevronRight size={14} /><span>Skills</span>
-      </nav>
-      <section className="aip-sec">
-        <h1 className="aip-h1">Skills</h1>
-        <p className="aip-sub">Habilidades que se le instalan a Claude para que haga un trabajo concreto, y bien. Por temas.</p>
-
-        <div className="aip-foro">
-          <aside className="aip-temas">
-            <Link className={'aip-tema' + (tema === 'todos' ? ' on' : '')} to="/aiparatodo/skills"><MessageSquare size={15} /> Todos los temas</Link>
-            {TEMAS.map(t => (
-              t.activo
-                ? <Link key={t.key} className={'aip-tema' + (tema === t.key ? ' on' : '')} to={`/aiparatodo/skills/${t.key}`}>
-                    <Palette size={15} /> {t.nombre} <b>{POSTS.filter(p => p.tema === t.key).length}</b>
-                  </Link>
-                : <span key={t.key} className="aip-tema off" title={t.desc}><Palette size={15} /> {t.nombre} <i>pronto</i></span>
-            ))}
-          </aside>
-
-          <div className="aip-hilos">
-            <div className="aip-hilos-cab"><span>Tema</span><span>Hilo</span><span>Skills</span></div>
-            {posts.map(p => (
-              <Link key={p.slug} className="aip-hilo" to={`/aiparatodo/skills/${p.tema}/${p.slug}`}>
-                <span className="aip-etiqueta">{nombreTema(p.tema)}</span>
-                <div>
-                  <b>{p.titulo}</b>
-                  <small>{p.resumen}</small>
-                  <small className="aip-meta">{FUNDADOR.nombre} · {new Date(p.fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} · {p.lectura}</small>
-                </div>
-                <span className="aip-num">{p.skills.length}</span>
-              </Link>
-            ))}
-            {TEMAS.filter(t => !t.activo && (tema === 'todos')).map(t => (
-              <div key={t.key} className="aip-hilo off">
-                <span className="aip-etiqueta">{t.nombre}</span>
-                <div><b>{t.desc}</b><small>Estamos preparando este tema.</small></div>
-                <span className="aip-pronto">pronto</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-    </main>
-  )
-}
-
-// ── Un post ─────────────────────────────────────────────────────────────────
-function Post() {
-  const { slug } = useParams()
-  const p = postPorSlug(slug)
-  useEffect(() => { if (p) track('vista_pagina', { pagina: 'aiparatodo-post', slug }) }, [p, slug])
-  if (!p) return <Navigate to="/aiparatodo/skills" replace />
-
-  return (
-    <main className="aip-main aip-post">
-      <nav className="aip-migas">
-        <Link to="/aiparatodo/comunidad">Comunidad</Link><ChevronRight size={14} />
-        <Link to="/aiparatodo/skills">Skills</Link><ChevronRight size={14} />
-        <span>{p.titulo}</span>
-      </nav>
-
-      <header className="aip-post-cab">
-        <p className="aip-kicker"><span className="aip-punto" /> {TEMAS.find(t => t.key === p.tema)?.nombre} · {p.skills.length} skills · {p.lectura}</p>
-        <h1 className="aip-h1">{p.gancho}</h1>
-        <p className="aip-sub">{p.resumen}</p>
-      </header>
+    <>
 
       <section className="aip-card aip-indice">
         <h2>Qué vas a encontrar</h2>
@@ -365,8 +322,7 @@ function Post() {
         </table>
       </section>
 
-      <Link className="aip-volver" to="/aiparatodo/skills"><ArrowLeft size={16} /> Volver al foro</Link>
-    </main>
+    </>
   )
 }
 

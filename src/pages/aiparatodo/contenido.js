@@ -18,22 +18,51 @@ export const FUNDADOR = {
   youtube: 'https://www.youtube.com/@silvesttre-ai',
 }
 
-// Agenda una llamada: la auditoría de /empresas.
-export const LLAMADA = '/empresas#auditoria'
-
-// Las casillas de la pantalla de entrada.
-export const ZONAS = [
-  { key: 'skills', titulo: 'Skills', desc: 'El foro de skills para Claude, por temas: diseño, contenido, estrategia…', ruta: '/aiparatodo/skills', activa: true },
-  { key: 'news', titulo: 'News', desc: 'Lo nuevo de la IA que de verdad cambia cómo trabajas. Sin humo.', activa: false },
-  { key: 'guia', titulo: 'Guía completa de Claude', desc: 'De cero a dirigir Claude: proyectos, skills, conectores y agentes.', activa: false },
+// Las cuatro secciones. Todas se recorren sin dejar nada: se ven los temas y
+// los hilos, como un foro. Lo que pide el correo es LEER un hilo.
+export const SECCIONES = [
+  {
+    key: 'skills', titulo: 'Skills', desc: 'Habilidades que se le instalan a Claude para que haga un trabajo concreto, y bien.',
+    temas: [
+      { key: 'diseno', nombre: 'Diseño', desc: 'Webs, pósters, apps y paletas sin saber diseñar' },
+      { key: 'contenido', nombre: 'Contenido', desc: 'Guiones, reels y copy con tu voz' },
+      { key: 'estrategia', nombre: 'Estrategia', desc: 'Oferta, embudo y números del negocio' },
+      { key: 'automatizacion', nombre: 'Automatización', desc: 'Que las tareas repetidas se hagan solas' },
+    ],
+  },
+  {
+    key: 'news', titulo: 'News', desc: 'Lo nuevo de la IA que de verdad cambia cómo trabajas, contado sin humo.',
+    temas: [
+      { key: 'claude', nombre: 'Claude', desc: 'Novedades de Claude y de Anthropic' },
+      { key: 'modelos', nombre: 'Modelos', desc: 'Qué modelo usar para qué' },
+      { key: 'herramientas', nombre: 'Herramientas', desc: 'Lo que merece la pena probar' },
+    ],
+  },
+  {
+    key: 'comunidad', titulo: 'Comunidad', desc: 'Dudas, lo que has montado y lo que te ha funcionado. Entre todos.',
+    temas: [
+      { key: 'presentate', nombre: 'Preséntate', desc: 'Quién eres y qué quieres montar' },
+      { key: 'dudas', nombre: 'Dudas', desc: 'Pregunta lo que sea' },
+      { key: 'montado', nombre: 'Lo que he montado', desc: 'Enseña tus sistemas y resultados' },
+    ],
+  },
+  {
+    key: 'guia', titulo: 'Guía completa de Claude', desc: 'De cero a dirigir Claude, capítulo a capítulo.',
+    temas: [
+      { key: 'capitulos', nombre: 'Capítulos', desc: 'La guía, en orden' },
+    ],
+  },
 ]
+export const seccionPorClave = (k) => SECCIONES.find(s => s.key === k)
 
-export const TEMAS = [
-  { key: 'diseno', nombre: 'Diseño', desc: 'Webs, pósters, apps y paletas sin saber diseñar', activo: true },
-  { key: 'contenido', nombre: 'Contenido', desc: 'Guiones, reels y copy con tu voz', activo: false },
-  { key: 'estrategia', nombre: 'Estrategia', desc: 'Oferta, embudo y números del negocio', activo: false },
-  { key: 'automatizacion', nombre: 'Automatización', desc: 'Que las tareas repetidas se hagan solas', activo: false },
-]
+// Los capítulos de la guía: el índice ya se ve; el texto llega pronto.
+export const CAPITULOS = [
+  { slug: 'empieza-aqui', titulo: 'Empieza aquí: qué es Claude y cómo pensar con él' },
+  { slug: 'proyectos', titulo: 'Proyectos: que Claude conozca tu negocio' },
+  { slug: 'skills', titulo: 'Skills: enséñale a Claude a trabajar como tú' },
+  { slug: 'conectores', titulo: 'Conectores: Claude con tus herramientas' },
+  { slug: 'claude-code', titulo: 'Claude Code y agentes: que trabaje solo' },
+].map((c, i) => ({ ...c, n: String(i + 1).padStart(2, '0'), seccion: 'guia', tema: 'capitulos', pronto: true }))
 
 const REPO_SKILLS = 'https://github.com/anthropics/skills'
 const copiaSuelta = (ruta, nombre) =>
@@ -42,6 +71,7 @@ const copiaSuelta = (ruta, nombre) =>
 export const POSTS = [
   {
     slug: '5-skills-diseno-claude',
+    seccion: 'skills',
     tema: 'diseno',
     titulo: '5 skills de diseño para Claude',
     gancho: 'Diseña sin saber diseñar',
@@ -143,3 +173,7 @@ export const POSTS = [
 ]
 
 export const postPorSlug = (slug) => POSTS.find(p => p.slug === slug)
+
+// Los hilos de una sección (y de un tema): publicados y anunciados.
+export const hilosDe = (seccion, tema) => [...POSTS, ...CAPITULOS]
+  .filter(h => h.seccion === seccion && (!tema || h.tema === tema))
