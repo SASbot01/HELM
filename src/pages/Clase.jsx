@@ -188,6 +188,10 @@ export default function Clase() {
           </a>
         </div>
 
+        {/* Fijo detrás de todo en escritorio (position: fixed no depende de
+            dónde esté en el HTML); en el móvil, justo debajo de los botones. */}
+        <FondoHacker />
+
         {/* Con el correo ya dejado, la sala de la clase va aquí abajo. */}
         {acceso && <PuertaClase acceso={acceso} setAcceso={setAcceso} />}
 
@@ -195,8 +199,6 @@ export default function Clase() {
           © {new Date().getFullYear()} Alex Silvestre · IA aplicada
         </p>
       </main>
-      {/* Detrás de todo en escritorio; al final de la página en el móvil. */}
-      <FondoHacker />
     </div>
   )
 }
