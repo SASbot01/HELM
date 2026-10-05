@@ -283,6 +283,7 @@ a.aip-hilo:hover .aip-candado { color: var(--rosa); }
 .aip-nn-banner .aip-kicker { margin-bottom: 10px; color: var(--rosa); }
 @media (max-width: 640px) { .aip-nn-banner { grid-template-columns: 1fr; padding: 16px; } .aip-nn-banner img { max-width: 220px; margin: 0 auto; } }
 .aip-sec .aip-nn-banner { margin: 22px 0 6px; }
+.aip-portada .aip-nn-banner { max-width: 880px; margin: 0 auto 30px; }
 
 .aip-nn-cab { display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: center; }
 .aip-nn-3d { width: 100%; height: auto; filter: drop-shadow(0 34px 34px rgba(0, 0, 0, .6)) drop-shadow(0 0 46px rgba(166, 43, 70, .35)); animation: aip-flota 5s ease-in-out infinite alternate; }

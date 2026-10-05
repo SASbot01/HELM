@@ -140,6 +140,8 @@ function Portada() {
   return (
     <main className="aip-main aip-portada">
       <h1>IA sin humo.</h1>
+      {/* Lo primero que se ve: la guía gratuita en PDF. */}
+      <BannerNoNegociables donde="portada" />
       <a
         className="aip-btn" href={FUNDADOR.instagram} target="_blank" rel="noopener noreferrer"
         onClick={() => track('clic_cta', { donde: 'aip-creador' })}
@@ -168,7 +170,6 @@ function Portada() {
           )
         })}
       </div>
-      <BannerNoNegociables donde="portada" />
     </main>
   )
 }
