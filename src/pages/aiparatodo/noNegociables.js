@@ -2,7 +2,11 @@
 //
 // El PDF está en public/aiparatodo/. La página del hilo enseña el índice a
 // todo el mundo y, con los datos dejados, los 8 puntos enteros y la descarga.
-// Si se cambia el PDF, se cambia esto a la vez: es el mismo texto.
+// Es el mismo texto que el PDF salvo tres pasos que aquí ya van corregidos
+// según la documentación de Claude Code de octubre de 2026 y que el PDF aún
+// dice a la antigua: 05 (/agents ya no crea subagentes), 06 (/hooks ya solo
+// los enseña) y 07 (por encima de Opus está ahora Fable). Al regenerar el PDF,
+// copiar estos tres de aquí.
 
 export const NN_PDF = '/aiparatodo/mis-8-no-negociables-con-claude.pdf'
 export const NN_PORTADA_3D = '/aiparatodo/no-negociables-3d.webp'
@@ -70,7 +74,7 @@ export const NN_PUNTOS = [
     pasos: [
       'Separa tu trabajo en tareas que no necesiten el resultado de otra.',
       'Pídele a Claude que las haga «con subagentes en paralelo».',
-      'Para crear subagentes fijos (un revisor, un investigador), usa el comando `/agents`.',
+      'Para crear subagentes fijos (un revisor, un investigador), pídele a Claude que te escriba uno en `.claude/agents/` (o en `~/.claude/agents/` para usarlo en todos tus proyectos).',
     ],
     donde: 'code.claude.com/docs/en/sub-agents',
     ojo: 'Varios agentes a la vez gastan más tokens. Úsalos para tareas independientes, no para todo.',
@@ -82,7 +86,7 @@ export const NN_PUNTOS = [
     ejemplo: 'Cuando Claude termina de tocar una función de mi app, un hook lanza Playwright, que abre la app en un navegador de verdad, la prueba como un usuario y busca errores.',
     pasos: [
       'Piensa en algo que siempre haces después de un cambio: probar, ordenar el código, avisar.',
-      'En Claude Code escribe `/hooks` y elige el momento (por ejemplo, al terminar una tarea).',
+      'Pídele a Claude que te escriba el hook en `.claude/settings.json` y elige el momento (por ejemplo, al terminar una tarea). Con `/hooks` compruebas que está y qué ejecuta.',
       'Para pruebas automáticas en el navegador, instala Playwright y pide a Claude que te escriba las pruebas.',
     ],
     donde: 'code.claude.com/docs/en/hooks · playwright.dev',
@@ -91,8 +95,8 @@ export const NN_PUNTOS = [
   {
     n: '07', nombre: 'El modelo correcto', titulo: 'El modelo correcto (y un plan B)',
     frase: 'No uses un camión para ir a por el pan.',
-    que: 'Claude tiene tres familias de modelos. Opus, el más potente, para lo pesado: diseñar un sistema, un error difícil. Sonnet para el trabajo del día a día. Haiku, el más rápido y barato, para tareas simples y repetitivas.',
-    ejemplo: 'Planifico la arquitectura con Opus, construyo con Sonnet y los resúmenes o clasificaciones van con Haiku.',
+    que: 'Claude tiene varias familias de modelos. Fable, el más capaz, y Opus para lo pesado: diseñar un sistema, un error difícil. Sonnet para el trabajo del día a día. Haiku, el más rápido y barato, para tareas simples y repetitivas.',
+    ejemplo: 'Planifico la arquitectura con el modelo más capaz, construyo con Sonnet y los resúmenes o clasificaciones van con Haiku.',
     pasos: [
       'En Claude Code escribe `/model` y elige según la tarea.',
       'Si un subagente hace algo sencillo, asígnale Haiku.',

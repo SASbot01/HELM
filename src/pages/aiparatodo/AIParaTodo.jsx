@@ -17,7 +17,7 @@
 // News no es contenido fijo: son las noticias que deja cada mañana el agente de
 // noticias de HELM en el perfil silvestre, leídas de /api/aiparatodo.
 import { useEffect, useState } from 'react'
-import { Routes, Route, Link, Navigate, useParams } from 'react-router-dom'
+import { Routes, Route, Link, Navigate, useParams, useLocation } from 'react-router-dom'
 import {
   ArrowRight, ArrowLeft, Lock, Instagram, Sparkles, Newspaper, BookOpen, Users,
   Copy, Check, Github, Terminal, ChevronRight, MessageSquare, Hash, Download,
@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { useCabeceraPublica } from '../inicio/cabecera.js'
 import { track } from '../inicio/socio/track.js'
+import { origen } from '../inicio/socio/origen.js'
 import mascara from '../inicio/mascara.txt?raw'
 import aiArte from '../inicio/ai.txt?raw'
 import {
@@ -49,6 +50,9 @@ function accesoGuardado() {
 }
 
 export default function AIParaTodo() {
+  // Las UTM se guardan al aterrizar, mientras siguen en la URL: los enlaces de
+  // dentro las quitan, y el alta las necesita para saber de qué Reel vino.
+  useState(() => origen())
   const [acceso, setAcceso] = useState(accesoGuardado)
   useCabeceraPublica({
     titulo: 'AI para todo — la comunidad de IA de Alex Silvestre',
@@ -81,7 +85,9 @@ function pideNoticias() {
       .then(d => (Array.isArray(d?.noticias) ? d.noticias : []).map(n => ({
         ...n, seccion: 'news', slug: `${n.fecha}-${n.puesto}`, titulo: n.titular,
       })))
-      .catch(() => { noticiasEnCurso = null; return [] })
+      // 'error' y no []: «no hay noticias» y «no se han podido cargar» no son
+      // lo mismo, y un enlace compartido no debe redirigir por un fallo de red.
+      .catch(() => { noticiasEnCurso = null; return 'error' })
   }
   return noticiasEnCurso
 }
@@ -187,7 +193,9 @@ function Foro() {
   const { seccion: sk, tema } = useParams()
   const s = seccionPorClave(sk)
   const esNews = sk === 'news'
-  const noticias = useNoticias(esNews)
+  const recibidas = useNoticias(esNews)
+  const fallo = recibidas === 'error'
+  const noticias = fallo ? [] : recibidas
   useEffect(() => { if (s) track('vista_pagina', { pagina: 'aiparatodo-foro', seccion: sk, tema }) }, [s, sk, tema])
   if (!s) return <Navigate to="/aiparatodo" replace />
   const t = tema ? s.temas.find(x => x.key === tema) : null
@@ -243,8 +251,8 @@ function Foro() {
               <div className="aip-hilo vacio">
                 <span className="aip-etiqueta">{t ? t.nombre : s.titulo}</span>
                 <div>
-                  <b>{esNews ? 'Las primeras noticias llegan mañana a primera hora' : 'Los primeros hilos están en camino'}</b>
-                  <small>Sigue a nuestro creador para enterarte cuando se abran.</small>
+                  <b>{fallo ? 'No se han podido cargar las noticias' : esNews ? 'Las primeras noticias llegan mañana a primera hora' : 'Los primeros hilos están en camino'}</b>
+                  <small>{fallo ? 'Prueba a recargar la página en un momento.' : 'Sigue a nuestro creador para enterarte cuando se abran.'}</small>
                 </div>
                 <span />
               </div>
@@ -263,7 +271,9 @@ function Hilo({ acceso, setAcceso }) {
   const { seccion: sk, tema, slug } = useParams()
   const s = seccionPorClave(sk)
   const esNews = sk === 'news'
-  const noticias = useNoticias(esNews)
+  const recibidas = useNoticias(esNews)
+  const noticias = recibidas === 'error' ? [] : recibidas
+  const { hash } = useLocation()
   const esNN = sk === 'guia' && tema === NN_HILO.tema && slug === NN_HILO.slug
   const capitulo = sk === 'guia' && tema === 'capitulos' ? capituloPorSlug(slug) : null
   const post = sk === 'skills' ? postPorSlug(slug) : null
@@ -271,7 +281,12 @@ function Hilo({ acceso, setAcceso }) {
   const h = esNews ? noticia : hilosDe(sk, tema).find(x => x.slug === slug)
 
   useEffect(() => { if (h && acceso) track('vista_pagina', { pagina: 'aiparatodo-hilo', seccion: sk, slug }) }, [h, acceso, sk, slug])
-  if (esNews && noticias === null) return <main className="aip-main aip-post"><p className="aip-sub">Cargando…</p></main>
+  // Un enlace con #apartado abierto en frío: cuando se monta el hilo (la página
+  // va en su propio archivo), ScrollToTop ya buscó el ancla y no la encontró.
+  // Las anclas son ASCII (ver ancla()), así que no hace falta decodificar.
+  useEffect(() => { if (acceso && hash) document.getElementById(hash.slice(1))?.scrollIntoView() }, [acceso, slug, hash])
+  if (esNews && recibidas === null) return <main className="aip-main aip-post"><p className="aip-sub">Cargando…</p></main>
+  if (esNews && recibidas === 'error') return <main className="aip-main aip-post"><p className="aip-sub">No se ha podido cargar la noticia. Prueba a recargar la página en un momento.</p></main>
   if (!s || !h) return <Navigate to={`/aiparatodo/${sk || ''}`} replace />
   const t = s.temas.find(x => x.key === tema)
 
@@ -508,7 +523,6 @@ function CuerpoNoticia({ n }) {
   return (
     <section className="aip-card aip-noticia">
       <p className="aip-noticia-resumen">{n.resumen}</p>
-      {n.por_que && <p className="aip-noticia-porque"><b>Por qué te importa.</b> {n.por_que}</p>}
       <a className="aip-btn sec" href={n.url} target="_blank" rel="noopener noreferrer" onClick={() => track('clic_cta', { donde: 'aip-noticia-fuente' })}>
         Leer la noticia en {n.fuente} <ExternalLink size={15} />
       </a>

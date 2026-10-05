@@ -44,7 +44,7 @@ export default {
     { tipo: 'h3', texto: 'Dónde funcionan las skills' },
     { tipo: 'p', texto: 'Las skills viven en tres sitios de Claude, y conviene saber en cuál estás.' },
     { tipo: 'lista', items: [
-      '**claude.ai** (la web y las apps): subes y activas skills desde los ajustes. Es donde está casi todo el público de esta guía.',
+      '**claude.ai** (la web y las apps): subes y activas skills en **Customize > Skills** (Personalizar > Skills). Es donde está casi todo el público de esta guía.',
       '**Claude Code** (la herramienta para el terminal, capítulo 06): las skills son carpetas en tu ordenador, no hace falta subir nada.',
       '**La API** (para quien programa): se suben y se referencian por código. Aquí no entramos.',
     ] },
@@ -66,7 +66,7 @@ export default {
     { tipo: 'p', texto: 'Esto es lo que vas a usar casi seguro si no programas. Los nombres exactos de los menús cambian según la versión y el idioma de la app, así que busca estas secciones aunque el literal no coincida al cien por cien.' },
     { tipo: 'pasos', items: [
       { titulo: 'Enciende la ejecución de código', texto: 'En los ajustes de claude.ai, activa la opción de ejecución de código y creación de archivos (Code execution and file creation). Sin esto, las skills no funcionan.' },
-      { titulo: 'Abre el panel de skills', texto: 'Busca la sección de Skills (en la app de escritorio está dentro de **Personalizar**, Customize en inglés). Ahí ves la lista de skills disponibles.' },
+      { titulo: 'Abre el panel de skills', texto: 'Entra en **Customize > Skills** (Personalizar > Skills), igual en la web que en la app de escritorio. Ahí ves la lista de skills disponibles.' },
       { titulo: 'Activa las que quieras', texto: 'Enciende o apaga cada skill con su interruptor. Deja activas solo las que vayas a usar: así Claude no se lía.' },
     ] },
     { tipo: 'aviso', variante: 'truco', titulo: 'Si no salta sola, nómbrala', texto: 'Con la creación de archivos activada, Claude usa las skills solo cuando encajan. Si quieres asegurarte, pídelo explícito: "usa mi skill de guiones de reel para esto". Es la forma más rápida de comprobar que una skill tuya funciona.' },
@@ -77,7 +77,7 @@ export default {
       { titulo: 'Entra en Skills', texto: 'En la sección de Skills, pulsa el botón para añadir o crear una skill nueva.' },
       { titulo: 'Elige subir', texto: 'Elige la opción de subir una skill (Upload) y selecciona tu .zip. Cuando termine, aparece en la lista y la activas con su interruptor.' },
     ] },
-    { tipo: 'aviso', variante: 'ojo', titulo: 'Hace falta un plan de pago', texto: 'Subir skills propias está en los planes de pago (Pro, Max, Team y Enterprise, según la documentación de Anthropic) y además necesita la ejecución de código activada. La disponibilidad por plan puede cambiar: míralo en tus ajustes.' },
+    { tipo: 'aviso', variante: 'dato', titulo: 'Está en todos los planes, también en el gratis', texto: 'Usar y subir skills propias está en Free, Pro, Max, Team y Enterprise, según la ayuda de Anthropic, siempre que tengas activada la ejecución de código (Settings > Capabilities). En Team y Enterprise, además, quien administra la organización tiene que tenerlas activadas en Organization settings > Plugins & skills. La disponibilidad puede cambiar: míralo en tus ajustes.' },
 
     { tipo: 'h2', texto: 'Paso a paso: skills en Claude Code' },
     { tipo: 'p', texto: 'Si trabajas con Claude Code (capítulo 06), las skills son todavía más sencillas: carpetas en tu disco. Nada de subir zips.' },
@@ -164,7 +164,7 @@ export default {
     'La description es el interruptor: di qué hace y cuándo usarla, con las palabras que tú dirías al pedirlo.',
     'Proyecto es el contexto fijo de tu negocio; skill es el procedimiento reutilizable; MCP es la conexión a herramientas. No se mezclan.',
     'En claude.ai subes un zip en la sección de Skills; en Claude Code es una carpeta en `~/.claude/skills`. Lo de claude.ai baja a Claude Code si entras con tu cuenta; al revés, no.',
-    'Una skill puede ejecutar código: instala solo las tuyas o las de Anthropic, y léelas antes.',
+    'Una skill puede ejecutar código: Anthropic recomienda usar solo las tuyas o las suyas. Si instalas una de la comunidad (como varias de las colecciones de esta web), léela entera antes, scripts incluidos.',
     'En la sección Skills de esta web tienes colecciones listas para instalar.',
   ],
   fuentes: [

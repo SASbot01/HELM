@@ -141,7 +141,7 @@ export default {
     },
     {
       tipo: 'p',
-      texto: 'Úsalas cuando lo que quieres conectar vive en tu equipo: archivos de tu disco, una base de datos local, una aplicación de escritorio. Solo funcionan en Claude Desktop y Claude Code, no en la web ni en el móvil.'
+      texto: 'Úsalas cuando lo que quieres conectar vive en tu equipo: archivos de tu disco, una base de datos local, una aplicación de escritorio. Solo funcionan en la app de escritorio de Claude, no en la web ni en el móvil. En Claude Code (la terminal) los servidores locales se añaden aparte con `claude mcp add`, como verás más abajo.'
     },
     {
       tipo: 'p',

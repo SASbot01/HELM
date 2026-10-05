@@ -31,13 +31,18 @@ const ahora = () => new Date().toISOString()
  * Da de alta (o actualiza) a quien deja sus datos.
  *
  *   · Si el correo ya existe en el perfil, se actualiza en vez de duplicar, y
- *     no se le cambia de embudo ni de etapa si ya estaba en uno: leer un hilo
- *     no devuelve a nadie a la casilla de salida.
+ *     NUNCA se le cambia de embudo ni de etapa: un contacto sin embudo ya está
+ *     en el de ventas por defecto, y leer un hilo no devuelve a nadie a la
+ *     casilla de salida.
  *   · Si el embudo todavía no existe, el contacto entra igual, sin embudo.
  */
 export async function altaMiembro({ nombre, email, profesion, ingresos, pipeline, nota }) {
   const correo = String(email || '').trim().toLowerCase()
   if (!correo) throw new Error('Falta el correo')
+  // La búsqueda va con ilike: `%` y `*` son comodines (y no hay forma de
+  // buscarlos literales), y `_` casa con cualquier letra. Sin esto, un correo
+  // con comodines encontraría la ficha de otra persona.
+  if (/[%*\\]/.test(correo) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) throw new Error('Revisa el correo')
   if (!INGRESOS[ingresos]) throw new Error('Elige tus ingresos')
 
   const { data: perfil, error: errPerfil } = await supabase
@@ -73,20 +78,15 @@ export async function altaMiembro({ nombre, email, profesion, ingresos, pipeline
   }
 
   const { data: existente } = await supabase
-    .from('crm_contacts').select('id, notes, pipeline_id, custom_fields')
-    .eq('client_id', perfil.id).ilike('email', correo).limit(1)
+    .from('crm_contacts').select('id, notes, custom_fields')
+    .eq('client_id', perfil.id).ilike('email', correo.replace(/_/g, '\\_')).limit(1)
 
   if (existente?.length) {
     const previo = existente[0]
-    const { pipeline_id, status, source: _source, ...cambios } = fila
+    const { pipeline_id: _embudo, status: _etapa, source: _source, ...cambios } = fila
     const previas = String(previo.notes || '')
     cambios.notes = previas.includes(linea) ? previas : [previas, linea].filter(Boolean).join('\n')
     cambios.custom_fields = { ...(previo.custom_fields || {}), aiparatodo: ficha }
-    // Solo entra en este embudo quien no estaba en ninguno.
-    if (!previo.pipeline_id && pipeline_id) {
-      cambios.pipeline_id = pipeline_id
-      cambios.status = status
-    }
     const { error } = await supabase.from('crm_contacts').update(cambios).eq('id', previo.id)
     if (error) throw new Error('No he podido guardarte. Prueba en un minuto.')
     return { id: previo.id }

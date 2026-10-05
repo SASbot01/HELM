@@ -358,7 +358,6 @@ a.aip-hilo:hover .aip-candado { color: var(--rosa); }
 .aip-news-nota { margin-top: 14px; color: var(--papel-2); }
 .aip-noticia { display: grid; gap: 18px; }
 .aip-noticia-resumen { font-size: 18px !important; line-height: 1.7 !important; color: var(--papel) !important; }
-.aip-noticia-porque { padding: 14px 16px; border-radius: 12px; border-left: 3px solid var(--rosa); background: rgba(126, 31, 53, 0.18); font-size: 16px !important; }
 .aip-noticia .aip-btn { justify-self: start; }
 
 @media (prefers-reduced-motion: reduce) { .aip-nn-3d { animation: none; } .aip-nn-banner, .aip-siguiente { transition: none; } }

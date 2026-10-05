@@ -15,13 +15,29 @@ import PaginaInicio from './pages/PaginaInicio.jsx'
 import PaginaInicioHugo from './pages/PaginaInicioHugo.jsx'
 import Clase from './pages/Clase.jsx'
 import SocioIA from './pages/inicio/socio/SocioIA.jsx'
+import { origen } from './pages/inicio/socio/origen.js'
 import Gracias from './pages/inicio/socio/Gracias.jsx'
 import Legal from './pages/inicio/socio/Legal.jsx'
 import AgentOS from './agents/AgentOS.jsx'
 import './index.css'
 // AI para todo va en su propio archivo: lleva la guía entera y las colecciones
 // de skills, y el panel no tiene por qué cargarlas.
-const AIParaTodo = lazy(() => import('./pages/aiparatodo/AIParaTodo.jsx'))
+//
+// Si su archivo no carga (un despliegue cambia los nombres de los archivos y
+// la pestaña abierta pide uno que ya no existe, o se corta la red), se recarga
+// la página una vez para traer los nuevos. Sin esto, React desmonta todo y se
+// queda en blanco. La marca de tiempo evita un bucle si el fallo es otro.
+const AIParaTodo = lazy(() => import('./pages/aiparatodo/AIParaTodo.jsx').catch((e) => {
+  try {
+    const ultima = Number(sessionStorage.getItem('aip.recarga')) || 0
+    if (Date.now() - ultima > 30_000) {
+      sessionStorage.setItem('aip.recarga', String(Date.now()))
+      window.location.reload()
+      return new Promise(() => {})
+    }
+  } catch { /* sin sessionStorage: que salga el error */ }
+  throw e
+}))
 // El tema de HELM va después de theme.css (que carga HelmApp) para mandar sobre él.
 import './helm/tema.css'
 
@@ -61,6 +77,7 @@ function SoloEnElPanel({ children }) {
 // UTM del enlace para que el alta sepa de qué Reel vino.
 function NoNegociables() {
   const { search } = useLocation()
+  origen()   // guarda las UTM antes de redirigir (ver src/pages/inicio/socio/origen.js)
   return <Navigate to={`/aiparatodo/guia/no-negociables/mis-8-no-negociables-con-claude${search}`} replace />
 }
 

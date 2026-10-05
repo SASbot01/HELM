@@ -37,7 +37,9 @@ export default async function handler(req, res) {
 
     const desde = diaMadrid(new Date(Date.now() - DIAS * 86_400_000))
     const { data, error } = await supabase.from('helm_noticias')
-      .select('fecha, puesto, tema, titular, resumen, por_que, url, fuente, publicado_en')
+      // Sin `por_que`: esa nota se escribe PARA el creador («qué vídeo saldría de
+      // aquí») con la biblia privada del perfil delante. No es para el público.
+      .select('fecha, puesto, tema, titular, resumen, url, fuente, publicado_en')
       .eq('client_id', perfil.id).gte('fecha', desde)
       .order('fecha', { ascending: false }).order('puesto')
     if (error) throw error
