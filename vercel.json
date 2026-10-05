@@ -47,7 +47,7 @@
       "destination": "/inicio/preview.html"
     },
     {
-      "source": "/:slug((?!(?:api|assets|login|registro|admin|usersadmin|primermap|silvestreai|c|f|d|paginainicio|clase|gracias|privacidad|aviso-legal|socio|agents)(?:[/?#]|$))[a-z0-9][a-z0-9-]*)",
+      "source": "/:slug((?!(?:api|assets|login|registro|admin|usersadmin|primermap|silvestreai|c|f|d|paginainicio|clase|gracias|privacidad|aviso-legal|socio|agents|aiparatodo|nonegociables|empresas)(?:[/?#]|$))[a-z0-9][a-z0-9-]*)",
       "has": [
         {
           "type": "header",

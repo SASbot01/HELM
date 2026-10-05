@@ -160,6 +160,9 @@ const buckets = new Map() // key -> { count, resetAt }
 export function rateLimit({ key, max = 60, windowMs = 60_000 }) {
   if (!key) return { ok: true, remaining: max }
   const now = Date.now()
+  // Con endpoints públicos hay una clave por IP: sin podar, el mapa crecería
+  // mientras viva el proceso. Se barren las caducadas cuando ya hay muchas.
+  if (buckets.size > 5000) for (const [k, v] of buckets) if (v.resetAt < now) buckets.delete(k)
   const b = buckets.get(key)
   if (!b || b.resetAt < now) {
     buckets.set(key, { count: 1, resetAt: now + windowMs })
@@ -182,6 +185,11 @@ function isValidIpish(s) {
 }
 
 export function getClientIp(req) {
+  // Detrás del túnel de Cloudflare, la IP real la pone Cloudflare en
+  // cf-connecting-ip y machaca la que mande el cliente. El primer valor de
+  // x-forwarded-for, en cambio, lo puede escribir cualquiera.
+  const cf = req.headers?.['cf-connecting-ip']
+  if (isValidIpish(cf)) return String(cf).trim()
   const xf = req.headers?.['x-forwarded-for']
   if (xf) {
     const first = String(xf).split(',')[0].trim()
