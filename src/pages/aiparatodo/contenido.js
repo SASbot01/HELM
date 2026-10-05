@@ -5,8 +5,9 @@
 //   · Guía: cada capítulo es un archivo de ./guia/ (NN-slug.js). Mientras un
 //     capítulo del índice no tenga archivo, se enseña como «pronto».
 //   · No negociables: la guía en PDF, en ./noNegociables.js.
-//   · News: no está aquí. Son las noticias que deja cada mañana el agente de
-//     noticias de HELM en el perfil silvestre, y se piden a /api/aiparatodo.
+//   · News: no está aquí. Es el diario que escribe la redacción automática de
+//     HELM (dos artículos al día) más las breves del agente de noticias, y se
+//     piden a /api/aiparatodo.
 //
 // Las instrucciones de instalación son las REALES de Claude Code: el
 // marketplace oficial de Anthropic (anthropics/skills) trae las cinco skills de
@@ -37,10 +38,12 @@ export const SECCIONES = [
     ],
   },
   {
-    key: 'news', titulo: 'News', desc: 'Las noticias del día de IA y ciberseguridad, cada mañana, contadas sin humo.',
-    // Los temas son los del agente de noticias de HELM (helm_noticias.tema).
+    key: 'news', titulo: 'News', desc: 'El diario de IA, tecnología y ciberseguridad: dos piezas al día, investigadas y contrastadas, y las breves de cada mañana.',
+    // Los temas del diario (aip_articulos.tema). Las breves (helm_noticias) usan
+    // 'ia' y 'ciberseguridad', que también están aquí.
     temas: [
       { key: 'ia', nombre: 'IA', desc: 'Modelos, herramientas y lo que cambia cómo trabajas' },
+      { key: 'tecnologia', nombre: 'Tecnología', desc: 'Lo nuevo en tecnología que de verdad importa' },
       { key: 'ciberseguridad', nombre: 'Ciberseguridad', desc: 'Fallos, estafas y cómo protegerte' },
     ],
   },

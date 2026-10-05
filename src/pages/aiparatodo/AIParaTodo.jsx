@@ -21,7 +21,7 @@ import { Routes, Route, Link, Navigate, useParams, useLocation } from 'react-rou
 import {
   ArrowRight, ArrowLeft, Lock, Instagram, Sparkles, Newspaper, BookOpen, Users,
   Copy, Check, Github, Terminal, ChevronRight, MessageSquare, Hash, Download,
-  Lightbulb, AlertTriangle, Info, ExternalLink, FileText,
+  Lightbulb, AlertTriangle, Info, ExternalLink, FileText, BrainCircuit, Cpu, ShieldAlert,
 } from 'lucide-react'
 import { useCabeceraPublica } from '../inicio/cabecera.js'
 import { track } from '../inicio/socio/track.js'
@@ -65,9 +65,9 @@ export default function AIParaTodo() {
       <Cabecera />
       <Routes>
         <Route index element={<Portada />} />
-        <Route path=":seccion" element={<Foro />} />
-        <Route path=":seccion/:tema" element={<Foro />} />
-        <Route path=":seccion/:tema/:slug" element={<Hilo acceso={acceso} setAcceso={setAcceso} />} />
+        <Route path=":seccion" element={<Seccion />} />
+        <Route path=":seccion/:tema" element={<Seccion />} />
+        <Route path=":seccion/:tema/:slug" element={<HiloRuta acceso={acceso} setAcceso={setAcceso} />} />
         <Route path="*" element={<Navigate to="/aiparatodo" replace />} />
       </Routes>
       <Pie />
@@ -163,7 +163,7 @@ function Portada() {
               <h3>{s.titulo}</h3>
               <p>{s.desc}</p>
               <span className="aip-zona-pie">
-                {s.key === 'news' ? 'Cada mañana · 3 noticias' : `${s.temas.length} tema${s.temas.length === 1 ? '' : 's'} · ${n} hilo${n === 1 ? '' : 's'}`}
+                {s.key === 'news' ? 'Dos piezas al día · y las breves' : `${s.temas.length} tema${s.temas.length === 1 ? '' : 's'} · ${n} hilo${n === 1 ? '' : 's'}`}
                 <ArrowRight size={14} />
               </span>
             </Link>
@@ -712,5 +712,298 @@ function Pie() {
         <a href="/privacidad">Privacidad</a>
       </span>
     </footer>
+  )
+}
+
+// ── News: el diario ─────────────────────────────────────────────────────────
+// La sección News es un periódico: dos piezas al día que escribe y verifica la
+// redacción automática (api/_lib/redaccion.js), con su foto, y debajo las
+// breves de la mañana del agente de noticias. Las piezas tienen su página;
+// las breves, la de siempre (Hilo).
+
+// Las breves llevan de slug «fecha-puesto»; los artículos, «fecha-titular».
+const esBreve = (slug) => /^\d{4}-\d{2}-\d{2}-\d$/.test(String(slug))
+
+/** La sección: el diario en News, el foro en las demás. */
+function Seccion() {
+  const { seccion } = useParams()
+  return seccion === 'news' ? <Diario /> : <Foro />
+}
+
+/** Un hilo: en News, el artículo; si es una breve o de otra sección, Hilo. */
+function HiloRuta(props) {
+  const { seccion, slug } = useParams()
+  return seccion === 'news' && !esBreve(slug) ? <Articulo {...props} /> : <Hilo {...props} />
+}
+
+const EDICION = { manana: 'Edición de mañana', tarde: 'Edición de tarde' }
+const ICONO_TEMA = { ia: BrainCircuit, tecnologia: Cpu, ciberseguridad: ShieldAlert }
+const temaNombre = (k) => seccionPorClave('news').temas.find(t => t.key === k)?.nombre || k
+const ahoraMadrid = () => new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())
+const edicionAhora = () => (Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', hour: '2-digit', hourCycle: 'h23' }).format(new Date())) >= 17 ? EDICION.tarde : EDICION.manana)
+
+let articulosEnCurso = null
+function pideArticulos() {
+  if (!articulosEnCurso) {
+    articulosEnCurso = fetch('/api/aiparatodo?action=articulos')
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then(d => (Array.isArray(d?.articulos) ? d.articulos : []))
+      .catch(() => { articulosEnCurso = null; return 'error' })
+  }
+  return articulosEnCurso
+}
+function useArticulos() {
+  const [lista, setLista] = useState(null)
+  useEffect(() => {
+    let vivo = true
+    pideArticulos().then(l => { if (vivo) setLista(l) })
+    return () => { vivo = false }
+  }, [])
+  return lista
+}
+/** null mientras carga · el artículo · 'no' si no existe · 'error' si falla la red. */
+function useArticulo(slug) {
+  // Se guarda con su slug: al pasar a otra pieza, la anterior no se pinta ni
+  // un instante mientras llega la nueva.
+  const [r, setR] = useState({ slug: null, valor: null })
+  useEffect(() => {
+    let vivo = true
+    fetch(`/api/aiparatodo?action=articulo&slug=${encodeURIComponent(slug)}`)
+      .then(x => (x.status === 404 ? 'no' : x.ok ? x.json().then(d => d.articulo || 'no') : 'error'))
+      .catch(() => 'error')
+      .then(valor => { if (vivo) setR({ slug, valor }) })
+    return () => { vivo = false }
+  }, [slug])
+  return r.slug === slug ? r.valor : null
+}
+
+// La foto de la noticia original. Si no hay, o la web de origen no la deja
+// cargar, una portada propia con el tema: nunca un hueco roto.
+function Foto({ a, grande = false }) {
+  const [rota, setRota] = useState(false)
+  if (!a.imagen_url || rota) {
+    const Icono = ICONO_TEMA[a.tema] || Newspaper
+    return (
+      <div className={`aip-foto aip-foto-propia ${a.tema}`} role="img" aria-label={temaNombre(a.tema)}>
+        <Icono size={grande ? 64 : 38} />
+        <span>AI para todo · {temaNombre(a.tema)}</span>
+      </div>
+    )
+  }
+  return (
+    <img
+      className="aip-foto" src={a.imagen_url} alt={a.imagen_alt || ''}
+      loading={grande ? 'eager' : 'lazy'} referrerPolicy="no-referrer" onError={() => setRota(true)}
+    />
+  )
+}
+
+function Kicker({ a }) {
+  return (
+    <p className="aip-art-kicker">
+      <span className={`aip-tema-chip ${a.tema}`}>{temaNombre(a.tema)}</span>
+      <span>{EDICION[a.edicion]} · {fechaCorta(a.fecha)} · {a.lectura_min} min</span>
+    </p>
+  )
+}
+
+function ArticuloPortada({ a }) {
+  return (
+    <Link className="aip-art-portada" to={`/aiparatodo/news/${a.tema}/${a.slug}`}>
+      <div className="aip-art-portada-foto"><Foto a={a} grande /></div>
+      <div className="aip-art-portada-txt">
+        <Kicker a={a} />
+        <h2>{a.titular}</h2>
+        <p>{a.subtitulo}</p>
+        <span className="aip-art-leer">Leer la pieza <ArrowRight size={15} /></span>
+      </div>
+    </Link>
+  )
+}
+
+function ArticuloTarjeta({ a }) {
+  return (
+    <Link className="aip-art-tarjeta" to={`/aiparatodo/news/${a.tema}/${a.slug}`}>
+      <div className="aip-art-tarjeta-foto"><Foto a={a} /></div>
+      <Kicker a={a} />
+      <h3>{a.titular}</h3>
+      <p>{recorta(a.subtitulo, 150)}</p>
+    </Link>
+  )
+}
+
+function Diario() {
+  const { tema } = useParams()
+  const s = seccionPorClave('news')
+  const t = tema ? s.temas.find(x => x.key === tema) : null
+  const recibidos = useArticulos()
+  const breves = useNoticias(true)
+  useEffect(() => { track('vista_pagina', { pagina: 'aiparatodo-diario', tema }) }, [tema])
+  if (tema && !t) return <Navigate to="/aiparatodo/news" replace />
+
+  const lista = Array.isArray(recibidos) ? recibidos.filter(a => !tema || a.tema === tema) : []
+  const brevesLista = Array.isArray(breves) ? breves.filter(b => !tema || b.tema === tema).slice(0, 6) : []
+  const [primero, ...resto] = lista
+
+  return (
+    <main className="aip-main aip-diario">
+      <nav className="aip-migas">
+        <Link to="/aiparatodo">Inicio</Link><ChevronRight size={14} />
+        {t ? <><Link to="/aiparatodo/news">News</Link><ChevronRight size={14} /><span>{t.nombre}</span></> : <span>News</span>}
+      </nav>
+
+      <header className="aip-diario-cab">
+        <p className="aip-diario-fecha"><span className="aip-punto" /> {ahoraMadrid()} · {edicionAhora()}</p>
+        <h1 className="aip-diario-nombre">{t ? t.nombre : 'El diario de AI para todo'}</h1>
+        <p className="aip-sub">{t ? t.desc : 'IA, tecnología y ciberseguridad. Dos piezas al día, a las 8:00 y a las 17:00, investigadas en las fuentes originales y revisadas dato a dato.'}</p>
+        <nav className="aip-diario-temas">
+          <Link className={!tema ? 'on' : ''} to="/aiparatodo/news">Portada</Link>
+          {s.temas.map(x => <Link key={x.key} className={tema === x.key ? 'on' : ''} to={`/aiparatodo/news/${x.key}`}>{x.nombre}</Link>)}
+        </nav>
+      </header>
+
+      {recibidos === null && <p className="aip-sub">Cargando el diario…</p>}
+      {recibidos === 'error' && <p className="aip-sub">No se ha podido cargar el diario. Prueba a recargar la página en un momento.</p>}
+      {primero && <ArticuloPortada a={primero} />}
+      {resto.length > 0 && <div className="aip-diario-grid">{resto.map(a => <ArticuloTarjeta key={a.slug} a={a} />)}</div>}
+      {Array.isArray(recibidos) && !lista.length && (
+        <div className="aip-card aip-diario-vacio">
+          <b>{tema ? `Todavía no hay piezas de ${t.nombre}` : 'La primera edición está en la imprenta'}</b>
+          <p>Cada día salen dos: a las 8:00 y a las 17:00. Mientras tanto, las breves de la mañana, aquí abajo.</p>
+        </div>
+      )}
+
+      {brevesLista.length > 0 && (
+        <section className="aip-breves">
+          <h2>En breve</h2>
+          <ul>
+            {brevesLista.map(b => (
+              <li key={`${b.tema}-${b.slug}`}>
+                <Link to={`/aiparatodo/news/${b.tema}/${b.slug}`}>
+                  <span>{temaNombre(b.tema)} · {b.fuente} · {fechaCorta(b.fecha)}</span>
+                  <b>{b.titulo}</b>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </main>
+  )
+}
+
+const sinComillas = (t) => String(t || '').trim().replace(/^[«"“'‘]+|[»"”'’]+$/g, '')
+
+function BloqueArticulo({ b }) {
+  switch (b.tipo) {
+    case 'h2': return <h2>{b.texto}</h2>
+    case 'cita': return (
+      <blockquote>
+        <p>«{sinComillas(b.texto)}»</p>
+        {b.autor && <cite>{b.autor}</cite>}
+      </blockquote>
+    )
+    case 'lista': return (
+      <>
+        {b.texto && <p>{b.texto}</p>}
+        <ul>{(b.items || []).map((x, k) => <li key={k}>{x}</li>)}</ul>
+      </>
+    )
+    default: return <p>{b.texto}</p>
+  }
+}
+
+function Articulo({ acceso, setAcceso }) {
+  const { tema, slug } = useParams()
+  const a = useArticulo(slug)
+  const todos = useArticulos()
+  const listo = a && typeof a === 'object'
+  useEffect(() => { if (listo) track('vista_pagina', { pagina: 'aiparatodo-articulo', slug, miembro: Boolean(acceso) }) }, [listo, slug, acceso])
+
+  if (a === null) return <main className="aip-main aip-articulo"><p className="aip-sub">Cargando…</p></main>
+  if (a === 'error') return <main className="aip-main aip-articulo"><p className="aip-sub">No se ha podido cargar la pieza. Prueba a recargar la página en un momento.</p></main>
+  if (a === 'no') return <Navigate to="/aiparatodo/news" replace />
+  if (a.tema !== tema) return <Navigate to={`/aiparatodo/news/${a.tema}/${a.slug}`} replace />
+
+  // Sin datos, el arranque de la pieza (como el muro de un periódico).
+  const visibles = acceso ? a.cuerpo : a.cuerpo.slice(0, 2)
+  const mas = Array.isArray(todos) ? todos.filter(x => x.slug !== a.slug).slice(0, 3) : []
+
+  return (
+    <main className="aip-main aip-articulo">
+      <nav className="aip-migas">
+        <Link to="/aiparatodo">Inicio</Link><ChevronRight size={14} />
+        <Link to="/aiparatodo/news">News</Link><ChevronRight size={14} />
+        <Link to={`/aiparatodo/news/${a.tema}`}>{temaNombre(a.tema)}</Link>
+      </nav>
+
+      <header className="aip-articulo-cab">
+        <Kicker a={a} />
+        <h1>{a.titular}</h1>
+        <p className="aip-articulo-entradilla">{a.subtitulo}</p>
+        <p className="aip-articulo-firma">Por la redacción de AI para todo · {fechaLarga(a.fecha)}</p>
+      </header>
+
+      <figure className="aip-articulo-foto">
+        <Foto a={a} grande />
+        {(a.imagen_credito || a.imagen_origen) && (
+          <figcaption>
+            {a.imagen_credito}
+            {a.imagen_origen && <> · <a href={a.imagen_origen} target="_blank" rel="noopener noreferrer">noticia original</a></>}
+          </figcaption>
+        )}
+      </figure>
+
+      <div className={'aip-articulo-cuerpo' + (acceso ? '' : ' cortado')}>
+        {visibles.map((b, i) => <BloqueArticulo key={i} b={b} />)}
+      </div>
+
+      {!acceso ? (
+        <Puerta
+          setAcceso={setAcceso} pipeline={PIPELINE_COMUNIDAD} nota={`leyó news/${a.slug}`}
+          titulo="Sigue leyendo"
+          texto="Cuatro datos, una sola vez, y se abren el diario entero, los hilos de skills y la guía completa de Claude."
+        />
+      ) : (
+        <>
+          {a.claves?.length > 0 && (
+            <section className="aip-card aip-claves">
+              <h2>Las claves</h2>
+              <ul>{a.claves.map((x, k) => <li key={k}><Check size={16} /><span>{x}</span></li>)}</ul>
+            </section>
+          )}
+          {a.que_significa && (
+            <section className="aip-articulo-ati">
+              <h2>Qué significa para ti</h2>
+              <p>{a.que_significa}</p>
+            </section>
+          )}
+          {a.fuentes?.length > 0 && (
+            <section className="aip-fuentes">
+              <h3>Fuentes</h3>
+              <ul>
+                {a.fuentes.map(f => (
+                  <li key={f.url}><a href={f.url} target="_blank" rel="noopener noreferrer">{f.nombre} <ExternalLink size={12} /></a></li>
+                ))}
+              </ul>
+            </section>
+          )}
+          <p className="aip-articulo-nota">
+            Esta pieza la ha investigado y redactado la redacción automática de AI para todo a partir de las fuentes
+            citadas, y la ha revisado un segundo agente que comprueba cada dato contra ellas. Si ves un error,
+            escríbenos por <a href={FUNDADOR.instagram} target="_blank" rel="noopener noreferrer">Instagram</a>.
+          </p>
+        </>
+      )}
+
+      {mas.length > 0 && (
+        <section className="aip-diario-mas">
+          <h2>Más del diario</h2>
+          <div className="aip-diario-grid">{mas.map(x => <ArticuloTarjeta key={x.slug} a={x} />)}</div>
+        </section>
+      )}
+
+      <Link className="aip-volver" to="/aiparatodo/news"><ArrowLeft size={16} /> Volver al diario</Link>
+    </main>
   )
 }
