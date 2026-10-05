@@ -1,4 +1,4 @@
-import { StrictMode, useEffect } from 'react'
+import { StrictMode, Suspense, lazy, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { ToastProvider } from './components/Toast.jsx'
@@ -15,11 +15,13 @@ import PaginaInicio from './pages/PaginaInicio.jsx'
 import PaginaInicioHugo from './pages/PaginaInicioHugo.jsx'
 import Clase from './pages/Clase.jsx'
 import SocioIA from './pages/inicio/socio/SocioIA.jsx'
-import AIParaTodo from './pages/aiparatodo/AIParaTodo.jsx'
 import Gracias from './pages/inicio/socio/Gracias.jsx'
 import Legal from './pages/inicio/socio/Legal.jsx'
 import AgentOS from './agents/AgentOS.jsx'
 import './index.css'
+// AI para todo va en su propio archivo: lleva la guía entera y las colecciones
+// de skills, y el panel no tiene por qué cargarlas.
+const AIParaTodo = lazy(() => import('./pages/aiparatodo/AIParaTodo.jsx'))
 // El tema de HELM va después de theme.css (que carga HelmApp) para mandar sobre él.
 import './helm/tema.css'
 
@@ -39,6 +41,27 @@ const PORTADAS_POR_DOMINIO = {
   'www.s4sf.net': PaginaInicio,
   'enformaconhugo.com': PaginaInicioHugo,
   'www.enformaconhugo.com': PaginaInicioHugo,
+}
+
+// El panel vive en helm.s4sf.net. Por un dominio de marca (s4sf.net,
+// enformaconhugo.com) solo se sirve lo público: quien abre ahí /admin, /login
+// o un /<perfil> salta al mismo sitio en el dominio del panel.
+const DOMINIO_PANEL = 'helm.s4sf.net'
+function SoloEnElPanel({ children }) {
+  const enMarca = Boolean(PORTADAS_POR_DOMINIO[window.location.hostname])
+  useEffect(() => {
+    if (!enMarca) return
+    const { pathname, search, hash } = window.location
+    window.location.replace(`https://${DOMINIO_PANEL}${pathname}${search}${hash}`)
+  }, [enMarca])
+  return enMarca ? null : children
+}
+
+// /nonegociables: la guía en PDF, que vive en AI para todo. Se conservan las
+// UTM del enlace para que el alta sepa de qué Reel vino.
+function NoNegociables() {
+  const { search } = useLocation()
+  return <Navigate to={`/aiparatodo/guia/no-negociables/mis-8-no-negociables-con-claude${search}`} replace />
 }
 
 // Qué hay en `/`: la portada de la marca si entras por su dominio, y el panel
@@ -79,11 +102,11 @@ createRoot(document.getElementById('root')).render(
         <ScrollToTop />
         <Routes>
           <Route path="/" element={<Raiz />} />
-          <Route path="/login" element={<SuperAdminLogin />} />
+          <Route path="/login" element={<SoloEnElPanel><SuperAdminLogin /></SoloEnElPanel>} />
           {/* Registro público (crea negocio + acceso pendientes de aprobación). */}
-          <Route path="/registro" element={<Registro />} />
+          <Route path="/registro" element={<SoloEnElPanel><Registro /></SoloEnElPanel>} />
           {/* Panel de usuarios — solo superadmins (la propia página lo comprueba). */}
-          <Route path="/usersadmin" element={<UsersAdmin />} />
+          <Route path="/usersadmin" element={<SoloEnElPanel><UsersAdmin /></SoloEnElPanel>} />
           {/* Lead magnet público: diagnóstico operativo. Los leads entran al
               CRM del perfil indicado en primermapa/guardar.js. */}
           <Route path="/primermap" element={<PrimerMapa />} />
@@ -114,19 +137,23 @@ createRoot(document.getElementById('root')).render(
           <Route path="/clase" element={<Clase />} />
           <Route path="/empresas" element={<SocioIA />} />
           {/* AI para todo: la comunidad gratis de la bio, con sus rutas dentro. */}
-          <Route path="/aiparatodo/*" element={<AIParaTodo />} />
+          <Route path="/aiparatodo/*" element={<Suspense fallback={null}><AIParaTodo /></Suspense>} />
+          {/* La guía en PDF de los no negociables: pública, sin sesión, y con
+              el alta en el CRM (embudo «Lead magnet»). Vive dentro de AI para
+              todo; esto es el enlace corto. */}
+          <Route path="/nonegociables" element={<NoNegociables />} />
           <Route path="/gracias" element={<Gracias />} />
           <Route path="/privacidad" element={<Legal pagina="privacidad" />} />
           <Route path="/aviso-legal" element={<Legal pagina="aviso-legal" />} />
           {/* Agent OS — el taller del operador. Solo superadmin: la propia
               página lo comprueba y api/agents.js lo exige en el servidor. Va
               ANTES de /:slug/*, que si no leería "agents" como slug de perfil. */}
-          <Route path="/agents/*" element={<AgentOS />} />
+          <Route path="/agents/*" element={<SoloEnElPanel><AgentOS /></SoloEnElPanel>} />
           {/* HELM — app limpia (CRM · Ventas · Diario · Finanzas · Chat · Ajustes).
               /admin entra sin perfil fijado (redirige al último usado) y
               /<slug> abre directamente ese perfil: /silvestre, /enformaconhugo… */}
-          <Route path="/admin/*" element={<HelmApp />} />
-          <Route path="/:slug/*" element={<HelmApp />} />
+          <Route path="/admin/*" element={<SoloEnElPanel><HelmApp /></SoloEnElPanel>} />
+          <Route path="/:slug/*" element={<SoloEnElPanel><HelmApp /></SoloEnElPanel>} />
           {/* Cualquier otra ruta vuelve al login. */}
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

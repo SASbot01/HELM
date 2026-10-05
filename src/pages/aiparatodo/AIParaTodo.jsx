@@ -9,27 +9,40 @@
 //   /aiparatodo/<seccion>/<tema>/<hilo>      un hilo
 //
 // Todo se recorre sin dejar nada hasta la lista de hilos, como un foro abierto.
-// LEER un hilo pide nombre y correo (una vez; se recuerda en el navegador). El
-// alta entra en el CRM del perfil silvestre, pipeline «Página de inicio».
+// LEER un hilo pide cuatro datos —nombre, correo, profesión e ingresos— una
+// vez; se recuerda en el navegador. El alta entra en el CRM del perfil
+// silvestre (ver crm.js): la guía en PDF de los no negociables va al embudo
+// «Lead magnet» y el resto a «Página de inicio».
+//
+// News no es contenido fijo: son las noticias que deja cada mañana el agente de
+// noticias de HELM en el perfil silvestre, leídas de /api/aiparatodo.
 import { useEffect, useState } from 'react'
 import { Routes, Route, Link, Navigate, useParams } from 'react-router-dom'
 import {
   ArrowRight, ArrowLeft, Lock, Instagram, Sparkles, Newspaper, BookOpen, Users,
-  Copy, Check, Github, Terminal, ChevronRight, MessageSquare, Hash,
+  Copy, Check, Github, Terminal, ChevronRight, MessageSquare, Hash, Download,
+  Lightbulb, AlertTriangle, Info, ExternalLink, FileText,
 } from 'lucide-react'
 import { useCabeceraPublica } from '../inicio/cabecera.js'
-import { altaLead } from '../inicio/crm.js'
 import { track } from '../inicio/socio/track.js'
 import mascara from '../inicio/mascara.txt?raw'
 import aiArte from '../inicio/ai.txt?raw'
-import { FUNDADOR, SECCIONES, seccionPorClave, postPorSlug, hilosDe, CAPITULOS } from './contenido.js'
+import {
+  FUNDADOR, SECCIONES, seccionPorClave, postPorSlug, hilosDe, CAPITULOS, capituloPorSlug,
+  NN_HILO, NN_RUTA,
+} from './contenido.js'
+import { NN_PDF, NN_PORTADA_3D, NN_INTRO, NN_PUNTOS, NN_ORDEN } from './noNegociables.js'
+import { altaMiembro, anota, INGRESOS, PIPELINE_COMUNIDAD, PIPELINE_LEAD_MAGNET } from './crm.js'
 import '../../fonts/inter-tight.css'
 import '../../fonts/jetbrains-mono.css'
 import './aip.css'
 
-const LLAVE = 's4sf.aiparatodo'
-const EVENTO = 'Entró en AI para todo (comunidad)'
+// v2: desde octubre de 2026 la puerta pide cuatro datos. Quien entró antes
+// solo con el correo los deja una vez más.
+const LLAVE = 's4sf.aiparatodo.v2'
 const ICONOS = { skills: Sparkles, news: Newspaper, comunidad: Users, guia: BookOpen }
+const fechaCorta = (f) => new Date(`${f}T12:00:00`).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+const fechaLarga = (f) => new Date(`${f}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
 
 function accesoGuardado() {
   try { return JSON.parse(localStorage.getItem(LLAVE) || 'null') } catch { return null }
@@ -39,7 +52,7 @@ export default function AIParaTodo() {
   const [acceso, setAcceso] = useState(accesoGuardado)
   useCabeceraPublica({
     titulo: 'AI para todo — la comunidad de IA de Alex Silvestre',
-    descripcion: 'Skills para Claude, noticias, comunidad y la guía completa de Claude. En español y gratis.',
+    descripcion: 'Skills para Claude, noticias de cada día, comunidad y la guía completa de Claude. En español y gratis.',
     imagen: '/inicio/og.jpg', colorBarra: '#050203',
   })
   return (
@@ -56,6 +69,31 @@ export default function AIParaTodo() {
       <Pie />
     </div>
   )
+}
+
+// ── Las noticias del día, de HELM ──────────────────────────────────────────
+// Una sola petición por visita: la lista y el hilo leen de la misma promesa.
+let noticiasEnCurso = null
+function pideNoticias() {
+  if (!noticiasEnCurso) {
+    noticiasEnCurso = fetch('/api/aiparatodo?action=noticias')
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then(d => (Array.isArray(d?.noticias) ? d.noticias : []).map(n => ({
+        ...n, seccion: 'news', slug: `${n.fecha}-${n.puesto}`, titulo: n.titular,
+      })))
+      .catch(() => { noticiasEnCurso = null; return [] })
+  }
+  return noticiasEnCurso
+}
+function useNoticias(activo = true) {
+  const [lista, setLista] = useState(null)
+  useEffect(() => {
+    if (!activo) return
+    let vivo = true
+    pideNoticias().then(l => { if (vivo) setLista(l) })
+    return () => { vivo = false }
+  }, [activo])
+  return lista
 }
 
 // ── El fondo: la máscara y el «AI» en ASCII, como la bio ───────────────────
@@ -103,9 +141,9 @@ function Portada() {
         <Instagram size={18} /> Sigue a nuestro creador
       </a>
       <p className="aip-sub">
-        Skills para Claude, las novedades que importan, una comunidad para preguntar y enseñar lo que
+        Skills para Claude, las noticias del día que importan, una comunidad para preguntar y enseñar lo que
         montas, y la guía completa de Claude. En español y gratis. Entra donde quieras: para leer un
-        hilo solo te pedimos el correo.
+        hilo solo te pedimos cuatro datos, una vez.
       </p>
       <div className="aip-zonas">
         {SECCIONES.map(s => {
@@ -116,12 +154,31 @@ function Portada() {
               <span className="aip-zona-ico"><Icono size={22} /></span>
               <h3>{s.titulo}</h3>
               <p>{s.desc}</p>
-              <span className="aip-zona-pie">{s.temas.length} tema{s.temas.length === 1 ? '' : 's'} · {n} hilo{n === 1 ? '' : 's'} <ArrowRight size={14} /></span>
+              <span className="aip-zona-pie">
+                {s.key === 'news' ? 'Cada mañana · 3 noticias' : `${s.temas.length} tema${s.temas.length === 1 ? '' : 's'} · ${n} hilo${n === 1 ? '' : 's'}`}
+                <ArrowRight size={14} />
+              </span>
             </Link>
           )
         })}
       </div>
+      <BannerNoNegociables donde="portada" />
     </main>
+  )
+}
+
+// La guía en PDF, anunciada donde se lee de Claude.
+function BannerNoNegociables({ donde }) {
+  return (
+    <Link className="aip-nn-banner" to={NN_RUTA} onClick={() => track('clic_cta', { donde: `aip-nn-${donde}` })}>
+      <img src={NN_PORTADA_3D} alt="" width="900" height="900" loading="lazy" />
+      <div>
+        <p className="aip-kicker"><FileText size={13} /> Guía gratuita en PDF</p>
+        <h3>Mis 8 <em>no negociables</em> con Claude</h3>
+        <p>Cómo trabajo para que la IA haga el trabajo de verdad, y no solo te dé conversación. Composio, Skills, Loops, Modo plan, Subagentes, Hooks, el modelo correcto y Todo a GitHub.</p>
+        <span className="aip-btn pequeno">Descárgala <ArrowRight size={14} /></span>
+      </div>
+    </Link>
   )
 }
 
@@ -129,11 +186,14 @@ function Portada() {
 function Foro() {
   const { seccion: sk, tema } = useParams()
   const s = seccionPorClave(sk)
+  const esNews = sk === 'news'
+  const noticias = useNoticias(esNews)
   useEffect(() => { if (s) track('vista_pagina', { pagina: 'aiparatodo-foro', seccion: sk, tema }) }, [s, sk, tema])
   if (!s) return <Navigate to="/aiparatodo" replace />
   const t = tema ? s.temas.find(x => x.key === tema) : null
   if (tema && !t) return <Navigate to={`/aiparatodo/${sk}`} replace />
-  const hilos = hilosDe(sk, tema)
+  const hilos = esNews ? (noticias || []).filter(n => !tema || n.tema === tema) : hilosDe(sk, tema)
+  const cuenta = (k) => (esNews ? (noticias || []).filter(n => n.tema === k).length : hilosDe(sk, k).length)
 
   return (
     <main className="aip-main">
@@ -144,6 +204,8 @@ function Foro() {
       <section className="aip-sec">
         <h1 className="aip-h1">{t ? t.nombre : s.titulo}</h1>
         <p className="aip-sub">{t ? t.desc : s.desc}</p>
+        {esNews && <p className="aip-kicker aip-news-nota"><span className="aip-punto" /> Las elige cada mañana, antes de las 6:00, nuestro agente de noticias. Tres al día.</p>}
+        {sk === 'guia' && tema !== 'no-negociables' && <BannerNoNegociables donde="guia" />}
 
         <div className={'aip-foro' + (s.temas.length > 1 ? '' : ' sin-temas')}>
           {s.temas.length > 1 && (
@@ -151,29 +213,39 @@ function Foro() {
               <Link className={'aip-tema' + (!tema ? ' on' : '')} to={`/aiparatodo/${sk}`}><MessageSquare size={15} /> Todos</Link>
               {s.temas.map(x => (
                 <Link key={x.key} className={'aip-tema' + (tema === x.key ? ' on' : '')} to={`/aiparatodo/${sk}/${x.key}`}>
-                  <Hash size={15} /> {x.nombre} <b>{hilosDe(sk, x.key).length}</b>
+                  <Hash size={15} /> {x.nombre} <b>{cuenta(x.key)}</b>
                 </Link>
               ))}
             </aside>
           )}
 
           <div className="aip-hilos">
-            <div className="aip-hilos-cab"><span>Tema</span><span>Hilo</span><span /></div>
+            <div className="aip-hilos-cab"><span>Tema</span><span>{esNews ? 'Noticia' : 'Hilo'}</span><span /></div>
             {hilos.map(h => (
-              <Link key={h.slug} className="aip-hilo" to={`/aiparatodo/${sk}/${h.tema}/${h.slug}`}>
+              <Link key={`${h.tema}-${h.slug}`} className="aip-hilo" to={`/aiparatodo/${sk}/${h.tema}/${h.slug}`}>
                 <span className="aip-etiqueta">{s.temas.find(x => x.key === h.tema)?.nombre}</span>
                 <div>
                   <b>{h.n ? `${h.n} · ` : ''}{h.titulo}</b>
-                  {h.resumen && <small>{h.resumen}</small>}
-                  <small className="aip-meta">{FUNDADOR.nombre}{h.fecha ? ` · ${new Date(h.fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}` : ''}{h.lectura ? ` · ${h.lectura}` : ''}</small>
+                  {h.resumen && <small>{esNews ? recorta(h.resumen, 160) : h.resumen}</small>}
+                  <small className="aip-meta">
+                    {esNews ? `${h.fuente} · ${fechaCorta(h.fecha)}` : FUNDADOR.nombre}
+                    {!esNews && h.fecha ? ` · ${fechaCorta(h.fecha)}` : ''}
+                    {h.lectura ? ` · ${h.lectura}` : ''}
+                  </small>
                 </div>
                 <span className="aip-candado">{h.pronto ? <span className="aip-pronto">pronto</span> : <Lock size={15} />}</span>
               </Link>
             ))}
-            {hilos.length === 0 && (
+            {esNews && noticias === null && (
+              <div className="aip-hilo vacio"><span className="aip-etiqueta">News</span><div><b>Cargando las noticias…</b></div><span /></div>
+            )}
+            {hilos.length === 0 && !(esNews && noticias === null) && (
               <div className="aip-hilo vacio">
                 <span className="aip-etiqueta">{t ? t.nombre : s.titulo}</span>
-                <div><b>Los primeros hilos están en camino</b><small>Sigue a nuestro creador para enterarte cuando se abran.</small></div>
+                <div>
+                  <b>{esNews ? 'Las primeras noticias llegan mañana a primera hora' : 'Los primeros hilos están en camino'}</b>
+                  <small>Sigue a nuestro creador para enterarte cuando se abran.</small>
+                </div>
                 <span />
               </div>
             )}
@@ -184,15 +256,39 @@ function Foro() {
   )
 }
 
-// ── Un hilo: detrás del correo ──────────────────────────────────────────────
+const recorta = (t, n) => (String(t).length > n ? `${String(t).slice(0, n).replace(/\s+\S*$/, '')}…` : t)
+
+// ── Un hilo: detrás de la puerta ────────────────────────────────────────────
 function Hilo({ acceso, setAcceso }) {
   const { seccion: sk, tema, slug } = useParams()
   const s = seccionPorClave(sk)
-  const h = hilosDe(sk, tema).find(x => x.slug === slug)
-  const p = postPorSlug(slug)
-  useEffect(() => { if (h && acceso) track('vista_pagina', { pagina: 'aiparatodo-hilo', slug }) }, [h, acceso, slug])
+  const esNews = sk === 'news'
+  const noticias = useNoticias(esNews)
+  const esNN = sk === 'guia' && tema === NN_HILO.tema && slug === NN_HILO.slug
+  const capitulo = sk === 'guia' && tema === 'capitulos' ? capituloPorSlug(slug) : null
+  const post = sk === 'skills' ? postPorSlug(slug) : null
+  const noticia = esNews ? (noticias || []).find(n => n.slug === slug && n.tema === tema) : null
+  const h = esNews ? noticia : hilosDe(sk, tema).find(x => x.slug === slug)
+
+  useEffect(() => { if (h && acceso) track('vista_pagina', { pagina: 'aiparatodo-hilo', seccion: sk, slug }) }, [h, acceso, sk, slug])
+  if (esNews && noticias === null) return <main className="aip-main aip-post"><p className="aip-sub">Cargando…</p></main>
   if (!s || !h) return <Navigate to={`/aiparatodo/${sk || ''}`} replace />
   const t = s.temas.find(x => x.key === tema)
+
+  // La puerta: en la guía en PDF entra al embudo «Lead magnet».
+  const puerta = esNN
+    ? <Puerta setAcceso={setAcceso} pipeline={PIPELINE_LEAD_MAGNET} nota="pidió la guía Mis 8 no negociables (PDF)"
+      titulo="Descárgate la guía" texto="Cuatro datos y es tuya, junto con todos los hilos de AI para todo." boton="Descargar" />
+    : <Puerta setAcceso={setAcceso} pipeline={PIPELINE_COMUNIDAD} nota={`entró por ${sk}/${slug}`} />
+
+  let kicker = t?.nombre
+  if (post) kicker += ` · ${post.skills.length} skills · ${post.lectura}`
+  if (capitulo) kicker = `Capítulo ${capitulo.n}${capitulo.lectura ? ` · ${capitulo.lectura}` : ''}`
+  if (noticia) kicker = `${t?.nombre} · ${noticia.fuente} · ${fechaLarga(noticia.fecha)}`
+  if (esNN) kicker = `Guía en PDF · ${NN_PUNTOS.length} puntos`
+
+  const titular = post ? post.gancho : capitulo?.texto ? capitulo.texto.gancho : esNN ? 'Mis 8 no negociables con Claude' : h.titulo
+  const sub = post ? post.resumen : capitulo ? capitulo.resumen : esNN ? NN_HILO.resumen : null
 
   return (
     <main className="aip-main aip-post">
@@ -200,45 +296,69 @@ function Hilo({ acceso, setAcceso }) {
         <Link to="/aiparatodo">Inicio</Link><ChevronRight size={14} />
         <Link to={`/aiparatodo/${sk}`}>{s.titulo}</Link><ChevronRight size={14} />
         {s.temas.length > 1 && <><Link to={`/aiparatodo/${sk}/${tema}`}>{t?.nombre}</Link><ChevronRight size={14} /></>}
-        <span>{h.titulo}</span>
+        <span>{capitulo ? `${capitulo.n} · ${capitulo.titulo}` : h.titulo}</span>
       </nav>
 
-      <header className="aip-post-cab">
-        <p className="aip-kicker"><span className="aip-punto" /> {t?.nombre}{p ? ` · ${p.skills.length} skills · ${p.lectura}` : ''}</p>
-        <h1 className="aip-h1">{p ? p.gancho : h.titulo}</h1>
-        {p && <p className="aip-sub">{p.resumen}</p>}
+      <header className={'aip-post-cab' + (esNN ? ' aip-nn-cab' : '')}>
+        <div>
+          <p className="aip-kicker"><span className="aip-punto" /> {kicker}</p>
+          <h1 className="aip-h1">{titular}</h1>
+          {sub && <p className="aip-sub">{sub}</p>}
+        </div>
+        {esNN && <img className="aip-nn-3d" src={NN_PORTADA_3D} alt="La guía «Mis 8 no negociables con Claude»" width="900" height="900" />}
       </header>
 
-      {!acceso ? <Puerta setAcceso={setAcceso} />
-        : p ? <CuerpoPost p={p} />
-          : (
-            <section className="aip-card aip-pronto-card">
-              <p>Este {sk === 'guia' ? 'capítulo' : 'hilo'} se publica pronto. Te avisamos al correo que dejaste.</p>
-              {sk === 'guia' && (
-                <ol>{CAPITULOS.map(c => <li key={c.slug} className={c.slug === slug ? 'on' : ''}><span>{c.n}</span> {c.titulo}</li>)}</ol>
-              )}
-            </section>
-          )}
+      {/* Lo que se ve antes de dejar los datos: el índice, para saber qué hay dentro. */}
+      {!acceso && capitulo?.texto && <IndiceCapitulo c={capitulo.texto} />}
+      {!acceso && esNN && <IndiceNN />}
+
+      {!acceso ? puerta
+        : post ? <CuerpoPost p={post} />
+          : capitulo?.texto ? <CuerpoCapitulo c={capitulo.texto} />
+            : noticia ? <CuerpoNoticia n={noticia} />
+              : esNN ? <CuerpoNoNegociables acceso={acceso} />
+                : (
+                  <section className="aip-card aip-pronto-card">
+                    <p>Este {sk === 'guia' ? 'capítulo' : 'hilo'} se publica pronto. Te avisamos al correo que dejaste.</p>
+                    {sk === 'guia' && (
+                      <ol>{CAPITULOS.map(c => <li key={c.slug} className={c.slug === slug ? 'on' : ''}><span>{c.n}</span> {c.titulo}</li>)}</ol>
+                    )}
+                  </section>
+                )}
+
+      {acceso && capitulo && <SiguienteCapitulo actual={capitulo} />}
+      {acceso && (capitulo || post) && <BannerNoNegociables donde={capitulo ? 'capitulo' : 'skills'} />}
 
       <Link className="aip-volver" to={`/aiparatodo/${sk}`}><ArrowLeft size={16} /> Volver a {s.titulo}</Link>
     </main>
   )
 }
 
-// ── La puerta: nombre y correo para leer ────────────────────────────────────
-function Puerta({ setAcceso }) {
-  const [f, setF] = useState({ nombre: '', email: '' })
+// ── La puerta: cuatro datos para leer ───────────────────────────────────────
+function Puerta({
+  setAcceso, pipeline, nota,
+  titulo = 'Deja tus datos para leerlo',
+  texto = 'Una sola vez: con estos cuatro datos se abren todos los hilos, los capítulos de la guía y las noticias. Te avisamos cuando haya nuevos.',
+  boton = 'Leer',
+}) {
+  const [f, setF] = useState({ nombre: '', email: '', profesion: '', ingresos: '' })
   const [estado, setEstado] = useState(null)
   const [error, setError] = useState(null)
+  const pon = (campo) => (e) => setF(s => ({ ...s, [campo]: e.target.value }))
+  const completo = f.nombre.trim() && f.email.trim() && f.profesion.trim() && f.ingresos
 
   async function entrar(e) {
     e.preventDefault()
+    if (!completo) return
     setEstado('enviando'); setError(null)
     try {
-      const lead = await altaLead({ nombre: f.nombre.trim(), email: f.email.trim(), evento: EVENTO })
-      const acceso = { id: lead?.id || null, nombre: f.nombre.trim(), at: new Date().toISOString() }
+      const lead = await altaMiembro({ ...f, nombre: f.nombre.trim(), email: f.email.trim(), pipeline, nota })
+      const acceso = {
+        id: lead?.id || null, nombre: f.nombre.trim(), profesion: f.profesion.trim(),
+        ingresos: f.ingresos, at: new Date().toISOString(),
+      }
       try { localStorage.setItem(LLAVE, JSON.stringify(acceso)) } catch { /* modo incógnito */ }
-      track('lead', { donde: 'aiparatodo' })
+      track('lead', { donde: 'aiparatodo', embudo: pipeline, ingresos: f.ingresos })
       setAcceso(acceso)
     } catch (err) {
       setError(err.message); setEstado(null)
@@ -248,25 +368,229 @@ function Puerta({ setAcceso }) {
   return (
     <form className="aip-card aip-puerta" onSubmit={entrar}>
       <p className="aip-kicker"><Lock size={13} /> contenido para miembros</p>
-      <h2>Deja tu correo para leerlo</h2>
-      <p>Una sola vez: con tu nombre y tu correo se abren todos los hilos. Te avisamos cuando haya nuevos.</p>
-      <div className="aip-campos">
-        <input placeholder="Tu nombre" value={f.nombre} maxLength={80} autoComplete="given-name" onChange={e => setF(s => ({ ...s, nombre: e.target.value }))} />
-        <input type="email" placeholder="Tu correo" required value={f.email} maxLength={160} autoComplete="email" inputMode="email" onChange={e => setF(s => ({ ...s, email: e.target.value }))} />
-        <button className="aip-btn" disabled={estado === 'enviando' || !f.email.trim()}>
-          {estado === 'enviando' ? 'Abriendo…' : <>Leer <ArrowRight size={18} /></>}
+      <h2>{titulo}</h2>
+      <p>{texto}</p>
+      <div className="aip-campos cuatro">
+        <input aria-label="Nombre" placeholder="Tu nombre" required value={f.nombre} maxLength={80} autoComplete="given-name" onChange={pon('nombre')} />
+        <input aria-label="Correo" type="email" placeholder="Tu correo" required value={f.email} maxLength={160} autoComplete="email" inputMode="email" onChange={pon('email')} />
+        <input className="ancho" aria-label="Profesión" placeholder="Tu profesión (ej. editor de vídeo, nutricionista, abogada)" required value={f.profesion} maxLength={120} autoComplete="organization-title" onChange={pon('profesion')} />
+        <fieldset className="aip-ingresos">
+          <legend>Tus ingresos al mes</legend>
+          {Object.entries(INGRESOS).map(([valor, etiqueta]) => (
+            <label key={valor} className={f.ingresos === valor ? 'on' : ''}>
+              <input type="radio" name="ingresos" value={valor} required checked={f.ingresos === valor} onChange={pon('ingresos')} />
+              <span>{etiqueta.replace('/mes', '')}</span>
+            </label>
+          ))}
+        </fieldset>
+        <button className="aip-btn" disabled={estado === 'enviando' || !completo}>
+          {estado === 'enviando' ? 'Abriendo…' : <>{boton} <ArrowRight size={18} /></>}
         </button>
       </div>
-      {error && <p className="aip-error">{error}</p>}
+      {error && <p className="aip-error" role="alert">{error}</p>}
+      <p className="aip-legal">Usamos tus datos solo para enviarte contenido de AI para todo. Puedes darte de baja cuando quieras. <a href="/privacidad">Privacidad</a></p>
     </form>
   )
 }
 
-// ── El cuerpo de un post de skills ──────────────────────────────────────────────────────────────
-function CuerpoPost({ p }) {
+// ── Texto con **negrita** y `código` ────────────────────────────────────────
+function Rico({ texto }) {
+  const partes = String(texto ?? '').split(/(\*\*[^*]+\*\*|`[^`]+`)/g)
+  return partes.map((p, i) => {
+    if (p.startsWith('**') && p.endsWith('**') && p.length > 4) return <b key={i}>{p.slice(2, -2)}</b>
+    if (p.startsWith('`') && p.endsWith('`') && p.length > 2) return <code key={i}>{p.slice(1, -1)}</code>
+    return p
+  })
+}
+
+const ancla = (texto, i) => `s-${i}-${String(texto).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48)}`
+
+// ── Un capítulo de la guía ──────────────────────────────────────────────────
+function IndiceCapitulo({ c, enlaces = false }) {
+  const apartados = c.bloques.map((b, i) => ({ b, i })).filter(({ b }) => b.tipo === 'h2')
+  if (!apartados.length) return null
+  return (
+    <section className="aip-card aip-indice">
+      <h2>{enlaces ? 'En este capítulo' : 'Qué vas a aprender'}</h2>
+      <ol>
+        {apartados.map(({ b, i }, k) => (
+          <li key={i}>
+            {enlaces
+              ? <a href={`#${ancla(b.texto, i)}`}><span>{String(k + 1).padStart(2, '0')}</span><b><Rico texto={b.texto} /></b></a>
+              : <span className="aip-indice-item"><span>{String(k + 1).padStart(2, '0')}</span><b><Rico texto={b.texto} /></b></span>}
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
+}
+
+const AVISOS = { truco: Lightbulb, ojo: AlertTriangle, dato: Info }
+
+function Bloque({ b, i }) {
+  switch (b.tipo) {
+    case 'h2': return <h2 id={ancla(b.texto, i)} className="aip-cap-h2"><Rico texto={b.texto} /></h2>
+    case 'h3': return <h3 className="aip-cap-h3"><Rico texto={b.texto} /></h3>
+    case 'p': return <p className="aip-cap-p"><Rico texto={b.texto} /></p>
+    case 'lista': return <ul className="aip-cap-lista">{(b.items || []).map((x, k) => <li key={k}><Rico texto={x} /></li>)}</ul>
+    case 'pasos': return (
+      <ol className="aip-cap-pasos">
+        {(b.items || []).map((x, k) => (
+          <li key={k}><span>{k + 1}</span><div><b><Rico texto={x.titulo} /></b>{x.texto && <p><Rico texto={x.texto} /></p>}</div></li>
+        ))}
+      </ol>
+    )
+    case 'aviso': {
+      const Icono = AVISOS[b.variante] || Info
+      return (
+        <aside className={`aip-aviso ${b.variante || 'dato'}`}>
+          <Icono size={18} />
+          <div>{b.titulo && <b><Rico texto={b.titulo} /></b>}<p><Rico texto={b.texto} /></p></div>
+        </aside>
+      )
+    }
+    case 'prompt': return <Prompt titulo={b.titulo} texto={b.texto} />
+    case 'codigo': return <Codigo titulo={b.titulo || 'Terminal'} nota={b.nota} texto={b.texto} />
+    case 'tabla': return (
+      <div className="aip-cap-tabla">
+        <table>
+          <thead><tr>{(b.cabecera || []).map((c, k) => <th key={k}><Rico texto={c} /></th>)}</tr></thead>
+          <tbody>{(b.filas || []).map((f, k) => <tr key={k}>{f.map((c, j) => <td key={j}><Rico texto={c} /></td>)}</tr>)}</tbody>
+        </table>
+      </div>
+    )
+    default: return null
+  }
+}
+
+function CuerpoCapitulo({ c }) {
   return (
     <>
+      <IndiceCapitulo c={c} enlaces />
+      <article className="aip-capitulo">
+        {c.bloques.map((b, i) => <Bloque key={i} b={b} i={i} />)}
+      </article>
+      {c.claves?.length > 0 && (
+        <section className="aip-card aip-claves">
+          <h2>Lo que te llevas</h2>
+          <ul>{c.claves.map((x, k) => <li key={k}><Check size={16} /><span><Rico texto={x} /></span></li>)}</ul>
+        </section>
+      )}
+      {c.fuentes?.length > 0 && (
+        <section className="aip-fuentes">
+          <h3>Fuentes oficiales</h3>
+          <ul>
+            {c.fuentes.map(f => (
+              <li key={f.url}><a href={f.url} target="_blank" rel="noopener noreferrer">{f.texto} <ExternalLink size={12} /></a></li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </>
+  )
+}
 
+function SiguienteCapitulo({ actual }) {
+  const i = CAPITULOS.findIndex(c => c.slug === actual.slug)
+  const sig = CAPITULOS[i + 1]
+  if (!sig) return null
+  return (
+    <Link className="aip-siguiente" to={`/aiparatodo/guia/capitulos/${sig.slug}`}>
+      <small>Siguiente capítulo</small>
+      <b>{sig.n} · {sig.titulo}</b>
+      <ArrowRight size={18} />
+    </Link>
+  )
+}
+
+// ── Una noticia del día ─────────────────────────────────────────────────────
+function CuerpoNoticia({ n }) {
+  return (
+    <section className="aip-card aip-noticia">
+      <p className="aip-noticia-resumen">{n.resumen}</p>
+      {n.por_que && <p className="aip-noticia-porque"><b>Por qué te importa.</b> {n.por_que}</p>}
+      <a className="aip-btn sec" href={n.url} target="_blank" rel="noopener noreferrer" onClick={() => track('clic_cta', { donde: 'aip-noticia-fuente' })}>
+        Leer la noticia en {n.fuente} <ExternalLink size={15} />
+      </a>
+    </section>
+  )
+}
+
+// ── La guía en PDF: los no negociables ──────────────────────────────────────
+function IndiceNN() {
+  return (
+    <section className="aip-card aip-indice">
+      <h2>Qué hay dentro</h2>
+      <ol className="aip-nn-indice">
+        {NN_PUNTOS.map(p => <li key={p.n}><span className="aip-indice-item"><span>{p.n}</span><b>{p.nombre}</b></span></li>)}
+      </ol>
+    </section>
+  )
+}
+
+function Descarga({ acceso, donde }) {
+  return (
+    <a
+      className="aip-btn aip-descarga" href={NN_PDF} download
+      onClick={() => { track('descarga', { recurso: 'no-negociables', donde }); anota(acceso?.id, 'AI para todo · descargó la guía Mis 8 no negociables (PDF)') }}
+    >
+      <Download size={18} /> Descargar el PDF
+    </a>
+  )
+}
+
+function CuerpoNoNegociables({ acceso }) {
+  return (
+    <>
+      <section className="aip-card aip-nn-listo">
+        <p className="aip-kicker"><Check size={13} /> Lista para descargar</p>
+        <h2>Toda tuya{acceso?.nombre ? <>, <em>{acceso.nombre}</em></> : null}</h2>
+        <p>{NN_INTRO}</p>
+        <Descarga acceso={acceso} donde="arriba" />
+      </section>
+
+      {NN_PUNTOS.map(p => (
+        <section key={p.n} className="aip-skill aip-nn-punto">
+          <p className="aip-skill-n"><span>{p.n}</span> {p.nombre}</p>
+          <h2>{p.titulo}</h2>
+          <p className="aip-historia aip-nn-frase">{p.frase}</p>
+          <h3>Qué es</h3>
+          <p className="aip-historia"><Rico texto={p.que} /></p>
+          <h3>Ejemplo</h3>
+          <p className="aip-nn-ejemplo"><Rico texto={p.ejemplo} /></p>
+          <h3>Cómo empezar</h3>
+          <ol className="aip-cap-pasos">
+            {p.pasos.map((x, k) => <li key={k}><span>{k + 1}</span><div><p><Rico texto={x} /></p></div></li>)}
+          </ol>
+          <aside className="aip-aviso ojo"><AlertTriangle size={18} /><div><b>Ojo</b><p>{p.ojo}</p></div></aside>
+          <p className="aip-nn-donde">Dónde: {p.donde}</p>
+        </section>
+      ))}
+
+      <section className="aip-card aip-resumen">
+        <h2>Si estás empezando, en este orden</h2>
+        <table>
+          <tbody>{NN_ORDEN.map(o => <tr key={o.cuando}><td>{o.cuando}</td><td>{o.que}</td></tr>)}</tbody>
+        </table>
+      </section>
+
+      <section className="aip-card aip-nn-final">
+        <h2>Llévatela en PDF</h2>
+        <p>Los 8 puntos en siete páginas, para tenerlos a mano mientras trabajas. Y la guía completa de Claude, capítulo a capítulo, en esta misma sección.</p>
+        <div className="aip-fila">
+          <Descarga acceso={acceso} donde="abajo" />
+          <Link className="aip-btn sec" to="/aiparatodo/guia/capitulos">Ir a la guía completa <ArrowRight size={16} /></Link>
+        </div>
+      </section>
+    </>
+  )
+}
+
+// ── El cuerpo de un post de skills ──────────────────────────────────────────
+function CuerpoPost({ p }) {
+  const n = p.skills.length
+  return (
+    <>
       <section className="aip-card aip-indice">
         <h2>Qué vas a encontrar</h2>
         <ol>
@@ -274,7 +598,7 @@ function CuerpoPost({ p }) {
             <li key={s.clave}><a href={`#${s.clave}`}><span>{s.n}</span><b>{s.nombre}</b> — {s.corto}</a></li>
           ))}
         </ol>
-        <p className="aip-nota">Las {p.skills.length} son gratis, oficiales de Anthropic y de código abierto. Solo necesitas Claude Code.</p>
+        <p className="aip-nota">{p.nota || `Las ${n} son gratis. Solo necesitas Claude Code.`}</p>
       </section>
 
       {p.skills.map(s => (
@@ -287,7 +611,10 @@ function CuerpoPost({ p }) {
 
           <div className="aip-repo">
             <Github size={16} />
-            <div><code>anthropics/skills · {s.clave}</code><small>Skill oficial de Anthropic · código abierto</small></div>
+            <div>
+              <code>{s.repo || 'anthropics/skills'} · {s.clave}</code>
+              <small>{s.oficial === false ? `De la comunidad · ${s.autor}` : 'Skill oficial de Anthropic'}{s.licencia ? ` · ${s.licencia}` : ''}</small>
+            </div>
             <a className="aip-btn sec pequeno" href={s.github} target="_blank" rel="noopener noreferrer">Ver en GitHub <ArrowRight size={14} /></a>
           </div>
 
@@ -299,12 +626,14 @@ function CuerpoPost({ p }) {
         </section>
       ))}
 
-      <section className="aip-skill aip-bonus">
-        <p className="aip-skill-n"><span>+</span> bonus</p>
-        <h2>Las cinco de una vez</h2>
-        <p className="aip-historia">{p.instalarTodo.explica}</p>
-        <Codigo titulo="Instalar las 5 en Claude Code" texto={p.instalarTodo.comando} />
-      </section>
+      {p.instalarTodo && (
+        <section className="aip-skill aip-bonus">
+          <p className="aip-skill-n"><span>+</span> bonus</p>
+          <h2>Todas de una vez</h2>
+          <p className="aip-historia">{p.instalarTodo.explica}</p>
+          <Codigo titulo="Instalar en Claude Code" texto={p.instalarTodo.comando} />
+        </section>
+      )}
 
       <section className="aip-card aip-resumen">
         <h2>Resumen rápido</h2>
@@ -315,7 +644,6 @@ function CuerpoPost({ p }) {
           </tbody>
         </table>
       </section>
-
     </>
   )
 }

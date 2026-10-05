@@ -1,8 +1,12 @@
 // AI para todo — el contenido de la comunidad.
 //
-// Un foro de skills por temas. De momento hay uno (diseño); el resto de temas
-// se enseñan como «próximamente» para que se vea hacia dónde va. Añadir un
-// post es añadir un objeto a POSTS.
+//   · Skills: cada colección es un archivo de ./skills/ (y la de diseño, aquí
+//     abajo). Añadir una es añadir un archivo: se carga sola.
+//   · Guía: cada capítulo es un archivo de ./guia/ (NN-slug.js). Mientras un
+//     capítulo del índice no tenga archivo, se enseña como «pronto».
+//   · No negociables: la guía en PDF, en ./noNegociables.js.
+//   · News: no está aquí. Son las noticias que deja cada mañana el agente de
+//     noticias de HELM en el perfil silvestre, y se piden a /api/aiparatodo.
 //
 // Las instrucciones de instalación son las REALES de Claude Code: el
 // marketplace oficial de Anthropic (anthropics/skills) trae las cinco skills de
@@ -28,14 +32,16 @@ export const SECCIONES = [
       { key: 'contenido', nombre: 'Contenido', desc: 'Guiones, reels y copy con tu voz' },
       { key: 'estrategia', nombre: 'Estrategia', desc: 'Oferta, embudo y números del negocio' },
       { key: 'automatizacion', nombre: 'Automatización', desc: 'Que las tareas repetidas se hagan solas' },
+      { key: 'documentos', nombre: 'Documentos', desc: 'Word, Excel, PowerPoint y PDF sin pelearte con ellos' },
+      { key: 'desarrollo', nombre: 'Claude Code', desc: 'Construir webs, automatizaciones y herramientas con método' },
     ],
   },
   {
-    key: 'news', titulo: 'News', desc: 'Lo nuevo de la IA que de verdad cambia cómo trabajas, contado sin humo.',
+    key: 'news', titulo: 'News', desc: 'Las noticias del día de IA y ciberseguridad, cada mañana, contadas sin humo.',
+    // Los temas son los del agente de noticias de HELM (helm_noticias.tema).
     temas: [
-      { key: 'claude', nombre: 'Claude', desc: 'Novedades de Claude y de Anthropic' },
-      { key: 'modelos', nombre: 'Modelos', desc: 'Qué modelo usar para qué' },
-      { key: 'herramientas', nombre: 'Herramientas', desc: 'Lo que merece la pena probar' },
+      { key: 'ia', nombre: 'IA', desc: 'Modelos, herramientas y lo que cambia cómo trabajas' },
+      { key: 'ciberseguridad', nombre: 'Ciberseguridad', desc: 'Fallos, estafas y cómo protegerte' },
     ],
   },
   {
@@ -47,22 +53,34 @@ export const SECCIONES = [
     ],
   },
   {
-    key: 'guia', titulo: 'Guía completa de Claude', desc: 'De cero a dirigir Claude, capítulo a capítulo.',
+    key: 'guia', titulo: 'Guía completa de Claude', desc: 'De cero a dirigir Claude: proyectos, skills, conectores, MCP y Claude Code. Y mis no negociables, en PDF.',
     temas: [
       { key: 'capitulos', nombre: 'Capítulos', desc: 'La guía, en orden' },
+      { key: 'no-negociables', nombre: 'No negociables', desc: 'Mis 8 no negociables con Claude, en PDF' },
     ],
   },
 ]
 export const seccionPorClave = (k) => SECCIONES.find(s => s.key === k)
 
-// Los capítulos de la guía: el índice ya se ve; el texto llega pronto.
+// Los capítulos de la guía, en orden. El texto de cada uno está en
+// ./guia/NN-slug.js; el que todavía no tenga archivo sale como «pronto».
+const TEXTOS_GUIA = Object.values(import.meta.glob('./guia/*.js', { eager: true, import: 'default' }))
 export const CAPITULOS = [
   { slug: 'empieza-aqui', titulo: 'Empieza aquí: qué es Claude y cómo pensar con él' },
   { slug: 'proyectos', titulo: 'Proyectos: que Claude conozca tu negocio' },
   { slug: 'skills', titulo: 'Skills: enséñale a Claude a trabajar como tú' },
   { slug: 'conectores', titulo: 'Conectores: Claude con tus herramientas' },
+  { slug: 'mcp', titulo: 'MCP: el enchufe universal entre Claude y todo lo demás' },
   { slug: 'claude-code', titulo: 'Claude Code y agentes: que trabaje solo' },
-].map((c, i) => ({ ...c, n: String(i + 1).padStart(2, '0'), seccion: 'guia', tema: 'capitulos', pronto: true }))
+].map((c, i) => {
+  const texto = TEXTOS_GUIA.find(t => t.slug === c.slug)
+  return {
+    ...c, n: String(i + 1).padStart(2, '0'), seccion: 'guia', tema: 'capitulos',
+    resumen: texto?.resumen, lectura: texto?.lectura, fecha: texto?.fecha,
+    texto: texto || null, pronto: !texto,
+  }
+})
+export const capituloPorSlug = (slug) => CAPITULOS.find(c => c.slug === slug)
 
 const REPO_SKILLS = 'https://github.com/anthropics/skills'
 const copiaSuelta = (ruta, nombre) =>
@@ -78,6 +96,7 @@ export const POSTS = [
     resumen: 'Cinco skills gratis y oficiales de Anthropic que convierten a Claude en tu diseñador: webs completas, pósters, apps, paletas y arte generativo.',
     fecha: '2026-09-29',
     lectura: '8 min',
+    nota: 'Las 5 son gratis, oficiales de Anthropic y de código abierto (Apache 2.0). Solo necesitas Claude Code.',
     instalarTodo: {
       explica: 'Las cinco vienen en el plugin oficial «example-skills» de Anthropic. Dentro de Claude Code, pega estas dos líneas una detrás de otra:',
       comando: '/plugin marketplace add anthropics/skills\n/plugin install example-skills@anthropic-agent-skills',
@@ -94,6 +113,7 @@ export const POSTS = [
           'Sirve para landings, paneles, portfolios y apps',
         ],
         github: `${REPO_SKILLS}/tree/main/skills/frontend-design`,
+        autor: 'Anthropic', oficial: true, repo: 'anthropics/skills', ruta: 'skills/frontend-design', licencia: 'Apache 2.0',
         suelta: copiaSuelta('skills', 'frontend-design'),
         ejemplos: [
           { titulo: 'Landing para una academia', texto: 'Diseña la landing de una academia online de edición de vídeo. Estética oscura y cinematográfica, tipografía con carácter, animaciones suaves al hacer scroll. Hero con vídeo, módulos del curso, testimonios y formulario de reserva.' },
@@ -111,6 +131,7 @@ export const POSTS = [
           'La tipografía forma parte de la composición',
         ],
         github: `${REPO_SKILLS}/tree/main/skills/canvas-design`,
+        autor: 'Anthropic', oficial: true, repo: 'anthropics/skills', ruta: 'skills/canvas-design', licencia: 'Apache 2.0',
         suelta: copiaSuelta('skills', 'canvas-design'),
         ejemplos: [
           { titulo: 'Anuncio de un directo', texto: 'Crea un póster vertical para Instagram anunciando un directo sobre IA aplicada a negocios. Negro y granate, mucho aire, solo el título, la fecha y la hora.' },
@@ -128,6 +149,7 @@ export const POSTS = [
           'Todo empaquetado en un único HTML',
         ],
         github: `${REPO_SKILLS}/tree/main/skills/web-artifacts-builder`,
+        autor: 'Anthropic', oficial: true, repo: 'anthropics/skills', ruta: 'skills/web-artifacts-builder', licencia: 'Apache 2.0',
         suelta: copiaSuelta('skills', 'web-artifacts-builder'),
         ejemplos: [
           { titulo: 'Calculadora de presupuestos', texto: 'Crea una calculadora de presupuestos para un editor de vídeo: tipo de pieza (reel, YouTube, anuncio), número de clips y urgencia. Que muestre el precio al instante y permita copiarlo.' },
@@ -145,6 +167,7 @@ export const POSTS = [
           'Se aplican a webs, presentaciones e informes',
         ],
         github: `${REPO_SKILLS}/tree/main/skills/theme-factory`,
+        autor: 'Anthropic', oficial: true, repo: 'anthropics/skills', ruta: 'skills/theme-factory', licencia: 'Apache 2.0',
         suelta: copiaSuelta('skills', 'theme-factory'),
         ejemplos: [
           { titulo: 'Elegir tema para tu marca', texto: 'Enséñame los temas de Theme Factory y dime cuál encaja con una marca personal de IA con tono serio y oscuro. Aplícalo a una página de ejemplo.' },
@@ -162,6 +185,7 @@ export const POSTS = [
           'Cada semilla, una pieza única y repetible',
         ],
         github: `${REPO_SKILLS}/tree/main/skills/algorithmic-art`,
+        autor: 'Anthropic', oficial: true, repo: 'anthropics/skills', ruta: 'skills/algorithmic-art', licencia: 'Apache 2.0',
         suelta: copiaSuelta('skills', 'algorithmic-art'),
         ejemplos: [
           { titulo: 'Fondo para tu marca', texto: 'Genera un fondo de partículas que fluyen despacio, en granate sobre negro, con controles para la densidad y la velocidad. Quiero usarlo detrás de mi web.' },
@@ -172,8 +196,21 @@ export const POSTS = [
   },
 ]
 
+// Las colecciones de ./skills/, de la más nueva a la más antigua.
+POSTS.push(...Object.values(import.meta.glob('./skills/*.js', { eager: true, import: 'default' })))
+POSTS.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)) || a.slug.localeCompare(b.slug))
+
 export const postPorSlug = (slug) => POSTS.find(p => p.slug === slug)
 
-// Los hilos de una sección (y de un tema): publicados y anunciados.
-export const hilosDe = (seccion, tema) => [...POSTS, ...CAPITULOS]
+// La guía en PDF: su hilo en la sección Guía. /nonegociables lleva aquí.
+export const NN_HILO = {
+  slug: 'mis-8-no-negociables-con-claude', seccion: 'guia', tema: 'no-negociables',
+  titulo: 'Mis 8 no negociables con Claude (guía en PDF)',
+  resumen: 'Cómo trabajo para que la IA haga el trabajo de verdad: Composio, Skills, Loops, Modo plan, Subagentes, Hooks, el modelo correcto y Todo a GitHub.',
+  fecha: '2026-10-05', lectura: '10 min',
+}
+export const NN_RUTA = `/aiparatodo/${NN_HILO.seccion}/${NN_HILO.tema}/${NN_HILO.slug}`
+
+// Los hilos de una sección (y de un tema). News no está aquí: viene de la API.
+export const hilosDe = (seccion, tema) => [...POSTS, ...CAPITULOS, NN_HILO]
   .filter(h => h.seccion === seccion && (!tema || h.tema === tema))
