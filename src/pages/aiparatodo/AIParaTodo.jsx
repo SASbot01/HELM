@@ -378,7 +378,7 @@ function Puerta({
           <legend>Tus ingresos al mes</legend>
           {Object.entries(INGRESOS).map(([valor, etiqueta]) => (
             <label key={valor} className={f.ingresos === valor ? 'on' : ''}>
-              <input type="radio" name="ingresos" value={valor} required checked={f.ingresos === valor} onChange={pon('ingresos')} />
+              <input type="radio" name="ingresos" value={valor} aria-label={etiqueta} required checked={f.ingresos === valor} onChange={pon('ingresos')} />
               <span>{etiqueta.replace('/mes', '')}</span>
             </label>
           ))}
@@ -618,7 +618,11 @@ function CuerpoPost({ p }) {
             <a className="aip-btn sec pequeno" href={s.github} target="_blank" rel="noopener noreferrer">Ver en GitHub <ArrowRight size={14} /></a>
           </div>
 
-          <Codigo titulo="Instalar solo esta skill" nota="En tu terminal. La copia a ~/.claude/skills y Claude Code la usa sola cuando toca." texto={s.suelta} />
+          <Codigo
+            titulo={s.sueltaTitulo || 'Instalar solo esta skill'}
+            nota={s.sueltaNota || 'En tu terminal. La copia a ~/.claude/skills y Claude Code la usa sola cuando toca (si lo tenías abierto, reinícialo).'}
+            texto={s.suelta}
+          />
 
           <div className="aip-ejemplos">
             {s.ejemplos.map(e => <Prompt key={e.titulo} {...e} />)}
