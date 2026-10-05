@@ -2,7 +2,9 @@
    Página pública con identidad propia, no el panel de HELM: negro con acento
    lima, display grande y etiquetas en mono. Todo namespaced bajo .sv-root para
    que no se toque con theme.css si algún día conviven en la misma pantalla. */
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('../../fonts/space-grotesk.css');
+@import url('../../fonts/inter.css');
+@import url('../../fonts/jetbrains-mono.css');
 
 .sv-root{
   --void:#07080A;

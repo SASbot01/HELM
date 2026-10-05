@@ -21,7 +21,8 @@
                          porque una tarjeta blanca sobre fondo claro sin
                          sombra no existe.
    ============================================================================ */
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('../fonts/archivo.css');
+@import url('../fonts/jetbrains-mono.css');
 
 /* Las variables se declaran también en .helm-swatch, que necesita la paleta
    sin heredar el layout de .helm. */
@@ -219,7 +220,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-table td { padding: 13px 18px; border-bottom: 1px solid var(--border); color: var(--text); white-space: nowrap; }
 .helm-table tr:last-child td { border-bottom: none; }
 .helm-table tbody tr:hover { background: var(--hover); }
-.helm-num { font-family: 'JetBrains Mono', monospace; }
+.helm-num { font-family: inherit; font-variant-numeric: tabular-nums; }
 /* Fila anulada (venta cancelada): se ve, pero se lee como "esto no cuenta". */
 .helm-table tr.helm-row-void td { color: var(--text-mut); text-decoration: line-through; }
 .helm-table tr.helm-row-void td:last-child { text-decoration: none; }
@@ -331,7 +332,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-col-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
 .helm-col-head b { font-weight: 600; }
 .helm-col-count { background: var(--panel-2); border: 1px solid var(--border); border-radius: 20px; padding: 1px 8px; font-size: 11px; color: var(--text-dim); }
-.helm-col-sum { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-mut); }
+.helm-col-sum { margin-left: auto; font-family: inherit; font-variant-numeric: tabular-nums; font-size: 11px; color: var(--text-mut); }
 .helm-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-mut); flex-shrink: 0; }
 .helm-dot.cyan { background: var(--cyan); } .helm-dot.amber { background: var(--amber); }
 .helm-dot.violet { background: var(--violet); } .helm-dot.green { background: var(--green); } .helm-dot.red { background: var(--red); }
@@ -342,7 +343,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-kcard:active { transform: scale(.98); }
 .helm-kcard-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .helm-kcard-top b { font-size: 13.5px; font-weight: 600; }
-.helm-kcard-val { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--green); }
+.helm-kcard-val { font-family: inherit; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--green); }
 .helm-kcard-sub { display: flex; align-items: center; gap: 5px; color: var(--text-dim); font-size: 12px; margin-top: 4px; }
 .helm-kcard-meta { display: flex; flex-direction: column; gap: 3px; margin-top: 7px; }
 .helm-kcard-meta span { display: flex; align-items: center; gap: 5px; color: var(--text-mut); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -389,7 +390,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-task-title { font-size: 14px; font-weight: 500; }
 .helm-task-desc { font-size: 12.5px; color: var(--text-dim); margin-top: 2px; }
 .helm-task-meta { display: flex; align-items: center; gap: 10px; }
-.helm-task-due { font-size: 12px; color: var(--text-mut); font-family: 'JetBrains Mono', monospace; }
+.helm-task-due { font-size: 12px; color: var(--text-mut); font-family: inherit; font-variant-numeric: tabular-nums; }
 
 /* Notes -------------------------------------------------------------------- */
 
@@ -482,11 +483,11 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-chat-bubble p + p { margin-top: 2px; }
 .helm-chat-bubble.typing { display: flex; align-items: center; gap: 8px; color: var(--text-mut); }
 .helm-chat-cmd {
-  display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  display: inline-block; font-family: inherit; font-variant-numeric: tabular-nums; font-size: 11px;
   color: var(--cyan); margin-bottom: 6px;
 }
 .helm-chat-code {
-  font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  font-family: inherit; font-variant-numeric: tabular-nums; font-size: 12px;
   background: var(--bg-1); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px;
 }
 .helm-spin { animation: helm-spin 1s linear infinite; }
@@ -497,11 +498,11 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-chat-intro h3 { margin: 0 0 6px; font-size: 16px; color: var(--text); font-weight: 600; }
 .helm-chat-intro p { margin: 0; font-size: 13px; line-height: 1.7; }
 .helm-chat-intro code {
-  font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--cyan);
+  font-family: inherit; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--cyan);
 }
 .helm-chat-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
 .helm-chat-chip {
-  font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer;
+  font-family: inherit; font-variant-numeric: tabular-nums; font-size: 12px; cursor: pointer;
   background: var(--panel); border: 1px solid var(--border); color: var(--text-dim);
   border-radius: 999px; padding: 6px 12px;
 }
@@ -534,8 +535,8 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 }
 .helm-chat-suggest-row:last-child { border-bottom: none; }
 .helm-chat-suggest-row:hover { background: var(--hover); }
-.helm-chat-suggest-row b { font-family: 'JetBrains Mono', monospace; color: var(--cyan); font-weight: 500; }
-.helm-chat-suggest-row .args { font-family: 'JetBrains Mono', monospace; color: var(--text-mut); font-size: 11.5px; }
+.helm-chat-suggest-row b { font-family: inherit; font-variant-numeric: tabular-nums; color: var(--cyan); font-weight: 500; }
+.helm-chat-suggest-row .args { font-family: inherit; font-variant-numeric: tabular-nums; color: var(--text-mut); font-size: 11.5px; }
 .helm-chat-suggest-row .desc { margin-left: auto; color: var(--text-mut); font-size: 11.5px; }
 
 .helm-chat-memory {
@@ -609,7 +610,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 }
 .helm-settings-block p { margin: 0 0 10px; font-size: 12.5px; line-height: 1.7; color: var(--text-dim); }
 .helm-settings-block code, .helm-copyrow code {
-  font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--cyan);
+  font-family: inherit; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--cyan);
 }
 
 .helm-copyrow {
@@ -791,7 +792,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-onb-scale-n {
   flex: 1; min-width: 34px; height: 38px; border-radius: var(--radius-sm); cursor: pointer;
   background: var(--bg-1); border: 1px solid var(--border-2); color: var(--text-dim);
-  font-family: 'JetBrains Mono', monospace; font-size: 13px; transition: all .12s;
+  font-family: inherit; font-variant-numeric: tabular-nums; font-size: 13px; transition: all .12s;
 }
 .helm-onb-scale-n:hover { border-color: var(--cyan); color: var(--text); }
 .helm-onb-scale-n.on { background: var(--cyan); border-color: transparent; color: var(--on-accent); font-weight: 600; }
@@ -859,7 +860,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 }
 .helm-biblia-editor {
   min-height: 60vh; resize: vertical; line-height: 1.6;
-  font-family: 'JetBrains Mono', monospace; font-size: 13px;
+  font-family: ui-monospace, monospace; font-size: 13px;
 }
 
 /* Tipografía del documento markdown */
@@ -876,7 +877,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-md li { margin: 5px 0; color: var(--text-dim); }
 .helm-md strong { color: var(--text); font-weight: 600; }
 .helm-md em { color: var(--text-mut); font-style: italic; }
-.helm-md code { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; background: var(--panel-2); padding: 1px 5px; border-radius: 5px; }
+.helm-md code { font-family: ui-monospace, monospace; font-size: 12.5px; background: var(--panel-2); padding: 1px 5px; border-radius: 5px; }
 .helm-md > :first-child { margin-top: 0; }
 
 /* Onboarding · filas de conexiones futuras -------------------------------- */
@@ -899,7 +900,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 }
 .helm-tcard-more:hover { color: var(--text); }
 .helm-task-due.over { color: var(--red); }
-.helm-chk { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--text-mut); font-family: 'JetBrains Mono', monospace; }
+.helm-chk { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--text-mut); font-family: inherit; font-variant-numeric: tabular-nums; }
 .helm-assignee {
   margin-left: auto; width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
   display: grid; place-items: center; font-size: 10px; font-weight: 700; color: var(--on-accent);
@@ -933,7 +934,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-cal-dia.fuera { opacity: 0.42; }
 .helm-cal-dia.hoy { border-color: var(--cyan); }
 .helm-cal-dia.over { border-color: var(--cyan); background: var(--hover); }
-.helm-cal-n { font-size: 11.5px; font-weight: 700; color: var(--text-mut); font-family: 'JetBrains Mono', monospace; }
+.helm-cal-n { font-size: 11.5px; font-weight: 700; color: var(--text-mut); font-family: inherit; font-variant-numeric: tabular-nums; }
 .helm-cal-dia.hoy .helm-cal-n { color: var(--cyan); }
 .helm-cal-task {
   display: flex; align-items: center; gap: 5px; width: 100%; padding: 3px 6px; cursor: pointer;
@@ -1027,7 +1028,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-chk-block { margin-top: 22px; }
 .helm-chk-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .helm-chk-head b { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; }
-.helm-chk-head span { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-mut); }
+.helm-chk-head span { font-family: inherit; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--text-mut); }
 .helm-chk-list { display: flex; flex-direction: column; gap: 6px; }
 /* Generar guion con IA: tema + intención, en una tarjeta propia para que se
    note que es la IA la que va a escribir, no un campo más del formulario. */
@@ -1188,7 +1189,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0; display: grid; place-items: center;
   background: var(--cyan); color: var(--on-accent);
 }
-.helm-svc-price { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.helm-svc-price { font-family: inherit; font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 600; white-space: nowrap; }
 .helm-svc-desc { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--text-dim); }
 .helm-svc-meta { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11.5px; color: var(--text-mut); }
 .helm-svc-people { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; color: var(--text-mut); }
@@ -1203,7 +1204,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-kv { display: grid; gap: 3px; font-size: 12.5px; }
 .helm-kv > div:first-child { display: flex; align-items: center; gap: 6px; color: var(--text-mut); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; }
 .helm-kv > div:last-child { color: var(--text); }
-.helm-kv small { display: block; color: var(--text-mut); font-family: 'JetBrains Mono', monospace; font-size: 11px; margin-top: 2px; word-break: break-all; }
+.helm-kv small { display: block; color: var(--text-mut); font-family: inherit; font-variant-numeric: tabular-nums; font-size: 11px; margin-top: 2px; word-break: break-all; }
 
 /* Interruptor de texto (activo / inactivo). */
 .helm-switch { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-dim); cursor: pointer; }
@@ -1311,7 +1312,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-form-resp-item small { display: block; font-size: 12px; color: var(--text-mut); line-height: 1.4; margin-bottom: 5px; }
 /* La respuesta pesa más que la pregunta: es lo que se viene a leer. */
 .helm-form-resp-item > div { font-size: 14.5px; font-weight: 500; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
-.helm-form-resp-mono { font-family: 'JetBrains Mono', monospace; font-size: 12px !important; font-weight: 400 !important; color: var(--text-dim); }
+.helm-form-resp-mono { font-family: inherit; font-variant-numeric: tabular-nums; font-size: 12px !important; font-weight: 400 !important; color: var(--text-dim); }
 
 /* Estado de producción de una pieza de contenido --------------------------- */
 .helm-segmented.estado button.on.todo  { background: var(--panel-2); color: var(--text); border: 1px solid var(--border-2); }
@@ -1619,7 +1620,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   display: grid; grid-template-columns: 1fr 70px 100px 80px 100px 34px; gap: 8px; align-items: center;
 }
 .helm-doc-lineas-head { padding: 0 2px; font-size: 11px; letter-spacing: .5px; text-transform: uppercase; color: var(--text-mut); }
-.helm-doc-importe { font-family: 'JetBrains Mono', monospace; font-size: 13px; text-align: right; padding-right: 6px; }
+.helm-doc-importe { font-family: inherit; font-variant-numeric: tabular-nums; font-size: 13px; text-align: right; padding-right: 6px; }
 .helm-doc-linea .helm-btn { padding: 8px; }
 
 .helm-doc-totales {
@@ -1628,7 +1629,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 }
 .helm-doc-totales label { font-size: 12px; color: var(--text-dim); margin-right: 8px; }
 .helm-doc-totales-cifras { display: flex; gap: 18px; font-size: 13px; color: var(--text-dim); }
-.helm-doc-totales-cifras b { color: var(--text); font-family: 'JetBrains Mono', monospace; }
+.helm-doc-totales-cifras b { color: var(--text); font-family: inherit; font-variant-numeric: tabular-nums; }
 .helm-doc-total-final { font-size: 15px; color: var(--text) !important; }
 .helm-doc-total-final b { color: var(--accent); font-size: 17px; }
 
@@ -1665,7 +1666,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-doc-tabla td { padding: 10px 6px; border-bottom: 1px solid #e5e5e5; }
 .helm-doc-tabla th:last-child, .helm-doc-tabla td:last-child, .helm-doc-tabla th:nth-child(2), .helm-doc-tabla td:nth-child(2), .helm-doc-tabla th:nth-child(3), .helm-doc-tabla td:nth-child(3) { text-align: right; }
 .helm-doc-totales-final { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; margin: 18px 0 4px; font-size: 13.5px; color: #444; }
-.helm-doc-totales-final b { color: #1a1a1a; font-family: 'JetBrains Mono', monospace; min-width: 90px; display: inline-block; text-align: right; }
+.helm-doc-totales-final b { color: #1a1a1a; font-family: inherit; font-variant-numeric: tabular-nums; min-width: 90px; display: inline-block; text-align: right; }
 .helm-doc-total-final { font-size: 16px; padding-top: 8px; border-top: 1.5px solid #1a1a1a; color: #1a1a1a; }
 .helm-doc-total-final b { font-size: 18px; }
 .helm-doc-notas { margin-top: 20px; padding-top: 16px; border-top: 1px solid #e5e5e5; font-size: 12.5px; color: #6b6b6b; white-space: pre-wrap; }
@@ -1684,7 +1685,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-doc-verifactu img { border-radius: 4px; flex-shrink: 0; }
 .helm-doc-verifactu > div { display: flex; flex-direction: column; gap: 3px; }
 .helm-doc-verifactu b { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #2E7D5B; }
-.helm-doc-verifactu span { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #8a8a8a; word-break: break-all; }
+.helm-doc-verifactu span { font-family: inherit; font-variant-numeric: tabular-nums; font-size: 10.5px; color: #8a8a8a; word-break: break-all; }
 .helm-doc-verifactu small { font-size: 10px; color: #a0a0a0; max-width: 460px; line-height: 1.4; }
 
 /* Color de marca del perfil (Ajustes → Marca). El selector nativo trae un
@@ -1958,9 +1959,9 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-est-frame.green { border-color: color-mix(in srgb, var(--green) 45%, var(--border)); }
 .helm-est-frame.amber { border-top-color: var(--amber); }
 .helm-est-frame.violet { border-top-color: var(--violet); }
-.helm-est-frame-n { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-mut); }
+.helm-est-frame-n { font-family: inherit; font-variant-numeric: tabular-nums; font-size: 11px; color: var(--text-mut); }
 .helm-est-frame-t { font-size: 13.5px; font-weight: 700; }
-.helm-est-frame-tiempo { font-size: 10.5px; color: var(--text-mut); font-family: 'JetBrains Mono', monospace; }
+.helm-est-frame-tiempo { font-size: 10.5px; color: var(--text-mut); font-family: inherit; font-variant-numeric: tabular-nums; }
 .helm-est-frame-micro { font-size: 12px; color: var(--text-dim); line-height: 1.45; margin-top: 2px; }
 .helm-est-frame-pie { display: flex; align-items: baseline; gap: 8px; margin-top: auto; padding-top: 6px; }
 .helm-est-frame-carril { font-size: 10.5px; color: var(--text-mut); text-transform: uppercase; letter-spacing: .04em; }
@@ -1968,7 +1969,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 
 .helm-est-reglas { display: flex; flex-direction: column; gap: 6px; }
 .helm-est-regla { display: flex; flex-direction: row; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--panel); border: 1px solid var(--border); }
-.helm-est-regla-n { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--cyan); flex-shrink: 0; margin-top: 3px; }
+.helm-est-regla-n { font-family: inherit; font-variant-numeric: tabular-nums; font-size: 11px; color: var(--cyan); flex-shrink: 0; margin-top: 3px; }
 .helm-est-regla-txt { display: flex; flex-direction: column; gap: 3px; }
 .helm-est-regla-t { font-size: 13px; color: var(--text-dim); line-height: 1.5; }
 .helm-est-regla-porque { font-size: 12px; color: var(--text-mut); line-height: 1.5; }
@@ -2002,7 +2003,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-est-rank-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
 .helm-est-rank-nombre { font-size: 13px; font-weight: 600; }
 .helm-est-rank-badge {
-  font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: var(--cyan);
+  font-family: inherit; font-variant-numeric: tabular-nums; font-size: 11px; font-weight: 700; color: var(--cyan);
   background: color-mix(in srgb, var(--cyan) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--cyan) 30%, transparent);
   border-radius: 6px; padding: 1px 7px; white-space: nowrap;
@@ -2043,7 +2044,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .helm-est-objetivo-tag.venta { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 35%, transparent); }
 .helm-est-timeline { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 10px; }
 .helm-est-timeline td { padding: 6px 0; vertical-align: top; border-bottom: 1px dashed var(--border); }
-.helm-est-timeline td:first-child { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--cyan); white-space: nowrap; padding-right: 12px; width: 90px; }
+.helm-est-timeline td:first-child { font-family: inherit; font-variant-numeric: tabular-nums; font-size: 11px; color: var(--cyan); white-space: nowrap; padding-right: 12px; width: 90px; }
 .helm-est-timeline tr:last-child td { border-bottom: none; }
 
 .helm-est-mitos { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
@@ -2216,9 +2217,11 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     backdrop-filter: saturate(180%) blur(20px);
   }
 }
-.helm-top { padding-block: var(--sp-4); }
+/* El safe-area va aquí y no solo en el bloque móvil: esta regla viene después
+   y lo pisaba, y en iPhone la cabecera quedaba bajo la hora y la cámara. */
+.helm-top { padding-top: max(var(--sp-4), env(safe-area-inset-top)); padding-bottom: var(--sp-4); }
 .helm-top p { line-height: 1.45; }
-.helm-body { padding: var(--sp-5) 28px var(--sp-7); }
+.helm-body { padding: var(--sp-5) 28px calc(var(--sp-7) + env(safe-area-inset-bottom)); }
 
 /* ── Superficies ─────────────────────────────────────────────────────────── */
 .helm-card, .helm-panel {
@@ -2296,8 +2299,10 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 
 /* ── Móvil ───────────────────────────────────────────────────────────────── */
 @media (max-width: 720px) {
-  .helm-body { padding: var(--sp-4) var(--sp-4) var(--sp-7); }
-  .helm-top { padding-inline: var(--sp-4); }
+  .helm-body {
+    padding: var(--sp-4) max(var(--sp-4), env(safe-area-inset-right)) calc(var(--sp-7) + env(safe-area-inset-bottom)) max(var(--sp-4), env(safe-area-inset-left));
+  }
+  .helm-top { padding-inline: max(var(--sp-4), env(safe-area-inset-left)) max(var(--sp-4), env(safe-area-inset-right)); }
   /* 44px es el mínimo con el que un dedo acierta a la primera. Por debajo, se
      falla y se vuelve a intentar, y eso es exactamente lo que hace que una app
      se sienta mal sin que nadie sepa decir por qué. */
@@ -2455,7 +2460,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 /* Los rótulos, en monoespaciada y versalitas. Un panel de instrumento no
    titula, etiqueta. */
 .helm-panel-head h2, .helm-kpi .lbl, .helm-table th, .helm-navlabel {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: inherit; font-variant-numeric: tabular-nums;
   text-transform: uppercase;
   letter-spacing: .1em;
   font-weight: 500;
@@ -2466,7 +2471,7 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 
 /* Las cifras. Grandes, apretadas y tabulares: es lo que se lee de lejos. */
 .helm-kpi .val {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: inherit; font-variant-numeric: tabular-nums;
   font-weight: 500; letter-spacing: -.03em;
 }
 
@@ -2500,3 +2505,96 @@ table.helm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 /* Cabecera de la app: una línea de acento bajo el borde, como el canto
    iluminado de una consola. */
 .helm-top { border-bottom: 1px solid var(--border); }
+
+/* Borrar un pipeline con contactos: qué hacer con ellos, dentro de la lista. */
+.helm-pipe-borrar {
+  display: flex; flex-direction: column; gap: 8px; margin: 4px 8px 10px; padding: 10px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card-light);
+  font-size: .82rem;
+}
+.helm-pipe-borrar label { display: flex; flex-direction: column; gap: 4px; color: var(--text-secondary); }
+.helm-pipe-borrar .helm-btn { justify-content: center; }
+.helm-pipe-borrar .helm-btn.danger { color: var(--danger); border-color: var(--danger); }
+.helm-pipe-borrar .helm-btn.ghost { background: transparent; border-color: transparent; color: var(--text-secondary); }
+
+/* ════════════════════════════════════════════════════════════════════════
+   TAREAS COMO TABLÓN DE TICKETS
+   Cada tarea es un ticket: franja de prioridad arriba, número, título y un
+   talón perforado con la fecha y el responsable. Las columnas son carriles
+   de un tablón con un punteado suave de fondo. Solo afecta a Tareas: el
+   tablero del CRM sigue con sus .helm-kcard.
+   ════════════════════════════════════════════════════════════════════════ */
+.helm-tablon { gap: 16px; grid-auto-columns: minmax(262px, 1fr); }
+.helm-tablon .helm-col {
+  background:
+    radial-gradient(color-mix(in srgb, var(--text-mut) 22%, transparent) 1px, transparent 1.2px) 0 0 / 14px 14px,
+    var(--bg-1);
+  border-radius: 16px;
+}
+.helm-tablon .helm-col-head {
+  border-bottom: 0; padding: 14px 14px 6px;
+  text-transform: uppercase; letter-spacing: .08em; font-size: 11.5px;
+}
+.helm-tablon .helm-col-head b { font-weight: 700; }
+.helm-tablon .helm-col-count { margin-left: auto; font-variant-numeric: tabular-nums; }
+.helm-tablon .helm-col-body { gap: 12px; padding: 10px 12px 14px; }
+.helm-tablon .helm-col-empty { border-radius: 12px; padding: 22px 8px; background: color-mix(in srgb, var(--panel) 60%, transparent); }
+.helm-tablon .helm-col.over { background: color-mix(in srgb, var(--cyan) 6%, var(--bg-1)); }
+
+.helm-ticket {
+  --franja: var(--amber);
+  position: relative; cursor: grab;
+  background: var(--panel); border: 1px solid var(--border-2); border-radius: 12px;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent), 0 6px 16px -10px color-mix(in srgb, #000 60%, transparent);
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+  overflow: hidden;
+}
+.helm-ticket::before { content: ''; position: absolute; inset: 0 0 auto; height: 4px; background: var(--franja); }
+.helm-ticket.p-high { --franja: var(--red); }
+.helm-ticket.p-medium { --franja: var(--amber); }
+.helm-ticket.p-low { --franja: var(--cyan); }
+.helm-ticket:hover { transform: translateY(-3px) rotate(-.4deg); border-color: color-mix(in srgb, var(--franja) 55%, var(--border-2)); box-shadow: 0 14px 28px -14px color-mix(in srgb, #000 70%, transparent); }
+.helm-ticket:active { cursor: grabbing; transform: scale(.98); }
+.helm-ticket.vencida { border-color: color-mix(in srgb, var(--red) 55%, var(--border-2)); }
+.helm-ticket.hecha { opacity: .72; }
+.helm-ticket.hecha .helm-ticket-titulo { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--text) 35%, transparent); }
+
+.helm-ticket-cuerpo { padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 7px; }
+.helm-ticket-cab { display: flex; align-items: center; gap: 8px; }
+.helm-ticket-num { font-family: inherit; font-variant-numeric: tabular-nums; font-size: 11px; color: var(--text-mut); letter-spacing: .02em; }
+.helm-ticket-prio {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--franja); background: color-mix(in srgb, var(--franja) 12%, transparent);
+  border-radius: 20px; padding: 2px 8px;
+}
+.helm-ticket-lock { color: var(--text-mut); margin-left: auto; }
+.helm-ticket-titulo { font-size: 14.5px; font-weight: 650; line-height: 1.35; letter-spacing: -.005em; text-wrap: pretty; }
+.helm-ticket-sub { display: flex; align-items: center; gap: 5px; color: var(--text-dim); font-size: 12px; }
+.helm-ticket-progreso { position: relative; height: 18px; display: flex; align-items: center; }
+.helm-ticket-progreso::before { content: ''; position: absolute; left: 0; right: 44px; height: 5px; border-radius: 5px; background: var(--panel-2); }
+.helm-ticket-progreso span { position: absolute; left: 0; height: 5px; max-width: calc(100% - 44px); border-radius: 5px; background: var(--green); }
+.helm-ticket-progreso small { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+
+/* El talón: línea perforada y dos muescas, como un ticket de verdad. */
+.helm-ticket-talon {
+  position: relative; display: flex; align-items: center; gap: 8px;
+  padding: 9px 14px; border-top: 1.5px dashed var(--border-2);
+  background: color-mix(in srgb, var(--panel-2) 55%, transparent);
+}
+.helm-ticket-talon::before, .helm-ticket-talon::after {
+  content: ''; position: absolute; top: -8px; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--bg-1); border: 1px solid var(--border-2);
+}
+.helm-ticket-talon::before { left: -8px; }
+.helm-ticket-talon::after { right: -8px; }
+.helm-ticket-fecha { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.helm-ticket-fecha.sin { font-weight: 400; color: var(--text-mut); }
+.helm-ticket.vencida .helm-ticket-fecha { color: var(--red); }
+.helm-ticket-aviso { color: var(--amber); }
+.helm-ticket-quien {
+  margin-left: auto; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 10.5px; font-weight: 700; color: var(--on-accent, #fff); background: var(--gradient, var(--cyan));
+  box-shadow: 0 0 0 2px var(--panel);
+}
+.helm-ticket-quien.libre { background: var(--panel-2); color: var(--text-mut); }
+@media (prefers-reduced-motion: reduce) { .helm-ticket, .helm-ticket:hover { transition: none; transform: none; } }

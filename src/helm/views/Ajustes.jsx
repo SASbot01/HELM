@@ -1,14 +1,15 @@
 // HELM — Ajustes del perfil activo, organizado en pestañas: Integraciones
-// (Stripe y futuras conexiones) e IA local. Se irán añadiendo más pestañas.
+// (Stripe y futuras conexiones) e IA (modelo local o Claude, por perfil). Se
+// irán añadiendo más pestañas.
 import { useEffect, useRef, useState } from 'react'
 import {
   Check, Copy, Link2, RefreshCw, Unlink, Cpu, AlertTriangle, Palette, ShieldCheck,
   ShoppingCart, CalendarDays, Folder, FileText, ChevronRight, Search,
-  Download, Sparkles, Image as ImageIcon, Trash2, Eye, Pencil,
+  Download, Sparkles, Image as ImageIcon, Trash2, Eye, Pencil, Send,
 } from 'lucide-react'
-import { stripeApi, wooApi, chatApi, googleApi, calendlyApi, brandOf, saveBrand, uploadLogo, MAX_LOGO_MB, DEFAULT_SUBTITLE } from '../lib'
+import { stripeApi, wooApi, iaApi, MODELO_CLAUDE_DEFECTO, googleApi, instagramApi, calendlyApi, telegramApi, brandOf, saveBrand, uploadLogo, MAX_LOGO_MB, DEFAULT_SUBTITLE } from '../lib'
 import { Panel, Field, Input, Select, Tabs, Empty } from '../ui'
-import { TEMAS_ELEGIBLES, useHelmTheme, acentoDe, normalizaHex } from '../theme'
+import { normalizaHex } from '../theme'
 import {
   AREAS, SECCIONES, DEFAULT_MATRIX, DEFAULT_VISIBLE, OWNER_ROLE, loadPermisos, savePermisos,
 } from '../permisos'
@@ -408,6 +409,98 @@ function WooCard({ clientId }) {
 // Token de Acceso Personal que Calendly da en Integrations → API & Webhooks.
 // Sirve igual en HELM (agendar la llamada de venta) que en consultoria
 // (agendar la reunión con el cliente del despacho).
+// Instagram: las métricas de lo que publica el perfil. De aquí leen los agentes
+// (el alcance y las visitas de cada pieza) para saber dónde falla el embudo.
+// Dos formas de conectar: con el botón, si el servidor tiene la app de Meta
+// configurada, o pegando un token de larga duración generado en el panel de Meta.
+function InstagramCard({ clientId }) {
+  const [status, setStatus] = useState(null)
+  const [token, setToken] = useState('')
+  const [busy, setBusy] = useState(false)
+  // Vuelta del consentimiento de Meta: ?instagram=ok o ?instagram=error&msg=…
+  const vuelta = () => new URLSearchParams(window.location.search)
+  const [msg, setMsg] = useState(() => (vuelta().get('instagram') === 'ok' ? 'Instagram conectado.' : null))
+  const [error, setError] = useState(() => (vuelta().get('instagram') === 'error' ? vuelta().get('msg') || 'No se pudo conectar Instagram.' : null))
+
+  const load = () => instagramApi.status(clientId)
+    .then(setStatus)
+    .catch(err => { setError(err.message); setStatus({ linked: false, failed: true }) })
+  useEffect(() => { load() }, [clientId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function hacer(fn, ok) {
+    setBusy(true); setError(null); setMsg(null)
+    try { const r = await fn(); if (ok) setMsg(ok(r)); await load() } catch (err) { setError(err.message) }
+    setBusy(false)
+  }
+  const conectar = () => hacer(async () => { window.location.href = (await instagramApi.authUrl(clientId)).url })
+  const pegar = (e) => { e.preventDefault(); return hacer(async () => { await instagramApi.link(clientId, token.trim()); setToken('') }, () => 'Instagram conectado.') }
+  const sincronizar = () => hacer(() => instagramApi.sync(clientId), r => `${r.sincronizadas} publicaciones sincronizadas.`)
+  const desconectar = () => {
+    if (!confirm('¿Desconectar Instagram de este perfil? Las métricas ya guardadas se quedan.')) return
+    hacer(() => instagramApi.unlink(clientId), () => 'Instagram desconectado.')
+  }
+
+  if (!status) return <Panel title="Instagram"><div className="helm-empty">Cargando…</div></Panel>
+  if (status.failed) {
+    return (
+      <Panel title="Instagram" action={<Badge tone="red">Sin conexión</Badge>}>
+        <div className="helm-settings-body"><div className="helm-formerror">{error}</div></div>
+      </Panel>
+    )
+  }
+
+  return (
+    <Panel title="Instagram" action={status.linked ? <Badge tone="green">Conectado</Badge> : <Badge>Sin conectar</Badge>}>
+      <div className="helm-settings-body">
+        {status.linked ? (
+          <>
+            <div className="helm-settings-row">
+              <div>
+                <b>@{status.username || 'cuenta'}</b>
+                <small>
+                  {[status.followers != null ? `${status.followers} seguidores` : '', status.mediaCount != null ? `${status.mediaCount} publicaciones` : '',
+                    status.lastSyncAt ? `sincronizado el ${new Date(status.lastSyncAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}` : 'sin sincronizar todavía'].filter(Boolean).join(', ')}
+                </small>
+              </div>
+              <div className="helm-settings-actions">
+                <button className="helm-btn" onClick={sincronizar} disabled={busy}>
+                  <RefreshCw size={15} /> {busy ? 'Un momento…' : 'Sincronizar métricas'}
+                </button>
+                <button className="helm-btn" onClick={desconectar} disabled={busy}>
+                  <Unlink size={15} /> Desconectar
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="helm-settings-lead">
+              Trae el alcance y las visitas de cada publicación del perfil. Hace falta una cuenta de Instagram
+              profesional (empresa o creador); una personal no da métricas.
+            </p>
+            {status.oauth && (
+              <div>
+                <button className="helm-btn primary" onClick={conectar} disabled={busy}>Conectar con Instagram</button>
+              </div>
+            )}
+            <form onSubmit={pegar}>
+              <Field
+                label={status.oauth ? 'O pega un token de larga duración' : 'Token de larga duración'}
+                hint="Se genera en developers.facebook.com, en tu app, dentro de Instagram → Configuración de la API con inicio de sesión de Instagram → Generar token."
+              >
+                <Input value={token} onChange={e => setToken(e.target.value)} placeholder="IGAA…" autoComplete="off" />
+              </Field>
+              <button type="submit" className="helm-btn" disabled={busy || token.trim().length < 20}>Conectar con el token</button>
+            </form>
+          </>
+        )}
+        {msg && <div className="helm-settings-ok">{msg}</div>}
+        {error && <div className="helm-formerror">{error}</div>}
+      </div>
+    </Panel>
+  )
+}
+
 function CalendlyCard({ clientId }) {
   const [status, setStatus] = useState(null)
   const [token, setToken] = useState('')
@@ -530,60 +623,199 @@ function CalendlyCard({ clientId }) {
   )
 }
 
-// ── La carpeta de los guiones ──────────────────────────────────────────────
-// La carpeta la crea HELM y no se pega un id a mano. El permiso que pide HELM
-// (drive.file) solo deja escribir en lo que ha creado la propia app: apuntar a
-// una carpeta hecha desde el Drive del cliente daría un 403 al primer guion, y
-// el error saldría tarde y en el chat, lejos de aquí.
-function CarpetaGuiones({ clientId, status, onListo }) {
+// ── Telegram ───────────────────────────────────────────────────────────────
+// La IA del perfil, desde el móvil. El token del bot se valida y se queda en
+// el servidor; aquí solo se ve @usuario y los cuatro últimos caracteres. El
+// bot solo contesta a los chats que se autorizan con un código de /vincular.
+function TelegramCard({ clientId }) {
+  const [status, setStatus] = useState(null)
+  const [token, setToken] = useState('')
   const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
   const [error, setError] = useState(null)
+  const [restante, setRestante] = useState(null)
 
-  async function preparar() {
-    setBusy(true); setError(null)
-    try { await googleApi.carpetaGuiones(clientId); onListo?.() }
+  const load = () => telegramApi.status(clientId)
+    .then(setStatus)
+    .catch(err => { setError(err.message); setStatus({ linked: false, failed: true }) })
+  useEffect(() => { load() }, [clientId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cuenta atrás del código vivo. Los segundos se calculan al vuelo en el
+  // render y el intervalo solo fuerza el repintado: guardarlos en estado desde
+  // dentro del efecto encadena un render por segundo sin ganar nada.
+  const caduca = status?.vinculo?.caduca
+  useEffect(() => {
+    if (!caduca) return undefined
+    const quedan = () => Math.max(0, Math.round((new Date(caduca).getTime() - Date.now()) / 1000))
+    // El primer valor llega en un cuarto de segundo en vez de calcularlo aquí
+    // mismo: leer el reloj durante el render, o escribir estado nada más entrar
+    // en el efecto, es lo que encadena renders de más.
+    const id = setInterval(() => setRestante(quedan()), 250)
+    return () => clearInterval(id)
+  }, [caduca])
+
+  // Al agotarse el código se recarga el estado: si mientras tanto alguien
+  // escribió /vincular en Telegram, el chat aparece ya en la lista.
+  const agotado = restante === 0
+  useEffect(() => { if (agotado) load() }, [agotado]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function link(e) {
+    e.preventDefault()
+    setBusy(true); setError(null); setMsg(null)
+    try {
+      await telegramApi.link(clientId, token.trim())
+      setToken('')
+      setMsg('Bot enlazado. Ahora genera un código y vincula tu chat.')
+      await load()
+    } catch (err) { setError(err.message) }
+    setBusy(false)
+  }
+
+  async function unlink() {
+    if (!confirm('¿Desenlazar el bot de Telegram de este perfil? Los chats autorizados se olvidan.')) return
+    setBusy(true); setError(null); setMsg(null)
+    try { await telegramApi.unlink(clientId); await load(); setMsg('Telegram desenlazado.') }
     catch (err) { setError(err.message) }
     setBusy(false)
   }
 
+  async function generarCodigo() {
+    setBusy(true); setError(null); setMsg(null)
+    try { await telegramApi.codigo(clientId); await load() }
+    catch (err) { setError(err.message) }
+    setBusy(false)
+  }
+
+  async function quitarChat(chat) {
+    if (!confirm(`¿Quitar a ${chat.nombre}? Ese chat dejará de hablar con la IA.`)) return
+    setBusy(true); setError(null); setMsg(null)
+    try { await telegramApi.quitarChat(clientId, chat.id); await load() }
+    catch (err) { setError(err.message) }
+    setBusy(false)
+  }
+
+  if (!status) return <Panel title="Telegram"><div className="helm-empty">Cargando…</div></Panel>
+  if (status.failed) {
+    return (
+      <Panel title="Telegram" action={<Badge tone="red">Sin conexión</Badge>}>
+        <div className="helm-settings-body"><div className="helm-formerror">{error}</div></div>
+      </Panel>
+    )
+  }
+
+  const chats = status.chats || []
+  const mmss = restante == null ? '' : `${Math.floor(restante / 60)}:${String(restante % 60).padStart(2, '0')}`
+
   return (
-    <div className="helm-settings-block">
-      <label>La carpeta de los guiones</label>
-      <p>
-        Cuando programes contenido con <code>/programar-guion</code>, el guion se agenda en{' '}
-        <b>Contenido</b> y además cae aquí como documento, para que quien graba lo abra sin
-        entrar al panel.
-      </p>
+    <Panel title="Telegram" action={status.linked ? <Badge tone="green">Enlazado</Badge> : <Badge>Sin enlazar</Badge>}>
+      <div className="helm-settings-body">
+        {status.linked ? (
+          <>
+            <div className="helm-settings-row">
+              <div>
+                <b><Send size={14} /> @{status.username}</b>
+                <small>{status.botName} · token …{status.last4}</small>
+              </div>
+              <div className="helm-settings-actions">
+                <button className="helm-btn" onClick={load} disabled={busy} title="Actualizar">
+                  <RefreshCw size={15} />
+                </button>
+                <button className="helm-btn" onClick={unlink} disabled={busy}>
+                  <Unlink size={15} /> Desenlazar
+                </button>
+              </div>
+            </div>
 
-      {!status.puedeEscribir ? (
-        <div className="helm-settings-warn">
-          <AlertTriangle size={15} />
-          <span>
-            Este perfil enlazó Google cuando HELM solo sabía leer. Para que pueda dejar los
-            guiones hay que <b>desconectar y volver a conectar</b>: Google preguntará de nuevo,
-            ahora incluyendo el permiso de escritura.
-          </span>
-        </div>
-      ) : status.guionesFolderId ? (
-        <div className="helm-settings-row">
-          <div>
-            <b>Carpeta lista</b>
-            <small>Los guiones que programes van cayendo ahí solos.</small>
-          </div>
-          {status.guionesFolderUrl && (
-            <a className="helm-btn" href={status.guionesFolderUrl} target="_blank" rel="noreferrer">
-              Abrir en Drive
-            </a>
-          )}
-        </div>
-      ) : (
-        <button type="button" className="helm-btn primary" onClick={preparar} disabled={busy}>
-          {busy ? 'Creando…' : 'Crear la carpeta en Drive'}
-        </button>
-      )}
+            {status.webhook?.ultimoError && (
+              <div className="helm-settings-warn">
+                <AlertTriangle size={15} />
+                Telegram no consigue entregar los mensajes: {status.webhook.ultimoError}
+                {status.webhook.ultimoErrorFecha ? ` (${new Date(status.webhook.ultimoErrorFecha).toLocaleString('es-ES')})` : ''}.
+                Comprueba que HELM_PUBLIC_URL apunta a este servidor y vuelve a enlazar.
+              </div>
+            )}
 
-      {error && <div className="helm-formerror" style={{ marginTop: 10 }}>{error}</div>}
-    </div>
+            <div className="helm-settings-block">
+              <label>Chats autorizados</label>
+              <p>Solo estos chats hablan con la IA de este perfil. Cualquier otro que escriba al bot no recibe respuesta.</p>
+              {chats.length === 0 ? (
+                <p>Todavía nadie. Genera un código aquí abajo y vincula tu chat.</p>
+              ) : (
+                <div className="helm-settings-list">
+                  {chats.map(c => (
+                    <div key={c.id} className="helm-settings-row">
+                      <div>
+                        <b>{c.nombre}</b>
+                        <small>desde {new Date(c.desde).toLocaleDateString('es-ES', { dateStyle: 'medium' })} · chat {c.id}</small>
+                      </div>
+                      <div className="helm-settings-actions">
+                        <button className="helm-btn" onClick={() => quitarChat(c)} disabled={busy}>
+                          <Trash2 size={15} /> Quitar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="helm-settings-block">
+              <label>Vincular un chat</label>
+              {status.vinculo ? (
+                <>
+                  <p>
+                    Abre <b>@{status.username}</b> en Telegram y escríbele esto. El código caduca en <b>{mmss}</b>.
+                  </p>
+                  <CopyRow value={`/vincular ${status.vinculo.codigo}`} />
+                </>
+              ) : (
+                <>
+                  <p>Genera un código, escríbeselo al bot desde el chat que quieras autorizar y listo. Caduca a los 15 minutos.</p>
+                  <button className="helm-btn primary" onClick={generarCodigo} disabled={busy}>
+                    <Link2 size={15} /> {busy ? 'Generando…' : 'Generar código'}
+                  </button>
+                </>
+              )}
+            </div>
+
+            <small className="helm-settings-note">
+              Lo que hables por Telegram es la misma conversación que el chat de aquí: mismos comandos
+              (/help los lista), misma memoria, mismo historial. /estado te dice qué modelo está contestando.
+            </small>
+          </>
+        ) : (
+          <>
+            <p className="helm-settings-lead">
+              Habla con la IA de este perfil desde Telegram: pídele guiones, emails o estrategia desde el
+              móvil, con la misma memoria y la misma Biblia que aquí.
+            </p>
+            {!status.publicUrl && (
+              <div className="helm-settings-warn">
+                <AlertTriangle size={15} />
+                El servidor no tiene definida HELM_PUBLIC_URL. Sin ella Telegram no sabe a dónde mandar los
+                mensajes y no se puede enlazar el bot. Ponla en el entorno de la API y reinicia.
+              </div>
+            )}
+            <form className="helm-settings-form" onSubmit={link}>
+              <Field label="Token del bot">
+                <Input type="password" value={token} autoComplete="off" required
+                  onChange={e => setToken(e.target.value)} placeholder="123456789:AAH…" />
+              </Field>
+              <button className="helm-btn primary" disabled={busy || !token.trim() || !status.publicUrl}>
+                <Link2 size={15} /> {busy ? 'Comprobando…' : 'Enlazar bot'}
+              </button>
+            </form>
+            <small className="helm-settings-note">
+              Crea el bot en Telegram hablando con @BotFather (/newbot), ponle nombre y copia el token que te da.
+              Se valida contra Telegram antes de guardarse y se queda en el servidor: el navegador no lo ve.
+            </small>
+          </>
+        )}
+
+        {msg && <div className="helm-settings-ok">{msg}</div>}
+        {error && <div className="helm-formerror">{error}</div>}
+      </div>
+    </Panel>
   )
 }
 
@@ -780,7 +1012,6 @@ function GoogleCard({ clientId }) {
               <button className="helm-btn primary" disabled={busy}>Guardar preferencias</button>
             </form>
 
-            <CarpetaGuiones clientId={clientId} status={status} onListo={load} />
           </>
         ) : (
           <>
@@ -792,9 +1023,8 @@ function GoogleCard({ clientId }) {
             </p>
             <p className="helm-settings-lead">
               De tu <b>agenda</b>, el permiso es de solo lectura: HELM no crea, cambia ni borra
-              nada en ella. De tu <b>Drive</b> lee lo que le enseñes, y además puede crear los
-              documentos de los guiones — pero <b>solo puede tocar lo que ha creado él</b>: el
-              resto de tu Drive le sigue siendo invisible. Puedes retirar el permiso cuando
+              nada en ella. De tu <b>Drive</b> solo lee lo que le enseñes: el resto le sigue
+              siendo invisible. Puedes retirar el permiso cuando
               quieras, desde aquí o desde tu cuenta de Google.
             </p>
             <button className="helm-btn primary" onClick={conectar} disabled={busy || !status.appConfigured}>
@@ -948,7 +1178,7 @@ function MarcaCard({ clientId, client, onClientUpdate }) {
 
   // El acento que se aplicará. Null mientras el hex esté a medio escribir: así
   // la vista previa no parpadea con cada tecla.
-  const acento = acentoDe(form.primary_color)
+  const acento = normalizaHex(form.primary_color)
 
   async function elegirLogo(e) {
     const file = e.target.files?.[0]
@@ -1000,7 +1230,7 @@ function MarcaCard({ clientId, client, onClientUpdate }) {
 
           {/* La misma pieza que la barra lateral, para ver el resultado antes
               de guardar y no a base de recargar. */}
-          <div className="helm-marca-preview" style={acento || undefined}>
+          <div className="helm-marca-preview">
             <span className="helm-marca-preview-lbl">Así se verá</span>
             <div className="helm-brand" style={{ padding: 0 }}>
               {previo.logo
@@ -1020,24 +1250,23 @@ function MarcaCard({ clientId, client, onClientUpdate }) {
             placeholder={DEFAULT_SUBTITLE} maxLength={40} />
         </Field>
 
-        {/* El color manda sobre el acento del tema en TODO este perfil: botones,
-            gráficas, etapas del CRM y la tarjeta que sale al compartir su enlace.
-            Vacío = se queda con el color del tema. */}
+        {/* El color ya no repinta el panel (el tema es uno, ver theme.js): se
+            usa donde representa al negocio hacia fuera. */}
         <Field
           label="Color de marca"
-          hint="Manda sobre el color del tema en todo este perfil. Déjalo vacío para usar el del tema."
+          hint="Se usa en la tarjeta que sale al compartir el enlace del perfil y en el icono de la pestaña. No cambia los colores del panel."
         >
           <div className="helm-color-row">
             <input
               type="color" className="helm-color-pick"
-              value={acentoDe(form.primary_color) ? normalizaHex(form.primary_color) : '#2FCB6A'}
+              value={acento || '#d9b66b'}
               onChange={e => set('primary_color', e.target.value)}
               aria-label="Elegir color de marca"
             />
             <Input
               value={form.primary_color}
               onChange={e => set('primary_color', e.target.value)}
-              placeholder="#2FCB6A" maxLength={7}
+              placeholder="#D9B66B" maxLength={7}
             />
             {form.primary_color && (
               <button type="button" className="helm-btn sm" onClick={() => set('primary_color', '')}>
@@ -1048,7 +1277,7 @@ function MarcaCard({ clientId, client, onClientUpdate }) {
         </Field>
         {form.primary_color && !acento && (
           <small className="helm-settings-note">
-            Eso no es un color válido. Escríbelo en hex, como <code>#2FCB6A</code>.
+            Eso no es un color válido. Escríbelo en hex, como <code>#D9B66B</code>.
           </small>
         )}
 
@@ -1064,86 +1293,158 @@ function MarcaCard({ clientId, client, onClientUpdate }) {
   )
 }
 
-function IaCard() {
+// ── IA del perfil ──────────────────────────────────────────────────────────
+// Cada perfil corre su IA por su cuenta: o el modelo local del servidor (gratis
+// y sin que salga un dato) o Claude con SU clave y SU modelo. HELM y
+// consultoría son perfiles distintos, así que uno puede estar en Claude Opus y
+// el otro en el local sin que se toquen — ni la clave, ni el modelo, ni la
+// factura.
+//
+// La clave se manda una vez y no vuelve: aquí solo se ven los 4 últimos.
+function IaCard({ clientId }) {
+  const [status, setStatus] = useState(null)
   const [health, setHealth] = useState(null)
-  useEffect(() => { chatApi.health().then(setHealth).catch(err => setHealth({ ok: false, error: err.message })) }, [])
+  const [apiKey, setApiKey] = useState('')
+  const [model, setModel] = useState(MODELO_CLAUDE_DEFECTO)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
+  const [error, setError] = useState(null)
+
+  const load = () => iaApi.status(clientId)
+    .then(st => {
+      setStatus(st)
+      setModel(st.proveedor === 'claude' ? st.model : MODELO_CLAUDE_DEFECTO)
+      setHealth(null)
+      iaApi.test(clientId).then(setHealth).catch(err => setHealth({ ok: false, error: err.message }))
+    })
+    .catch(err => { setError(err.message); setStatus({ failed: true }) })
+  useEffect(() => { load() }, [clientId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function enlazar(e) {
+    e.preventDefault()
+    setBusy(true); setError(null); setMsg(null)
+    try {
+      await iaApi.link(clientId, apiKey.trim(), model)
+      setApiKey('')
+      setMsg('Claude enlazado. A partir de ahora la IA de este perfil corre con tu clave.')
+      await load()
+    } catch (err) { setError(err.message) }
+    setBusy(false)
+  }
+
+  async function cambiarModelo(nuevo) {
+    setModel(nuevo)
+    if (status?.proveedor !== 'claude') return
+    setBusy(true); setError(null); setMsg(null)
+    try { await iaApi.modelo(clientId, nuevo); setMsg('Modelo cambiado.'); await load() }
+    catch (err) { setError(err.message) }
+    setBusy(false)
+  }
+
+  async function desenlazar() {
+    if (!confirm('¿Quitar la clave de Claude? Este perfil volverá al modelo local del servidor.')) return
+    setBusy(true); setError(null); setMsg(null)
+    try { await iaApi.unlink(clientId); setMsg('Clave borrada. Vuelves al modelo local.'); await load() }
+    catch (err) { setError(err.message) }
+    setBusy(false)
+  }
+
+  if (!status) return <Panel title="IA"><div className="helm-empty">Cargando…</div></Panel>
+  if (status.failed) {
+    return (
+      <Panel title="IA" action={<Badge tone="red">Sin conexión</Badge>}>
+        <div className="helm-settings-body"><div className="helm-formerror">{error}</div></div>
+      </Panel>
+    )
+  }
+
+  const enClaude = status.proveedor === 'claude'
+  const modelos = status.modelos || []
+  const etiqueta = modelos.find(m => m.id === status.model)?.label || status.model
 
   return (
     <Panel
-      title="IA local"
-      action={health ? <Badge tone={health.ok ? 'green' : 'red'}>{health.ok ? 'Operativa' : 'No disponible'}</Badge> : null}
+      title="IA"
+      action={
+        health
+          ? <Badge tone={health.ok ? 'green' : 'red'}>{health.ok ? 'Operativa' : 'No disponible'}</Badge>
+          : <Badge>Comprobando…</Badge>
+      }
     >
       <div className="helm-settings-body">
         <div className="helm-settings-row">
           <div>
-            <b><Cpu size={14} /> {health?.model || '…'}</b>
+            <b>{enClaude ? <Sparkles size={14} /> : <Cpu size={14} />} {enClaude ? etiqueta : status.model}</b>
             <small>
-              Corre en este servidor vía Ollama ({health?.url || '—'}) · contexto {health?.ctx || '—'} tokens
+              {enClaude
+                ? `Claude, con la clave de este perfil (…${status.last4 || '????'}) · se factura a tu cuenta de Anthropic`
+                : `Modelo local en este servidor vía Ollama (${status.local?.url || '—'}) · contexto ${status.local?.ctx || '—'} tokens`}
             </small>
           </div>
+          {enClaude && (
+            <div className="helm-settings-actions">
+              <button className="helm-btn" onClick={desenlazar} disabled={busy}>
+                <Unlink size={15} /> Quitar clave
+              </button>
+            </div>
+          )}
         </div>
-        <p className="helm-settings-lead">
-          El chat no usa ninguna IA externa: ni tokens, ni facturas, ni datos saliendo de aquí.
-        </p>
+
+        {enClaude ? (
+          <>
+            <div className="helm-settings-block">
+              <Field label="Modelo">
+                <Select value={model} onChange={e => cambiarModelo(e.target.value)} disabled={busy}>
+                  {modelos.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                </Select>
+              </Field>
+              <p>{modelos.find(m => m.id === model)?.desc}</p>
+            </div>
+            <small className="helm-settings-note">
+              El chat, las Biblias y la lectura de facturas de <b>este perfil</b> van contra Claude con esta
+              clave. Los demás perfiles siguen con lo suyo. Si quitas la clave, todo vuelve al modelo local
+              sin perder nada.
+            </small>
+          </>
+        ) : (
+          <>
+            <p className="helm-settings-lead">
+              Ahora mismo la IA de este perfil corre en el servidor: ni tokens, ni facturas, ni datos saliendo
+              de aquí. Si quieres respuestas mejores, mete tu clave de Anthropic y este perfil pasará a
+              Claude — pagando tú, y solo tú.
+            </p>
+            <form className="helm-settings-form" onSubmit={enlazar}>
+              <Field label="API key de Anthropic">
+                <Input type="password" value={apiKey} autoComplete="off" required
+                  onChange={e => setApiKey(e.target.value)} placeholder="sk-ant-…" />
+              </Field>
+              <Field label="Modelo">
+                <Select value={model} onChange={e => setModel(e.target.value)}>
+                  {modelos.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                </Select>
+              </Field>
+              <button className="helm-btn primary" disabled={busy || !apiKey.trim()}>
+                <Link2 size={15} /> {busy ? 'Comprobando…' : 'Usar Claude en este perfil'}
+              </button>
+            </form>
+            <small className="helm-settings-note">
+              Sácala de console.anthropic.com → API keys. Se valida contra Anthropic antes de guardarse y se
+              queda en el servidor: el navegador solo ve los cuatro últimos caracteres.
+            </small>
+          </>
+        )}
+
         {health && !health.ok && <div className="helm-formerror">{health.error}</div>}
         {health?.models?.length > 1 && (
-          <small className="helm-settings-note">
-            Modelos descargados: {health.models.join(', ')}
-          </small>
+          <small className="helm-settings-note">Modelos descargados: {health.models.join(', ')}</small>
         )}
+        {msg && <div className="helm-settings-ok">{msg}</div>}
+        {error && <div className="helm-formerror">{error}</div>}
       </div>
     </Panel>
   )
 }
 
-// Apariencia: el tema es del navegador, no del perfil, así que esta tarjeta no
-// necesita clientId ni escribe en Supabase.
-function AparienciaCard() {
-  const [theme, setTheme] = useHelmTheme()
-
-  return (
-    <Panel title="Tema">
-      <div className="helm-settings-body">
-        <p className="helm-settings-lead">
-          Cómo se ve HELM en <b>este dispositivo</b>. No afecta a lo que ven los demás.
-        </p>
-        <div className="helm-theme-grid">
-          {TEMAS_ELEGIBLES.map(t => (
-            <button
-              key={t.key}
-              type="button"
-              className={'helm-theme-opt' + (theme === t.key ? ' on' : '')}
-              onClick={() => setTheme(t.key)}
-              aria-pressed={theme === t.key}
-            >
-              {/* Miniatura del tema: se pinta con las variables del propio tema,
-                  así la muestra siempre coincide con lo que vas a ver. */}
-              <span className="helm-swatch" data-theme={t.key}>
-                <span className="s-side" />
-                <span className="s-main">
-                  <span className="s-bar" />
-                  <span className="s-card" />
-                </span>
-              </span>
-              <span className="helm-theme-meta">
-                <b>{t.label}{theme === t.key && <Check size={14} />}</b>
-                <small>{t.desc}</small>
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-    </Panel>
-  )
-}
-
-// Permisos: dos matrices por rol. Ver ../permisos.js.
-//   Visibilidad → qué secciones le aparecen en el menú. Es la que importa
-//                 ahora que closers y setters entran con su propia cuenta.
-//   Edición     → de lo que ve, qué puede modificar.
-//
-// Se muestran de una en una: son 19 secciones por 5 roles, y las dos tablas a
-// la vez convierten la pantalla en una hoja de cálculo ilegible.
 function PermisosCard({ clientId }) {
   const [vista, setVista] = useState('visible')
   const [visible, setVisible] = useState(null)
@@ -1293,8 +1594,7 @@ const AJUSTES_TABS = [
   { key: 'integraciones', label: 'Integraciones', icon: <Link2 size={15} /> },
   { key: 'marca', label: 'Marca', icon: <ImageIcon size={15} /> },
   { key: 'permisos', label: 'Permisos', icon: <ShieldCheck size={15} /> },
-  { key: 'apariencia', label: 'Apariencia', icon: <Palette size={15} /> },
-  { key: 'ia', label: 'IA local', icon: <Cpu size={15} /> },
+  { key: 'ia', label: 'IA', icon: <Cpu size={15} /> },
 ]
 
 export default function Ajustes({ clientId, client, onClientUpdate }) {
@@ -1307,7 +1607,10 @@ export default function Ajustes({ clientId, client, onClientUpdate }) {
       {tab === 'integraciones' ? (
         <div className="helm-grid" style={{ gap: 20 }}>
           <GoogleCard clientId={clientId} />
+          {/* Instagram se deja para más adelante: la tarjeta (InstagramCard) está
+              escrita y probada de aspecto, pero no se enseña todavía. */}
           <CalendlyCard clientId={clientId} />
+          <TelegramCard clientId={clientId} />
           <DriveCard clientId={clientId} />
           <StripeCard clientId={clientId} />
           <WooCard clientId={clientId} />
@@ -1315,8 +1618,7 @@ export default function Ajustes({ clientId, client, onClientUpdate }) {
       )
         : tab === 'marca' ? <MarcaCard clientId={clientId} client={client} onClientUpdate={onClientUpdate} />
         : tab === 'permisos' ? <PermisosCard clientId={clientId} />
-        : tab === 'apariencia' ? <AparienciaCard />
-        : <IaCard />}
+        : <IaCard clientId={clientId} />}
     </div>
   )
 }

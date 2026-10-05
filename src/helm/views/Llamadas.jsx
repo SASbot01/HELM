@@ -1,6 +1,6 @@
 // HELM — Llamadas: el calendario de las reuniones agendadas.
 //
-// Misma rejilla que Contenido a propósito (un mes, una celda por día), pero lo
+// Misma rejilla que Guiones a propósito (un mes, una celda por día), pero lo
 // que cae dentro no lo escribe nadie a mano: sale de Google Calendar. La
 // sincronización trae lo que parece una llamada — invitados o enlace de
 // videollamada — y encima de cada evento HELM guarda lo suyo: en qué acabó,
@@ -245,7 +245,7 @@ export default function Llamadas({ clientId, onNavigate }) {
             if (!iso) return <div key={'b' + i} className="helm-cal-cell empty" />
             const day = Number(iso.slice(8, 10))
             const list = byDay[iso] || []
-            // Igual que en Contenido: la celda tiene alto fijo y un día con
+            // Igual que en Guiones: la celda tiene alto fijo y un día con
             // ocho llamadas no puede estirar la semana entera.
             const caben = list.length > MAX_EN_CELDA + 1 ? MAX_EN_CELDA : list.length
             return (

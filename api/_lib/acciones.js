@@ -47,12 +47,6 @@ const ALIAS_METRICAS = {
   dudas: 'doubts_solved', dudas_resueltas: 'doubts_solved',
 }
 
-const FORMATOS = ['reel', 'carousel', 'email', 'yt', 'nota']
-const ALIAS_FORMATO = {
-  carrusel: 'carousel', youtube: 'yt', video: 'yt', 'vídeo': 'yt',
-  correo: 'email', post: 'nota', tiktok: 'reel', short: 'reel',
-}
-
 const sinTildes = (s) => String(s || '').toLowerCase().trim()
   .normalize('NFD').replace(/[̀-ͯ]/g, '')
 
@@ -78,41 +72,6 @@ function normalizarRol(v) {
 // modelo para decidir. De ahí que insistan en lo de las fechas.
 
 export const HERRAMIENTAS = [
-  {
-    type: 'function',
-    function: {
-      name: 'programar_contenido',
-      description:
-        'Agenda una o varias piezas de contenido en el calendario de Contenido del perfil. '
-        + 'Úsala cuando pidan programar, agendar o planificar contenido, reels, posts, emails o vídeos.',
-      parameters: {
-        type: 'object',
-        properties: {
-          piezas: {
-            type: 'array',
-            description: 'Una entrada por pieza. Si piden varias piezas, mándalas todas de una vez.',
-            items: {
-              type: 'object',
-              properties: {
-                titulo: { type: 'string', description: 'De qué va la pieza, en pocas palabras.' },
-                fecha: {
-                  type: 'string',
-                  description:
-                    'COPIA LITERALMENTE la fecha como la dijo el usuario: "mañana", "el lunes", '
-                    + '"25/07", "1 de agosto". NO la conviertas a otro formato y NO calcules tú el día: '
-                    + 'el servidor lo hace. Si no dijo fecha, pon "hoy".',
-                },
-                formato: { type: 'string', enum: FORMATOS, description: 'reel por defecto.' },
-                guion: { type: 'string', description: 'El guion o las notas, si el usuario los ha dado.' },
-              },
-              required: ['titulo', 'fecha'],
-            },
-          },
-        },
-        required: ['piezas'],
-      },
-    },
-  },
   {
     type: 'function',
     function: {
@@ -188,42 +147,6 @@ export const HERRAMIENTAS = [
 export const NOMBRES_HERRAMIENTAS = HERRAMIENTAS.map(h => h.function.name)
 
 // ── Ejecución ──────────────────────────────────────────────────────────────
-
-async function programarContenido(args, { supabase, clientId, hoy }) {
-  const piezas = Array.isArray(args?.piezas) ? args.piezas : [args]
-  if (!piezas.length) return { ok: false, error: 'No me has dicho qué pieza programar.' }
-  if (piezas.length > 20) return { ok: false, error: 'Son demasiadas piezas de una vez (máximo 20).' }
-
-  const filas = []
-  const errores = []
-  for (const p of piezas) {
-    const titulo = texto(p?.titulo, 200)
-    if (!titulo) { errores.push('Una de las piezas viene sin título.'); continue }
-    const f = fechaValida(p?.fecha || 'hoy', { hoy })
-    if (f.error) { errores.push(`"${titulo}": ${f.error}`); continue }
-    const fmt = sinTildes(p?.formato)
-    filas.push({
-      client_id: clientId,
-      title: titulo,
-      date: f.iso,
-      format: FORMATOS.includes(fmt) ? fmt : (ALIAS_FORMATO[fmt] || 'reel'),
-      body: texto(p?.guion, 20_000) || null,
-      status: 'todo',
-      source: 'chat',
-    })
-  }
-  if (!filas.length) return { ok: false, error: errores.join(' ') || 'No he podido montar ninguna pieza.' }
-
-  const { data, error } = await supabase.from('helm_content_calendar').insert(filas).select('id, title, date')
-  if (error) return { ok: false, error: `No se ha podido guardar en el calendario: ${error.message}` }
-
-  const lista = (data || []).map(d => `· ${d.date} — ${d.title}`).join('\n')
-  return {
-    ok: true,
-    resumen: `${data.length} pieza(s) agendadas en Contenido:\n${lista}`
-      + (errores.length ? `\nNo pude con: ${errores.join(' ')}` : ''),
-  }
-}
 
 async function crearReporteDiario(args, { supabase, clientId, hoy }) {
   const nombre = texto(args?.nombre, 120)
@@ -396,7 +319,6 @@ async function guardarArchivo(args, { supabase, clientId }) {
 }
 
 const EJECUTORES = {
-  programar_contenido: programarContenido,
   crear_reporte_diario: crearReporteDiario,
   crear_miembro_equipo: crearMiembroEquipo,
   guardar_archivo: guardarArchivo,
@@ -425,8 +347,7 @@ export async function ejecutarAccion(nombre, args, ctx) {
 export const INSTRUCCIONES_ACCIONES = (hoy) => `# ACCIONES QUE PUEDES EJECUTAR
 Hoy es ${isoLocal(hoy)}.
 
-No solo escribes: puedes hacer cuatro cosas en el panel de este perfil.
-· programar_contenido — agendar piezas en el calendario de Contenido.
+No solo escribes: puedes hacer tres cosas en el panel de este perfil.
 · crear_reporte_diario — apuntar los números del día de alguien en Diario.
 · crear_miembro_equipo — dar de alta a una persona en Equipo.
 · guardar_archivo — dejar un texto tuyo guardado en la sección Archivos.

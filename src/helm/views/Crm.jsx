@@ -418,6 +418,7 @@ export default function Crm({ clientId }) {
           pipelines={pipelines}
           activeId={pipeline.id}
           contacts={rows || []}
+          onContactsChanged={load}
           onClose={() => setEditEtapas(false)}
           onSaved={(lista, id, opts) => {
             setPipelines(lista)

@@ -60,6 +60,21 @@ export async function verifyJwt(token) {
 // validateAuth: lee Bearer token. Si no hay JWT pero header legacy 'x-client-slug',
 // permite modo compat sólo si process.env.ALLOW_LEGACY_AUTH === '1' (migración gradual).
 // ───────────────────────────────────────────────────────────────────────────
+// Se mira en la tabla y se recuerda un minuto: quitar a alguien tarda como
+// mucho eso en surtir efecto, y no se consulta la base en cada petición.
+const superadminsVistos = new Map() // sub -> { ok, exp }
+async function sigueSiendoSuperadmin(sub) {
+  if (!sub) return false
+  const visto = superadminsVistos.get(sub)
+  if (visto && visto.exp > Date.now()) return visto.ok
+  const { data, error } = await supabase.from('superadmins').select('active').eq('id', sub).maybeSingle()
+  // Si la base no contesta, no se echa a nadie por un fallo nuestro.
+  if (error) return true
+  const ok = Boolean(data) && data.active !== false
+  superadminsVistos.set(sub, { ok, exp: Date.now() + 60_000 })
+  return ok
+}
+
 export async function validateAuth(req, { required = true } = {}) {
   const header = req.headers?.authorization || req.headers?.Authorization || ''
   const token = header.startsWith('Bearer ') ? header.slice(7) : ''
@@ -79,6 +94,17 @@ export async function validateAuth(req, { required = true } = {}) {
         const e = new Error(`Unauthorized: este token es de tipo "${payload.kind}" y no sirve para el panel`)
         e.statusCode = 401
         throw e
+      }
+
+      // Un token de superadmin vale 7 días, pero la cuenta puede haberse
+      // borrado o desactivado antes: sin esto, quien ya no es superadmin
+      // seguiría viéndolo todo hasta que le caducara el token.
+      if (payload.superadmin === true || payload.role === 'superadmin') {
+        if (!(await sigueSiendoSuperadmin(payload.sub))) {
+          const e = new Error('Esta cuenta ya no es superadmin')
+          e.statusCode = 401
+          throw e
+        }
       }
 
       return {

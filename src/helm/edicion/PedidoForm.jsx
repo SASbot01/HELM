@@ -1,6 +1,6 @@
 // Edición → alta y ficha de un pedido.
 import { useEffect, useMemo, useState } from 'react'
-import { FolderOpen, ScrollText, Sparkles, Trash2, Pencil, Check, Send, Inbox, Eye, EyeOff } from 'lucide-react'
+import { FolderOpen, ScrollText, Trash2, Pencil, Check, Send, Inbox, Eye, EyeOff } from 'lucide-react'
 import { Modal, Drawer, Field, Input, Textarea, Select, MoneyInput, CountInput, FormNote } from '../ui'
 import {
   edicionApi, ESTADOS, FORMATOS, FASES, TIPOS, eur, fechaCorta, cuandoLabel, hoyISO, formatoCorto,
@@ -56,7 +56,7 @@ export function PedidoForm({ clientId, datos, clientePor, pedidoPorGuion, inicia
   return (
     <Modal title={inicial.id ? 'Editar pedido' : 'Nuevo pedido'} onClose={onClose} wide>
       <form className="helm-grid" style={{ gap: 12 }} onSubmit={guardar}>
-        <Field label="Guion" hint="Enlázalo y el Agente Montador lo seguirá en Drive y podrá escribir su hoja de montaje.">
+        <Field label="Guion">
           <Select value={f.guion_id} onChange={e => eligeGuion(e.target.value)}>
             <option value="">Sin guion (encargo externo)</option>
             {guionesLibres.map(g => (
@@ -98,7 +98,7 @@ export function PedidoForm({ clientId, datos, clientePor, pedidoPorGuion, inicia
             {ESTADOS.map(x => <option key={x.key} value={x.key}>{x.label}</option>)}
           </Select>
         </Field>
-        <Field label="Notas de estilo" hint="Ritmo, tipografía, música, referencias… El Montador las usa en la hoja.">
+        <Field label="Notas de estilo" hint="Ritmo, tipografía, música, referencias…">
           <Textarea value={f.notas_estilo} onChange={e => set('notas_estilo', e.target.value)} rows={3} />
         </Field>
         <Field label="Carpeta de Drive / Dropbox">
@@ -115,7 +115,6 @@ export function PedidoForm({ clientId, datos, clientePor, pedidoPorGuion, inicia
 }
 
 export function PedidoDrawer({ clientId, datos, clientePor, pedido, pon, quita, cambiarEstado, nuevoPedido, onClose }) {
-  const [hojaEstado, setHojaEstado] = useState(null)   // null | 'generando' | error
   const [verGuion, setVerGuion] = useState(false)
   // Un encargo recibido trae su guion (es de otro perfil); uno propio lo
   // busca en el calendario de este.
@@ -130,14 +129,6 @@ export function PedidoDrawer({ clientId, datos, clientePor, pedido, pon, quita, 
   }, [pedido.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const cliente = clientePor.get(pedido.cliente_id)
   const cobros = datos.cobros.filter(c => c.pedido_id === pedido.id)
-
-  async function pedirHoja() {
-    setHojaEstado('generando')
-    try {
-      const r = await edicionApi.hoja(clientId, pedido.id)
-      pon('pedidos', r.pedido); setHojaEstado(null)
-    } catch (e) { setHojaEstado(e.message) }
-  }
 
   async function borrar() {
     if (!window.confirm(`¿Borrar el pedido «${pedido.titulo}»? Sus cobros se quedan, sin pedido.`)) return
@@ -218,22 +209,6 @@ export function PedidoDrawer({ clientId, datos, clientePor, pedido, pon, quita, 
         </section>
       )}
 
-      <section className="ed-bloque ed-hoja">
-        <h4>
-          <Sparkles size={14} /> Hoja de montaje
-          {pedido.hoja_at && <small>{new Date(pedido.hoja_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</small>}
-        </h4>
-        {pedido.hoja ? <div className="ed-pre ed-hoja-txt">{pedido.hoja}</div> : (
-          <p className="ed-suave">
-            El Agente Montador la escribe a partir {guion ? 'del guion' : 'de las notas de estilo'}: formato, gancho,
-            cortes, música, subtítulos y checklist de exportación.
-          </p>
-        )}
-        {typeof hojaEstado === 'string' && hojaEstado !== 'generando' && <FormNote>{hojaEstado}</FormNote>}
-        <button className="helm-btn primary" onClick={pedirHoja} disabled={hojaEstado === 'generando'}>
-          <Sparkles size={14} /> {hojaEstado === 'generando' ? 'Escribiendo la hoja…' : pedido.hoja ? 'Rehacer la hoja' : 'Pedir la hoja de montaje'}
-        </button>
-      </section>
     </Drawer>
   )
 }

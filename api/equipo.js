@@ -53,8 +53,21 @@ export default async function handler(req, res) {
   const { clientId, personId } = req.body || {}
   if (!clientId) return res.status(400).json({ error: 'clientId requerido' })
 
+  // Dar y quitar accesos es cosa de quien administra el perfil. Tener sesión
+  // en él no basta: un miembro podría hacerse propietario o cambiarle la
+  // contraseña al dueño. Y solo un propietario toca a otro propietario.
+  let esPropietario = true
   try {
-    await requireProfileAccess(req, clientId)
+    const auth = await requireProfileAccess(req, clientId)
+    if (!auth.superadmin && auth.role !== 'superadmin') {
+      const { data: yo } = await supabase.from('team')
+        .select('role, active').eq('id', auth.userId).eq('client_id', clientId).maybeSingle()
+      const mio = String(yo?.role || '').split(',').map(r => r.trim())
+      if (!yo?.active || !mio.includes('admin')) {
+        return res.status(403).json({ error: 'Solo el propietario o un administrador del perfil gestionan los accesos' })
+      }
+      esPropietario = mio.includes('ceo') || mio.includes('director')
+    }
   } catch (err) {
     return res.status(err.statusCode || 401).json({ error: err.message })
   }
@@ -71,6 +84,15 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Esa persona no está en el equipo de este perfil' })
     }
     persona = data
+  }
+
+  if (!esPropietario) {
+    const { data: suLogin } = persona?.login_id
+      ? await supabase.from('team').select('role').eq('id', persona.login_id).maybeSingle()
+      : { data: null }
+    if (req.body?.level === 'propietario' || /\b(ceo|director)\b/.test(suLogin?.role || '')) {
+      return res.status(403).json({ error: 'Solo un propietario puede dar o cambiar un acceso de propietario' })
+    }
   }
 
   // ── POST ?action=grant ───────────────────────────────────────────────────

@@ -174,7 +174,7 @@ export default async function handler(req, res) {
     const { system, messages } = buildPrompt(kind, dossier)
     let content
     try {
-      content = await llmChat({ system, messages, maxTokens: MAX_TOKENS, temperature: 0.6 })
+      content = await llmChat({ clientId, system, messages, maxTokens: MAX_TOKENS, temperature: 0.6 })
     } catch (err) {
       return res.status(err.statusCode || 502).json({ error: err.message || 'Error generando la Biblia' })
     }

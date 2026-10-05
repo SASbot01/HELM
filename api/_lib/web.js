@@ -21,10 +21,15 @@ const TIMEOUT_MS = 8_000
 // El servidor tiene Supabase, Ollama y quién sabe qué más escuchando en local.
 // Sin este filtro, un `/estudiar http://localhost:54321/rest/v1/...` convertiría
 // el comando en una puerta para leer la base de datos desde el chat.
-const esIpPrivada = (ip) =>
-  /^(127\.|10\.|169\.254\.|0\.|192\.168\.)/.test(ip)
-  || /^172\.(1[6-9]|2\d|3[01])\./.test(ip)
-  || /^(::1|fc|fd|fe80)/i.test(ip)
+export const esIpPrivada = (dir) => {
+  // Una IPv4 escrita como IPv6 (::ffff:127.0.0.1) es la misma máquina.
+  const ip = String(dir).replace(/^::ffff:/i, '')
+  return /^(127\.|10\.|169\.254\.|0\.|192\.168\.)/.test(ip)
+    || /^172\.(1[6-9]|2\d|3[01])\./.test(ip)
+    // 100.64.0.0/10: la red de Tailscale de este servidor.
+    || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip)
+    || /^(::1?$|fc|fd|fe80)/i.test(ip)
+}
 
 export async function urlPublica(raw) {
   let u
@@ -36,6 +41,24 @@ export async function urlPublica(raw) {
     if (!dirs.length || dirs.some(d => esIpPrivada(d.address))) return null
   } catch { return null }
   return u.toString()
+}
+
+/**
+ * fetch para direcciones que vienen de fuera. Las redirecciones se siguen a
+ * mano y cada salto pasa por `urlPublica` ANTES de pedirse: con
+ * `redirect: 'follow'` la petición a la red interna ya habría salido cuando
+ * se mirase adónde llevó. Devuelve null si algún salto no es público.
+ */
+export async function fetchPublico(url, opciones = {}, saltos = 4) {
+  let actual = await urlPublica(url)
+  for (let i = 0; actual && i <= saltos; i++) {
+    const res = await fetch(actual, { ...opciones, redirect: 'manual' })
+    if (res.status < 300 || res.status >= 400) return res
+    const destino = res.headers.get('location')
+    if (!destino) return res
+    actual = await urlPublica(new URL(destino, actual).toString())
+  }
+  return null
 }
 
 // ── HTML → texto ───────────────────────────────────────────────────────────
@@ -76,17 +99,14 @@ export async function leerPagina(url, { maxChars = 6000 } = {}) {
   const seguro = await urlPublica(url)
   if (!seguro) return { url, error: 'URL no válida o apunta a una red privada' }
   try {
-    const res = await fetch(seguro, {
+    // Una redirección a 127.0.0.1 es el truco de manual para saltarse el
+    // filtro de arriba: fetchPublico comprueba cada salto antes de pedirlo.
+    const res = await fetchPublico(seguro, {
       headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml' },
-      redirect: 'follow',
       signal: AbortSignal.timeout(TIMEOUT_MS),
     })
+    if (!res) return { url: seguro, error: 'La página redirige a una red privada' }
     if (!res.ok) return { url: seguro, error: `HTTP ${res.status}` }
-    // Tras los redirects se vuelve a comprobar: una redirección a 127.0.0.1 es
-    // el truco de manual para saltarse el filtro de arriba.
-    if (res.url && res.url !== seguro && !(await urlPublica(res.url))) {
-      return { url: seguro, error: 'La página redirige a una red privada' }
-    }
     const tipo = res.headers.get('content-type') || ''
     if (!/text\/html|text\/plain|application\/xhtml/i.test(tipo)) {
       return { url: seguro, error: `No es una página de texto (${tipo.split(';')[0] || 'desconocido'})` }

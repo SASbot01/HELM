@@ -1,7 +1,7 @@
 // Edición → Panel: cómo va el mes de un vistazo.
 import { useMemo, useState } from 'react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
-import { Clapperboard, RefreshCw, Timer, FolderOpen, ArrowRight, Sparkles, Inbox } from 'lucide-react'
+import { Timer, ArrowRight, Inbox } from 'lucide-react'
 import { Kpi, Panel, Empty } from '../ui'
 import {
   edicionApi, eur, estadoCobro, mismoMes, diasHasta, cuandoLabel, fechaCorta,
@@ -10,7 +10,7 @@ import {
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 
-export default function PanelEdicion({ clientId, datos, clientePor, recargar, abrirPedido, nuevoPedido, irA }) {
+export default function PanelEdicion({ clientId, datos, clientePor, recargar, abrirPedido, irA }) {
   const { pedidos, cobros } = datos
 
   const k = useMemo(() => {
@@ -85,11 +85,11 @@ export default function PanelEdicion({ clientId, datos, clientePor, recargar, ab
                   <XAxis dataKey="mes" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
                   <YAxis tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => (v >= 1000 ? `${v / 1000}k` : v)} />
                   <Tooltip
-                    cursor={{ fill: 'rgba(56,189,248,0.06)' }}
-                    contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, color: '#e2e8f0' }}
+                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                    contentStyle={{ background: '#141416', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 12, color: '#fff' }}
                     formatter={(v, n) => (n === 'Entregas' ? v : eur(v))}
                   />
-                  <Bar dataKey="Facturado" fill="#38bdf8" radius={[6, 6, 0, 0]} maxBarSize={26} />
+                  <Bar dataKey="Facturado" fill="#e6b84a" radius={[6, 6, 0, 0]} maxBarSize={26} />
                   <Bar dataKey="Cobrado" fill="#00d2ff" fillOpacity={0.45} radius={[6, 6, 0, 0]} maxBarSize={26} />
                 </BarChart>
               </ResponsiveContainer>
@@ -121,7 +121,6 @@ export default function PanelEdicion({ clientId, datos, clientePor, recargar, ab
         </Panel>
       </div>
 
-      <AgenteMontador clientId={clientId} datos={datos} recargar={recargar} nuevoPedido={nuevoPedido} />
       {datos.esSuperadmin && !datos.soyMesa && <HacerMesa clientId={clientId} recargar={recargar} />}
     </div>
   )
@@ -144,64 +143,6 @@ function HacerMesa({ clientId, recargar }) {
       <p><b>¿Es el perfil de un editor?</b> Hazlo mesa de edición: los demás perfiles podrán enviarle sus guiones y él los recibirá en «Encargos».</p>
       {error && <span className="ed-rojo">{error}</span>}
       <button className="helm-btn" onClick={hacer} disabled={enviando}>{enviando ? 'Un momento…' : 'Hacer mesa de edición'}</button>
-    </div>
-  )
-}
-
-// El Agente Montador: la postproducción que va sola. Sincroniza los pedidos
-// con el Drive y escribe la hoja de montaje de cada pieza (en el pedido).
-function AgenteMontador({ clientId, datos, recargar }) {
-  const [estado, setEstado] = useState(null)   // null | 'corriendo' | { cambios } | { error }
-  const sinHoja = datos.pedidos.filter(p => p.estado !== 'entregado' && p.guion_id && !p.hoja).length
-
-  async function sincronizar() {
-    setEstado('corriendo')
-    try {
-      const r = await edicionApi.sincronizar(clientId)
-      setEstado({ cambios: r.cambios })
-      if (r.cambios.length) recargar()
-    } catch (e) { setEstado({ error: e.message }) }
-  }
-
-  return (
-    <div className="ed-agente">
-      <div className="ed-agente-ico"><Clapperboard size={22} /></div>
-      <div className="ed-agente-txt">
-        <div className="ed-agente-cab">
-          <b>Agente Montador</b>
-          <span className="ed-turno"><i />en turno</span>
-        </div>
-        <p>
-          Vigila la carpeta de Drive del perfil: cuando grabas un guion y cae en <em>1 · Sin editar</em>, abre su
-          pedido en bruto; cuando la pieza pasa a <em>2 · Editados</em>, la da por entregada y abre el cobro. En cada
-          pedido escribe la hoja de montaje: formato, gancho, cortes, música, subtítulos y checklist de exportación.
-        </p>
-        {sinHoja > 0 && <p className="ed-agente-nota"><Sparkles size={13} /> {sinHoja} pedido{sinHoja === 1 ? '' : 's'} en marcha sin hoja de montaje: ábrelos y pídesela.</p>}
-        {estado?.cambios && (
-          estado.cambios.length === 0
-            ? <p className="ed-agente-nota">Todo al día: el Drive no trae nada nuevo.</p>
-            : (
-              <ul className="ed-agente-log">
-                {estado.cambios.map((c, i) => (
-                  <li key={i}>
-                    <code>{c.tipo === 'nuevo' ? '+ pedido' : '→ avanza'}</code> {c.titulo}
-                    <span>{c.de ? `${estadoLabel(c.de)} → ` : ''}{estadoLabel(c.estado)}</span>
-                  </li>
-                ))}
-              </ul>
-            )
-        )}
-        {estado?.error && <p className="ed-rojo">{estado.error}</p>}
-      </div>
-      <div className="ed-agente-acc">
-        <button className="helm-btn primary" onClick={sincronizar} disabled={estado === 'corriendo'}>
-          <RefreshCw size={15} className={estado === 'corriendo' ? 'ed-gira' : ''} />
-          {estado === 'corriendo' ? 'Revisando Drive…' : 'Sincronizar con Drive'}
-        </button>
-        {datos.drive?.conectado && (
-          <a className="helm-btn" href={datos.drive.url} target="_blank" rel="noopener noreferrer"><FolderOpen size={15} /> Abrir Drive</a>
-        )}
-      </div>
     </div>
   )
 }

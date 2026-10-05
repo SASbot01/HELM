@@ -1,7 +1,7 @@
 // HELM — Edición: el puesto del editor de vídeo.
 //
 // Cinco pestañas sobre los mismos datos, que se cargan una vez:
-//   Panel     KPIs, ingresos por mes, entregas urgentes y el Agente Montador
+//   Panel     KPIs, ingresos por mes, y entregas urgentes
 //   Pedidos   calendario del mes y tablero por estado (guion → entregado)
 //   Guiones   el calendario de guiones del perfil, con su fase en Drive; de
 //             cada guion sale su pedido

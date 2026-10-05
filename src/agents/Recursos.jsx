@@ -3,13 +3,14 @@
 // No son agentes. Son de lo que comen los agentes: la identidad da el estilo
 // con el que se escribe, y la memoria lo que no hay que volver a descubrir.
 import { useEffect, useState } from 'react'
+import { CreadoresGrid } from './Piezas'
 import { agentsApi } from './api'
 
 // ── Identidades ─────────────────────────────────────────────────────────────
 
-const VACIA = { nombre: '', descripcion: '', contexto: '', reglas_si: '', reglas_no: '' }
+const VACIA = { nombre: '', descripcion: '', categoria: '', contexto: '', reglas_si: '', reglas_no: '' }
 
-export function Identidades({ lista, onCambio }) {
+export function Identidades({ lista, onCambio, onAbrir }) {
   const [form, setForm] = useState(null)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
@@ -27,7 +28,7 @@ export function Identidades({ lista, onCambio }) {
     const lineas = (s) => String(s || '').split('\n').map(x => x.trim()).filter(Boolean)
     try {
       await agentsApi.guardarIdentidad({
-        id: form.id, nombre: form.nombre, descripcion: form.descripcion, contexto: form.contexto,
+        id: form.id, nombre: form.nombre, descripcion: form.descripcion, categoria: form.categoria, contexto: form.contexto,
         reglas: { siempre: lineas(form.reglas_si), nunca: lineas(form.reglas_no) },
       })
       setForm(null); onCambio()
@@ -42,13 +43,19 @@ export function Identidades({ lista, onCambio }) {
   if (form) {
     return (
       <form className="ag-card ag-form" onSubmit={guardar}>
-        <h2>{form.id ? 'Editar identidad' : 'Nueva identidad'}</h2>
+        <h2>{form.id ? `Editar ${form.nombre}` : 'Nuevo creador'}</h2>
         {error && <p className="ag-error">{error}</p>}
         <label><span>Nombre</span>
           <input value={form.nombre} onChange={e => set('nombre', e.target.value)} placeholder="Alex Hormozi" autoFocus required />
         </label>
         <label><span>En una línea</span>
           <input value={form.descripcion} onChange={e => set('descripcion', e.target.value)} placeholder="Directo, sin adornos, todo en cifras concretas" />
+        </label>
+        <label><span>Tipo de contenido</span>
+          <input value={form.categoria || ''} onChange={e => set('categoria', e.target.value)} list="ag-categorias" placeholder="Filmmaking, Marca personal, Ecommerce…" />
+          <datalist id="ag-categorias">
+            {[...new Set(lista.map(i => i.categoria).filter(Boolean))].map(c => <option key={c} value={c} />)}
+          </datalist>
         </label>
         <label><span>Contexto</span>
           <small>Cómo hace los vídeos: estructura, ritmo, qué ganchos usa, cómo cierra. Cuanto más concreto, mejor escribe el modelo a su estilo.</small>
@@ -75,25 +82,24 @@ export function Identidades({ lista, onCambio }) {
   return (
     <div className="ag-lista">
       <div className="ag-lista-top">
-        <p>Cada identidad guarda cómo trabaja un creador. El analista la usa para leer sus reels con sus ojos, y el escritor de guiones para escribir a su estilo.</p>
-        <button className="ag-btn primario" onClick={() => abrir(null)}>Nueva identidad</button>
+        <p>Los creadores que estudia el agente. Pincha uno para ver sus reels, su guion frase a frase y lo aprendido de él.</p>
+        <button className="ag-btn primario" onClick={() => abrir(null)}>Nuevo creador</button>
       </div>
       {error && <p className="ag-error">{error}</p>}
-      {lista.length === 0 ? (
-        <p className="ag-vacio">Todavía no hay ninguna. Empieza por la que más te interese estudiar.</p>
-      ) : lista.map(i => (
-        <article key={i.id} className="ag-card ag-ident">
-          <div>
-            <h3>{i.nombre}</h3>
-            <p>{i.descripcion || <em>Sin descripción</em>}</p>
-            <small>{i.contexto ? `${i.contexto.length} caracteres de contexto` : 'Sin contexto todavía'}</small>
-          </div>
-          <div className="ag-ident-acc">
-            <button className="ag-btn sm" onClick={() => abrir(i)}>Editar</button>
-            <button className="ag-btn sm peligro" onClick={() => borrar(i)}>Borrar</button>
-          </div>
-        </article>
-      ))}
+      {lista.length === 0
+        ? <p className="ag-vacio">Todavía no hay ninguno. Empieza por el que más te interese estudiar.</p>
+        : (
+          <CreadoresGrid
+            creadores={lista}
+            onAbrir={onAbrir}
+            acciones={(i) => (
+              <>
+                <button className="ag-btn sm" onClick={() => abrir(i)}>Editar</button>
+                <button className="ag-btn sm peligro" onClick={() => borrar(i)}>Borrar</button>
+              </>
+            )}
+          />
+        )}
     </div>
   )
 }

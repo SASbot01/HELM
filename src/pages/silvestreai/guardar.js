@@ -166,7 +166,7 @@ async function guardarEnFormularios(clientId, contactId, { A, datos, calif }) {
   // El orden lo da preguntas.js, que es el mismo de los campos del formulario.
   const answers = {}
   for (const q of visibles(A)) {
-    if (!q.rama) continue                 // la P6 la dice ya el título del formulario
+    if (q.id === 'tipo') continue         // la P6 la dice ya el título del formulario
     const t = etiquetaDe(A, q.id)
     if (t) answers[q.id] = t
   }

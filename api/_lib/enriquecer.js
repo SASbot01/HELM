@@ -26,6 +26,8 @@
 // primer contacto y de atender de inmediato a quien pida no ser contactado.
 // Un autónomo es persona física: sus datos son datos personales.
 
+import { fetchPublico } from './web.js'
+
 const UA = 'HELM-Prospeccion/1.0 (+https://helm.s4sf.net; contacto: el perfil que hace la búsqueda)'
 
 // Una web de empresa no ocupa esto. El tope está para no tragarse un PDF de
@@ -84,12 +86,13 @@ async function traer(url) {
   const ctrl = new AbortController()
   const corta = setTimeout(() => ctrl.abort(), TIMEOUT_MS)
   try {
-    const r = await fetch(url, {
-      redirect: 'follow',
+    // La web de un prospecto la escribe cualquiera (una lista pegada, una
+    // fuente pública): sin el filtro, el servidor visitaría su propia red.
+    const r = await fetchPublico(url, {
       signal: ctrl.signal,
       headers: { 'User-Agent': UA, Accept: 'text/html,text/plain;q=0.9' },
     })
-    if (!r.ok) return null
+    if (!r?.ok) return null
     // Solo HTML. Un PDF o un ZIP no se descargan ni para mirarlos.
     const tipo = r.headers.get('content-type') || ''
     if (!/text\/html|text\/plain/i.test(tipo)) return null

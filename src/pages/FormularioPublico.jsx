@@ -29,6 +29,7 @@ export default function FormularioPublico() {
   const [answers, setAnswers] = useState({})
   const [nombre, setNombre] = useState('')
   const [email, setEmail] = useState('')
+  const [acepta, setAcepta] = useState(false)
   const [touched, setTouched] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [enviado, setEnviado] = useState(false)
@@ -74,8 +75,13 @@ export default function FormularioPublico() {
     if (!form) return {}
     const errs = validarRespuestas(form.fields, answers)
     if (!nombre.trim()) errs.__nombre = 'Dinos quién eres'
+    if (!acepta) errs.__acepta = 'Marca la casilla para poder enviar'
     return errs
-  }, [form, answers, nombre])
+  }, [form, answers, nombre, acepta])
+
+  // Lo que la persona acepta al enviar, con el nombre de quien le manda el
+  // formulario. El mismo texto que ve es el que se guarda como prueba.
+  const textoConsentimiento = `Acepto que ${marca?.nombre || 'quien me envía este formulario'} trate los datos que escribo aquí para atender mi solicitud.`
 
   const ok = Object.keys(errores).length === 0
   const shown = touched ? errores : {}
@@ -91,6 +97,8 @@ export default function FormularioPublico() {
       contact_id: contactId || null,
       respondent: [nombre.trim(), email.trim()].filter(Boolean).join(' · '),
       answers,
+      // La prueba del consentimiento: qué casilla marcó, con qué texto y cuándo.
+      meta: { consentimiento: { aceptado: true, texto: textoConsentimiento, fecha: new Date().toISOString() } },
     })
     if (err) { setError('No se pudo enviar: ' + err.message); setEnviando(false); return }
     setEnviado(true)
@@ -135,8 +143,14 @@ export default function FormularioPublico() {
             <div className="helm-drawer-section">Preguntas</div>
             <CamposRespuesta fields={form.fields || []} answers={answers} set={set} errors={shown} />
 
+            <label className="helm-checkline" style={{ marginTop: 16 }}>
+              <input type="checkbox" checked={acepta} onChange={e => setAcepta(e.target.checked)} style={{ flexShrink: 0 }} />
+              <span>{textoConsentimiento}</span>
+            </label>
+            <FormNote>{shown.__acepta}</FormNote>
+
             <FormNote>{error}</FormNote>
-            {touched && !ok && <FormNote>Faltan respuestas obligatorias.</FormNote>}
+            {touched && Object.keys(errores).some(k => k !== '__acepta') && <FormNote>Faltan respuestas obligatorias.</FormNote>}
 
             <button type="submit" className="helm-btn primary" disabled={enviando}
               style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}>

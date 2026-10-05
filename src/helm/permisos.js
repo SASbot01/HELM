@@ -26,10 +26,9 @@ export const AREAS = [
   { key: 'ventas', label: 'Ventas', desc: 'Registrar y cancelar ventas' },
   { key: 'diario', label: 'Diario', desc: 'Reportes diarios' },
   { key: 'finanzas', label: 'Finanzas', desc: 'Movimientos y comisiones' },
-  { key: 'contenido', label: 'Guiones', desc: 'Calendario y piezas' },
+  { key: 'contenido', label: 'Agentes', desc: 'Agentes y creadores de referencia' },
   { key: 'onboarding', label: 'Onboarding', desc: 'Respuestas y Biblia' },
   { key: 'enlaces', label: 'Enlaces', desc: 'URLs del negocio' },
-  { key: 'archivos', label: 'Archivos', desc: 'Documentos del negocio' },
   { key: 'ajustes', label: 'Ajustes', desc: 'Integraciones y permisos' },
   { key: 'tareas', label: 'Tareas', desc: 'Plugin de tareas' },
   { key: 'biblioteca', label: 'Biblioteca', desc: 'Documentos de la IA' },
@@ -62,13 +61,11 @@ export const SECCIONES = [
   { key: 'ventas', label: 'Ventas', desc: 'Reporte de ventas' },
   { key: 'diario', label: 'Diario', desc: 'Reportes diarios' },
   { key: 'finanzas', label: 'Finanzas', desc: 'Ingresos, gastos y comisiones' },
-  { key: 'chat', label: 'Chat IA', desc: 'El copywriter del perfil' },
-  // La clave no cambia aunque el nombre sí (ver el NAV de HelmApp): está
-  // guardada en los permisos de cada perfil.
-  { key: 'contenido', label: 'Guiones', desc: 'Calendario de piezas y guiones' },
+  { key: 'dia', label: 'Mi día', desc: 'Rituales diarios con la IA' },
+  { key: 'noticias', label: 'Noticias', desc: 'Las tres noticias del día de IA y ciberseguridad, cada mañana a las 6:00' },
+  { key: 'contenido', label: 'Agentes', desc: 'Agentes de IA y creadores de referencia' },
   { key: 'llamadas', label: 'Llamadas', desc: 'Agenda de llamadas' },
   { key: 'enlaces', label: 'Enlaces', desc: 'URLs del negocio' },
-  { key: 'archivos', label: 'Archivos', desc: 'Documentos del negocio' },
   { key: 'plugins', label: 'Plugins', desc: 'Catálogo de módulos' },
   { key: 'tareas', label: 'Tareas', desc: 'Plugin de tareas' },
   { key: 'biblioteca', label: 'Biblioteca', desc: 'Documentos de la IA' },
@@ -207,6 +204,8 @@ export const SECCIONES_FIJAS = ['ajustes', 'secciones']
 //
 //   · de SECTOR — una asesoría quiere el control de plazos fiscales; un
 //     infoproducto vería una sección con modelos del 303 que no abrirá jamás.
+//     Las noticias de IA y ciberseguridad son de quien hace contenido de eso,
+//     y encenderlas pone además a trabajar a su agente cada mañana.
 //   · MÓDULOS — lo que antes era el catálogo de "Plugins". Se fusionó aquí
 //     porque tener dos pantallas para lo mismo (qué usa este negocio) confundía,
 //     y porque los plugins se guardaban en el localStorage del navegador: quien
@@ -214,7 +213,7 @@ export const SECCIONES_FIJAS = ['ajustes', 'secciones']
 //     aparecían. Ahora van en la base, como el resto.
 //
 // Las normales se apagan si molestan; estas se encienden si hacen falta.
-export const SECCIONES_SECTOR = ['fiscal']
+export const SECCIONES_SECTOR = ['fiscal', 'noticias']
 export const SECCIONES_MODULO = ['tareas', 'actividad', 'biblioteca', 'formularios', 'prospeccion', 'equipos-ia']
 const OPT_IN = new Set([...SECCIONES_SECTOR, ...SECCIONES_MODULO])
 

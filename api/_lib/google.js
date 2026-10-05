@@ -312,6 +312,115 @@ export async function crearEventoEnCalendar(token, {
   }
 }
 
+// ─── Avisos de cobro en el calendario ───────────────────────────────────────
+//
+// Son otra cosa que las llamadas de arriba: no hay invitado, no hay Meet y no
+// se manda correo a nadie. Es una nota para el dueño del calendario, con los
+// recordatorios puestos a mano para que suenen cuando tienen que sonar.
+//
+// Todos llevan la misma marca en `extendedProperties.private`. Eso es lo que
+// permite volver a pasar la sincronización mañana sin duplicar nada: se
+// buscan por la marca, se comparan con lo que toca y se borra lo que sobra.
+// Sin la marca habría que adivinar por el título, y el primer aviso que el
+// dueño renombrase a mano se duplicaría para siempre.
+export const MARCA_AVISO = 'helm-cobros'
+
+/** Los avisos que HELM ya tiene puestos en ese tramo del calendario. */
+export async function listarAvisosHelm(token, { calendarId = 'primary', timeMin, timeMax, marca = MARCA_AVISO }) {
+  const eventos = []
+  let pageToken = null
+  for (let i = 0; i < 6; i++) {
+    const params = new URLSearchParams({
+      timeMin, timeMax, singleEvents: 'true', maxResults: '250',
+      privateExtendedProperty: `helmAviso=${marca}`,
+    })
+    if (pageToken) params.set('pageToken', pageToken)
+    const page = await apiGet(token, `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events?${params}`)
+    eventos.push(...(page.items || []))
+    pageToken = page.nextPageToken
+    if (!pageToken) break
+  }
+  return eventos
+}
+
+/**
+ * El cuerpo de un aviso. Fuera de las funciones de red porque lo usan las dos
+ * —crear y actualizar— y porque así se puede comparar antes de tocar nada.
+ *
+ * `avisoHorasAntes` son las 48 h que pidió Hugo, en minutos. El recordatorio a
+ * 0 minutos es el del día: salta a la hora del evento.
+ */
+export function cuerpoDeAviso({ titulo, descripcion, dia, hora = 9, duracionMin = 15, zona = 'Europe/Madrid', clave, marca = MARCA_AVISO, avisoHorasAntes = 48 }) {
+  const inicio = `${dia}T${String(hora).padStart(2, '0')}:00:00`
+  const fin = `${dia}T${String(hora).padStart(2, '0')}:${String(duracionMin).padStart(2, '0')}:00`
+  return {
+    summary: String(titulo || 'Cobro').slice(0, 300),
+    description: String(descripcion || '').slice(0, 4000),
+    // Sin `Z`: la hora es local de Madrid y la zona va aparte. Con Z, el aviso
+    // de las 9:00 saltaría a las 11:00 en verano.
+    start: { dateTime: inicio, timeZone: zona },
+    end: { dateTime: fin, timeZone: zona },
+    reminders: {
+      useDefault: false,
+      overrides: [
+        { method: 'popup', minutes: 0 },
+        { method: 'popup', minutes: avisoHorasAntes * 60 },
+        { method: 'email', minutes: avisoHorasAntes * 60 },
+      ],
+    },
+    extendedProperties: { private: { helmAviso: marca, helmClave: String(clave) } },
+  }
+}
+
+async function calendarWrite(token, url, method, cuerpo) {
+  const res = await fetch(url, {
+    method,
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    ...(cuerpo ? { body: JSON.stringify(cuerpo) } : {}),
+    signal: AbortSignal.timeout(20_000),
+  })
+  if (!res.ok && res.status !== 410) {   // 410 = ya estaba borrado, da igual
+    const detalle = await res.text().catch(() => '')
+    const e = new Error(`Calendar respondió ${res.status}: ${detalle.slice(0, 200)}`)
+    e.statusCode = res.status
+    throw e
+  }
+  return method === 'DELETE' ? null : res.json()
+}
+
+export const crearAviso = (token, calendarId, cuerpo) =>
+  calendarWrite(token, `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events`, 'POST', cuerpo)
+
+export const actualizarAviso = (token, calendarId, eventId, cuerpo) =>
+  calendarWrite(token, `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, 'PATCH', cuerpo)
+
+export const borrarAviso = (token, calendarId, eventId) =>
+  calendarWrite(token, `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, 'DELETE')
+
+/**
+ * Baja una hoja de cálculo de Google como CSV.
+ *
+ * Por `export` de Drive y no por la API de Sheets a propósito: Sheets sería un
+ * scope más que registrar y volver a consentir, y para leer una tabla plana no
+ * aporta nada. Con `drive.readonly`, que HELM ya tiene, esto funciona tal cual.
+ * Solo baja la PRIMERA pestaña, que es lo que devuelve el export sin gid.
+ */
+export async function exportarHojaComoCSV(token, fileId, { gid } = {}) {
+  const params = new URLSearchParams({ mimeType: 'text/csv' })
+  if (gid != null) params.set('gid', String(gid))
+  const res = await fetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}/export?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(30_000),
+  })
+  if (!res.ok) {
+    const detalle = await res.text().catch(() => '')
+    const e = new Error(`Drive respondió ${res.status} al exportar la hoja: ${detalle.slice(0, 200)}`)
+    e.statusCode = res.status
+    throw e
+  }
+  return res.text()
+}
+
 // Crea un Google Doc con el guion dentro de la carpeta indicada.
 //
 // Va por subida multipart y no por la API de Google Docs (que sería otro scope

@@ -210,10 +210,45 @@ function sumaDias(iso, dias) {
   return d.toISOString().slice(0, 10)
 }
 
+// ── Cómo se cobra a plazos ───────────────────────────────────────────────────
+// Fraccionar no es «que el cliente te vaya haciendo transferencias»: eso acabas
+// persiguiéndolo tú cada mes. Lo que sostiene un ticket alto es la tarjeta
+// domiciliada — primer cobro al comprar y el resto automáticos. La ayuda vive
+// aquí, y no en Ajustes, porque este es el momento en que alguien marca
+// «Fraccionado» y se pregunta cómo se cobra eso de verdad.
+function ComoCobrarAPlazos() {
+  return (
+    <div className="helm-settings-block">
+      <label>Cómo se cobra a plazos</label>
+      <p>Con tarjeta de crédito o débito, en tres pasos:</p>
+      <ol className="helm-pasos">
+        <li>El cliente introduce su tarjeta en el momento de la compra.</li>
+        <li>Se hace el primer cobro en ese momento.</li>
+        <li>Los siguientes salen automáticamente cada mes de la misma tarjeta.</li>
+      </ol>
+      <p>
+        Para ofrecerlo en tu web, envía la solicitud desde{' '}
+        <a href="https://www.sequra.com/es/contacto" target="_blank" rel="noopener noreferrer">
+          sequra.com/es/contacto
+        </a>{' '}
+        y elige la opción <b>Empresas</b>.
+      </p>
+      <FormNote tone="warn">
+        Usa un email corporativo: con Gmail o Hotmail no tramitan la solicitud.
+      </FormNote>
+      <p className="helm-settings-note">
+        Es lo que hace vendible un ticket alto: 3.000 € de golpe frenan la compra;
+        esos mismos 3.000 € repartidos en mensualidades, no.
+      </p>
+    </div>
+  )
+}
+
 function NuevaVentaModal({ contacts, services, people, onClose, onSave }) {
   const [form, setForm] = useState(EMPTY)
   const [touched, setTouched] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [comoCobrar, setComoCobrar] = useState(false)
   const [error, setError] = useState(null)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -384,6 +419,13 @@ function NuevaVentaModal({ contacts, services, people, onClose, onSave }) {
 
         {fraccionado && (
           <>
+            <p className="helm-settings-lead">
+              El cliente mete la tarjeta al comprar y las cuotas siguientes se cobran solas.{' '}
+              <button type="button" className="helm-linkbtn" onClick={() => setComoCobrar(v => !v)}>
+                {comoCobrar ? 'Ocultar' : 'Cómo se cobra a plazos'}
+              </button>
+            </p>
+            {comoCobrar && <ComoCobrarAPlazos />}
             <div className="helm-form-3">
               <Field label="Nº de cuotas *" error={shown.installments_total}>
                 <CountInput value={form.installments_total} onChange={elegirCuotas} placeholder="3" />

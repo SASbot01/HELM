@@ -19,6 +19,7 @@ import { applyCors, rateLimit, getClientIp } from './_lib/auth.js'
 import {
   getGoogleConfig, getAccessToken, crearEventoEnCalendar, puedeEscribirEnAgenda,
 } from './_lib/google.js'
+import { notificar } from './_lib/notificar.js'
 
 const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i
 
@@ -97,6 +98,70 @@ async function avanzarPorReserva(form, contactId) {
   if (error) console.warn('[formularios] no se pudo mover el contacto a reservado:', error.message)
 }
 
+// ── La reunión en el calendario, y el aviso ─────────────────────────────────
+// Un único sitio para las dos formas de reservar: la que manda la hora con los
+// datos de contacto y la que la elige en un paso posterior. Antes solo la
+// primera creaba el evento, y las reservas de los formularios por pasos se
+// quedaban en el CRM sin llegar nunca al calendario.
+//
+// Si Google falla, la reserva sigue adelante sin evento: el lead ya ha elegido
+// su hora y perderlo por un fallo de calendario sería mucho peor que una
+// reunión que hay que apuntar a mano. Pero se AVISA: en silencio es como se
+// pierde un mes de llamadas.
+const cuandoLabel = (iso) => new Date(iso).toLocaleString('es-ES', {
+  weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid',
+})
+
+async function agendarLlamada(client, form, { nombre, email, telefono, respuestas, meta }) {
+  let evento = null
+  let fallo = null
+  try {
+    const cfgG = (await getGoogleConfig(supabase, client.id))?.config
+    if (!cfgG?.refreshToken) {
+      fallo = 'el perfil no tiene Google Calendar conectado'
+    } else if (!puedeEscribirEnAgenda(cfgG.scopes)) {
+      fallo = 'Google está conectado sin permiso para crear eventos; hay que volver a conectarlo en Ajustes'
+    } else {
+      const { token } = await getAccessToken(supabase, client.id)
+      const fin = meta.slot_end || new Date(new Date(meta.slot_start).getTime() + 30 * 60000).toISOString()
+      evento = await crearEventoEnCalendar(token, {
+        calendarId: cfgG.calendarId || 'primary',
+        titulo: `Llamada · ${nombre || email || 'lead'}`,
+        descripcion: [
+          `Lead de ${form.title}.`,
+          email ? `Email: ${email}` : '',
+          telefono ? `Teléfono: ${telefono}` : '',
+          '',
+          ...Object.entries(respuestas || {}).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`),
+        ].filter(Boolean).join('\n'),
+        inicio: meta.slot_start,
+        fin,
+        invitado: email || null,
+      })
+    }
+  } catch (err) {
+    fallo = err.message
+  }
+  if (fallo) console.warn('[formularios] no se pudo crear el evento:', fallo)
+
+  const quien = nombre || email || 'Un lead'
+  const cuando = cuandoLabel(meta.slot_start)
+  await notificar(supabase, client.id, {
+    tipo: 'reserva', titulo: `Llamada agendada · ${quien}`,
+    cuerpo: [cuando, email, telefono, evento?.meet ? `Meet: ${evento.meet}` : ''].filter(Boolean).join('\n'),
+    destino: 'llamadas', meta: { slot_start: meta.slot_start, evento_id: evento?.id || null },
+  })
+  if (fallo) {
+    await notificar(supabase, client.id, {
+      tipo: 'calendario', nivel: 'error',
+      titulo: 'Una reserva no ha llegado a Google Calendar',
+      cuerpo: `${quien}, ${cuando}. Apúntala a mano. Motivo: ${fallo}`.slice(0, 600),
+      destino: 'ajustes',
+    })
+  }
+  return evento
+}
+
 export default async function handler(req, res) {
   applyCors(req, res)
   if (req.method === 'OPTIONS') return res.status(204).end()
@@ -139,6 +204,17 @@ export default async function handler(req, res) {
     }
 
     const meta = body.meta && typeof body.meta === 'object' ? body.meta : {}
+
+    // La prueba del consentimiento, si la landing la manda: qué casilla marcó
+    // y con qué texto. La fecha la pone el servidor, no el navegador.
+    const consentimiento = body.consentimiento || meta.consentimiento
+    if (consentimiento && typeof consentimiento === 'object') {
+      meta.consentimiento = {
+        aceptado: consentimiento.aceptado === true,
+        texto: txt(consentimiento.texto, 300),
+        fecha: new Date().toISOString(),
+      }
+    } else delete meta.consentimiento
 
     // ── El hueco, si reserva llamada ───────────────────────────────────────
     // Dos personas pueden abrir la landing a la vez y elegir la misma hora: los
@@ -187,6 +263,29 @@ export default async function handler(req, res) {
       // sea una fecha reventaría el formateo y devolvería un 500 por una
       // respuesta que ya se ha guardado bien.
       const cuando = new Date(meta.slot_start || '')
+      // Solo la primera vez que llega la hora: reenviar el paso no duplica la
+      // reunión ni el aviso.
+      if (!Number.isNaN(cuando.getTime()) && !previa.meta?.slot_start) {
+        let contacto = null
+        if (previa.contact_id) {
+          const { data } = await supabase.from('crm_contacts')
+            .select('name, email, phone').eq('id', previa.contact_id).maybeSingle()
+          contacto = data
+        }
+        const evento = await agendarLlamada(client, form, {
+          nombre: contacto?.name || '', email: contacto?.email || '', telefono: contacto?.phone || '',
+          respuestas: { ...(previa.answers || {}), ...respuestas }, meta,
+        })
+        if (evento) {
+          const { error: errEv } = await supabase.from('helm_form_responses').update({
+            meta: {
+              ...(previa.meta || {}), ...meta, completado_en: new Date().toISOString(),
+              evento_id: evento.id, evento_url: evento.htmlLink, meet_url: evento.meet,
+            },
+          }).eq('id', previa.id)
+          if (errEv) console.warn('[formularios] enlace del evento:', errEv.message)
+        }
+      }
       if (previa.contact_id && !Number.isNaN(cuando.getTime())) {
         await avanzarPorReserva(form, previa.contact_id)
         const { error: errAct } = await supabase.from('crm_activities').insert({
@@ -209,6 +308,11 @@ export default async function handler(req, res) {
     const nombre = txt(body.nombre, 160)
     const email = txt(body.email, 200).toLowerCase()
     const telefono = txt(body.telefono, 40)
+    // El negocio de quien escribe, cuando la landing lo pregunta (la de Sergio
+    // Amorós: sus leads son empresas, no particulares). Es una columna del CRM,
+    // no una respuesta del formulario, así que se trata como el resto de datos
+    // de contacto y no pasa por la lista de claves declaradas.
+    const empresa = txt(body.empresa, 200)
     if (!nombre) return res.status(400).json({ error: 'Falta el nombre' })
     if (email && !RE_EMAIL.test(email)) return res.status(400).json({ error: 'Email no válido' })
     if (!email && !telefono) return res.status(400).json({ error: 'Hace falta un email o un teléfono' })
@@ -224,13 +328,13 @@ export default async function handler(req, res) {
 
     if (email) {
       const { data } = await supabase.from('crm_contacts')
-        .select('id, email, phone, instagram')
+        .select('id, email, phone, instagram, company')
         .eq('client_id', client.id).eq('email', email).limit(1)
       contacto = data?.[0] || null
     }
     if (!contacto && telCola.length >= 9) {
       const { data } = await supabase.from('crm_contacts')
-        .select('id, email, phone, instagram')
+        .select('id, email, phone, instagram, company')
         .eq('client_id', client.id).not('phone', 'is', null).limit(5000)
       contacto = (data || []).find(c => cola(c.phone) === telCola) || null
     }
@@ -245,6 +349,7 @@ export default async function handler(req, res) {
       if (!contacto.email && email) patch.email = email
       if (!contacto.phone && telefono) { patch.phone = telefono; patch.whatsapp = telefono }
       if (!contacto.instagram && instagram) patch.instagram = instagram
+      if (!contacto.company && empresa) patch.company = empresa
       await supabase.from('crm_contacts').update(patch).eq('id', contactId)
     } else {
       // A qué embudo entra. El formulario lo decide; si no lo dice, se queda
@@ -257,6 +362,7 @@ export default async function handler(req, res) {
         phone: telefono,
         whatsapp: telefono,
         instagram,
+        company: empresa,
         source: txt(body.origen, 60) || 'Web',
         // Si el envío ya trae hora (llegó de una sola vez, sin pasar por el
         // paso 1), no es un lead: es alguien con la llamada puesta. Entra ya en
@@ -279,37 +385,10 @@ export default async function handler(req, res) {
 
     // ── La reunión en el calendario ────────────────────────────────────────
     // Se crea ANTES de guardar la respuesta para poder meter el enlace de Meet
-    // dentro de ella. Si Google falla, la reserva sigue adelante sin evento: el
-    // lead ya ha elegido su hora y perderlo por un fallo de calendario sería
-    // mucho peor que una reunión que hay que apuntar a mano.
-    let evento = null
-    if (meta.slot_start) {
-      try {
-        const cfgG = (await getGoogleConfig(supabase, client.id))?.config
-        if (cfgG?.refreshToken && puedeEscribirEnAgenda(cfgG.scopes)) {
-          const { token } = await getAccessToken(supabase, client.id)
-          const fin = meta.slot_end || new Date(new Date(meta.slot_start).getTime() + 30 * 60000).toISOString()
-          evento = await crearEventoEnCalendar(token, {
-            calendarId: cfgG.calendarId || 'primary',
-            titulo: `Llamada · ${nombre}`,
-            descripcion: [
-              `Lead de ${form.title}.`,
-              email ? `Email: ${email}` : '',
-              telefono ? `Teléfono: ${telefono}` : '',
-              '',
-              ...Object.entries(respuestas).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`),
-            ].filter(Boolean).join('\n'),
-            inicio: meta.slot_start,
-            fin,
-            invitado: email || null,
-          })
-        } else if (cfgG?.refreshToken) {
-          console.warn('[formularios] el perfil no tiene permiso de calendario; la llamada no se agenda')
-        }
-      } catch (err) {
-        console.warn('[formularios] no se pudo crear el evento:', err.message)
-      }
-    }
+    // dentro de ella.
+    const evento = meta.slot_start
+      ? await agendarLlamada(client, form, { nombre, email, telefono, respuestas, meta })
+      : null
 
     // ── La respuesta ───────────────────────────────────────────────────────
     const { data: respuesta, error: errResp } = await supabase
@@ -343,6 +422,15 @@ export default async function handler(req, res) {
       performed_by: 'Formulario web',
     })
     if (errAct) console.warn('[formularios] actividad:', errAct.message)
+
+    // La reserva ya ha avisado por su cuenta; aquí, el lead que entra sin hora.
+    if (!meta.slot_start) {
+      await notificar(supabase, client.id, {
+        tipo: 'lead', titulo: `${creado ? 'Lead nuevo' : 'Respuesta nueva'} · ${nombre || email || telefono}`,
+        cuerpo: [form.title, email, telefono].filter(Boolean).join('\n'),
+        destino: 'crm',
+      })
+    }
 
     return res.status(200).json({
       ok: true,

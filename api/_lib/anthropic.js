@@ -161,7 +161,13 @@ export async function claudeTurno({ apiKey, model, system, messages, maxTokens =
     .filter(b => b.type === 'tool_use')
     .map(b => ({ name: b.name, args: b.input || {} }))
 
-  return { content: texto, toolCalls }
+  // `usage` es para quien lleva la cuenta de lo que gasta (el registro del
+  // equipo de agentes); el resto del código lo ignora.
+  const usage = {
+    in: (res.usage?.input_tokens || 0) + (res.usage?.cache_read_input_tokens || 0) + (res.usage?.cache_creation_input_tokens || 0),
+    out: res.usage?.output_tokens || 0,
+  }
+  return { content: texto, toolCalls, usage }
 }
 
 // ── Config por perfil ──────────────────────────────────────────────────────

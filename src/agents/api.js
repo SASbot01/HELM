@@ -32,6 +32,7 @@ const url = (accion, extra = '') => `/api/agents?action=${accion}${extra}`
 export const agentsApi = {
   // Identidades
   identidades: () => pide(url('identidades')),
+  ficha: (slug) => pide(url('identidad-ficha', `&slug=${encodeURIComponent(slug)}`)),
   guardarIdentidad: (body) => pide(url('identidad-guardar'), { method: 'POST', body }),
   borrarIdentidad: (id) => pide(url('identidad-borrar', `&id=${id}`), { method: 'DELETE' }),
 
@@ -48,6 +49,31 @@ export const agentsApi = {
   memoria: (q) => pide(url('memoria', q ? `&q=${encodeURIComponent(q)}` : '')),
   guardarNota: (body) => pide(url('memoria-guardar'), { method: 'POST', body }),
   borrarNota: (id) => pide(url('memoria-borrar', `&id=${id}`), { method: 'DELETE' }),
+
+  // Creadores de cada perfil de HELM (la tarjeta de Ajustes → IA)
+  perfilCreadores: (clientId) => pide(url('perfil-creadores', `&clientId=${clientId}`)),
+  guardarPerfilCreadores: (clientId, identityIds) =>
+    pide(url('perfil-creadores-guardar'), { method: 'POST', body: { clientId, identityIds } }),
+
+  identidadPerfiles: (identityId) => pide(url('identidad-perfiles', `&identityId=${identityId}`)),
+  guardarIdentidadPerfiles: (identityId, clientIds) =>
+    pide(url('identidad-perfiles-guardar'), { method: 'POST', body: { identityId, clientIds } }),
+
+  // Ingesta de Drive
+  drivePerfiles: () => pide(url('drive')),
+  drive: (clientId) => pide(url('drive', `&clientId=${clientId}`)),
+
+  // El enlace del conector de Claude de un perfil
+  mcpEnlace: (clientId) => pide(url('mcp-enlace', `&clientId=${clientId}`)),
+  generarMcpEnlace: (clientId) => pide(url('mcp-enlace'), { method: 'POST', body: { clientId } }),
+
+  // El equipo de agentes de un perfil
+  equipo: (clientId) => pide(url('equipo', clientId ? `&clientId=${clientId}` : '')),
+  equipoConfig: (body) => pide(url('equipo-config'), { method: 'POST', body }),
+  equipoLanzar: (body) => pide(url('equipo-lanzar'), { method: 'POST', body }),
+  equipoGuion: (body) => pide(url('equipo-guion'), { method: 'POST', body }),
+  equipoTarea: (body) => pide(url('equipo-tarea'), { method: 'POST', body }),
+  equipoNota: (body) => pide(url('equipo-nota'), { method: 'POST', body }),
 
   // Cola
   estado: () => pide(url('estado')),

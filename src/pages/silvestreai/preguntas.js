@@ -4,8 +4,9 @@
 // del contenido, y tocar una pregunta es editar este fichero y nada más.
 //
 // La forma la marca el bloque 2: la P6 elige rama (A a E) y a partir de ahí
-// solo se ven las 16 preguntas de ESA rama. Nadie contesta 80 preguntas —
-// contesta 16 que le hablan de su negocio, que es lo que hace que se terminen.
+// solo se ven las 16 preguntas de ESA rama, más las cinco comunes del final.
+// Nadie contesta 80 preguntas — contesta 21 que le hablan de su negocio, que
+// es lo que hace que se terminen.
 //
 //   rama    si está, la pregunta solo sale para esa rama
 //   type    'text' para respuesta libre; sin poner, opción única
@@ -513,6 +514,51 @@ export const Q = [
       { label: 'Escalar sin contratar más gente', value: 'escalar' },
       { label: 'Todo lo anterior', value: 'todo' }] },
   ]),
+
+  /* ═══ BLOQUE FINAL — COMÚN A TODAS LAS RAMAS ════════════════════════════
+     Sin `rama`, así que las ve todo el mundo y salen al final, después de las
+     de su tipo de empresa. Van aquí y no dentro de cada rama por dos motivos:
+     la respuesta significa lo mismo en un despacho que en un infoproducto, y
+     repetirlas cinco veces era garantizar que acabaran desincronizadas.
+     Lo que miden es si el negocio YA vive de lo digital —facturación por
+     internet, no seguidores—, que es la línea que separa a quien hay que
+     ayudar a montar el sistema de quien solo necesita escalarlo. Van al final
+     a propósito: se preguntan por dinero cuando ya se ha contestado todo lo
+     demás, no antes de haberse ganado la confianza. */
+  { id: 'digital_vive', q: '¿Vives ya de lo que facturas por internet?',
+    help: 'Facturación, no seguidores. Aquí no hay respuesta mala.', options: [
+    { label: 'Sí, es mi único ingreso', value: 'solo' },
+    { label: 'Sí, pero lo combino con otra cosa', value: 'mixto' },
+    { label: 'Saco algo, pero todavía no me da para vivir', value: 'algo' },
+    { label: 'Todavía no facturo nada online', value: 'no' }] },
+
+  { id: 'digital_parte', q: '¿Qué parte de lo que facturas es 100 % digital?',
+    help: 'Digital = se cobra y se entrega sin que nadie se mueva de sitio.', options: [
+    { label: 'Todo', value: 'todo' },
+    { label: 'Más de la mitad', value: 'mayoria' },
+    { label: 'Menos de la mitad', value: 'minoria' },
+    { label: 'Casi nada, mi negocio es presencial', value: 'nada' }] },
+
+  { id: 'digital_desde', q: '¿Cuánto tiempo llevas facturando por internet?', options: [
+    { label: 'Todavía no he empezado', value: 'no' },
+    { label: 'Menos de 6 meses', value: '-6m' },
+    { label: 'Entre 6 meses y 2 años', value: '6m-2a' },
+    { label: 'Entre 2 y 5 años', value: '2-5a' },
+    { label: 'Más de 5 años', value: '5a+' }] },
+
+  { id: 'digital_facturacion', q: '¿Cómo emites las facturas hoy?',
+    help: 'Con VeriFactu encima, hacerlas a mano ha dejado de salir gratis.', options: [
+    { label: 'Se emiten solas, conectadas a la pasarela de pago', value: 'automatico' },
+    { label: 'Tengo programa de facturación, pero las meto yo', value: 'programa' },
+    { label: 'Excel o plantillas de Word', value: 'excel' },
+    { label: 'Las hace mi gestoría', value: 'gestoria' },
+    { label: 'No tengo nada montado', value: 'nada' }] },
+
+  { id: 'digital_meta', q: 'Si mañana pudieras, ¿dejarías lo presencial para vivir solo de lo digital?', options: [
+    { label: 'Ya vivo solo de lo digital', value: 'ya' },
+    { label: 'Sí, es exactamente lo que busco', value: 'si' },
+    { label: 'Sí, pero no me veo listo todavía', value: 'nolisto' },
+    { label: 'No, quiero mantener las dos patas', value: 'no' }] },
 ]
 
 // Las preguntas que se ven con lo respondido hasta ahora: las comunes siempre y

@@ -16,6 +16,7 @@
 import { supabase } from './lib/supabase.js'
 import { applyCors, rateLimit, getClientIp } from './_lib/auth.js'
 import { getGoogleConfig, getAccessToken, listCalendarEvents } from './_lib/google.js'
+import { notificar } from './_lib/notificar.js'
 
 // Plantilla por defecto. Es lo que se usa mientras nadie la haya tocado, y está
 // puesta para un negocio español: de lunes a viernes, de 10 a 19, media hora.
@@ -140,6 +141,14 @@ export default async function handler(req, res) {
     // Sin Google enlazado no hay forma de saber qué tiene ocupado, y ofrecer la
     // plantilla entera acabaría con dos llamadas encima de una reunión suya.
     if (!cfg.refreshToken) {
+      // Solo se avisa si el perfil tiene formularios con los que reservar: un
+      // perfil sin embudo no tiene nada que perder aquí.
+      await notificar(supabase, client.id, {
+        tipo: 'embudo', nivel: 'error',
+        titulo: 'Tu web no está ofreciendo huecos para reservar',
+        cuerpo: 'Alguien ha entrado a reservar una llamada y no se le ha podido ofrecer ninguna hora: el perfil no tiene Google Calendar conectado. Conéctalo en Ajustes.',
+        destino: 'ajustes', clave: 'embudo-sin-google', cadaHoras: 24,
+      })
       return res.status(200).json({ days: [], motivo: 'sin-google' })
     }
 
@@ -168,6 +177,12 @@ export default async function handler(req, res) {
       // es preferible que el lead pida que le llamen a que le den una hora que
       // choca con otra cosa.
       console.warn('[agenda] calendario', err.message)
+      await notificar(supabase, client.id, {
+        tipo: 'embudo', nivel: 'error',
+        titulo: 'Tu web no está ofreciendo huecos para reservar',
+        cuerpo: `Google Calendar no responde, así que quien entra a reservar una llamada no ve ninguna hora. Vuelve a conectar Google en Ajustes. Motivo: ${String(err.message).slice(0, 300)}`,
+        destino: 'ajustes', clave: 'embudo-calendario', cadaHoras: 6,
+      })
       return res.status(200).json({ days: [], motivo: 'calendario-no-disponible' })
     }
 
@@ -184,8 +199,17 @@ export default async function handler(req, res) {
 
     // Un minuto de caché: la landing pide los huecos al abrir, y varias visitas
     // seguidas no tienen por qué costar una llamada a Google cada una.
+    const days = construirDias(agenda, ocupado, ahora)
+    if (!days.some(d => d.slots?.length)) {
+      await notificar(supabase, client.id, {
+        tipo: 'embudo', nivel: 'aviso',
+        titulo: 'No te quedan huecos libres para llamadas',
+        cuerpo: `En los próximos ${agenda.diasVista} días no hay ninguna hora libre que ofrecer a quien entra a reservar. Revisa tu calendario o amplía el horario.`,
+        destino: 'llamadas', clave: 'embudo-lleno', cadaHoras: 24,
+      })
+    }
     res.setHeader('Cache-Control', 'public, max-age=60')
-    return res.status(200).json({ days: construirDias(agenda, ocupado, ahora) })
+    return res.status(200).json({ days })
   } catch (err) {
     console.error('[agenda]', err)
     return res.status(500).json({ error: 'No se pudieron cargar los huecos' })

@@ -1,0 +1,42 @@
+/* La campana y su panel. Usa los tokens del tema (tema.css). */
+.helm-noti { position: relative; }
+.helm-noti-btn {
+  position: relative; display: grid; place-items: center; width: 38px; height: 38px;
+  border-radius: var(--radius-sm); border: 1px solid var(--border-2); background: var(--panel-2);
+  color: var(--text-dim); cursor: pointer; transition: background .14s ease, color .14s ease, border-color .14s ease;
+}
+.helm-noti-btn:hover, .helm-noti-btn.abierta { background: var(--hover); color: var(--text); border-color: rgba(255, 255, 255, 0.28); }
+.helm-noti-n {
+  position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px;
+  display: grid; place-items: center; border-radius: 9px;
+  font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+  background: var(--oro); color: var(--on-accent); box-shadow: 0 0 0 2px #000;
+}
+.helm-noti-n.error { background: var(--red); color: #fff; }
+
+.helm-noti-panel {
+  position: absolute; top: calc(100% + 10px); right: 0; z-index: 40;
+  width: min(380px, calc(100vw - 24px)); max-height: min(520px, 70vh); overflow-y: auto;
+  background: linear-gradient(180deg, #18181a, #101011) padding-box, var(--borde-neutro) border-box;
+  border: 1px solid transparent; border-radius: 16px;
+  box-shadow: var(--shadow), 0 40px 80px -30px #000;
+}
+.helm-noti-cab { padding: 14px 16px 10px; font-size: 14px; font-weight: 600; }
+.helm-noti-vacio { margin: 0; padding: 6px 16px 18px; font-size: 13px; line-height: 1.55; color: var(--text-mut); }
+.helm-noti-panel ul { list-style: none; margin: 0; padding: 0 6px 6px; }
+.helm-noti-item {
+  display: flex; align-items: flex-start; gap: 11px; width: 100%; padding: 10px;
+  font: inherit; text-align: left; color: var(--text); cursor: pointer;
+  background: transparent; border: 0; border-radius: 10px; transition: background .12s ease;
+}
+.helm-noti-item:hover { background: var(--hover); }
+.helm-noti-item.nueva { background: rgba(255, 255, 255, 0.045); }
+.helm-noti-item > svg { flex-shrink: 0; margin-top: 2px; color: var(--text-mut); }
+.helm-noti-item.aviso > svg { color: var(--amber); }
+.helm-noti-item.error > svg { color: var(--red); }
+.helm-noti-item.nueva.info > svg { color: var(--oro); }
+.helm-noti-item span { min-width: 0; display: grid; gap: 3px; }
+.helm-noti-item b { font-size: 13px; font-weight: 600; line-height: 1.35; }
+.helm-noti-item small { font-size: 12.5px; line-height: 1.45; color: var(--text-dim); white-space: pre-line; overflow-wrap: anywhere; }
+.helm-noti-item time { font-size: 11.5px; color: var(--text-mut); }
+@media (max-width: 820px) { .helm-noti-panel { position: fixed; top: 74px; right: 12px; left: 12px; width: auto; } }

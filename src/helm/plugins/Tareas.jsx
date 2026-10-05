@@ -129,6 +129,11 @@ export default function Tareas({ clientId }) {
   const [verColabs, setVerColabs] = useState(false)
   const [active, setActive] = useState(null)   // tarea abierta en el drawer
   const [error, setError] = useState(null)
+  // El número de ticket: su orden de creación en el perfil, estable aunque
+  // cambie de columna o se filtre.
+  const numeroDe = useMemo(() => new Map(
+    [...(rows || [])].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at))).map((t, i) => [t.id, i + 1]),
+  ), [rows])
   // Descripciones desplegadas: en la tarjeta se recorta a 2 líneas y aquí
   // guardamos las que el usuario ha abierto para leerlas enteras.
   const [abiertas, setAbiertas] = useState(() => new Set())
@@ -366,7 +371,7 @@ export default function Tareas({ clientId }) {
           onAbrir={setActive} onFecha={moveToDate} nameOf={nameOf}
         />
       ) : (
-        <div className="helm-kanban">
+        <div className="helm-kanban helm-tablon">
           {STATUSES.map((s, i) => (
             <div
               key={s.key}
@@ -391,65 +396,70 @@ export default function Tareas({ clientId }) {
                   const chkDone = chk.filter(c => c.done).length
                   const cliente = clienteDe(t)
                   return (
-                    <div
+                    <article
                       key={t.id}
-                      className="helm-kcard"
+                      /* Un ticket: franja de color por prioridad, número, título
+                         y un talón perforado con fecha y responsable. Lo que
+                         arde (prioridad alta, vencida) se ve antes de leer. */
+                      className={'helm-ticket p-' + (t.priority || 'medium') + (isOverdue(t) ? ' vencida' : '') + (s.key === 'done' ? ' hecha' : '')}
                       draggable
                       onDragStart={e => e.dataTransfer.setData('text/plain', t.id)}
                       onClick={() => setActive(t)}
                     >
-                      <div className="helm-kcard-top"><b>{t.title}</b></div>
-                      {t.origin_client_id && t.origin_client_id !== clientId && (
-                        <div className="helm-kcard-sub helm-task-externa">
-                          <Building2 size={12} />Encargo de {nombrePerfil(t.origin_client_id)}
+                      <div className="helm-ticket-cuerpo">
+                        <div className="helm-ticket-cab">
+                          <span className="helm-ticket-num">#{String(numeroDe.get(t.id) || 0).padStart(3, '0')}</span>
+                          <span className="helm-ticket-prio">{prioLabel(t.priority)}</span>
+                          {esPrivada(t) && <Lock size={11} className="helm-ticket-lock" aria-label="Privada" />}
                         </div>
-                      )}
-                      {cliente && <div className="helm-kcard-sub"><User size={12} />{cliente}</div>}
-                      {t.description && (() => {
-                        const abierta = abiertas.has(t.id)
-                        // Solo ofrecemos "Ver más" si el texto da para recortarse.
-                        const largo = t.description.length > 90 || t.description.includes('\n')
-                        return (
-                          <>
-                            <div className={'helm-tcard-desc' + (abierta ? ' open' : '')}>{t.description}</div>
-                            {largo && (
-                              <button
-                                type="button"
-                                className="helm-tcard-more"
-                                onClick={e => { e.stopPropagation(); toggleDesc(t.id) }}
-                              >
-                                {abierta ? 'Ver menos' : 'Ver más'}
-                              </button>
-                            )}
-                          </>
-                        )
-                      })()}
-                      <div className="helm-kcard-meta">
-                        <span className={'helm-chip ' + toneOf(t.priority)}>{prioLabel(t.priority)}</span>
-                        {esPrivada(t) && (
-                          <span className="helm-chk" title="Privada: solo su responsable y quien manda en el perfil">
-                            <Lock size={11} /> Privada
-                          </span>
+                        <b className="helm-ticket-titulo">{t.title}</b>
+                        {t.origin_client_id && t.origin_client_id !== clientId && (
+                          <div className="helm-ticket-sub helm-task-externa">
+                            <Building2 size={12} />Encargo de {nombrePerfil(t.origin_client_id)}
+                          </div>
                         )}
-                        {t.due_date && (
-                          <span className={'helm-task-due' + (isOverdue(t) ? ' over' : '')}>
-                            <Calendar size={11} /> {fmtDate(t.due_date)}
-                          </span>
-                        )}
+                        {cliente && <div className="helm-ticket-sub"><User size={12} />{cliente}</div>}
+                        {t.description && (() => {
+                          const abierta = abiertas.has(t.id)
+                          // Solo ofrecemos "Ver más" si el texto da para recortarse.
+                          const largo = t.description.length > 90 || t.description.includes('\n')
+                          return (
+                            <>
+                              <div className={'helm-tcard-desc' + (abierta ? ' open' : '')}>{t.description}</div>
+                              {largo && (
+                                <button
+                                  type="button"
+                                  className="helm-tcard-more"
+                                  onClick={e => { e.stopPropagation(); toggleDesc(t.id) }}
+                                >
+                                  {abierta ? 'Ver menos' : 'Ver más'}
+                                </button>
+                              )}
+                            </>
+                          )
+                        })()}
                         {chk.length > 0 && (
-                          <span className="helm-chk"><ListChecks size={11} /> {chkDone}/{chk.length}</span>
-                        )}
-                        {asArray(t.notify_channels).length > 0 && (
-                          <span className="helm-chk" title="Aviso pendiente de enviar"><Bell size={11} /></span>
-                        )}
-                        {nameOf(t) && (
-                          <span className="helm-assignee" title={nameOf(t)}>{initials(nameOf(t))}</span>
+                          <div className="helm-ticket-progreso" title={`${chkDone} de ${chk.length} hechas`}>
+                            <span style={{ width: `${Math.round((chkDone / chk.length) * 100)}%` }} />
+                            <small><ListChecks size={11} /> {chkDone}/{chk.length}</small>
+                          </div>
                         )}
                       </div>
-                    </div>
+                      <div className="helm-ticket-talon">
+                        {t.due_date
+                          ? <span className="helm-ticket-fecha"><Calendar size={11} /> {isOverdue(t) ? 'Venció ' : ''}{fmtDate(t.due_date)}</span>
+                          : <span className="helm-ticket-fecha sin">Sin fecha</span>}
+                        {asArray(t.notify_channels).length > 0 && (
+                          <Bell size={12} className="helm-ticket-aviso" aria-label="Aviso pendiente de enviar" />
+                        )}
+                        {nameOf(t)
+                          ? <span className="helm-ticket-quien" title={nameOf(t)}>{initials(nameOf(t))}</span>
+                          : <span className="helm-ticket-quien libre" title="Sin responsable">?</span>}
+                      </div>
+                    </article>
                   )
                 })}
-                {(byStatus[s.key] || []).length === 0 && <div className="helm-col-empty">Suelta aquí</div>}
+                {(byStatus[s.key] || []).length === 0 && <div className="helm-col-empty">Arrastra aquí un ticket</div>}
               </div>
             </div>
           ))}

@@ -205,9 +205,20 @@ export async function renamePipeline(id, name) {
   if (error) throw error
 }
 
-// Al borrar, la FK de crm_contacts.pipeline_id es ON DELETE SET NULL: los
-// contactos que estuvieran dentro no se pierden, pasan al pipeline por defecto.
-export async function deletePipeline(id) {
+// Borrar un pipeline decide ANTES qué pasa con sus contactos: o se mueven a
+// otro pipeline, o se borran con él. Sin esto, la FK (ON DELETE SET NULL) los
+// dejaba sin pipeline y aparecían de golpe en el principal, como si no se
+// hubiera borrado nada.
+//   contactos: ids de los contactos que se ven en ese pipeline
+//   destino:   id del pipeline al que moverlos; null para borrarlos
+export async function deletePipeline(id, { contactos = [], destino = null } = {}) {
+  if (contactos.length) {
+    const q = destino
+      ? supabase.from('crm_contacts').update({ pipeline_id: destino }).in('id', contactos)
+      : supabase.from('crm_contacts').delete().in('id', contactos)
+    const { error } = await q
+    if (error) throw error
+  }
   const { error } = await supabase.from('crm_pipelines').delete().eq('id', id)
   if (error) throw error
 }

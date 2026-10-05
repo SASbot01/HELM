@@ -92,13 +92,17 @@ export async function createProfile({ name, slug, client_type = 'growth', primar
   // 3) Usuario de acceso opcional (login del cliente)
   if (admin?.email && admin?.password) {
     try {
-      await supabase.from('team').insert({
-        client_id: client.id,
-        name: (admin.name || cleanName).trim(),
-        email: String(admin.email).trim().toLowerCase(),
-        password: String(admin.password), // texto plano: verifyPassword lo soporta
-        role: 'admin,ceo,director',
-        active: true,
+      // Por el servidor (api/equipo.js), que hashea la contraseña: el navegador
+      // ya no puede escribir en `team`, que guarda las credenciales.
+      await apiFetch('/api/equipo?action=grant', {
+        method: 'POST',
+        body: {
+          clientId: client.id,
+          name: (admin.name || cleanName).trim(),
+          email: String(admin.email).trim().toLowerCase(),
+          password: String(admin.password),
+          level: 'propietario',
+        },
       })
     } catch (e) { console.warn('[helm] createProfile admin', e?.message); throw new Error('Perfil creado, pero falló crear el acceso: ' + (e?.message || e)) }
   }
@@ -489,8 +493,6 @@ export const googleApi = {
   unlink: (clientId) => apiFetch(`/api/google?action=unlink&clientId=${clientId}`, { method: 'DELETE' }),
   config: (clientId, body) => apiFetch('/api/google?action=config', { method: 'POST', body: { clientId, ...body } }),
   calendars: (clientId) => apiFetch(`/api/google?action=calendars&clientId=${clientId}`),
-  carpetaGuiones: (clientId) =>
-    apiFetch('/api/google?action=drive-carpeta-guiones', { method: 'POST', body: { clientId } }),
   syncCalls: (clientId, body = {}) =>
     apiFetch('/api/google?action=sync-calls', { method: 'POST', body: { clientId, ...body } }),
   drive: (clientId, { q, folderId, pageToken } = {}) => apiFetch(
@@ -536,6 +538,15 @@ export const onboardingApi = {
     apiFetch('/api/onboarding?action=save', { method: 'POST', body: { clientId, kind, content } }),
 }
 
+// Sección Agentes: los creadores de referencia de este perfil (api/agentes-perfil.js).
+// Solo lectura; elegirlos y editarlos es del superadmin, con src/agents/api.js.
+export const creadoresApi = {
+  lista: (clientId) => apiFetch(`/api/agentes-perfil?action=creadores&clientId=${clientId}`),
+  ficha: (clientId, slug) =>
+    apiFetch(`/api/agentes-perfil?action=ficha&clientId=${clientId}&slug=${encodeURIComponent(slug)}`),
+  drive: (clientId) => apiFetch(`/api/agentes-perfil?action=drive&clientId=${clientId}`),
+}
+
 // Equipos IA — equipo de Contenido: Agente Persona (base) + Agente 1 (ideas diarias).
 export const agentesApi = {
   base: (clientId) => apiFetch(`/api/agentes-contenido?action=base&clientId=${clientId}`),
@@ -560,4 +571,31 @@ export async function fetchActivities(contactId) {
     .limit(100)
   if (error) { console.warn('[helm] fetchActivities', error.message); return [] }
   return data || []
+}
+
+// ── Notificaciones (la campana) ────────────────────────────────────────────
+export const notificacionesApi = {
+  lista: (clientId) => apiFetch(`/api/notificaciones?action=lista&clientId=${clientId}`),
+  leer: (clientId, ids) => apiFetch(`/api/notificaciones?action=leer&clientId=${clientId}`, { method: 'POST', body: { ids } }),
+  resumen: () => apiFetch('/api/notificaciones?action=resumen'),
+}
+
+// ── Perfiles: desactivar, reactivar y borrar (solo superadmin) ─────────────
+export const perfilesApi = {
+  inactivos: () => apiFetch('/api/perfiles?action=inactivos'),
+  activar: (clientId, activo) => apiFetch('/api/perfiles?action=activar', { method: 'POST', body: { clientId, activo } }),
+  borrar: (clientId, confirma) => apiFetch('/api/perfiles?action=borrar', { method: 'POST', body: { clientId, confirma } }),
+}
+
+// ── Mi día: los rituales diarios con la IA ─────────────────────────────────
+export const diaApi = {
+  resumen: (clientId) => apiFetch(`/api/dia?action=resumen&clientId=${clientId}`),
+  hacer: (clientId, body) => apiFetch(`/api/dia?action=hacer&clientId=${clientId}`, { method: 'POST', body }),
+  borrar: (clientId, id) => apiFetch(`/api/dia?action=borrar&clientId=${clientId}`, { method: 'POST', body: { id } }),
+}
+
+// ── Noticias: las tres del día de IA y ciberseguridad ──────────────────────
+export const noticiasApi = {
+  lista: (clientId) => apiFetch(`/api/noticias?action=lista&clientId=${clientId}`),
+  ahora: (clientId) => apiFetch(`/api/noticias?action=ahora&clientId=${clientId}`, { method: 'POST' }),
 }

@@ -13,15 +13,17 @@
 //   GET  ?action=knowledge   &clientId=              → memoria
 //   DELETE ?action=knowledge &id=                    → borra un bloque
 //   DELETE ?action=history   &clientId=              → vacía la conversación
+//
+// El motor de `send` está expuesto como `responderMensaje()` para que
+// api/telegram.js conteste desde el móvil con el mismo cerebro y el mismo hilo.
 import { supabase } from './lib/supabase.js'
 import { applyCors, rateLimit, getClientIp, validateAuth } from './_lib/auth.js'
 import { requireProfileAccess } from './_lib/access.js'
 import { COPY_KNOWLEDGE } from './_lib/copy-knowledge.js'
-import { llmChat, llmChatConHerramientas, llmHealth, llmInfo } from './_lib/llm.js'
+import { llmChat, llmChatConHerramientas, llmHealth } from './_lib/llm.js'
 import { investigar, buscadorEnUso } from './_lib/web.js'
 import { HERRAMIENTAS, INSTRUCCIONES_ACCIONES, ejecutarAccion } from './_lib/acciones.js'
-import { resolverFecha, isoLocal } from './_lib/fechas.js'
-import { getGoogleConfig, getAccessToken, crearDocEnDrive, puedeEscribirEnDrive } from './_lib/google.js'
+import { isoLocal } from './_lib/fechas.js'
 
 const MAX_TOKENS = 2048
 const HISTORY_TURNS = 12        // mensajes de contexto que se reenvían al modelo
@@ -30,7 +32,6 @@ const HISTORY_TURNS = 12        // mensajes de contexto que se reenvían al mode
 export const COMMANDS = [
   { cmd: '/help', args: '', desc: 'Muestra todos los comandos disponibles.' },
   { cmd: '/reel-guion', args: '<tema o ángulo>', desc: 'Escribe el guion: hook, bullets y CTA, con la estructura completa.' },
-  { cmd: '/programar-guion', args: '<fecha> <tema>', desc: 'Escribe el guion y lo agenda en el calendario de Contenido el día que digas.' },
   { cmd: '/reel-estudio', args: '<guion o transcripción>', desc: 'Estudia un reel ajeno: extrae su patrón y lo guarda en la memoria del perfil.' },
   { cmd: '/estudiar', args: '<tema o URL>', desc: 'Busca en internet, se lee las fuentes y aprende lo que sirva para este negocio.' },
   { cmd: '/conocimiento', args: '<info>', desc: 'Guarda información en la memoria permanente de este perfil.' },
@@ -38,7 +39,6 @@ export const COMMANDS = [
   { cmd: '/descripcion', args: '<bio de perfil | vídeo sobre…>', desc: 'Tu bio para redes o la descripción de un vídeo, escritas con lo que sé de ti.' },
   { cmd: '/memoria-setter', args: '<info>', desc: 'Entrena al setter: guarda oferta, objeciones, tono y conversaciones que funcionaron.' },
   // Los cuatro que EJECUTAN. Lo mismo se puede pedir hablando, sin comando.
-  { cmd: '/añadir', args: '<pieza y día>', desc: 'Añade piezas al calendario de Contenido.' },
   { cmd: '/reporteventa', args: '<persona y números>', desc: 'Apunta en Diario el reporte del día de un closer.' },
   { cmd: '/reportesetting', args: '<persona y números>', desc: 'Apunta en Diario el reporte del día de un setter.' },
   { cmd: '/creacionequipo', args: '<nombre, rol y condiciones>', desc: 'Da de alta a una persona en Equipo.' },
@@ -448,17 +448,37 @@ async function getHistory(clientId, limit = HISTORY_TURNS) {
   return (data || []).reverse()
 }
 
-async function saveMessage(clientId, role, content, command = null) {
-  const { data } = await supabase
-    .from('helm_chat_messages').insert({ client_id: clientId, role, content, command })
-    .select('id, role, content, command, created_at').single()
+// `origen` marca desde dónde llegó el mensaje ('web' o 'telegram'): la
+// conversación es la misma en los dos sitios, solo cambia la etiqueta. La
+// columna `source` llega con migrations/helm_telegram.sql; hasta que se
+// aplique, el mensaje se guarda igual (sin etiqueta) antes que perderlo.
+async function saveMessage(clientId, role, content, command = null, origen = 'web') {
+  const fila = { client_id: clientId, role, content, command }
+  const cols = 'id, role, content, command, created_at'
+  if (origen && origen !== 'web') {
+    const { data, error } = await supabase
+      .from('helm_chat_messages').insert({ ...fila, source: origen }).select(cols).single()
+    if (!error) return data
+    if (!/source/i.test(error.message || '')) throw error
+    console.warn('[helm] falta migrations/helm_telegram.sql — guardando el mensaje sin origen')
+  }
+  const { data, error } = await supabase
+    .from('helm_chat_messages').insert(fila).select(cols).single()
+  if (error) throw error
   return data
+}
+
+// Error con código HTTP, para que el handler web conteste con el estado que
+// toca y el webhook de Telegram lo convierta en un mensaje legible.
+function errorHttp(statusCode, message) {
+  const e = new Error(message)
+  e.statusCode = statusCode
+  return e
 }
 
 // Alias tolerante: la gente escribe el comando sin guiones, con acentos o con
 // el verbo delante ("/crear-guion-setting"). Todo cae en el canónico.
 const ALIASES = {
-  '/programarguion': '/programar-guion',
   '/reelguion': '/reel-guion',
   '/estudia': '/estudiar',
   '/investigar': '/estudiar',
@@ -471,9 +491,6 @@ const ALIASES = {
   '/crearguionsetting': '/guion-setting',
   '/crear-guion-setting': '/guion-setting',
   '/guion-de-setting': '/guion-setting',
-  '/anadir': '/añadir',
-  '/agregar': '/añadir',
-  '/calendario': '/añadir',
   '/reporte-venta': '/reporteventa',
   '/reporteventas': '/reporteventa',
   '/reportecloser': '/reporteventa',
@@ -498,42 +515,6 @@ function parseCommand(text) {
   return { command, body: m[2].trim() }
 }
 
-// La fecha de /programar-guion la resuelve el mismo motor que usan las
-// acciones del chat (api/_lib/fechas.js), así que aquí también valen "el lunes"
-// o "en 3 días" y no solo hoy/mañana/25-07 como antes.
-
-/**
- * Deja el guion como documento en la carpeta de Drive del perfil.
- *
- * Nunca lanza: devuelve `{ url, aviso }` y el guion se agenda igual pase lo que
- * pase. Un guion que se pierde porque Drive dio 500 es mucho peor que un guion
- * agendado sin documento, y quien lo escribió no tiene forma de saber que hay
- * que repetirlo.
- */
-async function docDelGuion(clientId, { titulo, fecha, guion }) {
-  try {
-    const row = await getGoogleConfig(supabase, clientId)
-    const cfg = row?.config
-    if (!cfg?.refreshToken) return { url: null }        // sin Google enlazado: normal, sin aviso
-    if (!cfg.guionesFolderId) {
-      return { url: null, aviso: '_Para que además caiga en Drive, prepara la carpeta en Ajustes → Integraciones._' }
-    }
-    if (!puedeEscribirEnDrive(cfg.scopes)) {
-      return { url: null, aviso: '_Este perfil enlazó Google antes de que HELM pudiera escribir. Reconecta en Ajustes y el próximo guion irá también a Drive._' }
-    }
-    const { token } = await getAccessToken(supabase, clientId)
-    const doc = await crearDocEnDrive(token, {
-      nombre: `${fecha} · ${String(titulo).slice(0, 80)}`,
-      texto: guion,
-      folderId: cfg.guionesFolderId,
-    })
-    return { url: doc.webViewLink || null }
-  } catch (err) {
-    console.warn('[chat] docDelGuion', err.message)
-    return { url: null, aviso: `_El guion está agendado, pero no pude subirlo a Drive: ${err.message}_` }
-  }
-}
-
 // ── Comandos de acción ─────────────────────────────────────────────────────
 // El atajo con nombre propio de las tres cosas que el chat sabe hacer. Lo mismo
 // se puede pedir hablando, pero un comando quita la duda de si te ha entendido.
@@ -541,19 +522,6 @@ async function docDelGuion(clientId, { titulo, fecha, guion }) {
 // `fijo` son los campos que decide el COMANDO y no el modelo: en /reporteventa
 // el rol es closer aunque la frase mencione otra cosa.
 const ACCION_DE_COMANDO = {
-  '/añadir': {
-    tool: 'programar_contenido',
-    ayuda: [
-      'Dime qué pieza y para cuándo. Puedes meter varias de una vez:',
-      '',
-      '`/añadir reel sobre las objeciones de precio para mañana`',
-      '`/añadir el lunes un carrusel con los 3 errores al contratar un closer`',
-      '`/añadir para el jueves un email de reactivación y el viernes un reel de testimonios`',
-      '',
-      'Fechas que entiendo: hoy, mañana, pasado, un día de la semana, «en 3 días», 25/07 o 2026-08-10.',
-      'Formatos: reel, carrusel, email, YouTube o nota. Si no dices ninguno, va como reel.',
-    ],
-  },
   '/reporteventa': {
     tool: 'crear_reporte_diario',
     fijo: { rol: 'closer' },
@@ -611,8 +579,417 @@ function titleFrom(text) {
 }
 
 // Llama al modelo LOCAL (Ollama en este servidor) y devuelve el texto.
-function ask({ system, messages }) {
-  return llmChat({ system, messages, maxTokens: MAX_TOKENS, temperature: 0.75 })
+function ask({ clientId, system, messages }) {
+  return llmChat({ clientId, system, messages, maxTokens: MAX_TOKENS, temperature: 0.75 })
+}
+
+// ── El motor del chat ──────────────────────────────────────────────────────
+/**
+ * Responde a un mensaje del usuario en nombre de la IA del perfil y persiste
+ * los dos turnos. Es lo que hay detrás de `POST ?action=send`, separado del
+ * handler para que Telegram (api/telegram.js) hable con el MISMO cerebro: los
+ * mismos comandos, el mismo system prompt, la misma memoria y el mismo
+ * historial. Aquí no hay `req` ni `res`: quien llama decide cómo contesta.
+ *
+ * @param {object} opts
+ * @param {string} opts.clientId perfil que atiende
+ * @param {string} opts.message  texto del usuario (comando incluido, si lo hay)
+ * @param {'web'|'telegram'} [opts.origen] de dónde llega, para etiquetar el historial
+ * @returns {Promise<{userMessage: object, message: object}>} las dos filas guardadas
+ * @throws error con `statusCode` (400 petición incompleta, 404 perfil, 5xx modelo)
+ */
+export async function responderMensaje({ clientId, message, origen = 'web' }) {
+  if (!clientId || !message?.trim()) throw errorHttp(400, 'clientId y message son obligatorios')
+  const guarda = (role, content, command = null) => saveMessage(clientId, role, content, command, origen)
+
+  const { data: client } = await supabase
+    .from('clients').select('id, name, client_type').eq('id', clientId).maybeSingle()
+  if (!client) throw errorHttp(404, 'Perfil no encontrado')
+  const esConsultoria = client.client_type === 'consultoria'
+
+  const { command, body } = parseCommand(message)
+
+  // El Copiloto Fiscal no tiene comandos de infoproducto (/reel-guion,
+  // /email…): son de otro oficio. Se avisa en vez de ejecutarlos.
+  if (command && esConsultoria) {
+    const u = await guarda('user', message, command)
+    const b = await guarda('assistant',
+      `Aquí no hay comandos — pregúntame directamente lo que necesites sobre plazos, modelos o `
+      + `clientes del despacho.`, command)
+    return { userMessage: u, message: b }
+  }
+
+  // Comandos que se resuelven sin llamar al modelo.
+  if (command === '/help') {
+    const userMsg = await guarda('user', message, command)
+    const botMsg = await guarda('assistant', HELP_TEXT, command)
+    return { userMessage: userMsg, message: botMsg }
+  }
+
+  if (command === '/memoria') {
+    const k = await getKnowledge(clientId)
+    const text = k.length
+      ? [`Tengo ${k.length} bloques guardados de **${client.name}**:`, '',
+         ...k.map(x => `· **${x.title || 'Sin título'}** — ${x.kind}`)].join('\n')
+      : 'Todavía no tengo nada guardado de este perfil. Usa `/conocimiento` para empezar.'
+    const userMsg = await guarda('user', message, command)
+    const botMsg = await guarda('assistant', text, command)
+    return { userMessage: userMsg, message: botMsg }
+  }
+
+  if (command === '/conocimiento') {
+    if (!body) throw errorHttp(400, 'Escribe la información después de /conocimiento')
+    const { error } = await supabase.from('helm_knowledge').insert({
+      client_id: clientId, kind: 'nota', title: titleFrom(body), content: body, source: 'chat',
+    })
+    if (error) throw errorHttp(500, error.message)
+    const userMsg = await guarda('user', message, command)
+    const botMsg = await guarda(
+      'assistant',
+      `Guardado en la memoria de **${client.name}**. Lo tendré en cuenta a partir de ahora.`,
+      command,
+    )
+    return { userMessage: userMsg, message: botMsg }
+  }
+
+  // /memoria-setter: lo mismo que /conocimiento pero para el oficio de
+  // setting. Va a su propio cajón para que /guion-setting y
+  // /continuar-conversacion lo usen como manual de la casa.
+  if (command === '/memoria-setter') {
+    if (!body) {
+      const help = [
+        'Escribe después del comando lo que quieres que aprenda el setter. Por ejemplo:',
+        '',
+        '`/memoria-setter la oferta son 3 meses de acompañamiento a 1.500 € y solo entramos si facturan más de 3.000 €/mes`',
+        '`/memoria-setter cuando dicen "mándame info" no mandamos nada: se devuelve con una pregunta sobre su situación`',
+        '`/memoria-setter esta conversación acabó en llamada agendada: [pega el chat entero]`',
+        '',
+        'Cuanto más concreto (oferta, precio, a quién decimos que no, objeciones reales, chats que sí funcionaron), '
+        + 'mejores serán los guiones que te escriba.',
+      ].join('\n')
+      const u = await guarda('user', message, command)
+      const b = await guarda('assistant', help, command)
+      return { userMessage: u, message: b }
+    }
+
+    const fila = {
+      client_id: clientId, title: `Setting — ${titleFrom(body)}`, content: body, source: 'setter',
+    }
+    let { error } = await supabase.from('helm_knowledge').insert({ ...fila, kind: 'setter' })
+    // Sin `migrations/helm_setter.sql` aplicada, el check de `kind` rechaza
+    // 'setter'. Se guarda como nota antes que perder lo que el usuario acaba
+    // de escribir; `source` sigue distinguiéndolo.
+    if (error && /violates check constraint|check constraint/i.test(error.message || '')) {
+      console.warn('[helm] falta migrations/helm_setter.sql — guardando como nota')
+      ;({ error } = await supabase.from('helm_knowledge').insert({ ...fila, kind: 'nota' }))
+    }
+    if (error) throw errorHttp(500, error.message)
+
+    const u = await guarda('user', message, command)
+    const b = await guarda(
+      'assistant',
+      `Aprendido. Lo usaré en **/guion-setting** y en **/continuar-conversacion** para que los `
+      + `mensajes suenen a ${client.name} y no a un guion de plantilla.`,
+      command,
+    )
+    return { userMessage: u, message: b }
+  }
+
+  // ── Comandos de acción ─────────────────────────────────────────────────
+  // La versión con nombre y apellidos de lo que ya se puede pedir hablando.
+  // Van antes de cargar memoria y Biblia a propósito: para dar de alta a
+  // alguien no hace falta saber cómo escribe la marca, y así el comando
+  // responde en un tercio del tiempo.
+  if (ACCION_DE_COMANDO[command]) {
+    const { tool, fijo, ayuda } = ACCION_DE_COMANDO[command]
+
+    if (!body) {
+      const u = await guarda('user', message, command)
+      const b = await guarda('assistant', ayuda.join('\n'), command)
+      return { userMessage: u, message: b }
+    }
+
+    const hoy = new Date()
+    // El modelo aquí solo hace de extractor: convierte la frase en campos.
+    // Nada de Biblia ni de método — cuanto menos contexto, menos se despista.
+    const sistema = [
+      'Eres un extractor de datos. Conviertes lo que te escriben en una llamada a la herramienta.',
+      `Hoy es ${isoLocal(hoy)}.`,
+      'Reglas: copia las fechas TAL CUAL las diga el usuario ("mañana", "el lunes", "25/07") sin',
+      'convertirlas ni calcular el día. No rellenes campos que no te hayan dicho. No inventes nombres,',
+      'números ni roles. Si falta algo obligatorio, no llames a la herramienta: di qué falta en una línea.',
+    ].join('\n')
+
+    let turno
+    try {
+      turno = await llmChatConHerramientas({
+        clientId,
+        system: sistema,
+        messages: [{ role: 'user', content: body }],
+        tools: HERRAMIENTAS.filter(h => h.function.name === tool),
+        maxTokens: 800,
+      })
+    } catch (err) {
+      throw errorHttp(err.statusCode || 502, err.message || 'Error llamando al modelo')
+    }
+
+    const llamada = turno.toolCalls.find(c => c.name === tool)
+    if (!llamada) {
+      const u = await guarda('user', message, command)
+      const b = await guarda('assistant',
+        turno.content || ['No he sacado los datos de ahí.', '', ...ayuda].join('\n'), command)
+      return { userMessage: u, message: b }
+    }
+
+    // `fijo` manda sobre lo que diga el modelo: en /reporteventa el rol es
+    // closer aunque en la frase aparezca la palabra "setter".
+    const r = await ejecutarAccion(tool, { ...llamada.args, ...(fijo || {}) }, { supabase, clientId, hoy })
+    const u = await guarda('user', message, command)
+    const b = await guarda('assistant',
+      r.ok ? `✅ **Hecho.**\n\n${r.resumen}` : `⚠️ ${r.error}`, command)
+    return { userMessage: u, message: b }
+  }
+
+  // Comandos que sí llaman al modelo.
+  const [knowledge, biblia, library, history] = await Promise.all([
+    getKnowledge(clientId), getBiblia(clientId), getLibrary(clientId), getHistory(clientId),
+  ])
+
+  // /estudiar <tema o URL>: lo único del chat que sale a internet. Busca,
+  // se lee las páginas y guarda lo aprendido en la memoria del perfil, que es
+  // lo que hace que la próxima vez ya lo sepa sin volver a buscar.
+  if (command === '/estudiar') {
+    if (!body) {
+      const help = [
+        'Dime qué quieres que estudie. Puede ser un tema o una URL concreta:',
+        '',
+        '`/estudiar cómo están cobrando las mentorías high ticket en España`',
+        '`/estudiar https://unblog.com/articulo-que-me-interesa`',
+        '',
+        `Buscaré con ${buscadorEnUso()}, me leeré las páginas y me quedaré con lo que sirva `
+        + 'para este negocio. Lo aprendido se guarda en la memoria del perfil.',
+      ].join('\n')
+      const u = await guarda('user', message, command)
+      const b = await guarda('assistant', help, command)
+      return { userMessage: u, message: b }
+    }
+
+    let inv
+    try {
+      // Tres páginas y no cuatro, y más cortas: lo que entra aquí es lo que
+      // el modelo tiene que leer antes de escribir nada, y el túnel corta a
+      // los 100 s. Con tres fuentes ya se puede contrastar.
+      inv = await investigar(body, { paginas: 3, maxChars: 4500 })
+    } catch (err) {
+      const u = await guarda('user', message, command)
+      const b = await guarda('assistant',
+        `No he podido buscar en internet: ${err.message}. Si el servidor no tiene salida a la red, `
+        + 'pásame el texto directamente con `/conocimiento`.', command)
+      return { userMessage: u, message: b }
+    }
+
+    if (!inv.fuentes.length) {
+      const detalle = inv.fallos.length
+        ? '\n\nLo que he intentado abrir:\n' + inv.fallos.map(f => `· ${f.url} — ${f.error}`).join('\n')
+        : ''
+      const u = await guarda('user', message, command)
+      const b = await guarda('assistant',
+        (inv.esUrl
+          ? 'No he podido leer esa página.'
+          : 'No he encontrado ninguna página legible sobre eso. Prueba a decirlo de otra forma, '
+            + 'o pásame tú la URL directamente.') + detalle, command)
+      return { userMessage: u, message: b }
+    }
+
+    // Las páginas van numeradas para que el modelo pueda citar "fuente 2" en
+    // vez de inventarse de dónde ha sacado cada cosa.
+    const dossier = inv.fuentes
+      .map((f, i) => `### FUENTE ${i + 1} — ${f.title}\n${f.url}\n\n${f.text}`)
+      .join('\n\n---\n\n')
+
+    const system = buildSystem({ clientName: client.name, knowledge, biblia, library })
+    let estudio
+    try {
+      estudio = await ask({
+        clientId,
+        system,
+        messages: [{ role: 'user', content: `${TASKS.estudiar}\n\n---\n\nTEMA: ${body}\n\n---\n\n${dossier}` }],
+      })
+    } catch (err) {
+      throw errorHttp(err.statusCode || 502, err.message || 'Error llamando al modelo')
+    }
+
+    const listaFuentes = inv.fuentes.map((f, i) => `${i + 1}. [${f.title}](${f.url})`).join('\n')
+
+    // A memoria va el estudio CON sus fuentes: dentro de un mes, poder
+    // comprobar de dónde salió un dato vale tanto como el dato.
+    await supabase.from('helm_knowledge').insert({
+      client_id: clientId,
+      kind: 'nota',
+      title: `Estudio — ${titleFrom(body)}`,
+      content: `${estudio}\n\n---\nFuentes consultadas:\n${listaFuentes}`,
+      source: inv.esUrl ? `web:${inv.fuentes[0].url}` : `web:${buscadorEnUso()}`,
+    })
+
+    const cabecera = inv.esUrl
+      ? `🔎 He leído la página y lo he guardado en la memoria de **${client.name}**.`
+      : `🔎 He buscado en ${buscadorEnUso()}, leído **${inv.fuentes.length} páginas** y guardado lo aprendido `
+        + `en la memoria de **${client.name}**.`
+    const pie = `\n\n---\n**Fuentes**\n${listaFuentes}`
+      + (inv.fallos.length ? `\n\n_No pude abrir ${inv.fallos.length}: ${inv.fallos.map(f => f.error).join(', ')}._` : '')
+
+    const u = await guarda('user', message, command)
+    const b = await guarda('assistant', `${cabecera}\n\n${estudio}${pie}`, command)
+    return { userMessage: u, message: b }
+  }
+
+  // /continuar-conversacion sin conversación no tiene nada que leer.
+  if (command === '/continuar-conversacion' && !body) {
+    const help = [
+      'Pégame la conversación después del comando y te escribo lo siguiente. Tal cual la copies del móvil vale:',
+      '',
+      '`/continuar-conversacion`',
+      '`Lead: vi tu reel del otro día`',
+      '`Yo: ¿qué te resonó?`',
+      '`Lead: lo de que no me llegan clientes por Instagram`',
+      '',
+      'Marca quién dice cada cosa como puedas (Lead/Yo, Él/Yo…). Si no, lo deduzco.',
+    ].join('\n')
+    const u = await guarda('user', message, command)
+    const b = await guarda('assistant', help, command)
+    return { userMessage: u, message: b }
+  }
+
+  // ── Copiloto Fiscal (consultoria): conversación normal, SIN las
+  // herramientas de infoproducto (agendar contenido, reporte de closer…),
+  // que no pintan nada en un despacho. Con el contexto real de plazos.
+  if (!command && esConsultoria) {
+    const contextoFiscal = await getContextoFiscal(clientId)
+    const system = buildSystem({ clientName: client.name, knowledge, biblia, library, modo: 'fiscal', contextoFiscal })
+    const messages = [
+      ...history.map(m => ({ role: m.role, content: m.content })),
+      { role: 'user', content: message },
+    ]
+    let respuesta
+    // Temperatura baja a propósito: aquí lo que importa es no inventarse un
+    // plazo, no sonar creativo.
+    try { respuesta = await llmChat({ clientId, system, messages, maxTokens: MAX_TOKENS, temperature: 0.3 }) } catch (err) {
+      throw errorHttp(err.statusCode || 502, err.message)
+    }
+    const u = await guarda('user', message, null)
+    const b = await guarda('assistant', respuesta, null)
+    return { userMessage: u, message: b }
+  }
+
+  // ── Conversación normal: aquí el chat puede EJECUTAR ───────────────────
+  // Sin comando, el modelo tiene herramientas: si le pides que programe el
+  // contenido, que apunte un reporte o que dé de alta a alguien, lo hace en
+  // el panel en vez de explicarte dónde está el botón.
+  if (!command) {
+    const hoy = new Date()
+    const system = buildSystem({ clientName: client.name, knowledge, biblia, library })
+      + '\n\n---\n\n' + INSTRUCCIONES_ACCIONES(hoy)
+    const messages = [
+      ...history.map(m => ({ role: m.role, content: m.content })),
+      { role: 'user', content: message },
+    ]
+
+    let turno
+    try {
+      turno = await llmChatConHerramientas({
+        clientId, system, messages, tools: HERRAMIENTAS, maxTokens: MAX_TOKENS,
+      })
+    } catch (err) {
+      throw errorHttp(err.statusCode || 502, err.message || 'Error llamando al modelo')
+    }
+
+    // Sin herramientas de por medio: charla de siempre. Si además vuelve
+    // vacío (a los modelos pequeños les pasa cuando llevan herramientas
+    // colgadas), se repite la pregunta sin ellas.
+    if (!turno.toolCalls.length) {
+      let respuesta = turno.content
+      if (!respuesta) {
+        try { respuesta = await ask({ clientId, system, messages }) } catch (err) {
+          throw errorHttp(err.statusCode || 502, err.message)
+        }
+      }
+      const u = await guarda('user', message, null)
+      const b = await guarda('assistant', respuesta, null)
+      return { userMessage: u, message: b }
+    }
+
+    // Se ejecutan en orden. El tope es para que un bucle del modelo no
+    // acabe escribiendo cuarenta filas en la base de datos.
+    const hechos = []
+    const fallos = []
+    for (const llamada of turno.toolCalls.slice(0, 4)) {
+      const r = await ejecutarAccion(llamada.name, llamada.args, { supabase, clientId, hoy })
+      if (r.ok) hechos.push(r.resumen)
+      else fallos.push(r.error)
+    }
+
+    // La respuesta la redacta el servidor, no el modelo: lo que se le dice a
+    // la persona tiene que ser exactamente lo que ha pasado en la base de
+    // datos. Una segunda pasada por el modelo aquí acabaría diciendo "he
+    // programado tres piezas" cuando solo entraron dos.
+    const partes = []
+    if (hechos.length) partes.push('✅ **Hecho.**\n\n' + hechos.join('\n\n'))
+    if (fallos.length) partes.push((hechos.length ? '\n' : '⚠️ ') + fallos.join('\n'))
+    if (!partes.length) partes.push(turno.content || 'No he podido hacerlo. Repítemelo con otras palabras.')
+
+    const u = await guarda('user', message, null)
+    const b = await guarda('assistant', partes.join('\n'), 'acción')
+    return { userMessage: u, message: b }
+  }
+
+  const task = command === '/reel-guion' ? TASKS.guion
+    : command === '/reel-estudio' ? TASKS.estudio
+    : command === '/email' ? TASKS.email
+    : command === '/descripcion' ? (esDeVideo(body) ? TASKS.video : TASKS.bio)
+    : command === '/guion-setting' ? TASKS.guionSetting
+    : command === '/continuar-conversacion' ? TASKS.continuar
+    : null
+
+  // Los comandos estructurados van SIN historial y con la tarea pegada al
+  // turno del usuario. Con un modelo de 14B el historial pesa más que las
+  // instrucciones del system: si la respuesta anterior fue un guion, te
+  // devuelve un guion aunque le pidas un email. Sin historial no hay dudas.
+  const modo = SETTING_COMMANDS.has(command) ? 'setting' : 'copy'
+  const system = buildSystem({ clientName: client.name, knowledge, biblia, library, modo })
+  // Con `/descripcion` y `/guion-setting` a secas no hay petición que pegar,
+  // pero sí hay trabajo: se escribe con lo que ya sabe del negocio.
+  const porDefecto = command === '/descripcion'
+    ? 'Escribe la bio del perfil de esta cuenta con la información que ya tienes de ella.'
+    : command === '/guion-setting'
+      ? 'Escribe el guion de setting de esta cuenta para su oferta y su cliente ideal, en mensaje directo de Instagram.'
+      : message
+
+  const messages = task
+    ? [{ role: 'user', content: `${task}\n\n---\n\nPETICIÓN: ${body || porDefecto}` }]
+    : [
+        ...history.map(m => ({ role: m.role, content: m.content })),
+        { role: 'user', content: message },
+      ]
+
+  let answer
+  try {
+    answer = await ask({ clientId, system, messages })
+  } catch (err) {
+    throw errorHttp(err.statusCode || 502, err.message || 'Error llamando al modelo')
+  }
+
+  const userMsg = await guarda('user', message, command)
+  const botMsg = await guarda('assistant', answer, command)
+
+  // /reel-estudio guarda tanto el material bruto como el análisis.
+  if (command === '/reel-estudio' && body) {
+    await supabase.from('helm_knowledge').insert([
+      { client_id: clientId, kind: 'reel', title: `Reel estudiado — ${titleFrom(body)}`, content: body, source: 'chat' },
+      { client_id: clientId, kind: 'analisis', title: `Patrón — ${titleFrom(body)}`, content: answer, source: 'chat' },
+    ])
+  }
+
+  return { userMessage: userMsg, message: botMsg }
 }
 
 // ── Handler ────────────────────────────────────────────────────────────────
@@ -626,6 +1003,12 @@ export default async function handler(req, res) {
   // Sesión válida y con permiso sobre el perfil que se pide. `health` y
   // `commands` no tocan datos de nadie, así que solo exigen estar logueado.
   const reqClientId = req.query.clientId || req.body?.clientId || null
+  // Un solo perfil por petición. El permiso se comprueba sobre `reqClientId`
+  // y más abajo se trabaja con el del cuerpo: si pudieran ser distintos, se
+  // entraría con el permiso de un perfil en los datos de otro.
+  if (req.query.clientId && req.body?.clientId && req.query.clientId !== req.body.clientId) {
+    return res.status(400).json({ error: 'El perfil de la URL y el del cuerpo no coinciden' })
+  }
   const isPublicAction = action === 'health' || action === 'commands'
   try {
     if (isPublicAction) await validateAuth(req, { required: true })
@@ -636,7 +1019,7 @@ export default async function handler(req, res) {
 
   // GET ?action=history|knowledge
   if (req.method === 'GET') {
-    if (action === 'health') return res.status(200).json({ ...(await llmHealth()), ...llmInfo })
+    if (action === 'health') return res.status(200).json(await llmHealth(reqClientId))
     if (action === 'commands') return res.status(200).json({ commands: COMMANDS })
     const clientId = req.query.clientId
     if (!clientId) return res.status(400).json({ error: 'clientId requerido' })
@@ -678,443 +1061,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'clientId y message son obligatorios' })
     }
 
-    const { data: client } = await supabase
-      .from('clients').select('id, name, client_type').eq('id', clientId).maybeSingle()
-    if (!client) return res.status(404).json({ error: 'Perfil no encontrado' })
-    const esConsultoria = client.client_type === 'consultoria'
-
-    const { command, body } = parseCommand(message)
-
-    // El Copiloto Fiscal no tiene comandos de infoproducto (/reel-guion,
-    // /email…): son de otro oficio. Se avisa en vez de ejecutarlos.
-    if (command && esConsultoria) {
-      const u = await saveMessage(clientId, 'user', message, command)
-      const b = await saveMessage(clientId, 'assistant',
-        `Aquí no hay comandos — pregúntame directamente lo que necesites sobre plazos, modelos o `
-        + `clientes del despacho.`, command)
-      return res.status(200).json({ userMessage: u, message: b })
-    }
-
-    // Comandos que se resuelven sin llamar al modelo.
-    if (command === '/help') {
-      const userMsg = await saveMessage(clientId, 'user', message, command)
-      const botMsg = await saveMessage(clientId, 'assistant', HELP_TEXT, command)
-      return res.status(200).json({ userMessage: userMsg, message: botMsg })
-    }
-
-    if (command === '/memoria') {
-      const k = await getKnowledge(clientId)
-      const text = k.length
-        ? [`Tengo ${k.length} bloques guardados de **${client.name}**:`, '',
-           ...k.map(x => `· **${x.title || 'Sin título'}** — ${x.kind}`)].join('\n')
-        : 'Todavía no tengo nada guardado de este perfil. Usa `/conocimiento` para empezar.'
-      const userMsg = await saveMessage(clientId, 'user', message, command)
-      const botMsg = await saveMessage(clientId, 'assistant', text, command)
-      return res.status(200).json({ userMessage: userMsg, message: botMsg })
-    }
-
-    if (command === '/conocimiento') {
-      if (!body) return res.status(400).json({ error: 'Escribe la información después de /conocimiento' })
-      const { error } = await supabase.from('helm_knowledge').insert({
-        client_id: clientId, kind: 'nota', title: titleFrom(body), content: body, source: 'chat',
-      })
-      if (error) return res.status(500).json({ error: error.message })
-      const userMsg = await saveMessage(clientId, 'user', message, command)
-      const botMsg = await saveMessage(
-        clientId, 'assistant',
-        `Guardado en la memoria de **${client.name}**. Lo tendré en cuenta a partir de ahora.`,
-        command,
-      )
-      return res.status(200).json({ userMessage: userMsg, message: botMsg })
-    }
-
-    // /memoria-setter: lo mismo que /conocimiento pero para el oficio de
-    // setting. Va a su propio cajón para que /guion-setting y
-    // /continuar-conversacion lo usen como manual de la casa.
-    if (command === '/memoria-setter') {
-      if (!body) {
-        const help = [
-          'Escribe después del comando lo que quieres que aprenda el setter. Por ejemplo:',
-          '',
-          '`/memoria-setter la oferta son 3 meses de acompañamiento a 1.500 € y solo entramos si facturan más de 3.000 €/mes`',
-          '`/memoria-setter cuando dicen "mándame info" no mandamos nada: se devuelve con una pregunta sobre su situación`',
-          '`/memoria-setter esta conversación acabó en llamada agendada: [pega el chat entero]`',
-          '',
-          'Cuanto más concreto (oferta, precio, a quién decimos que no, objeciones reales, chats que sí funcionaron), '
-          + 'mejores serán los guiones que te escriba.',
-        ].join('\n')
-        const u = await saveMessage(clientId, 'user', message, command)
-        const b = await saveMessage(clientId, 'assistant', help, command)
-        return res.status(200).json({ userMessage: u, message: b })
-      }
-
-      const fila = {
-        client_id: clientId, title: `Setting — ${titleFrom(body)}`, content: body, source: 'setter',
-      }
-      let { error } = await supabase.from('helm_knowledge').insert({ ...fila, kind: 'setter' })
-      // Sin `migrations/helm_setter.sql` aplicada, el check de `kind` rechaza
-      // 'setter'. Se guarda como nota antes que perder lo que el usuario acaba
-      // de escribir; `source` sigue distinguiéndolo.
-      if (error && /violates check constraint|check constraint/i.test(error.message || '')) {
-        console.warn('[helm] falta migrations/helm_setter.sql — guardando como nota')
-        ;({ error } = await supabase.from('helm_knowledge').insert({ ...fila, kind: 'nota' }))
-      }
-      if (error) return res.status(500).json({ error: error.message })
-
-      const u = await saveMessage(clientId, 'user', message, command)
-      const b = await saveMessage(
-        clientId, 'assistant',
-        `Aprendido. Lo usaré en **/guion-setting** y en **/continuar-conversacion** para que los `
-        + `mensajes suenen a ${client.name} y no a un guion de plantilla.`,
-        command,
-      )
-      return res.status(200).json({ userMessage: u, message: b })
-    }
-
-    // ── Comandos de acción ─────────────────────────────────────────────────
-    // La versión con nombre y apellidos de lo que ya se puede pedir hablando.
-    // Van antes de cargar memoria y Biblia a propósito: para dar de alta a
-    // alguien no hace falta saber cómo escribe la marca, y así el comando
-    // responde en un tercio del tiempo.
-    if (ACCION_DE_COMANDO[command]) {
-      const { tool, fijo, ayuda } = ACCION_DE_COMANDO[command]
-
-      if (!body) {
-        const u = await saveMessage(clientId, 'user', message, command)
-        const b = await saveMessage(clientId, 'assistant', ayuda.join('\n'), command)
-        return res.status(200).json({ userMessage: u, message: b })
-      }
-
-      const hoy = new Date()
-      // El modelo aquí solo hace de extractor: convierte la frase en campos.
-      // Nada de Biblia ni de método — cuanto menos contexto, menos se despista.
-      const sistema = [
-        'Eres un extractor de datos. Conviertes lo que te escriben en una llamada a la herramienta.',
-        `Hoy es ${isoLocal(hoy)}.`,
-        'Reglas: copia las fechas TAL CUAL las diga el usuario ("mañana", "el lunes", "25/07") sin',
-        'convertirlas ni calcular el día. No rellenes campos que no te hayan dicho. No inventes nombres,',
-        'números ni roles. Si falta algo obligatorio, no llames a la herramienta: di qué falta en una línea.',
-      ].join('\n')
-
-      let turno
-      try {
-        turno = await llmChatConHerramientas({
-          system: sistema,
-          messages: [{ role: 'user', content: body }],
-          tools: HERRAMIENTAS.filter(h => h.function.name === tool),
-          maxTokens: 800,
-        })
-      } catch (err) {
-        return res.status(err.statusCode || 502).json({ error: err.message || 'Error llamando al modelo' })
-      }
-
-      const llamada = turno.toolCalls.find(c => c.name === tool)
-      if (!llamada) {
-        const u = await saveMessage(clientId, 'user', message, command)
-        const b = await saveMessage(clientId, 'assistant',
-          turno.content || ['No he sacado los datos de ahí.', '', ...ayuda].join('\n'), command)
-        return res.status(200).json({ userMessage: u, message: b })
-      }
-
-      // `fijo` manda sobre lo que diga el modelo: en /reporteventa el rol es
-      // closer aunque en la frase aparezca la palabra "setter".
-      const r = await ejecutarAccion(tool, { ...llamada.args, ...(fijo || {}) }, { supabase, clientId, hoy })
-      const u = await saveMessage(clientId, 'user', message, command)
-      const b = await saveMessage(clientId, 'assistant',
-        r.ok ? `✅ **Hecho.**\n\n${r.resumen}` : `⚠️ ${r.error}`, command)
-      return res.status(200).json({ userMessage: u, message: b })
-    }
-
-    // Comandos que sí llaman al modelo.
-    const [knowledge, biblia, library, history] = await Promise.all([
-      getKnowledge(clientId), getBiblia(clientId), getLibrary(clientId), getHistory(clientId),
-    ])
-
-    // /programar-guion <fecha> <tema>: escribe el guion y lo agenda en el
-    // calendario de Contenido el día indicado.
-    if (command === '/programar-guion') {
-      const first = body.split(/\s+/)[0] || ''
-      const fecha = resolverFecha(first)
-      const tema = fecha ? body.slice(first.length).trim() : ''
-      if (!fecha || !tema) {
-        const help = [
-          'Dime la fecha y el tema, en ese orden:',
-          '`/programar-guion 25/07 lanzamiento del curso`',
-          'Fechas válidas: `hoy`, `mañana`, `pasado`, `25/07`, `2026-07-25`.',
-        ].join('\n')
-        const u = await saveMessage(clientId, 'user', message, command)
-        const b = await saveMessage(clientId, 'assistant',
-          (!fecha ? 'No entendí la fecha. ' : 'Falta el tema. ') + help, command)
-        return res.status(200).json({ userMessage: u, message: b })
-      }
-
-      const system = buildSystem({ clientName: client.name, knowledge, biblia, library })
-      let guion
-      try {
-        guion = await ask({ system, messages: [{ role: 'user', content: `${TASKS.guion}\n\n---\n\nPETICIÓN: ${tema}` }] })
-      } catch (err) {
-        return res.status(err.statusCode || 502).json({ error: err.message || 'Error llamando al modelo' })
-      }
-
-      // El documento en Drive es opcional a propósito: si el perfil no tiene
-      // Google enlazado, o lo enlazó antes de que HELM pudiera escribir, el
-      // guion se agenda igual. Perder el guion por no poder subir el doc sería
-      // el peor de los dos fallos posibles.
-      const doc = await docDelGuion(clientId, { titulo: tema, fecha, guion })
-
-      const { error: calErr } = await supabase.from('helm_content_calendar').insert({
-        client_id: clientId, date: fecha, title: tema.slice(0, 80),
-        body: guion, format: 'reel', status: 'planned', source: 'chat',
-        doc_url: doc.url || null,
-      })
-      const u = await saveMessage(clientId, 'user', message, command)
-      const confirm = calErr
-        ? `He escrito el guion pero no pude agendarlo (${calErr.message}).\n\n${guion}`
-        : [
-          `📅 Guion agendado en **Contenido** para el **${fecha}**. Lo tienes en el calendario.`,
-          doc.url ? `📄 Y en Drive: [abrir el documento](${doc.url})` : '',
-          doc.aviso || '',
-          '',
-          guion,
-        ].filter(Boolean).join('\n\n')
-      const b = await saveMessage(clientId, 'assistant', confirm, command)
-      return res.status(200).json({ userMessage: u, message: b })
-    }
-
-    // /estudiar <tema o URL>: lo único del chat que sale a internet. Busca,
-    // se lee las páginas y guarda lo aprendido en la memoria del perfil, que es
-    // lo que hace que la próxima vez ya lo sepa sin volver a buscar.
-    if (command === '/estudiar') {
-      if (!body) {
-        const help = [
-          'Dime qué quieres que estudie. Puede ser un tema o una URL concreta:',
-          '',
-          '`/estudiar cómo están cobrando las mentorías high ticket en España`',
-          '`/estudiar https://unblog.com/articulo-que-me-interesa`',
-          '',
-          `Buscaré con ${buscadorEnUso()}, me leeré las páginas y me quedaré con lo que sirva `
-          + 'para este negocio. Lo aprendido se guarda en la memoria del perfil.',
-        ].join('\n')
-        const u = await saveMessage(clientId, 'user', message, command)
-        const b = await saveMessage(clientId, 'assistant', help, command)
-        return res.status(200).json({ userMessage: u, message: b })
-      }
-
-      let inv
-      try {
-        // Tres páginas y no cuatro, y más cortas: lo que entra aquí es lo que
-        // el modelo tiene que leer antes de escribir nada, y el túnel corta a
-        // los 100 s. Con tres fuentes ya se puede contrastar.
-        inv = await investigar(body, { paginas: 3, maxChars: 4500 })
-      } catch (err) {
-        const u = await saveMessage(clientId, 'user', message, command)
-        const b = await saveMessage(clientId, 'assistant',
-          `No he podido buscar en internet: ${err.message}. Si el servidor no tiene salida a la red, `
-          + 'pásame el texto directamente con `/conocimiento`.', command)
-        return res.status(200).json({ userMessage: u, message: b })
-      }
-
-      if (!inv.fuentes.length) {
-        const detalle = inv.fallos.length
-          ? '\n\nLo que he intentado abrir:\n' + inv.fallos.map(f => `· ${f.url} — ${f.error}`).join('\n')
-          : ''
-        const u = await saveMessage(clientId, 'user', message, command)
-        const b = await saveMessage(clientId, 'assistant',
-          (inv.esUrl
-            ? 'No he podido leer esa página.'
-            : 'No he encontrado ninguna página legible sobre eso. Prueba a decirlo de otra forma, '
-              + 'o pásame tú la URL directamente.') + detalle, command)
-        return res.status(200).json({ userMessage: u, message: b })
-      }
-
-      // Las páginas van numeradas para que el modelo pueda citar "fuente 2" en
-      // vez de inventarse de dónde ha sacado cada cosa.
-      const dossier = inv.fuentes
-        .map((f, i) => `### FUENTE ${i + 1} — ${f.title}\n${f.url}\n\n${f.text}`)
-        .join('\n\n---\n\n')
-
-      const system = buildSystem({ clientName: client.name, knowledge, biblia, library })
-      let estudio
-      try {
-        estudio = await ask({
-          system,
-          messages: [{ role: 'user', content: `${TASKS.estudiar}\n\n---\n\nTEMA: ${body}\n\n---\n\n${dossier}` }],
-        })
-      } catch (err) {
-        return res.status(err.statusCode || 502).json({ error: err.message || 'Error llamando al modelo' })
-      }
-
-      const listaFuentes = inv.fuentes.map((f, i) => `${i + 1}. [${f.title}](${f.url})`).join('\n')
-
-      // A memoria va el estudio CON sus fuentes: dentro de un mes, poder
-      // comprobar de dónde salió un dato vale tanto como el dato.
-      await supabase.from('helm_knowledge').insert({
-        client_id: clientId,
-        kind: 'nota',
-        title: `Estudio — ${titleFrom(body)}`,
-        content: `${estudio}\n\n---\nFuentes consultadas:\n${listaFuentes}`,
-        source: inv.esUrl ? `web:${inv.fuentes[0].url}` : `web:${buscadorEnUso()}`,
-      })
-
-      const cabecera = inv.esUrl
-        ? `🔎 He leído la página y lo he guardado en la memoria de **${client.name}**.`
-        : `🔎 He buscado en ${buscadorEnUso()}, leído **${inv.fuentes.length} páginas** y guardado lo aprendido `
-          + `en la memoria de **${client.name}**.`
-      const pie = `\n\n---\n**Fuentes**\n${listaFuentes}`
-        + (inv.fallos.length ? `\n\n_No pude abrir ${inv.fallos.length}: ${inv.fallos.map(f => f.error).join(', ')}._` : '')
-
-      const u = await saveMessage(clientId, 'user', message, command)
-      const b = await saveMessage(clientId, 'assistant', `${cabecera}\n\n${estudio}${pie}`, command)
-      return res.status(200).json({ userMessage: u, message: b })
-    }
-
-    // /continuar-conversacion sin conversación no tiene nada que leer.
-    if (command === '/continuar-conversacion' && !body) {
-      const help = [
-        'Pégame la conversación después del comando y te escribo lo siguiente. Tal cual la copies del móvil vale:',
-        '',
-        '`/continuar-conversacion`',
-        '`Lead: vi tu reel del otro día`',
-        '`Yo: ¿qué te resonó?`',
-        '`Lead: lo de que no me llegan clientes por Instagram`',
-        '',
-        'Marca quién dice cada cosa como puedas (Lead/Yo, Él/Yo…). Si no, lo deduzco.',
-      ].join('\n')
-      const u = await saveMessage(clientId, 'user', message, command)
-      const b = await saveMessage(clientId, 'assistant', help, command)
-      return res.status(200).json({ userMessage: u, message: b })
-    }
-
-    // ── Copiloto Fiscal (consultoria): conversación normal, SIN las
-    // herramientas de infoproducto (agendar contenido, reporte de closer…),
-    // que no pintan nada en un despacho. Con el contexto real de plazos.
-    if (!command && esConsultoria) {
-      const contextoFiscal = await getContextoFiscal(clientId)
-      const system = buildSystem({ clientName: client.name, knowledge, biblia, library, modo: 'fiscal', contextoFiscal })
-      const messages = [
-        ...history.map(m => ({ role: m.role, content: m.content })),
-        { role: 'user', content: message },
-      ]
-      let respuesta
-      // Temperatura baja a propósito: aquí lo que importa es no inventarse un
-      // plazo, no sonar creativo.
-      try { respuesta = await llmChat({ system, messages, maxTokens: MAX_TOKENS, temperature: 0.3 }) } catch (err) {
-        return res.status(err.statusCode || 502).json({ error: err.message })
-      }
-      const u = await saveMessage(clientId, 'user', message, null)
-      const b = await saveMessage(clientId, 'assistant', respuesta, null)
-      return res.status(200).json({ userMessage: u, message: b })
-    }
-
-    // ── Conversación normal: aquí el chat puede EJECUTAR ───────────────────
-    // Sin comando, el modelo tiene herramientas: si le pides que programe el
-    // contenido, que apunte un reporte o que dé de alta a alguien, lo hace en
-    // el panel en vez de explicarte dónde está el botón.
-    if (!command) {
-      const hoy = new Date()
-      const system = buildSystem({ clientName: client.name, knowledge, biblia, library })
-        + '\n\n---\n\n' + INSTRUCCIONES_ACCIONES(hoy)
-      const messages = [
-        ...history.map(m => ({ role: m.role, content: m.content })),
-        { role: 'user', content: message },
-      ]
-
-      let turno
-      try {
-        turno = await llmChatConHerramientas({
-          system, messages, tools: HERRAMIENTAS, maxTokens: MAX_TOKENS,
-        })
-      } catch (err) {
-        return res.status(err.statusCode || 502).json({ error: err.message || 'Error llamando al modelo' })
-      }
-
-      // Sin herramientas de por medio: charla de siempre. Si además vuelve
-      // vacío (a los modelos pequeños les pasa cuando llevan herramientas
-      // colgadas), se repite la pregunta sin ellas.
-      if (!turno.toolCalls.length) {
-        let respuesta = turno.content
-        if (!respuesta) {
-          try { respuesta = await ask({ system, messages }) } catch (err) {
-            return res.status(err.statusCode || 502).json({ error: err.message })
-          }
-        }
-        const u = await saveMessage(clientId, 'user', message, null)
-        const b = await saveMessage(clientId, 'assistant', respuesta, null)
-        return res.status(200).json({ userMessage: u, message: b })
-      }
-
-      // Se ejecutan en orden. El tope es para que un bucle del modelo no
-      // acabe escribiendo cuarenta filas en la base de datos.
-      const hechos = []
-      const fallos = []
-      for (const llamada of turno.toolCalls.slice(0, 4)) {
-        const r = await ejecutarAccion(llamada.name, llamada.args, { supabase, clientId, hoy })
-        if (r.ok) hechos.push(r.resumen)
-        else fallos.push(r.error)
-      }
-
-      // La respuesta la redacta el servidor, no el modelo: lo que se le dice a
-      // la persona tiene que ser exactamente lo que ha pasado en la base de
-      // datos. Una segunda pasada por el modelo aquí acabaría diciendo "he
-      // programado tres piezas" cuando solo entraron dos.
-      const partes = []
-      if (hechos.length) partes.push('✅ **Hecho.**\n\n' + hechos.join('\n\n'))
-      if (fallos.length) partes.push((hechos.length ? '\n' : '⚠️ ') + fallos.join('\n'))
-      if (!partes.length) partes.push(turno.content || 'No he podido hacerlo. Repítemelo con otras palabras.')
-
-      const u = await saveMessage(clientId, 'user', message, null)
-      const b = await saveMessage(clientId, 'assistant', partes.join('\n'), 'acción')
-      return res.status(200).json({ userMessage: u, message: b })
-    }
-
-    const task = command === '/reel-guion' ? TASKS.guion
-      : command === '/reel-estudio' ? TASKS.estudio
-      : command === '/email' ? TASKS.email
-      : command === '/descripcion' ? (esDeVideo(body) ? TASKS.video : TASKS.bio)
-      : command === '/guion-setting' ? TASKS.guionSetting
-      : command === '/continuar-conversacion' ? TASKS.continuar
-      : null
-
-    // Los comandos estructurados van SIN historial y con la tarea pegada al
-    // turno del usuario. Con un modelo de 14B el historial pesa más que las
-    // instrucciones del system: si la respuesta anterior fue un guion, te
-    // devuelve un guion aunque le pidas un email. Sin historial no hay dudas.
-    const modo = SETTING_COMMANDS.has(command) ? 'setting' : 'copy'
-    const system = buildSystem({ clientName: client.name, knowledge, biblia, library, modo })
-    // Con `/descripcion` y `/guion-setting` a secas no hay petición que pegar,
-    // pero sí hay trabajo: se escribe con lo que ya sabe del negocio.
-    const porDefecto = command === '/descripcion'
-      ? 'Escribe la bio del perfil de esta cuenta con la información que ya tienes de ella.'
-      : command === '/guion-setting'
-        ? 'Escribe el guion de setting de esta cuenta para su oferta y su cliente ideal, en mensaje directo de Instagram.'
-        : message
-
-    const messages = task
-      ? [{ role: 'user', content: `${task}\n\n---\n\nPETICIÓN: ${body || porDefecto}` }]
-      : [
-          ...history.map(m => ({ role: m.role, content: m.content })),
-          { role: 'user', content: message },
-        ]
-
-    let answer
     try {
-      answer = await ask({ system, messages })
+      return res.status(200).json(await responderMensaje({ clientId, message, origen: 'web' }))
     } catch (err) {
-      return res.status(err.statusCode || 502).json({ error: err.message || 'Error llamando al modelo' })
+      return res.status(err.statusCode || 500).json({ error: err.message || 'Error inesperado' })
     }
-
-    const userMsg = await saveMessage(clientId, 'user', message, command)
-    const botMsg = await saveMessage(clientId, 'assistant', answer, command)
-
-    // /reel-estudio guarda tanto el material bruto como el análisis.
-    if (command === '/reel-estudio' && body) {
-      await supabase.from('helm_knowledge').insert([
-        { client_id: clientId, kind: 'reel', title: `Reel estudiado — ${titleFrom(body)}`, content: body, source: 'chat' },
-        { client_id: clientId, kind: 'analisis', title: `Patrón — ${titleFrom(body)}`, content: answer, source: 'chat' },
-      ])
-    }
-
-    return res.status(200).json({ userMessage: userMsg, message: botMsg })
   }
 
   return res.status(405).json({ error: 'Method not allowed' })

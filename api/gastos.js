@@ -150,6 +150,7 @@ export default async function handler(req, res) {
       }
 
       const { toolCalls } = await llmChatConHerramientas({
+        clientId,
         system: SYSTEM,
         messages: [{ role: 'user', content: `Texto OCR de la factura:\n\n${textoOcr.slice(0, 6000)}` }],
         tools: [HERRAMIENTA],

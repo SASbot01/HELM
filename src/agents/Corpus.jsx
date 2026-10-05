@@ -15,19 +15,9 @@ import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell, Tooltip,
 } from 'recharts'
 import { agentsApi } from './api'
-import { GANCHOS, SIN_ETIQUETAR, gancho, ROLES, rol } from './ganchos'
+import { GANCHOS, SIN_ETIQUETAR, gancho, nf, fecha, ESTADOS } from './ganchos'
+import { Guion } from './Piezas'
 
-const nf = new Intl.NumberFormat('es-ES')
-const fecha = (d) => d ? new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '—'
-
-const ESTADOS = {
-  pendiente:      { txt: 'En cola',      tono: 'espera' },
-  descargando:    { txt: 'Descargando',  tono: 'espera' },
-  transcribiendo: { txt: 'Transcribiendo', tono: 'espera' },
-  transcrito:     { txt: 'Transcrito',   tono: 'espera' },
-  etiquetado:     { txt: 'Listo',        tono: 'ok' },
-  error:          { txt: 'Error',        tono: 'mal' },
-}
 
 export default function Corpus({ identidades }) {
   const [reels, setReels] = useState([])
@@ -278,7 +268,7 @@ export default function Corpus({ identidades }) {
 
 // ── El guion etiquetado ─────────────────────────────────────────────────────
 
-function Detalle({ id, identidades, onCerrar, onCambio }) {
+export function Detalle({ id, identidades, onCerrar, onCambio }) {
   const [reel, setReel] = useState(null)
   const [error, setError] = useState('')
   const [m, setM] = useState({})
@@ -364,30 +354,7 @@ function Detalle({ id, identidades, onCerrar, onCambio }) {
             )}
 
             {/* El guion, frase a frase, con su papel al margen. */}
-            {reel.frases?.length > 0 && (
-              <>
-                <div className="ag-roles">
-                  {ROLES.map(r => (
-                    <span key={r.key}><i style={{ background: r.color }} />{r.label}</span>
-                  ))}
-                </div>
-                <ol className="ag-guion">
-                  {reel.frases.map((f, i) => {
-                    const r = rol(f.rol)
-                    return (
-                      <li key={i} className={`rol-${r.key}`}>
-                        <span className="ag-rol" style={{ background: r.color }} aria-label={r.label} />
-                        <span className="ag-frase">{f.texto}</span>
-                      </li>
-                    )
-                  })}
-                </ol>
-              </>
-            )}
-
-            {!reel.frases?.length && reel.transcripcion && (
-              <p className="ag-transcripcion">{reel.transcripcion}</p>
-            )}
+            <Guion reel={reel} />
           </div>
         )}
       </aside>

@@ -16,10 +16,10 @@ import {
   Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
 
-export const COLOR_FACTURADO = '#0894AC'
-export const COLOR_COBRADO = '#C25A32'
+export const COLOR_FACTURADO = '#d9b66b'
+export const COLOR_COBRADO = '#a3a3ad'
 
-const EJE = { fill: '#5C7284', fontSize: 11 }
+const EJE = { fill: '#8d8d95', fontSize: 11 }
 const REJILLA = 'rgba(96,186,214,0.10)'
 
 // Los nombres de programa que escribe la gente son larguísimos ("Asesoría
@@ -41,7 +41,7 @@ function EtiquetaPrograma({ x, y, payload }) {
   return (
     <text
       x={x} y={y} dy={4} textAnchor="end"
-      fill="#5C7284" fontSize={11}
+      fill="#8d8d95" fontSize={11}
     >
       {recorta(payload.value, 22)}
     </text>
@@ -126,7 +126,7 @@ export function Evolucion({ serie }) {
             <Area
               type="monotone" dataKey="facturado" name="Facturado"
               stroke={COLOR_FACTURADO} strokeWidth={2} fill="url(#helm-g-fact)"
-              dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: '#101820' }}
+              dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: '#121213' }}
             />
             {/* Discontinua a propósito: cuando todo lo facturado está
                 cobrado las dos líneas coinciden, y con las dos continuas la
@@ -134,7 +134,7 @@ export function Evolucion({ serie }) {
             <Area
               type="monotone" dataKey="cobrado" name="Cobrado"
               stroke={COLOR_COBRADO} strokeWidth={2} strokeDasharray="5 4" fill="none"
-              dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: '#101820' }}
+              dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: '#121213' }}
             />
           </AreaChart>
         </ResponsiveContainer>

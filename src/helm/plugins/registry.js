@@ -1,14 +1,17 @@
 // HELM — registro de plugins. Cada entrada describe un módulo instalable.
 // available:true → funcional, con vista propia; se puede activar y aparece en el menú.
 // available:false → en el catálogo como "próximamente".
-import { CheckSquare, Activity, MessageSquare, Mail, FileText, BookOpen, ClipboardList, Hash, MapPinned } from 'lucide-react'
+import { CheckSquare, Activity, MessageSquare, Mail, FileText, BookOpen, ClipboardList, Hash, MapPinned, Bot } from 'lucide-react'
 import Tareas from './Tareas'
 import Actividad from './Actividad'
 import Biblioteca from './Biblioteca'
 import Formularios from './Formularios'
 import Prospeccion from './Prospeccion'
+import EquiposIA from './equiposIA/EquiposIA'
 
 export const PLUGINS = [
+  { key: 'equipos-ia', name: 'Equipos IA', icon: Bot, available: true, View: EquiposIA,
+    desc: 'Agentes encadenados que hacen un trabajo completo del negocio. El primero: Contenido — de tu onboarding al plan de grabación de cada día.' },
   { key: 'tareas', name: 'Tareas', icon: CheckSquare, available: true, View: Tareas,
     desc: 'Tareas del equipo por perfil, con cliente adjunto, prioridad y vencimiento.' },
   { key: 'actividad', name: 'Actividad', icon: Activity, available: true, View: Actividad,

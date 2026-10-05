@@ -26,8 +26,6 @@ export const edicionApi = {
   cobrado: (c, id, deshacer = false) => api('cobrado', c, { id, deshacer }),
   recordar: (c, id) => api('recordar', c, { id }),
   borrar: (c, tabla, id) => api('borrar', c, { tabla, id }),
-  sincronizar: (c) => api('sincronizar', c, {}),
-  hoja: (c, id) => api('hoja', c, { id }),
   visto: (c, ids) => api('visto', c, { ids }),
   mesa: (c, activo = true) => api('mesa', c, { activo }),
 }

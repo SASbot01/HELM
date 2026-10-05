@@ -20,7 +20,7 @@ const TONE_LABEL = {
 }
 
 export default function EditorEtapas({
-  clientId, pipelines, activeId, contacts = [], onClose, onSaved,
+  clientId, pipelines, activeId, contacts = [], onClose, onSaved, onContactsChanged,
 }) {
   // Se trabaja sobre una copia: hasta que no se pulsa Guardar, la vista de
   // detrás no cambia. Las operaciones sobre la LISTA (crear, renombrar, borrar,
@@ -41,6 +41,7 @@ export default function EditorEtapas({
   const [renombrando, setRenombrando] = useState(undefined)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [aBorrar, setABorrar] = useState(null) // { p, destino } mientras se decide
 
   const actual = pipelines.find(p => p.id === sel) || pipelines[0]
 
@@ -129,18 +130,21 @@ export default function EditorEtapas({
     setRenombrando(undefined)
   }
 
-  async function borrar(p) {
-    const n = delPipeline(p).length
+  // Con contactos dentro, borrar abre una caja que pregunta qué hacer con
+  // ellos (moverlos o borrarlos). Sin contactos, basta confirmar.
+  function borrar(p) {
     const otros = pipelines.filter(x => x.id && x.id !== p.id)
     if (!otros.length) return setError('Tiene que quedar al menos un pipeline')
-    if (!window.confirm(
-      n > 0
-        ? `"${p.name}" tiene ${n} contacto${n === 1 ? '' : 's'}. Al borrarlo pasarán al pipeline por defecto, no se pierden. ¿Seguir?`
-        : `¿Eliminar el pipeline "${p.name}"?`,
-    )) return
+    if (delPipeline(p).length) return setABorrar({ p, destino: (otros.find(x => x.isDefault) || otros[0]).id })
+    if (window.confirm(`¿Eliminar el pipeline "${p.name}"?`)) ejecutaBorrado(p, null)
+  }
+
+  async function ejecutaBorrado(p, destino) {
     setError(null)
     try {
-      await deletePipeline(p.id)
+      await deletePipeline(p.id, { contactos: delPipeline(p).map(c => c.id), destino })
+      setABorrar(null)
+      onContactsChanged?.()
       const quedan = pipelines.filter(x => x.id !== p.id)
       onSaved(quedan, quedan[0]?.id ?? null)
       cambiarSeleccion(quedan[0])
@@ -213,6 +217,30 @@ export default function EditorEtapas({
                       <Trash2 size={13} className="helm-x" title="Eliminar" onClick={() => borrar(p)} />
                     </div>
                   )}
+                  {aBorrar?.p.id === p.id && (() => {
+                    const n = delPipeline(p).length
+                    const otros = pipelines.filter(x => x.id && x.id !== p.id)
+                    return (
+                      <div className="helm-pipe-borrar">
+                        <b>¿Qué hago con sus {n} contacto{n === 1 ? '' : 's'}?</b>
+                        <label>
+                          Moverlos a
+                          <select value={aBorrar.destino} onChange={e => setABorrar(a => ({ ...a, destino: e.target.value }))}>
+                            {otros.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                          </select>
+                        </label>
+                        <button type="button" className="helm-btn" onClick={() => ejecutaBorrado(p, aBorrar.destino)}>
+                          Mover y borrar el pipeline
+                        </button>
+                        <button type="button" className="helm-btn danger" onClick={() => {
+                          if (window.confirm(`Se borrarán ${n} contacto${n === 1 ? '' : 's'} con su historial. No se puede deshacer. ¿Seguro?`)) ejecutaBorrado(p, null)
+                        }}>
+                          Borrar también los {n} contactos
+                        </button>
+                        <button type="button" className="helm-btn ghost" onClick={() => setABorrar(null)}>Cancelar</button>
+                      </div>
+                    )
+                  })()}
                 </>
               )}
             </div>

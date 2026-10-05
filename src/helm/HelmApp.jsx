@@ -2,14 +2,19 @@
 // Se monta en /admin. Gestiona un perfil (cliente) a la vez, con selector arriba.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, MessageSquare, Link2, Blocks, Settings, Plus, Rocket, Menu, X, Package, UserCog, PhoneCall, FolderOpen, Layers, CalendarClock, BookOpen, FileText, Receipt, ShieldCheck, ScrollText } from 'lucide-react'
+import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, Link2, Settings, Plus, Rocket, Menu, X, Package, UserCog, PhoneCall, Layers, CalendarClock, BookOpen, FileText, Receipt, ShieldCheck, Bot, Sunrise, Newspaper, LayoutGrid, LogOut } from 'lucide-react'
 import { listClients, createProfile, slugify, usersApi, brandOf } from './lib'
 import { productoActual, seccionDelProducto, seccionSiempre } from './producto'
 import { Modal, Field, Input } from './ui'
 import Guia from './Guia'
+import Perfiles from './Perfiles'
+import Notificaciones from './Notificaciones'
 import Informe from './views/Informe'
 import Onboarding from './views/Onboarding'
-import Guiones from './views/Guiones'
+import Agentes from './views/Agentes'
+import MiDia from './views/MiDia'
+import Noticias from './views/Noticias'
+import Lienzo from './Lienzo'
 import Llamadas from './views/Llamadas'
 import Crm from './views/Crm'
 import Servicios from './views/Servicios'
@@ -19,9 +24,7 @@ import Equipo from './views/Equipo'
 import Ventas from './views/Ventas'
 import Diario from './views/Diario'
 import Finanzas from './views/Finanzas'
-import Chat from './views/Chat'
 import Enlaces from './views/Enlaces'
-import Archivos from './views/Archivos'
 import Secciones from './views/Secciones'
 import Fiscal from './views/Fiscal'
 import Copiloto from './views/Copiloto'
@@ -32,30 +35,49 @@ import { useHelmTheme, acentoDe } from './theme'
 import './theme.css'
 
 const NAV = [
-  { key: 'informe', label: 'Informe', icon: LayoutDashboard, title: 'Informe', sub: 'Resumen del negocio', C: Informe },
-  { key: 'onboarding', label: 'Onboarding', icon: Rocket, title: 'Onboarding', sub: 'Alimenta a tu IA y trae tu sistema', C: Onboarding },
-  { key: 'crm', label: 'CRM', icon: Users, title: 'CRM', sub: 'Tus contactos y pipeline', C: Crm },
-  { key: 'servicios', label: 'Servicios', icon: Package, title: 'Servicios', sub: 'El catálogo que lo conecta todo', C: Servicios },
-  { key: 'documentos', label: 'Documentos', icon: FileText, title: 'Presupuestos y facturas', sub: 'Del presupuesto a la factura, con tu marca', C: Documentos },
-  { key: 'gastos', label: 'Gastos', icon: Receipt, title: 'Gastos', sub: 'Facturas de compra, con captura por IA', C: Gastos },
-  { key: 'equipo', label: 'Equipo', icon: UserCog, title: 'Equipo y perfiles', sub: 'Quién es quién, cómo se le paga y su contrato', C: Equipo },
-  { key: 'ventas', label: 'Ventas', icon: TrendingUp, title: 'Ventas', sub: 'Reporte de ventas', C: Ventas },
-  { key: 'diario', label: 'Diario', icon: ClipboardList, title: 'Diario', sub: 'Reportes de closer y setter', C: Diario },
-  { key: 'finanzas', label: 'Finanzas', icon: Wallet, title: 'Finanzas', sub: 'Ingresos, gastos y balance', C: Finanzas },
-  { key: 'chat', label: 'Chat', icon: MessageSquare, title: 'Chat', sub: 'Tu copywriter con la memoria de este perfil', C: Chat },
-  // "Contenido" era esto: el calendario de piezas. Ahora se llama Guiones (es
-  // donde se escribe lo que vas a grabar) y el nombre Contenido pasa a la
-  // sección de abajo, la de métricas. La CLAVE sigue siendo 'contenido' a
-  // propósito: es la que está guardada en los permisos y las secciones activas
-  // de cada perfil.
-  { key: 'contenido', label: 'Guiones', icon: ScrollText, title: 'Guiones', sub: 'Lo que vas a grabar, día a día', C: Guiones },
-  { key: 'llamadas', label: 'Llamadas', icon: PhoneCall, title: 'Llamadas', sub: 'Tu agenda de Google, con lo que pasó en cada una', C: Llamadas },
-  { key: 'enlaces', label: 'Enlaces', icon: Link2, title: 'Enlaces', sub: 'Las URLs del negocio, a mano', C: Enlaces },
-  { key: 'archivos', label: 'Archivos', icon: FolderOpen, title: 'Archivos', sub: 'Lo que subes, lo que escribe la IA y las Biblias', C: Archivos },
-  { key: 'fiscal', label: 'Fiscal', icon: CalendarClock, title: 'Fiscal', sub: 'Plazos y modelos de tus clientes', C: Fiscal },
-  { key: 'copiloto', label: 'Copiloto Fiscal', icon: ShieldCheck, title: 'Copiloto Fiscal', sub: 'Pregúntale por plazos, clientes y avisos', C: Copiloto },
-  { key: 'secciones', label: 'Secciones', icon: Layers, title: 'Secciones', sub: 'Qué partes del panel usa este negocio', C: Secciones },
-  { key: 'ajustes', label: 'Ajustes', icon: Settings, title: 'Ajustes', sub: 'Integraciones y IA de este perfil', C: Ajustes },
+  { key: 'informe', tono: 'oro', label: 'Informe', icon: LayoutDashboard, title: 'Informe', sub: 'Resumen del negocio', C: Informe },
+  { key: 'onboarding', tono: 'azul', label: 'Onboarding', icon: Rocket, title: 'Onboarding', sub: 'Alimenta a tu IA y trae tu sistema', C: Onboarding },
+  { key: 'crm', tono: 'azul', label: 'CRM', icon: Users, title: 'CRM', sub: 'Tus contactos y pipeline', C: Crm },
+  { key: 'servicios', tono: 'oro', label: 'Servicios', icon: Package, title: 'Servicios', sub: 'El catálogo que lo conecta todo', C: Servicios },
+  { key: 'documentos', tono: 'oro', label: 'Documentos', icon: FileText, title: 'Presupuestos y facturas', sub: 'Del presupuesto a la factura, con tu marca', C: Documentos },
+  { key: 'gastos', tono: 'oro', label: 'Gastos', icon: Receipt, title: 'Gastos', sub: 'Facturas de compra, con captura por IA', C: Gastos },
+  { key: 'equipo', tono: 'azul', label: 'Equipo', icon: UserCog, title: 'Equipo y perfiles', sub: 'Quién es quién, cómo se le paga y su contrato', C: Equipo },
+  { key: 'ventas', tono: 'oro', label: 'Ventas', icon: TrendingUp, title: 'Ventas', sub: 'Reporte de ventas', C: Ventas },
+  { key: 'diario', tono: 'azul', label: 'Diario', icon: ClipboardList, title: 'Diario', sub: 'Reportes de closer y setter', C: Diario },
+  { key: 'finanzas', tono: 'oro', label: 'Finanzas', icon: Wallet, title: 'Finanzas', sub: 'Ingresos, gastos y balance', C: Finanzas },
+  // El Chat se retiró: los guiones y el copy se piden a Claude por el conector
+  // (api/mcp). api/chat.js sigue vivo porque lo usan Telegram, el Copiloto
+  // Fiscal y la Biblioteca.
+  // Agentes ocupa el sitio de Guiones, que se retiró: los guiones los escribe
+  // ahora Claude con los creadores de referencia del perfil. La CLAVE sigue
+  // siendo 'contenido' a propósito: es la que está guardada en los permisos y
+  // las secciones activas de cada perfil, así que quien veía Guiones ve Agentes.
+  // Edición (el puesto del editor de vídeo) se retiró del panel.
+  // Mi día: los rituales diarios con la IA (priorizar, preparar reuniones,
+  // cerrar el día). Va el primero de su rama: es lo que se abre cada mañana.
+  { key: 'dia', tono: 'rojo', label: 'Mi día', icon: Sunrise, title: 'Mi día', sub: 'Tus rituales diarios con la IA', C: MiDia },
+  // Noticias: las tres del día de IA y ciberseguridad, que deja un agente antes
+  // de las 6:00. Nace apagada: solo la quiere quien hace contenido de eso.
+  { key: 'noticias', tono: 'rojo', label: 'Noticias', icon: Newspaper, title: 'Noticias', sub: 'Las tres del día de IA y ciberseguridad', C: Noticias },
+  { key: 'contenido', tono: 'rojo', label: 'Agentes', icon: Bot, title: 'Agentes', sub: 'Tus agentes de IA y los creadores que estudian', C: Agentes },
+  { key: 'llamadas', tono: 'azul', label: 'Llamadas', icon: PhoneCall, title: 'Llamadas', sub: 'Tu agenda de Google, con lo que pasó en cada una', C: Llamadas },
+  { key: 'enlaces', tono: 'rojo', label: 'Enlaces', icon: Link2, title: 'Enlaces', sub: 'Las URLs del negocio, a mano', C: Enlaces },
+  // Archivos se retiró: los archivos del negocio se llevan en Drive.
+  { key: 'fiscal', tono: 'oro', label: 'Fiscal', icon: CalendarClock, title: 'Fiscal', sub: 'Plazos y modelos de tus clientes', C: Fiscal },
+  { key: 'copiloto', tono: 'oro', label: 'Copiloto Fiscal', icon: ShieldCheck, title: 'Copiloto Fiscal', sub: 'Pregúntale por plazos, clientes y avisos', C: Copiloto },
+  { key: 'secciones', tono: 'plata', label: 'Secciones', icon: Layers, title: 'Secciones', sub: 'Qué partes del panel usa este negocio', C: Secciones },
+  { key: 'ajustes', tono: 'plata', label: 'Ajustes', icon: Settings, title: 'Ajustes', sub: 'Integraciones y IA de este perfil', C: Ajustes },
+]
+
+// El menú no es una lista: es un esquema de tres ramas, y cada rama tiene su
+// color de borde. Ese mismo color tiñe la cabecera y los paneles de la sección
+// abierta, así que se sabe en qué parte del negocio se está sin leer el título.
+// El ORDEN de NAV no cambia (de él sale la sección a la que aterriza cada rol);
+// esto solo decide dónde se pinta cada recuadro.
+const GRUPOS = [
+  { tono: 'oro', label: 'Dinero' },
+  { tono: 'azul', label: 'Clientes y equipo' },
+  { tono: 'rojo', label: 'Contenido e IA' },
 ]
 
 const LAST_CLIENT_KEY = 'helm_last_client'
@@ -94,7 +116,7 @@ function NewProfileModal({ onClose, onCreated }) {
     if (effSlug.length < 3) return setError('La URL debe tener al menos 3 caracteres')
     if (form.withAccess) {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.admin_email)) return setError('Email de acceso inválido')
-      if (form.admin_password.length < 6) return setError('La contraseña de acceso debe tener al menos 6 caracteres')
+      if (form.admin_password.length < 8) return setError('La contraseña de acceso debe tener al menos 8 caracteres')
     }
     setSaving(true)
     try {
@@ -237,6 +259,10 @@ export default function HelmApp() {
       return cs
     }
 
+    // El administrador que entra sin slug (/admin) no cae en ningún perfil:
+    // ve el tablero con todos y elige él.
+    if (!isClient && !urlSlug) { setClientId(null); return cs }
+
     const bySlug = urlSlug ? cs.find(c => c.slug === urlSlug) : null
     const saved = preferId || localStorage.getItem(LAST_CLIENT_KEY)
     const pick = bySlug || (isClient ? cs[0] : (cs.find(c => c.id === saved) || cs[0]))
@@ -277,7 +303,8 @@ export default function HelmApp() {
   // Volver del consentimiento de Google aterriza en el perfil con ?google=ok;
   // la tarjeta de Ajustes es la que cuenta cómo ha ido, así que abrimos esa.
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('google')) setView('ajustes')
+    const q = new URLSearchParams(window.location.search)
+    if (q.get('google') || q.get('instagram')) setView('ajustes')
   }, [])
 
   function logout() {
@@ -357,8 +384,8 @@ export default function HelmApp() {
   // Ajustes se pinta abajo, junto a la cuenta, pero sigue estando en `coreNav`
   // para que la vista se resuelva igual: sacarlo de ahí haría que entrar por
   // /ajustes cayera en el Informe.
-  const navAjustes = useMemo(() => coreNav.find(n => n.key === 'ajustes'), [coreNav])
-  const navNegocio = useMemo(() => coreNav.filter(n => n.key !== 'ajustes'), [coreNav])
+  const navPie = useMemo(() => coreNav.filter(n => n.tono === 'plata'), [coreNav])
+  const navNegocio = useMemo(() => coreNav.filter(n => n.tono !== 'plata'), [coreNav])
 
   // La vista activa puede ser del núcleo o de un plugin. Una sección que no le
   // corresponde no se abre ni escribiendo la URL: cae en la primera que sí.
@@ -369,12 +396,39 @@ export default function HelmApp() {
   const View = isPlugin ? current.View : current.C
   const title = isPlugin ? current.name : current.title
   const sub = isPlugin ? current.desc : current.sub
+  const tono = current.tono || 'plata'
+  // /admin sin slug: el tablero de perfiles, sin menú ni cabecera.
+  const eligiendo = !isClient && !urlSlug
+
+  const recuadro = (key, Icon, label, onClick, extra) => (
+    <button
+      type="button" key={key}
+      className={'helm-tile' + (view === key ? ' activa' : '')}
+      aria-current={view === key ? 'page' : undefined}
+      onClick={onClick || (() => go(key))}
+    >
+      <Icon /><span>{label}{extra && <small>{extra}</small>}</span>
+    </button>
+  )
 
   return (
     // El color de marca del perfil pisa el acento del tema. Va como estilo en
     // línea y no como clase porque es un dato del negocio, no una variante
     // prevista: cada perfil trae el suyo.
-    <div className="helm" data-theme={theme} style={acentoDe(marca.color) || undefined}>
+    <div className="helm" data-theme={theme} data-tono={eligiendo ? 'oro' : tono} style={acentoDe(marca.color) || undefined}>
+      <Lienzo vista={view} />
+      {eligiendo ? (
+        <Perfiles
+          clients={clients} loading={loadingClients}
+          lastId={localStorage.getItem(LAST_CLIENT_KEY)}
+          email={email} producto={producto.nombre}
+          onPick={c => navigate('/' + c.slug)}
+          onNew={() => setShowNew(true)}
+          onUsers={() => navigate('/usersadmin')}
+          onLogout={logout}
+          onChanged={refreshClients}
+        />
+      ) : (
       <div className="helm-shell">
         {menuOpen && <div className="helm-side-backdrop" onClick={() => setMenuOpen(false)} />}
         <aside className={'helm-side' + (menuOpen ? ' open' : '')}>
@@ -383,60 +437,50 @@ export default function HelmApp() {
             <div><b>{marca.name}</b><span>{marca.subtitle}</span></div>
             <button className="helm-side-close" onClick={() => setMenuOpen(false)} aria-label="Cerrar menú"><X size={18} /></button>
           </div>
-          <div className="helm-navlabel">NEGOCIO</div>
-          {navNegocio.map(n => {
-            const Icon = n.icon
+          {GRUPOS.map(g => {
+            const items = navNegocio.filter(n => n.tono === g.tono)
+            if (!items.length) return null
             return (
-              <div key={n.key} className={'helm-nav' + (view === n.key ? ' active' : '')} onClick={() => go(n.key)}>
-                <Icon /> {n.label}
+              <div key={g.tono} className="helm-grupo" data-tono={g.tono}>
+                <div className="helm-grupo-cab">{g.label}</div>
+                <div className="helm-grupo-grid">
+                  {items.map(n => recuadro(n.key, n.icon, n.label))}
+                </div>
               </div>
             )
           })}
           {pluginNav.length > 0 && (
-            <>
-              <div className="helm-navlabel">PLUGINS</div>
-              {pluginNav.map(p => {
-                const Icon = p.icon
-                return (
-                  <div key={p.key} className={'helm-nav' + (view === p.key ? ' active' : '')} onClick={() => go(p.key)}>
-                    <Icon /> {p.name}
-                  </div>
-                )
-              })}
-            </>
+            <div className="helm-grupo" data-tono="plata">
+              <div className="helm-grupo-cab">Módulos</div>
+              <div className="helm-grupo-grid">
+                {pluginNav.map(p => recuadro(p.key, p.icon, p.name))}
+              </div>
+            </div>
           )}
           <div className="helm-side-foot">
-            {/* Ajustes va con la cuenta, no con el negocio: es lo que se toca de
-                uvas a peras y estorbaba al final de una lista de 17 secciones.
-                Encima de Usuarios, y encima del nombre en las cuentas de cliente,
-                que no ven Usuarios. */}
-            {navAjustes && (
-              <div className={'helm-nav' + (view === navAjustes.key ? ' active' : '')} onClick={() => go(navAjustes.key)}>
-                <navAjustes.icon /> {navAjustes.label}
+            {/* Lo de la cuenta y no del negocio: se toca de uvas a peras y
+                estorbaba en medio de las secciones. */}
+            <div className="helm-grupo" data-tono="plata">
+              <div className="helm-grupo-cab">Cuenta</div>
+              <div className="helm-grupo-grid">
+                {navPie.map(n => recuadro(n.key, n.icon, n.label))}
+                {/* Solo un superadmin (ver isClient arriba), y lo que abre es la
+                    lista de TODA la plataforma, no el equipo de este negocio:
+                    de ahí el aviso en el propio recuadro. */}
+                {!isClient && recuadro('_usuarios', Users, 'Usuarios', () => navigate('/usersadmin'), 'toda la plataforma')}
+                {/* Siempre a mano, no solo el primer día: en un equipo entra gente
+                    nueva cada mes y la guía es lo que le enseña por dónde empezar. */}
+                {recuadro('_guia', BookOpen, 'Guía', () => setShowGuide(true))}
               </div>
-            )}
-            {/* Solo llega aquí un superadmin (ver isClient arriba) y lo que abre
-                es la lista de TODA la plataforma, no de este perfil — de ahí el
-                aviso en el propio nombre, para que no se confunda con el equipo
-                de este negocio mientras estás dentro de su panel. */}
-            {!isClient && (
-              <div className="helm-nav" onClick={() => navigate('/usersadmin')}>
-                <Users /> Usuarios (toda la plataforma)
-              </div>
-            )}
-            {/* Siempre a mano, no solo el primer día: en un equipo entra gente
-                nueva cada mes y la guía es lo que le enseña por dónde empezar. */}
-            <div className="helm-nav" onClick={() => setShowGuide(true)}>
-              <BookOpen /> Guía
             </div>
             <div className="helm-user">
               <div className="helm-avatar">{email[0]?.toUpperCase()}</div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis' }}>{email.split('@')[0]}</div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>{email.split('@')[0]}</div>
                 <small>{isClient ? 'Cliente' : 'Administrador'}</small>
               </div>
+              <button type="button" className="helm-logout" onClick={logout} aria-label="Cerrar sesión" title="Cerrar sesión"><LogOut size={16} /></button>
             </div>
-            <div className="helm-logout" onClick={logout}>Cerrar sesión</div>
           </div>
         </aside>
 
@@ -450,10 +494,14 @@ export default function HelmApp() {
               </div>
             </div>
             <div className="helm-top-actions">
+              {clientId && <Notificaciones key={clientId} clientId={clientId} onNavigate={go} />}
               {isClient ? (
                 <span className="helm-badge">{marca.name}</span>
               ) : (
                 <>
+                  <button className="helm-btn" onClick={() => navigate('/admin')} title="Ver todos los perfiles">
+                    <LayoutGrid size={16} /> Perfiles
+                  </button>
                   {clients.length > 0 && (
                     <select className="helm-select" value={clientId || ''} onChange={e => goToClient(e.target.value)}>
                       {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -504,6 +552,7 @@ export default function HelmApp() {
           </div>
         </main>
       </div>
+      )}
 
       {showNew && <NewProfileModal onClose={() => setShowNew(false)} onCreated={onCreated} />}
       {showGuide && <Guia onFinish={finishGuide} onClose={() => setShowGuide(false)} />}

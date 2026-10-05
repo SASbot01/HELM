@@ -1,0 +1,49 @@
+/* Tablero de perfiles: opciones de cada recuadro, avisos y desactivados.
+   La base (.helm-perfil, .helm-perfiles-*) está en tema.css. */
+div.helm-perfil { cursor: default; }
+.helm-perfil-abrir {
+  position: absolute; inset: 0; z-index: 1; border: 0; padding: 0; background: transparent;
+  border-radius: inherit; cursor: pointer;
+}
+.helm-perfil.con-menu { z-index: 5; }
+.helm-perfil-mas {
+  position: relative; z-index: 2; display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0;
+  border: 0; border-radius: 8px; background: transparent; color: var(--text-mut); cursor: pointer;
+  opacity: 0; transition: opacity .14s ease, background .14s ease, color .14s ease;
+}
+.helm-perfil:hover .helm-perfil-mas, .helm-perfil-mas:focus-visible, .helm-perfil.con-menu .helm-perfil-mas { opacity: 1; }
+.helm-perfil-mas:hover { background: var(--hover); color: var(--text); }
+@media (hover: none) { .helm-perfil-mas { opacity: 1; } }
+.helm-perfil-menu {
+  position: absolute; top: calc(100% - 10px); right: 14px; z-index: 6; min-width: 190px; padding: 5px;
+  background: linear-gradient(180deg, #1a1a1c, #111112) padding-box, var(--borde-neutro) border-box;
+  border: 1px solid transparent; border-radius: 12px; box-shadow: var(--shadow), 0 30px 60px -24px #000;
+}
+.helm-perfil-menu button {
+  display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px 10px;
+  font: inherit; font-size: 13px; text-align: left; color: var(--text);
+  background: transparent; border: 0; border-radius: 8px; cursor: pointer;
+}
+.helm-perfil-menu button:hover { background: var(--hover); }
+.helm-perfil-menu button.peligro { color: var(--red); }
+.helm-perfil-avisos { color: var(--oro); font-weight: 500; }
+.helm-perfil-avisos.error { color: var(--red); }
+
+.helm-perfiles-inactivos { margin-top: 44px; }
+.helm-perfiles-inactivos h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.helm-perfiles-inactivos > p { margin: 4px 0 14px; font-size: 13px; color: var(--text-mut); }
+.helm-perfiles-inactivos ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.helm-perfiles-inactivos li {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px;
+  border: 1px dashed var(--border-2); border-radius: 14px;
+}
+.helm-perfiles-inactivos li > span { flex: 1; min-width: 160px; display: flex; align-items: baseline; gap: 10px; color: var(--text-dim); }
+.helm-perfiles-inactivos li small { color: var(--text-mut); font-size: 12.5px; }
+
+.helm-perfil-ruta {
+  margin: 0 0 6px; padding: 10px 12px; border-radius: 10px; background: var(--bg-1); border: 1px solid var(--border);
+  font-size: 12.5px; color: var(--text-dim); overflow-wrap: anywhere; user-select: all;
+}
+.helm .helm-btn.danger { color: var(--red); border-color: color-mix(in srgb, var(--red) 45%, transparent); }
+.helm .helm-btn.danger:hover:not(:disabled) { color: #fff !important; background: color-mix(in srgb, var(--red) 80%, #000); border-color: transparent; }
+.helm .helm-btn:disabled { opacity: .45; cursor: not-allowed; }

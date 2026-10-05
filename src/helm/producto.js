@@ -76,7 +76,6 @@ export const PRODUCTOS = {
       'ventas',       // facturación del despacho
       'finanzas',     // cobros, morosos y márgenes
       'llamadas',     // citas con clientes desde el calendario
-      'archivos',     // documentación por cliente
       'secciones',
       'ajustes',
       // Los módulos. Nacen apagados y se encienden en Secciones, que es donde

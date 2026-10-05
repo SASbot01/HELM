@@ -57,3 +57,23 @@ export const ROLES = [
 
 const ROLPORKEY = new Map(ROLES.map(r => [r.key, r]))
 export const rol = (v) => ROLPORKEY.get(String(v || '')) || ROLES[1]
+
+// Formato y estados de un reel, compartidos por el corpus y la ficha de cada creador.
+export const nf = new Intl.NumberFormat('es-ES')
+export const fecha = (d) => d ? new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '—'
+
+export const ESTADOS = {
+  pendiente:      { txt: 'En cola',      tono: 'espera' },
+  descargando:    { txt: 'Descargando',  tono: 'espera' },
+  transcribiendo: { txt: 'Transcribiendo', tono: 'espera' },
+  transcrito:     { txt: 'Transcrito',   tono: 'espera' },
+  etiquetado:     { txt: 'Listo',        tono: 'ok' },
+  error:          { txt: 'Error',        tono: 'mal' },
+}
+
+// 2300000 → "2,3 M"; 399000 → "399 k". Para leer de un vistazo, no para contar.
+export function compacto(n) {
+  if (n >= 1e6) return `${nf.format(Math.round(n / 1e5) / 10)} M`
+  if (n >= 1e3) return `${nf.format(Math.round(n / 1e3))} k`
+  return nf.format(n)
+}

@@ -23,6 +23,8 @@ import { track } from '../inicio/socio/track.js'
 import mascara from '../inicio/mascara.txt?raw'
 import aiArte from '../inicio/ai.txt?raw'
 import { FUNDADOR, SECCIONES, seccionPorClave, postPorSlug, hilosDe, CAPITULOS } from './contenido.js'
+import '../../fonts/inter-tight.css'
+import '../../fonts/jetbrains-mono.css'
 import './aip.css'
 
 const LLAVE = 's4sf.aiparatodo'
@@ -40,14 +42,6 @@ export default function AIParaTodo() {
     descripcion: 'Skills para Claude, noticias, comunidad y la guía completa de Claude. En español y gratis.',
     imagen: '/inicio/og.jpg', colorBarra: '#050203',
   })
-  useEffect(() => {
-    const l = document.createElement('link')
-    l.rel = 'stylesheet'
-    l.href = 'https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap'
-    document.head.appendChild(l)
-    return () => l.remove()
-  }, [])
-
   return (
     <div className="aip">
       <Fondo />

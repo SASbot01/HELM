@@ -21,6 +21,7 @@ import { Youtube, Building2, ChevronRight, Sparkles } from 'lucide-react'
 import { useCabeceraPublica } from './inicio/cabecera.js'
 import { track } from './inicio/socio/track.js'
 import FondoHacker from './inicio/FondoHacker.jsx'
+import '../fonts/inter-tight.css'
 import './inicio/inicio.css'
 
 // Lo que se cambia cada dos por tres, junto y arriba: enlaces y handle.
@@ -38,13 +39,6 @@ export default function Clase() {
 
   useEffect(() => {
     track('vista_pagina', { pagina: 'clase' })
-    // Su tipografía se carga solo aquí: la principal no la usa y no tiene por
-    // qué pagarla.
-    const l = document.createElement('link')
-    l.rel = 'stylesheet'
-    l.href = 'https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&display=swap'
-    document.head.appendChild(l)
-    return () => l.remove()
   }, [])
 
   return (

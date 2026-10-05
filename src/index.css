@@ -5,7 +5,10 @@
 
 /* Theme system — añadido feature/vt-hover (Valen 2026-05-10) */
 @import url('./styles/themes.css');
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('./fonts/inter.css');
+@import url('./fonts/montserrat.css');
+@import url('./fonts/archivo.css');
+@import url('./fonts/jetbrains-mono.css');
 *,
 *::before,
 *::after { margin: 0; padding: 0; box-sizing: border-box; }

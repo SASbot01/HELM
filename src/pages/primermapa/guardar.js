@@ -182,6 +182,13 @@ export async function guardarDiagnostico(clientId, contactId, { A, R, calif, ext
         calificacion: calif,
         quiere_revision: Boolean(extra?.quiereRevision),
         completado: new Date().toISOString(),
+        // La prueba del consentimiento. Sin la casilla marcada el formulario
+        // no deja enviar (PrimerMapa.jsx), así que aquí siempre es cierto.
+        consentimiento: {
+          aceptado: true,
+          texto: 'Acepto que tratéis mis datos para enviarme el informe y contactarme sobre él.',
+          fecha: new Date().toISOString(),
+        },
       },
     },
     updated_at: new Date().toISOString(),

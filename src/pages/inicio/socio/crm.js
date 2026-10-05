@@ -70,6 +70,12 @@ export async function altaSocio({ respuestas, encaja, titular }) {
     utm_term: o.utm_term || null,
     titular,
     enviado: ahora,
+    // La prueba del consentimiento: qué casilla marcó, con qué texto y cuándo.
+    consentimiento: {
+      aceptado: Boolean(respuestas.rgpd),
+      texto: 'Acepto la política de privacidad',
+      fecha: ahora,
+    },
   }
   const nota = `Socio IA: ${encaja ? 'ENCAJA' : 'no encaja'} · vende "${respuestas.que_vende}" · precio ${respuestas.precio} · factura ${respuestas.facturacion}/mes · resultados: ${respuestas.resultados}${o.k ? ` · palabra: ${o.k}` : ''}`
 

@@ -1,28 +1,24 @@
 // Agent OS — /agents. El taller del operador.
 //
-// La portada es un lanzador: una casilla por agente, se entra en uno y se
-// trabaja dentro. Antes esto eran cuatro pestañas y parecía un solo agente
-// disfrazado; el catálogo deja claro que son cosas distintas y que vendrán más.
+// La portada es un menú: una casilla por agente, se pincha y se entra. El de
+// contenido lleva dentro sus creadores, sus reels y su memoria, en pestañas.
 //
 // Solo superadmin. El guardia de verdad está en el servidor (api/agents.js va
 // con `wrap(..., { superadmin: true })`); esto solo evita enseñar una pantalla
-// que luego daría 403 en cada llamada.
+// que luego daría 403 en cada llamada. Los perfiles ven lo suyo, en solo
+// lectura, en la sección Agentes de HELM.
 import { useCallback, useEffect, useState } from 'react'
-import { Routes, Route, useNavigate, useParams, Link } from 'react-router-dom'
-import {
-  ScatterChart, PenLine, FolderSync, FileBarChart, UserSquare, Brain,
-  ArrowLeft, ArrowRight,
-} from 'lucide-react'
+import { Routes, Route, Navigate, NavLink, useNavigate, useParams, Link } from 'react-router-dom'
+import { ArrowLeft } from 'lucide-react'
 import { agentsApi } from './api'
-import { AGENTES, RECURSOS, ESTADOS } from './agentes'
+import { AGENTES, PARTES_CONTENIDO } from './agentes'
 import { Identidades, Memoria } from './Recursos'
+import { MenuAgentes } from './Piezas'
+import Ficha from './Ficha'
 import Corpus from './Corpus'
+import PanelDrive from './Drive'
+import Equipo from './Equipo'
 import './agentos.css'
-
-const ICONOS = {
-  grafica: ScatterChart, pluma: PenLine, carpeta: FolderSync,
-  informe: FileBarChart, persona: UserSquare, memoria: Brain,
-}
 
 export default function AgentOS() {
   const navigate = useNavigate()
@@ -44,11 +40,13 @@ export default function AgentOS() {
     ]).catch(e => setError(e.message)).finally(() => setListo(true))
   }, [navigate])
 
-  // El pulso del taller: mientras haya algo en la cola se refresca solo.
+  // El pulso del taller: se refresca solo, y más a menudo mientras algún
+  // agente trabaja, para que se le vea avanzar de paso en paso.
+  const hayTrabajo = (estado?.ahora?.length || 0) > 0
   useEffect(() => {
-    const t = setInterval(() => agentsApi.estado().then(setEstado).catch(() => {}), 10000)
+    const t = setInterval(() => agentsApi.estado().then(setEstado).catch(() => {}), hayTrabajo ? 3000 : 10000)
     return () => clearInterval(t)
-  }, [])
+  }, [hayTrabajo])
 
   if (!listo) return <div className="ag"><p className="ag-vacio">Cargando…</p></div>
 
@@ -57,21 +55,20 @@ export default function AgentOS() {
       {error && <p className="ag-error">{error}</p>}
       <Routes>
         <Route index element={<Lanzador estado={estado} identidades={identidades} />} />
-        <Route path="reels" element={
-          <Dentro titulo="Analista de reels" sub="Pega enlaces y mira qué gancho funciona">
-            <Corpus identidades={identidades} />
+        <Route path="contenido/*" element={
+          <AgenteContenido identidades={identidades} onCambio={cargaIdentidades} />
+        } />
+        <Route path="drive" element={<AgenteDrive />} />
+        <Route path="equipo" element={
+          <Dentro titulo="Equipo de agentes" sub="El flujo entero: qué hace cada agente, por dónde va cada pieza, el registro de cada ejecución y lo que espera tu aprobación">
+            <Equipo />
           </Dentro>
         } />
-        <Route path="identidades" element={
-          <Dentro titulo="Identidades" sub="Estilos de creador, con todo su contexto">
-            <Identidades lista={identidades} onCambio={cargaIdentidades} />
-          </Dentro>
-        } />
-        <Route path="memoria" element={
-          <Dentro titulo="Memoria" sub="Lo que no hay que volver a descubrir">
-            <Memoria identidades={identidades} />
-          </Dentro>
-        } />
+        {/* Las rutas de antes, para los enlaces que ya hubiera guardados. */}
+        <Route path="reels" element={<Navigate to="/agents/contenido/reels" replace />} />
+        <Route path="identidades" element={<Navigate to="/agents/contenido" replace />} />
+        <Route path="identidades/:slug" element={<RedirigeFicha />} />
+        <Route path="memoria" element={<Navigate to="/agents/contenido/memoria" replace />} />
         <Route path=":otro" element={<NoExiste />} />
       </Routes>
     </div>
@@ -98,7 +95,7 @@ function Lanzador({ estado, identidades }) {
       <header className="ag-top">
         <div>
           <h1>Agent OS</h1>
-          <p>Tus agentes, el material del que comen y lo que van aprendiendo.</p>
+          <p>Elige un agente para entrar.</p>
         </div>
         <a className="ag-btn" href="/admin">Volver a HELM</a>
       </header>
@@ -106,22 +103,15 @@ function Lanzador({ estado, identidades }) {
       {/* El pulso: si algo va mal, se ve antes de entrar a ningún sitio. */}
       <div className="ag-pulso">
         <Pulso n={activos} lb="agentes activos" />
-        <Pulso n={estado?.total ?? '—'} lb="en el corpus" />
-        <Pulso n={identidades.length} lb={identidades.length === 1 ? 'identidad' : 'identidades'} />
+        <Pulso n={estado?.total ?? "—"} lb="reels" />
+        <Pulso n={identidades.length} lb={identidades.length === 1 ? "creador" : "creadores"} />
         <Pulso n={trabajando} lb="trabajando" vivo={trabajando > 0} />
         <Pulso n={enCola} lb="en cola" />
         <Pulso n={fallidos} lb="con error" mal={fallidos > 0} />
       </div>
 
       <h2 className="ag-seccion">Agentes</h2>
-      <div className="ag-rejilla">
-        {AGENTES.map(a => <Casilla key={a.key} a={a} metrica={metricaDe(a)} />)}
-      </div>
-
-      <h2 className="ag-seccion">Material</h2>
-      <div className="ag-rejilla recursos">
-        {RECURSOS.map(r => <Casilla key={r.key} a={{ ...r, estado: 'activo' }} recurso />)}
-      </div>
+      <MenuAgentes agentes={AGENTES.filter(a => !a.soloPerfil)} metricaDe={metricaDe} />
     </>
   )
 }
@@ -132,33 +122,6 @@ function Pulso({ n, lb, vivo, mal }) {
       <b>{n}</b><span>{lb}</span>
     </div>
   )
-}
-
-function Casilla({ a, metrica, recurso }) {
-  const Icono = ICONOS[a.icono] || ScatterChart
-  const est = ESTADOS[a.estado] || ESTADOS.construido
-  const entrable = Boolean(a.ruta)
-
-  // Todas las casillas tienen la misma anatomía y en el mismo orden: icono,
-  // nombre, resumen, detalle y pie. Si a una le falta una pieza, su pie queda
-  // a distinta altura que el de al lado y la fila entera se ve mal hecha.
-  const cuerpo = (
-    <>
-      <span className="ag-cas-ico"><Icono size={20} strokeWidth={1.8} aria-hidden="true" /></span>
-      <h3>{a.nombre}</h3>
-      <p>{a.resumen}</p>
-      {a.detalle && <p className="ag-cas-detalle">{a.detalle}</p>}
-      <footer>
-        {metrica
-          ? <span className="ag-cas-num"><b>{metrica.n}</b> {metrica.lb}</span>
-          : <span className={`ag-estado ${est.tono}`}>{recurso ? 'Listo' : est.label}</span>}
-        {entrable && <ArrowRight size={15} strokeWidth={2} className="ag-cas-flecha" aria-hidden="true" />}
-      </footer>
-    </>
-  )
-
-  if (!entrable) return <article className="ag-casilla pendiente" aria-disabled="true">{cuerpo}</article>
-  return <Link className="ag-casilla" to={a.ruta}>{cuerpo}</Link>
 }
 
 // ── Dentro de un agente ─────────────────────────────────────────────────────
@@ -176,6 +139,82 @@ function Dentro({ titulo, sub, children }) {
       {children}
     </>
   )
+}
+
+// ── El agente de contenido ───────────────────────────────────────────────────
+
+function AgenteContenido({ identidades, onCambio }) {
+  const navigate = useNavigate()
+  const abrirFicha = (slug) => navigate(`/agents/contenido/creadores/${slug}`)
+  return (
+    <Routes>
+      <Route path="creadores/:slug" element={<FichaRuta identidades={identidades} />} />
+      <Route path="*" element={
+        <Dentro titulo="Agente de contenido" sub="Creadores de referencia, sus reels analizados y lo aprendido">
+          <nav className="ag-pestanas">
+            {PARTES_CONTENIDO.map(p => (
+              <NavLink key={p.key} end to={`/agents/contenido${p.ruta ? `/${p.ruta}` : ''}`}>{p.nombre}</NavLink>
+            ))}
+          </nav>
+          <Routes>
+            <Route index element={<Identidades lista={identidades} onCambio={onCambio} onAbrir={abrirFicha} />} />
+            <Route path="reels" element={<Corpus identidades={identidades} />} />
+            <Route path="memoria" element={<Memoria identidades={identidades} />} />
+          </Routes>
+        </Dentro>
+      } />
+    </Routes>
+  )
+}
+
+function FichaRuta({ identidades }) {
+  const { slug } = useParams()
+  const navigate = useNavigate()
+  const cargar = useCallback(() => agentsApi.ficha(slug), [slug])
+  return (
+    <Ficha
+      cargar={cargar} admin identidades={identidades}
+      onVolver={() => navigate('/agents/contenido')} volverLabel="Creadores"
+    />
+  )
+}
+
+// ── La ingesta de Drive: un perfil cada vez ─────────────────────────────────
+
+function AgenteDrive() {
+  const [perfiles, setPerfiles] = useState(null)
+  const [elegido, setElegido] = useState('')
+  useEffect(() => {
+    agentsApi.drivePerfiles().then(({ perfiles }) => {
+      setPerfiles(perfiles)
+      setElegido(p => p || perfiles[0]?.id || '')
+    }).catch(() => setPerfiles([]))
+  }, [])
+  const cargar = useCallback(() => agentsApi.drive(elegido), [elegido])
+
+  return (
+    <Dentro titulo="Calendario de guiones" sub="Los guiones de cada perfil día a día, y lo que va entrando en su Drive">
+      {!perfiles ? <p className="ag-vacio">Cargando…</p> : !perfiles.length
+        ? <p className="ag-vacio">Ningún perfil tiene carpeta en HELM Contenido.</p>
+        : (
+          <>
+            <nav className="ag-pestanas">
+              {perfiles.map(p => (
+                <button key={p.id} type="button" className={elegido === p.id ? 'active' : ''} onClick={() => setElegido(p.id)}>
+                  {p.nombre}
+                </button>
+              ))}
+            </nav>
+            {elegido && <PanelDrive key={elegido} cargar={cargar} />}
+          </>
+        )}
+    </Dentro>
+  )
+}
+
+function RedirigeFicha() {
+  const { slug } = useParams()
+  return <Navigate to={`/agents/contenido/creadores/${slug}`} replace />
 }
 
 function NoExiste() {

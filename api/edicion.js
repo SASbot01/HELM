@@ -1,8 +1,7 @@
 // HELM — Edición: el puesto del editor de vídeo de un perfil.
 //
-// Clientes del editor, pedidos (enlazados a los guiones del calendario), cobros
-// y el Agente Montador. Todo pasa por aquí con la clave de servicio y exige
-// acceso al perfil: las tablas no tienen policy para anon (migración 084).
+// Clientes del editor, pedidos (enlazados a los guiones del calendario) y
+// cobros. Todo pasa por aquí con la clave de servicio y exige acceso al perfil: las tablas no tienen policy para anon (migración 084).
 //
 //   GET  ?action=resumen      &clientId=   → todo lo de la pantalla
 //   POST ?action=cliente      &clientId=   → alta o edición ({ id? , ... })
@@ -13,21 +12,18 @@
 //   POST ?action=recordar     &clientId=   → { id } apunta el recordatorio y
 //                                            devuelve el mensaje para enviarlo
 //   POST ?action=borrar       &clientId=   → { tabla: cliente|pedido|cobro, id }
-//   POST ?action=sincronizar  &clientId=   → el Agente Montador contra el Drive
-//   POST ?action=hoja         &clientId=   → { id } la hoja de montaje del pedido
 //   POST ?action=visto        &clientId=   → { ids } el editor abre encargos nuevos
 //   POST ?action=mesa         &clientId=   → { activo, nombre } este perfil es (o
 //                                            deja de ser) una mesa de edición
 //
 // Editor compartido (migración 085): un perfil dado de alta como «mesa de
 // edición» recibe los pedidos que le envían los demás (editor_client_id). Los
-// ve en su resumen como `recibidos`, los mueve de estado y pide su hoja; no los
+// ve en su resumen como `recibidos`, los mueve de estado; no los
 // edita ni los borra, porque son del perfil que los envió.
 import { supabase } from './lib/supabase.js'
 import { applyCors } from './_lib/auth.js'
 import { requireProfileAccess } from './_lib/access.js'
-import { calendario, carpetasDe, TIPOS } from './_lib/ingesta.js'
-import { llmChat } from './_lib/llm.js'
+import { calendario, carpetasDe } from './_lib/ingesta.js'
 
 const TABLAS = {
   cliente: 'helm_edicion_clientes',
@@ -113,16 +109,6 @@ async function guionesDe(clientId) {
   }
 }
 
-// Qué estado de pedido corresponde a la fase de su guion en Drive. null = el
-// Drive no dice nada nuevo (la pieza no se ha grabado todavía).
-function estadoPorFase(fase) {
-  if (fase === 'editado' || fase === 'publicado') return 'entregado'
-  if (fase === 'sin_editar') return 'bruto'
-  return null
-}
-
-// Al entregar un pedido con precio y sin cobro, nace su cobro pendiente. Así
-// «cobrar» no depende de acordarse.
 async function cobroAlEntregar(p) {
   if (!(Number(p.precio) > 0)) return null
   const { data: ya } = await supabase.from(TABLAS.cobro).select('id').eq('pedido_id', p.id).limit(1)
@@ -133,114 +119,6 @@ async function cobroAlEntregar(p) {
   }).select().single()
   if (error) throw error
   return data
-}
-
-// ── El Agente Montador: sincronizar pedidos con el Drive ────────────────────
-async function sincronizar(clientId) {
-  const [guiones, { data: pedidos, error }] = await Promise.all([
-    guionesDe(clientId),
-    supabase.from(TABLAS.pedido).select('*').eq('client_id', clientId),
-  ])
-  if (error) throw error
-  const porGuion = new Map((pedidos || []).filter(p => p.guion_id).map(p => [p.guion_id, p]))
-  const cambios = []
-
-  for (const g of guiones) {
-    const objetivo = estadoPorFase(g.fase)
-    const p = porGuion.get(g.id)
-
-    // Guion grabado sin pedido: se abre el pedido, ya en su estado.
-    if (!p) {
-      if (!objetivo) continue
-      const nuevo = await guarda('pedido', clientId, null, {
-        guion_id: g.id, titulo: g.title, formato: 'short', estado: objetivo,
-        entrega: g.date >= dia(0) ? g.date : dia(3),
-        drive_url: g.drive_carpeta_id ? `https://drive.google.com/drive/folders/${g.drive_carpeta_id}` : '',
-        entregado_at: objetivo === 'entregado' ? ahora() : null,
-      })
-      cambios.push({ tipo: 'nuevo', titulo: g.title, estado: objetivo })
-      continue
-    }
-
-    // Solo se avanza, nunca se retrocede: si el editor ya lo tiene en edición
-    // o revisión, que el bruto siga en Drive no lo devuelve a «bruto».
-    if (!objetivo || ESTADOS.indexOf(objetivo) <= ESTADOS.indexOf(p.estado)) continue
-    const fila = { estado: objetivo }
-    if (objetivo === 'entregado') fila.entregado_at = ahora()
-    if (!p.drive_url && g.drive_carpeta_id) fila.drive_url = `https://drive.google.com/drive/folders/${g.drive_carpeta_id}`
-    const guardado = await guarda('pedido', clientId, p.id, fila)
-    if (objetivo === 'entregado') await cobroAlEntregar(guardado)
-    cambios.push({ tipo: 'avanza', titulo: p.titulo, de: p.estado, estado: objetivo })
-  }
-  return cambios
-}
-
-// En la mesa del editor, el agente solo avanza lo que le han enviado: los
-// guiones de cada perfil siguen siendo de ese perfil.
-async function sincronizarRecibidos(clientId) {
-  const cambios = []
-  for (const p of await recibidosDe(clientId)) {
-    const objetivo = estadoPorFase(p.guion_info?.fase)
-    if (!objetivo || ESTADOS.indexOf(objetivo) <= ESTADOS.indexOf(p.estado)) continue
-    const fila = { estado: objetivo, ...(objetivo === 'entregado' ? { entregado_at: ahora() } : {}) }
-    const guardado = await guarda('pedido', p.client_id, p.id, fila)
-    if (objetivo === 'entregado') await cobroAlEntregar(guardado)
-    cambios.push({ tipo: 'avanza', titulo: p.titulo, de: p.estado, estado: objetivo })
-  }
-  return cambios
-}
-
-// ── El Agente Montador: la hoja de montaje ──────────────────────────────────
-async function hojaDeMontaje(clientId, pedido) {
-  let guion = null
-  if (pedido.guion_id) {
-    const { data } = await supabase.from('helm_content_calendar')
-      .select('title, body, tipo, date').eq('id', pedido.guion_id).maybeSingle()
-    guion = data
-  }
-  if (!guion?.body && !pedido.notas_estilo) {
-    throw falla('Sin guion ni notas de estilo no hay de qué hacer la hoja. Enlaza el pedido a un guion o escribe las notas.')
-  }
-  // La guía de formatos de montaje (B-roll, a cámara con insertos…) que
-  // mantiene el Agent OS en su memoria global.
-  const { data: guia } = await supabase.from('agent_memory').select('contenido')
-    .eq('ambito', 'global').ilike('contenido', '%FORMATOS DE MONTAJE%').limit(1)
-
-  const system = [
-    'Eres el Montador del equipo: el jefe de postproducción de reels y vídeos cortos.',
-    'Escribes la hoja de montaje que el editor sigue para editar la pieza. Español de España, concreta, sin relleno.',
-    'Estructura, en este orden:',
-    '1. FORMATO: cuál de la guía y por qué, en una línea.',
-    '2. GANCHO (0-3 s): qué se ve, qué se oye y el texto en pantalla exacto.',
-    '3. MONTAJE, en una tabla TIEMPO | QUÉ SE VE | QUÉ SE OYE O SE LEE, una fila por idea del guion, con los cortes y los insertos.',
-    '4. RITMO Y MÚSICA: cortes por segundo, tipo de música y dónde sube.',
-    '5. SUBTÍTULOS Y GRÁFICOS: estilo, palabras a resaltar.',
-    '6. CIERRE Y CTA: el plano final y el texto del CTA.',
-    '7. CHECKLIST DE ENTREGA: formato de exportación (9:16 1080×1920 para short, 16:9 para largo), duración objetivo y nombre del archivo.',
-    guia?.[0]?.contenido ? `\nGuía de formatos del equipo:\n${guia[0].contenido}` : '',
-  ].join('\n')
-
-  const user = [
-    `Pieza: ${pedido.titulo}`,
-    `Formato pedido: ${pedido.formato === 'largo' ? 'vídeo largo horizontal' : pedido.formato === 'revision' ? 'revisión de una pieza ya editada' : 'short vertical (Reel/TikTok/Short)'}`,
-    guion?.tipo ? `Tipo de reel: ${TIPOS[guion.tipo] || guion.tipo}` : '',
-    pedido.clips > 1 ? `Clips a entregar: ${pedido.clips}` : '',
-    pedido.notas_estilo ? `Notas de estilo del cliente: ${pedido.notas_estilo}` : '',
-    guion?.body ? `\nGuion, tal como se grabó:\n${guion.body}` : '',
-  ].filter(Boolean).join('\n')
-
-  let hoja
-  try {
-    hoja = await llmChat({ clientId, system, messages: [{ role: 'user', content: user }], temperature: 0.4, maxTokens: 1800 })
-  } catch (e) {
-    // El caso típico: el perfil tira del modelo local y ese modelo no está en
-    // la máquina. Se dice qué hacer, no el error de Ollama.
-    if (/modelo local|not found|ECONNREFUSED|fetch failed/i.test(e.message)) {
-      throw falla('La IA de este perfil no está disponible ahora mismo. Conecta Claude en Ajustes → IA y vuelve a pedir la hoja.', 503)
-    }
-    throw e
-  }
-  return guarda('pedido', clientId, pedido.id, { hoja, hoja_at: ahora() })
 }
 
 export default async function handler(req, res) {
@@ -373,12 +251,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true })
     }
 
-    if (accion === 'sincronizar') {
-      const cambios = await sincronizar(clientId)
-      if ((await mesas()).some(m => m.id === clientId)) cambios.push(...(await sincronizarRecibidos(clientId)))
-      return res.status(200).json({ cambios })
-    }
-
     if (accion === 'visto') {
       const ids = (Array.isArray(b.ids) ? b.ids : []).filter(Boolean).slice(0, 200)
       if (ids.length) {
@@ -399,12 +271,6 @@ export default async function handler(req, res) {
       })
       if (error) throw error
       return res.status(200).json({ ok: true })
-    }
-
-    if (accion === 'hoja') {
-      const pedido = await pedidoAccesible(b.id, clientId)
-      // La IA y el guion son los del perfil dueño del pedido.
-      return res.status(200).json({ pedido: await hojaDeMontaje(pedido.client_id, pedido) })
     }
 
     return res.status(400).json({ error: `Acción desconocida: ${accion}` })

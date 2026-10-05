@@ -44,3 +44,6 @@ landing-bootcamp-fba/
 .dist-nuevo/
 __pycache__/
 .dist-socio/
+
+# Llave de la cuenta de servicio de Google Drive (helm-drive). Es una contraseña.
+.google-drive-sa.json

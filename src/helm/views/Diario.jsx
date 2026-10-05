@@ -263,8 +263,76 @@ function ReporteModal({ clientId, people, onClose, onSave }) {
     }))
   }
 
-  const setMetric = (field, v) => setForm(f => ({ ...f, metrics: { ...f.metrics, [field]: v } }))
+  // Lo que el closer teclea a mano deja de rellenarse solo: si corrige una
+  // cifra, su corrección manda aunque cambie de fecha o añada otra venta.
+  const [aMano, setAMano] = useState({})
+  const setMetric = (field, v) => {
+    setAMano(m => ({ ...m, [field]: true }))
+    setForm(f => ({ ...f, metrics: { ...f.metrics, [field]: v } }))
+  }
   const num = (field) => Number(form.metrics[field]) || 0
+
+  // El embudo del closer sale de lo que HELM ya sabe de ese día:
+  //   · agendadas   las llamadas de la agenda (Llamadas ← Google Calendar),
+  //                 sin las canceladas
+  //   · asistieron  de esas, las marcadas como «Hecha». Solo si alguien ha
+  //                 marcado alguna: con todas en «Agendada» no se sabe, y un
+  //                 cero inventado sería peor que el campo vacío
+  //   · convirtieron  las ventas que se apuntan aquí abajo
+  // Si las llamadas están repartidas, solo las de esta persona y las que no
+  // tienen a nadie asignado.
+  const [enAgenda, setEnAgenda] = useState(null)   // { agendadas, hechas, marcadas } | null
+  const esCloser = rol.key === 'closer'
+  useEffect(() => {
+    if (!esCloser || !form.date) return
+    let vivo = true
+    const [y, m, d] = form.date.split('-').map(Number)
+    supabase.from('helm_calls').select('status, assignee_id')
+      .eq('client_id', clientId)
+      .gte('starts_at', new Date(y, m - 1, d).toISOString())
+      .lt('starts_at', new Date(y, m - 1, d + 1).toISOString())
+      .then(({ data, error: e }) => {
+        if (!vivo) return
+        if (e) { setEnAgenda(null); return }
+        const suyas = (data || []).filter(c => c.status !== 'cancelada'
+          && (!c.assignee_id || !form.person_id || c.assignee_id === form.person_id))
+        const agenda = {
+          agendadas: suyas.length,
+          hechas: suyas.filter(c => c.status === 'hecha').length,
+          marcadas: suyas.some(c => c.status !== 'agendada'),
+        }
+        setEnAgenda(agenda)
+        setForm(f => ({
+          ...f,
+          metrics: {
+            ...f.metrics,
+            ...(aMano.appointments_booked ? {} : { appointments_booked: agenda.agendadas ? String(agenda.agendadas) : '' }),
+            ...(aMano.calls_made || !agenda.marcadas ? {} : { calls_made: String(agenda.hechas) }),
+          },
+        }))
+      })
+    return () => { vivo = false }
+  }, [clientId, form.date, form.person_id, esCloser]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // «Convirtieron» sigue a las ventas apuntadas en el reporte.
+  function setVentas(v) {
+    setForm(f => ({
+      ...f, sales: v,
+      metrics: esCloser && !aMano.closes ? { ...f.metrics, closes: v.length ? String(v.length) : '' } : f.metrics,
+    }))
+  }
+
+  const pistaDe = (m) => {
+    if (!esCloser || enAgenda === null) return m.hint
+    if (m.field === 'appointments_booked') return `${enAgenda.agendadas} en la agenda de ese día. Se rellena solo; cámbialo si no cuadra.`
+    if (m.field === 'calls_made') {
+      return enAgenda.marcadas
+        ? `${enAgenda.hechas} marcadas como «Hecha» en Llamadas. Se rellena solo.`
+        : 'Marca las llamadas como «Hecha» en Llamadas y se rellenará solo.'
+    }
+    if (m.field === 'closes') return 'Sigue a las ventas que apuntes abajo.'
+    return m.hint
+  }
 
   const errors = {}
   if (!form.name.trim()) errors.name = 'Di de quién es el reporte'
@@ -327,7 +395,7 @@ function ReporteModal({ clientId, people, onClose, onSave }) {
         <div className="helm-drawer-section">{rol.label} · {rol.key === 'closer' ? 'embudo del día' : 'actividad del día'}</div>
 
         {rol.diario.map(m => (
-          <Field key={m.field} label={m.label} error={shown[m.field]} hint={m.hint}>
+          <Field key={m.field} label={m.label} error={shown[m.field]} hint={pistaDe(m)}>
             <CountInput value={form.metrics[m.field] ?? ''} onChange={v => setMetric(m.field, v)} placeholder="0" />
           </Field>
         ))}
@@ -337,7 +405,7 @@ function ReporteModal({ clientId, people, onClose, onSave }) {
         {VENDEN.has(rol.key) && (
           <Ventas
             clientId={clientId} value={form.sales}
-            onChange={v => setForm(f => ({ ...f, sales: v }))}
+            onChange={setVentas}
             declarados={num('closes')}
           />
         )}

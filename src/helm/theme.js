@@ -19,7 +19,7 @@ import { useCallback, useEffect } from 'react'
 // El fondo del NAVEGADOR: el rebote del scroll y la barra de estado del móvil
 // quedan fuera del contenedor .helm, así que hay que pintarlos aparte o asoma
 // una franja de otro color al hacer scroll. Es el mismo --bg de theme.css.
-const BG = '#EAE9E4'
+const BG = '#070708'
 
 // Ya no hay temas que elegir. Se exporta vacío para que la sección de Ajustes
 // que los pintaba no se rompa mientras se retira.
