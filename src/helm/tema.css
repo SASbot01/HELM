@@ -111,6 +111,13 @@
    luz de arriba. `isolation` hace que el z-index negativo se quede dentro del
    panel, por encima de su fondo y por debajo de su contenido. */
 .helm { isolation: isolate; }
+/* La franja de la barra de estado en la app de la pantalla de inicio: lo que
+   pasa por debajo al hacer scroll no se ve detrás de la hora. Debajo de los
+   overlays (z-index 50), que ya llevan su propia zona segura. */
+.helm::before {
+  content: ''; position: fixed; inset: 0 0 auto 0; z-index: 40; pointer-events: none;
+  height: env(safe-area-inset-top, 0px); background: var(--bg);
+}
 .helm-lienzo { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: -1; pointer-events: none; display: none; }
 .helm.vivo > .helm-lienzo { display: block; }
 .helm.vivo {
@@ -282,8 +289,18 @@
 
 @media (max-width: 820px) {
   .helm-shell { grid-template-columns: 1fr; }
-  .helm-side { background: #050505; padding: 18px 16px; border-right: 1px solid var(--border); }
-  .helm-top { margin: 10px 10px 0; top: 10px; padding: 12px 14px; }
+  /* Con HELM en la pantalla de inicio del iPhone la web va a pantalla completa
+     (viewport-fit=cover y barra de estado translúcida): sin sumar la zona
+     segura, la cabecera y el menú quedaban debajo de la hora y de la Dynamic
+     Island. En Safari normal la zona segura es 0 y esto no cambia nada. */
+  .helm-side {
+    background: #050505; padding: 18px 16px; border-right: 1px solid var(--border);
+    padding-top: max(18px, env(safe-area-inset-top)); padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+  .helm-top {
+    margin: calc(10px + env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left));
+    top: calc(10px + env(safe-area-inset-top)); padding: 12px 14px;
+  }
   .helm-top p { display: none; }
   .helm-body { padding: 16px 10px calc(48px + env(safe-area-inset-bottom)); }
   .helm-drawer { border-radius: 0; }
