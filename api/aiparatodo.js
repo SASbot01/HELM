@@ -43,6 +43,9 @@ export default async function handler(req, res) {
     if (accion === 'articulos') {
       const { data, error } = await supabase.from('aip_articulos')
         .select(CAMPOS_LISTA).eq('client_id', perfil.id).eq('estado', 'publicado')
+        // Por día y edición ('tarde' > 'manana'): si la de tarde sale antes
+        // que la de mañana (un reintento), la portada sigue en su orden.
+        .order('fecha', { ascending: false }).order('edicion', { ascending: false })
         .order('publicado_en', { ascending: false }).limit(60)
       if (error) throw error
       res.setHeader('Cache-Control', 'public, max-age=120')
@@ -50,7 +53,7 @@ export default async function handler(req, res) {
     }
     if (accion === 'articulo') {
       const slug = String(req.query?.slug || '').slice(0, 120)
-      if (!/^[a-z0-9-]+$/.test(slug)) return res.status(400).json({ error: 'Falta el artículo' })
+      if (!/^[a-z0-9-]+$/.test(slug)) return res.status(404).json({ error: 'Ese artículo no existe' })
       const { data, error } = await supabase.from('aip_articulos')
         .select(`${CAMPOS_LISTA}, cuerpo, claves, que_significa, fuentes, imagen_origen`)
         .eq('client_id', perfil.id).eq('estado', 'publicado').eq('slug', slug).maybeSingle()

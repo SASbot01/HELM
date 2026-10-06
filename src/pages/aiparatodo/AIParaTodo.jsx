@@ -739,7 +739,10 @@ function HiloRuta(props) {
 const EDICION = { manana: 'Edición de mañana', tarde: 'Edición de tarde' }
 const ICONO_TEMA = { ia: BrainCircuit, tecnologia: Cpu, ciberseguridad: ShieldAlert }
 const temaNombre = (k) => seccionPorClave('news').temas.find(t => t.key === k)?.nombre || k
-const ahoraMadrid = () => new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())
+const ahoraMadrid = () => {
+  const f = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())
+  return f.charAt(0).toUpperCase() + f.slice(1)
+}
 const edicionAhora = () => (Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', hour: '2-digit', hourCycle: 'h23' }).format(new Date())) >= 17 ? EDICION.tarde : EDICION.manana)
 
 let articulosEnCurso = null
@@ -769,7 +772,7 @@ function useArticulo(slug) {
   useEffect(() => {
     let vivo = true
     fetch(`/api/aiparatodo?action=articulo&slug=${encodeURIComponent(slug)}`)
-      .then(x => (x.status === 404 ? 'no' : x.ok ? x.json().then(d => d.articulo || 'no') : 'error'))
+      .then(x => (x.status === 404 || x.status === 400 ? 'no' : x.ok ? x.json().then(d => d.articulo || 'no') : 'error'))
       .catch(() => 'error')
       .then(valor => { if (vivo) setR({ slug, valor }) })
     return () => { vivo = false }
@@ -779,9 +782,11 @@ function useArticulo(slug) {
 
 // La foto de la noticia original. Si no hay, o la web de origen no la deja
 // cargar, una portada propia con el tema: nunca un hueco roto.
-function Foto({ a, grande = false }) {
-  const [rota, setRota] = useState(false)
-  if (!a.imagen_url || rota) {
+function Foto({ a, grande = false, pie = null }) {
+  // La URL que falló, no un sí/no: al pasar a otra pieza con otra foto, se
+  // vuelve a intentar.
+  const [rotaUrl, setRotaUrl] = useState(null)
+  if (!a.imagen_url || rotaUrl === a.imagen_url) {
     const Icono = ICONO_TEMA[a.tema] || Newspaper
     return (
       <div className={`aip-foto aip-foto-propia ${a.tema}`} role="img" aria-label={temaNombre(a.tema)}>
@@ -791,10 +796,14 @@ function Foto({ a, grande = false }) {
     )
   }
   return (
-    <img
-      className="aip-foto" src={a.imagen_url} alt={a.imagen_alt || ''}
-      loading={grande ? 'eager' : 'lazy'} referrerPolicy="no-referrer" onError={() => setRota(true)}
-    />
+    <>
+      <img
+        className="aip-foto" src={a.imagen_url} alt={a.imagen_alt || ''}
+        loading={grande ? 'eager' : 'lazy'} referrerPolicy="no-referrer" onError={() => setRotaUrl(a.imagen_url)}
+      />
+      {/* El crédito, solo cuando la foto del medio se ve de verdad. */}
+      {pie}
+    </>
   )
 }
 
@@ -925,8 +934,11 @@ function Articulo({ acceso, setAcceso }) {
   if (a === 'no') return <Navigate to="/aiparatodo/news" replace />
   if (a.tema !== tema) return <Navigate to={`/aiparatodo/news/${a.tema}/${a.slug}`} replace />
 
-  // Sin datos, el arranque de la pieza (como el muro de un periódico).
-  const visibles = acceso ? a.cuerpo : a.cuerpo.slice(0, 2)
+  // Sin datos, el arranque de la pieza hasta el segundo párrafo (como el muro
+  // de un periódico), con el ladillo que haya entre medias.
+  let parrafos = 0
+  const corte = a.cuerpo.findIndex(b => b.tipo === 'p' && ++parrafos === 2)
+  const visibles = acceso ? a.cuerpo : a.cuerpo.slice(0, corte === -1 ? a.cuerpo.length : corte + 1)
   const mas = Array.isArray(todos) ? todos.filter(x => x.slug !== a.slug).slice(0, 3) : []
 
   return (
@@ -945,13 +957,15 @@ function Articulo({ acceso, setAcceso }) {
       </header>
 
       <figure className="aip-articulo-foto">
-        <Foto a={a} grande />
-        {(a.imagen_credito || a.imagen_origen) && (
-          <figcaption>
-            {a.imagen_credito}
-            {a.imagen_origen && <> · <a href={a.imagen_origen} target="_blank" rel="noopener noreferrer">noticia original</a></>}
-          </figcaption>
-        )}
+        <Foto
+          a={a} grande
+          pie={(a.imagen_credito || a.imagen_origen) && (
+            <figcaption>
+              {a.imagen_credito}
+              {a.imagen_origen && <> · <a href={a.imagen_origen} target="_blank" rel="noopener noreferrer">noticia original</a></>}
+            </figcaption>
+          )}
+        />
       </figure>
 
       <div className={'aip-articulo-cuerpo' + (acceso ? '' : ' cortado')}>

@@ -370,7 +370,7 @@ a.aip-hilo:hover .aip-candado { color: var(--rosa); }
 .aip-diario, .aip-articulo { --serifa: 'Iowan Old Style', 'Charter', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif; }
 .aip-diario { max-width: 1120px; }
 .aip-diario-cab { padding: 26px 0 18px; border-bottom: 1px solid var(--linea-2); margin-bottom: 26px; }
-.aip-diario-fecha { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font: 600 12.5px var(--mono); color: var(--papel-3); text-transform: capitalize; }
+.aip-diario-fecha { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font: 600 12.5px var(--mono); color: var(--papel-3); }
 .aip-diario-nombre { margin: 0; font-family: var(--serifa); font-size: clamp(38px, 6.4vw, 72px); font-weight: 700; line-height: 1; letter-spacing: -.02em; }
 .aip-diario-cab .aip-sub { max-width: 720px; }
 .aip-diario-temas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 20px; }
@@ -404,7 +404,7 @@ a.aip-hilo:hover .aip-candado { color: var(--rosa); }
 .aip-art-tarjeta { display: flex; flex-direction: column; text-decoration: none; }
 .aip-art-tarjeta-foto { aspect-ratio: 16 / 9; margin-bottom: 14px; border-radius: 12px; overflow: hidden; border: 1px solid var(--linea); }
 .aip-art-tarjeta h3 { margin: 0 0 8px; font-family: var(--serifa); font-size: 22px; font-weight: 700; line-height: 1.15; }
-.aip-art-tarjeta p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--papel-2); }
+.aip-art-tarjeta p:not(.aip-art-kicker) { margin: 0; font-size: 15px; line-height: 1.55; color: var(--papel-2); }
 .aip-art-tarjeta:hover h3 { text-decoration: underline; text-decoration-color: var(--granate-2); text-underline-offset: 4px; }
 .aip-diario-vacio b { display: block; margin-bottom: 6px; font-size: 18px; }
 
@@ -436,7 +436,7 @@ a.aip-hilo:hover .aip-candado { color: var(--rosa); }
 .aip-articulo-cuerpo blockquote { margin: 30px 0; padding: 4px 0 4px 24px; border-left: 4px solid var(--granate-2); }
 .aip-articulo-cuerpo blockquote p { margin: 0 0 8px; font-size: 24px; line-height: 1.45; font-style: italic; color: var(--papel); }
 .aip-articulo-cuerpo cite { font: 600 12.5px var(--mono); font-style: normal; color: var(--papel-3); }
-.aip-articulo-cuerpo.cortado { position: relative; max-height: 420px; overflow: hidden; }
+.aip-articulo-cuerpo.cortado { position: relative; }
 .aip-articulo-cuerpo.cortado::after { content: ''; position: absolute; inset: auto 0 0 0; height: 160px; background: linear-gradient(transparent, var(--negro)); }
 .aip-articulo-ati { margin-top: 22px; padding: 22px 24px; border-radius: 16px; border-left: 4px solid var(--rosa); background: rgba(126, 31, 53, 0.2); }
 .aip-articulo-ati h2 { margin: 0 0 8px; font-size: 20px; font-weight: 800; }
