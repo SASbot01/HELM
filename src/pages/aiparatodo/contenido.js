@@ -39,7 +39,7 @@ export const SECCIONES = [
     ],
   },
   {
-    key: 'news', titulo: 'News', desc: 'El diario de IA, tecnología y ciberseguridad: dos piezas al día, investigadas y contrastadas, y las breves de cada mañana.',
+    key: 'news', titulo: 'News', desc: 'El diario de IA, tecnología y ciberseguridad: tres piezas al día, investigadas y contrastadas, y las breves de cada mañana.',
     // Los temas del diario (aip_articulos.tema). Las breves (helm_noticias) usan
     // 'ia' y 'ciberseguridad', que también están aquí.
     temas: [

@@ -39,7 +39,8 @@ const WEB = 'https://s4sf.net/aiparatodo/news'
 // Las dos ediciones, en minutos desde la medianoche de Madrid.
 export const EDICIONES = [
   { clave: 'manana', nombre: 'Edición de mañana', desde: 8 * 60 },
-  { clave: 'tarde', nombre: 'Edición de tarde', desde: 17 * 60 },
+  { clave: 'mediodia', nombre: 'Edición de mediodía', desde: 14 * 60 },
+  { clave: 'tarde', nombre: 'Edición de tarde', desde: 20 * 60 },
 ]
 const VENTANA_H = 30
 const POR_FUENTE = 10

@@ -163,7 +163,7 @@ function Portada() {
               <h3>{s.titulo}</h3>
               <p>{s.desc}</p>
               <span className="aip-zona-pie">
-                {s.key === 'news' ? 'Dos piezas al día · y las breves' : `${s.temas.length} tema${s.temas.length === 1 ? '' : 's'} · ${n} hilo${n === 1 ? '' : 's'}`}
+                {s.key === 'news' ? 'Tres piezas al día · y las breves' : `${s.temas.length} tema${s.temas.length === 1 ? '' : 's'} · ${n} hilo${n === 1 ? '' : 's'}`}
                 <ArrowRight size={14} />
               </span>
             </Link>
@@ -725,7 +725,7 @@ function Pie() {
 }
 
 // ── News: el diario ─────────────────────────────────────────────────────────
-// La sección News es un periódico: dos piezas al día que escribe y verifica la
+// La sección News es un periódico: tres piezas al día que escribe y verifica la
 // redacción automática (api/_lib/redaccion.js), con su foto, y debajo las
 // breves de la mañana del agente de noticias. Las piezas tienen su página;
 // las breves, la de siempre (Hilo).
@@ -745,14 +745,17 @@ function HiloRuta(props) {
   return seccion === 'news' && !esBreve(slug) ? <Articulo {...props} /> : <Hilo {...props} />
 }
 
-const EDICION = { manana: 'Edición de mañana', tarde: 'Edición de tarde' }
+const EDICION = { manana: 'Edición de mañana', mediodia: 'Edición de mediodía', tarde: 'Edición de tarde' }
 const ICONO_TEMA = { ia: BrainCircuit, tecnologia: Cpu, ciberseguridad: ShieldAlert }
 const temaNombre = (k) => seccionPorClave('news').temas.find(t => t.key === k)?.nombre || k
 const ahoraMadrid = () => {
   const f = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())
   return f.charAt(0).toUpperCase() + f.slice(1)
 }
-const edicionAhora = () => (Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', hour: '2-digit', hourCycle: 'h23' }).format(new Date())) >= 17 ? EDICION.tarde : EDICION.manana)
+const edicionAhora = () => {
+  const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', hour: '2-digit', hourCycle: 'h23' }).format(new Date()))
+  return h >= 20 ? EDICION.tarde : h >= 14 ? EDICION.mediodia : EDICION.manana
+}
 
 let articulosEnCurso = null
 function pideArticulos() {
@@ -873,7 +876,7 @@ function Diario() {
       <header className="aip-diario-cab">
         <p className="aip-diario-fecha"><span className="aip-punto" /> {ahoraMadrid()} · {edicionAhora()}</p>
         <h1 className="aip-diario-nombre">{t ? t.nombre : 'El diario de AI para todo'}</h1>
-        <p className="aip-sub">{t ? t.desc : 'IA, tecnología y ciberseguridad. Dos piezas al día, a las 8:00 y a las 17:00, investigadas en las fuentes originales y revisadas dato a dato.'}</p>
+        <p className="aip-sub">{t ? t.desc : 'IA, tecnología y ciberseguridad. Tres piezas al día, a las 8:00, las 14:00 y las 20:00, investigadas en las fuentes originales y revisadas dato a dato.'}</p>
         <nav className="aip-diario-temas">
           <Link className={!tema ? 'on' : ''} to="/aiparatodo/news">Portada</Link>
           {s.temas.map(x => <Link key={x.key} className={tema === x.key ? 'on' : ''} to={`/aiparatodo/news/${x.key}`}>{x.nombre}</Link>)}
@@ -887,7 +890,7 @@ function Diario() {
       {Array.isArray(recibidos) && !lista.length && (
         <div className="aip-card aip-diario-vacio">
           <b>{tema ? `Todavía no hay piezas de ${t.nombre}` : 'La primera edición está en la imprenta'}</b>
-          <p>Cada día salen dos: a las 8:00 y a las 17:00. Mientras tanto, las breves de la mañana, aquí abajo.</p>
+          <p>Cada día salen tres: a las 8:00, las 14:00 y las 20:00. Mientras tanto, las breves de la mañana, aquí abajo.</p>
         </div>
       )}
 
