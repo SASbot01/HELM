@@ -599,3 +599,8 @@ export const noticiasApi = {
   lista: (clientId) => apiFetch(`/api/noticias?action=lista&clientId=${clientId}`),
   ahora: (clientId) => apiFetch(`/api/noticias?action=ahora&clientId=${clientId}`, { method: 'POST' }),
 }
+
+export const avatarApi = {
+  lista: (clientId) => apiFetch(`/api/avatar?action=lista&clientId=${clientId}`),
+  ahora: (clientId) => apiFetch(`/api/avatar?action=ahora&clientId=${clientId}`, { method: 'POST' }),
+}

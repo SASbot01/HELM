@@ -2,7 +2,7 @@
 // Se monta en /admin. Gestiona un perfil (cliente) a la vez, con selector arriba.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, Link2, Settings, Plus, Rocket, Menu, X, Package, UserCog, PhoneCall, Layers, CalendarClock, BookOpen, FileText, Receipt, ShieldCheck, Bot, Sunrise, Newspaper, LayoutGrid, LogOut } from 'lucide-react'
+import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, Link2, Settings, Plus, Rocket, Menu, X, Package, UserCog, PhoneCall, Layers, CalendarClock, BookOpen, FileText, Receipt, ShieldCheck, Bot, Sunrise, Newspaper, LayoutGrid, LogOut, Target } from 'lucide-react'
 import { listClients, createProfile, slugify, usersApi, brandOf } from './lib'
 import { productoActual, seccionDelProducto, seccionSiempre } from './producto'
 import { Modal, Field, Input } from './ui'
@@ -14,6 +14,7 @@ import Onboarding from './views/Onboarding'
 import Agentes from './views/Agentes'
 import MiDia from './views/MiDia'
 import Noticias from './views/Noticias'
+import Avatar from './views/Avatar.jsx'
 import Lienzo from './Lienzo'
 import Llamadas from './views/Llamadas'
 import Crm from './views/Crm'
@@ -38,6 +39,7 @@ const NAV = [
   { key: 'informe', tono: 'oro', label: 'Informe', icon: LayoutDashboard, title: 'Informe', sub: 'Resumen del negocio', C: Informe },
   { key: 'onboarding', tono: 'azul', label: 'Onboarding', icon: Rocket, title: 'Onboarding', sub: 'Alimenta a tu IA y trae tu sistema', C: Onboarding },
   { key: 'crm', tono: 'azul', label: 'CRM', icon: Users, title: 'CRM', sub: 'Tus contactos y pipeline', C: Crm },
+  { key: 'avatar', tono: 'azul', label: 'Avatar', icon: Target, title: 'Avatar del cliente', sub: 'Quién es tu cliente tipo, según tu CRM', C: Avatar },
   { key: 'servicios', tono: 'oro', label: 'Servicios', icon: Package, title: 'Servicios', sub: 'El catálogo que lo conecta todo', C: Servicios },
   { key: 'documentos', tono: 'oro', label: 'Documentos', icon: FileText, title: 'Presupuestos y facturas', sub: 'Del presupuesto a la factura, con tu marca', C: Documentos },
   { key: 'gastos', tono: 'oro', label: 'Gastos', icon: Receipt, title: 'Gastos', sub: 'Facturas de compra, con captura por IA', C: Gastos },

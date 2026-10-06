@@ -106,7 +106,7 @@ async function coge() {
   let { data, error } = await pendientes().like('tipo', 'drive-%')
   // Después, las noticias y el equipo de agentes: son pocos trabajos al día y
   // cortos, y lo de la mañana no puede esperar a que se vacíe la cola de reels.
-  if (!error && !data?.length) ({ data, error } = await pendientes().in('tipo', ['noticias', 'articulo', 'equipo']))
+  if (!error && !data?.length) ({ data, error } = await pendientes().in('tipo', ['noticias', 'articulo', 'equipo', 'avatar']))
   if (!error && !data?.length) ({ data, error } = await pendientes())
   if (error) { log('error leyendo la cola:', error.message); return null }
   const job = data?.[0]
@@ -724,13 +724,15 @@ const { generaNoticias, miraNoticias } = await import('../api/_lib/noticias.js')
 // El diario de AI para todo (api/_lib/redaccion.js): dos artículos al día, a
 // las 8:00 y a las 17:00 de Madrid, con la misma sección Noticias encendida.
 const { generaArticulo, miraRedaccion } = await import('../api/_lib/redaccion.js')
+// El estudio de clientes (api/_lib/avatar.js): a petición, no por horario.
+const { generaAvatar } = await import('../api/_lib/avatar.js')
 
 const CADA_CUANTO_AGENDA_MS = 60_000
 let ultimaAgenda = 0
 
 // ── Bucle ───────────────────────────────────────────────────────────────────
 
-const PASOS = { descargar, transcribir, etiquetar, 'drive-ingesta': driveIngesta, estudiar, equipo: ejecutaAgente, noticias: generaNoticias, articulo: generaArticulo }
+const PASOS = { descargar, transcribir, etiquetar, 'drive-ingesta': driveIngesta, estudiar, equipo: ejecutaAgente, noticias: generaNoticias, articulo: generaArticulo, avatar: generaAvatar }
 
 let parando = false
 for (const s of ['SIGINT', 'SIGTERM']) {
