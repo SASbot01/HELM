@@ -35,6 +35,7 @@ export const SECCIONES = [
       { key: 'automatizacion', nombre: 'Automatización', desc: 'Que las tareas repetidas se hagan solas' },
       { key: 'documentos', nombre: 'Documentos', desc: 'Word, Excel, PowerPoint y PDF sin pelearte con ellos' },
       { key: 'desarrollo', nombre: 'Claude Code', desc: 'Construir webs, automatizaciones y herramientas con método' },
+      { key: 'mcp', nombre: 'MCP', desc: 'Conecta Claude a tus herramientas con el enchufe universal' },
     ],
   },
   {
@@ -84,6 +85,13 @@ export const CAPITULOS = [
   }
 })
 export const capituloPorSlug = (slug) => CAPITULOS.find(c => c.slug === slug)
+
+// Qué capítulos se enseñan en la Guía. Vacío = solo el PDF de los no
+// negociables. Para publicar uno, se añade su slug aquí: aparece en la lista
+// con el mismo estilo de tarjeta. (El archivo y la URL del capítulo existen
+// aunque no esté en la lista.)
+export const CAPITULOS_PUBLICADOS = []
+const capituloVisible = (c) => CAPITULOS_PUBLICADOS.includes(c.slug)
 
 const REPO_SKILLS = 'https://github.com/anthropics/skills'
 const copiaSuelta = (ruta, nombre) =>
@@ -215,5 +223,6 @@ export const NN_HILO = {
 export const NN_RUTA = `/aiparatodo/${NN_HILO.seccion}/${NN_HILO.tema}/${NN_HILO.slug}`
 
 // Los hilos de una sección (y de un tema). News no está aquí: viene de la API.
-export const hilosDe = (seccion, tema) => [...POSTS, ...CAPITULOS, NN_HILO]
+// Los capítulos solo se listan si están en CAPITULOS_PUBLICADOS.
+export const hilosDe = (seccion, tema) => [...POSTS, ...CAPITULOS.filter(capituloVisible), NN_HILO]
   .filter(h => h.seccion === seccion && (!tema || h.tema === tema))

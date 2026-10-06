@@ -21,7 +21,7 @@ import { Routes, Route, Link, Navigate, useParams, useLocation } from 'react-rou
 import {
   ArrowRight, ArrowLeft, Lock, Instagram, Sparkles, Newspaper, BookOpen, Users,
   Copy, Check, Github, Terminal, ChevronRight, MessageSquare, Hash, Download,
-  Lightbulb, AlertTriangle, Info, ExternalLink, FileText, BrainCircuit, Cpu, ShieldAlert,
+  Lightbulb, AlertTriangle, Info, ExternalLink, FileText, BrainCircuit, Cpu, ShieldAlert, Blocks,
 } from 'lucide-react'
 import { useCabeceraPublica } from '../inicio/cabecera.js'
 import { track } from '../inicio/socio/track.js'
@@ -213,14 +213,12 @@ function Foro() {
       <section className="aip-sec">
         <h1 className="aip-h1">{t ? t.nombre : s.titulo}</h1>
         <p className="aip-sub">{t ? t.desc : s.desc}</p>
-        {esNews && <p className="aip-kicker aip-news-nota"><span className="aip-punto" /> Las elige cada mañana, antes de las 6:00, nuestro agente de noticias. Tres al día.</p>}
-        {sk === 'guia' && tema !== 'no-negociables' && <BannerNoNegociables donde="guia" />}
 
         <div className={'aip-foro' + (s.temas.length > 1 ? '' : ' sin-temas')}>
           {s.temas.length > 1 && (
             <aside className="aip-temas">
               <Link className={'aip-tema' + (!tema ? ' on' : '')} to={`/aiparatodo/${sk}`}><MessageSquare size={15} /> Todos</Link>
-              {s.temas.map(x => (
+              {s.temas.filter(x => cuenta(x.key) > 0 || tema === x.key).map(x => (
                 <Link key={x.key} className={'aip-tema' + (tema === x.key ? ' on' : '')} to={`/aiparatodo/${sk}/${x.key}`}>
                   <Hash size={15} /> {x.nombre} <b>{cuenta(x.key)}</b>
                 </Link>
@@ -228,40 +226,47 @@ function Foro() {
             </aside>
           )}
 
-          <div className="aip-hilos">
-            <div className="aip-hilos-cab"><span>Tema</span><span>{esNews ? 'Noticia' : 'Hilo'}</span><span /></div>
-            {hilos.map(h => (
-              <Link key={`${h.tema}-${h.slug}`} className="aip-hilo" to={`/aiparatodo/${sk}/${h.tema}/${h.slug}`}>
-                <span className="aip-etiqueta">{s.temas.find(x => x.key === h.tema)?.nombre}</span>
-                <div>
-                  <b>{h.n ? `${h.n} · ` : ''}{h.titulo}</b>
-                  {h.resumen && <small>{esNews ? recorta(h.resumen, 160) : h.resumen}</small>}
-                  <small className="aip-meta">
-                    {esNews ? `${h.fuente} · ${fechaCorta(h.fecha)}` : FUNDADOR.nombre}
-                    {!esNews && h.fecha ? ` · ${fechaCorta(h.fecha)}` : ''}
-                    {h.lectura ? ` · ${h.lectura}` : ''}
-                  </small>
-                </div>
-                <span className="aip-candado">{h.pronto ? <span className="aip-pronto">pronto</span> : <Lock size={15} />}</span>
-              </Link>
-            ))}
-            {esNews && noticias === null && (
-              <div className="aip-hilo vacio"><span className="aip-etiqueta">News</span><div><b>Cargando las noticias…</b></div><span /></div>
-            )}
-            {hilos.length === 0 && !(esNews && noticias === null) && (
-              <div className="aip-hilo vacio">
-                <span className="aip-etiqueta">{t ? t.nombre : s.titulo}</span>
-                <div>
-                  <b>{fallo ? 'No se han podido cargar las noticias' : esNews ? 'Las primeras noticias llegan mañana a primera hora' : 'Los primeros hilos están en camino'}</b>
-                  <small>{fallo ? 'Prueba a recargar la página en un momento.' : 'Sigue a nuestro creador para enterarte cuando se abran.'}</small>
-                </div>
-                <span />
+          <div className="aip-tarjetas">
+            {hilos.map(h => <TarjetaHilo key={`${h.tema}-${h.slug}`} h={h} sk={sk} tema={s.temas.find(x => x.key === h.tema)} />)}
+            {hilos.length === 0 && (
+              <div className="aip-card aip-tarjetas-vacio">
+                <b>Los primeros hilos están en camino</b>
+                <p>Sigue a nuestro creador para enterarte cuando se abran.</p>
               </div>
             )}
           </div>
         </div>
       </section>
     </main>
+  )
+}
+
+// Una tarjeta de hilo, al estilo del banner de los no negociables: portada,
+// tema, título y un botón. La portada es el render 3D en los no negociables, y
+// un icono sobre degradado en el resto (capítulos, skills, MCP).
+const PORTADA_HILO = { skills: Sparkles, mcp: Blocks, guia: BookOpen, comunidad: Users }
+function TarjetaHilo({ h, sk, tema }) {
+  const esNN = h.slug === NN_HILO.slug
+  const Icono = h.tipo === 'mcp' ? Blocks : PORTADA_HILO[sk] || Sparkles
+  const claseTema = sk === 'guia' ? (esNN ? 'nn' : 'cap') : (h.tema || sk)
+  return (
+    <Link className={'aip-tarjeta' + (h.pronto ? ' pronto' : '')} to={`/aiparatodo/${sk}/${h.tema}/${h.slug}`}>
+      <div className={`aip-tarjeta-cover ${claseTema}`}>
+        {esNN
+          ? <img src={NN_PORTADA_3D} alt="" width="900" height="900" loading="lazy" />
+          : <Icono size={44} />}
+        {h.n && <span className="aip-tarjeta-n">{h.n}</span>}
+      </div>
+      <div className="aip-tarjeta-txt">
+        <p className="aip-kicker">{esNN ? <><FileText size={13} /> Guía en PDF</> : <>{tema?.nombre || ''}</>}</p>
+        <h3>{h.titulo}</h3>
+        {h.resumen && <p>{recorta(h.resumen, 150)}</p>}
+        <span className="aip-tarjeta-pie">
+          {h.pronto ? <span className="aip-pronto">pronto</span>
+            : <><span className="aip-btn pequeno">{esNN ? 'Descárgala' : 'Leer'} <ArrowRight size={14} /></span>{h.lectura && <small>{h.lectura}</small>}</>}
+        </span>
+      </div>
+    </Link>
   )
 }
 
@@ -624,20 +629,24 @@ function CuerpoPost({ p }) {
           <h3>Qué puedes hacer</h3>
           <ul className="aip-puedes">{s.puedes.map(x => <li key={x}>{x}</li>)}</ul>
 
-          <div className="aip-repo">
-            <Github size={16} />
-            <div>
-              <code>{s.repo || 'anthropics/skills'} · {s.clave}</code>
-              <small>{s.oficial === false ? `De la comunidad · ${s.autor}` : 'Skill oficial de Anthropic'}{s.licencia ? ` · ${s.licencia}` : ''}</small>
+          {s.github && (
+            <div className="aip-repo">
+              <Github size={16} />
+              <div>
+                <code>{s.repo || 'anthropics/skills'} · {s.clave}</code>
+                <small>{s.oficial === false ? `De la comunidad · ${s.autor}` : 'Skill oficial de Anthropic'}{s.licencia ? ` · ${s.licencia}` : ''}</small>
+              </div>
+              <a className="aip-btn sec pequeno" href={s.github} target="_blank" rel="noopener noreferrer">Ver en GitHub <ArrowRight size={14} /></a>
             </div>
-            <a className="aip-btn sec pequeno" href={s.github} target="_blank" rel="noopener noreferrer">Ver en GitHub <ArrowRight size={14} /></a>
-          </div>
+          )}
 
-          <Codigo
-            titulo={s.sueltaTitulo || 'Instalar solo esta skill'}
-            nota={s.sueltaNota || 'En tu terminal. La copia a ~/.claude/skills y Claude Code la usa sola cuando toca (si lo tenías abierto, reinícialo).'}
-            texto={s.suelta}
-          />
+          {s.suelta && (
+            <Codigo
+              titulo={s.sueltaTitulo || 'Instalar solo esta skill'}
+              nota={s.sueltaNota || 'En tu terminal. La copia a ~/.claude/skills y Claude Code la usa sola cuando toca (si lo tenías abierto, reinícialo).'}
+              texto={s.suelta}
+            />
+          )}
 
           <div className="aip-ejemplos">
             {s.ejemplos.map(e => <Prompt key={e.titulo} {...e} />)}
@@ -647,19 +656,19 @@ function CuerpoPost({ p }) {
 
       {p.instalarTodo && (
         <section className="aip-skill aip-bonus">
-          <p className="aip-skill-n"><span>+</span> bonus</p>
-          <h2>Todas de una vez</h2>
+          <p className="aip-skill-n"><span>+</span> {p.tipo === 'mcp' ? 'conectar' : 'bonus'}</p>
+          <h2>{p.tipo === 'mcp' ? 'Cómo se conecta' : 'Todas de una vez'}</h2>
           <p className="aip-historia">{p.instalarTodo.explica}</p>
-          <Codigo titulo="Instalar en Claude Code" texto={p.instalarTodo.comando} />
+          <Codigo titulo={p.instalarTodo.titulo || (p.tipo === 'mcp' ? 'La URL del conector' : 'Instalar en Claude Code')} texto={p.instalarTodo.comando} />
         </section>
       )}
 
       <section className="aip-card aip-resumen">
         <h2>Resumen rápido</h2>
         <table>
-          <thead><tr><th>#</th><th>Skill</th><th>Para qué</th></tr></thead>
+          <thead><tr><th>#</th><th>{p.tipo === 'mcp' ? 'Qué' : 'Skill'}</th><th>Para qué</th></tr></thead>
           <tbody>
-            {p.skills.map(s => <tr key={s.clave}><td>{s.n}</td><td><a href={s.github} target="_blank" rel="noopener noreferrer">{s.nombre}</a></td><td>{s.corto}</td></tr>)}
+            {p.skills.map(s => <tr key={s.clave}><td>{s.n}</td><td>{s.github ? <a href={s.github} target="_blank" rel="noopener noreferrer">{s.nombre}</a> : s.nombre}</td><td>{s.corto}</td></tr>)}
           </tbody>
         </table>
       </section>

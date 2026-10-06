@@ -447,3 +447,34 @@ a.aip-hilo:hover .aip-candado { color: var(--rosa); }
 .aip-diario-mas { margin-top: 44px; padding-top: 22px; border-top: 3px double var(--linea-2); }
 .aip-diario-mas h2 { margin: 0 0 18px; font-family: var(--serifa); font-size: 26px; }
 @media (max-width: 600px) { .aip-articulo-cuerpo { font-size: 18px; } .aip-articulo-cuerpo blockquote p { font-size: 20px; } }
+
+/* ── Listado en tarjetas (Guía y Skills), al estilo del PDF de los no
+   negociables: portada arriba, tema, título y botón. ─────────────────────── */
+.aip-tarjetas { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; width: 100%; }
+@media (max-width: 760px) { .aip-tarjetas { grid-template-columns: 1fr; } }
+.aip-tarjeta {
+  display: flex; flex-direction: column; text-decoration: none; overflow: hidden;
+  border-radius: 20px; border: 1px solid var(--linea-2); background: var(--panel);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  transition: transform .18s, border-color .18s, box-shadow .18s;
+}
+.aip-tarjeta:hover { transform: translateY(-3px); border-color: var(--rosa); box-shadow: 0 24px 50px -24px rgba(166, 43, 70, 0.9); }
+.aip-tarjeta.pronto { opacity: .62; }
+.aip-tarjeta.pronto:hover { transform: none; border-color: var(--linea-2); box-shadow: none; }
+.aip-tarjeta-cover {
+  position: relative; display: grid; place-items: center; aspect-ratio: 16 / 8; color: var(--rosa);
+  background: radial-gradient(circle at 32% 24%, rgba(255, 143, 163, .3), transparent 58%), linear-gradient(140deg, #3a0d1a, #0d0507);
+  border-bottom: 1px solid var(--linea);
+}
+.aip-tarjeta-cover.mcp { color: #a8c3fb; background: radial-gradient(circle at 32% 24%, rgba(122, 165, 248, .28), transparent 58%), linear-gradient(140deg, #10203d, #05070d); }
+.aip-tarjeta-cover img { position: absolute; inset: 0; margin: auto; width: 74%; height: auto; filter: drop-shadow(0 20px 22px rgba(0, 0, 0, .55)); }
+.aip-tarjeta-n { position: absolute; left: 16px; top: 12px; font: 800 20px var(--mono); color: var(--rosa); opacity: .9; }
+.aip-tarjeta-txt { display: flex; flex-direction: column; gap: 8px; padding: 18px 20px 20px; flex: 1; }
+.aip-tarjeta-txt .aip-kicker { margin: 0; color: var(--rosa); }
+.aip-tarjeta-txt h3 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.02em; line-height: 1.12; }
+.aip-tarjeta-txt p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--papel-2); }
+.aip-tarjeta-pie { display: flex; align-items: center; gap: 12px; margin-top: auto; padding-top: 6px; }
+.aip-tarjeta-pie small { font: 500 12px var(--mono); color: var(--papel-3); }
+.aip-tarjetas-vacio { grid-column: 1 / -1; }
+.aip-tarjetas-vacio b { display: block; margin-bottom: 6px; font-size: 18px; }
+.aip-tarjetas-vacio p { margin: 0; color: var(--papel-2); }
