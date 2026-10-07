@@ -2,7 +2,7 @@
 // Se monta en /admin. Gestiona un perfil (cliente) a la vez, con selector arriba.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, Link2, Settings, Plus, Rocket, Menu, X, Package, UserCog, PhoneCall, Layers, CalendarClock, BookOpen, FileText, Receipt, ShieldCheck, Bot, Sunrise, Newspaper, LayoutGrid, LogOut } from 'lucide-react'
+import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, Link2, Settings, Plus, Rocket, Menu, X, Package, UserCog, PhoneCall, Layers, CalendarClock, BookOpen, FileText, Receipt, ShieldCheck, Bot, Sunrise, Newspaper, LayoutGrid, LogOut, Target, Radar } from 'lucide-react'
 import { listClients, createProfile, slugify, usersApi, brandOf } from './lib'
 import { productoActual, seccionDelProducto, seccionSiempre } from './producto'
 import { Modal, Field, Input } from './ui'
@@ -14,6 +14,8 @@ import Onboarding from './views/Onboarding'
 import Agentes from './views/Agentes'
 import MiDia from './views/MiDia'
 import Noticias from './views/Noticias'
+import Avatar from './views/Avatar.jsx'
+import RadarView from './views/Radar.jsx'
 import Lienzo from './Lienzo'
 import Llamadas from './views/Llamadas'
 import Crm from './views/Crm'
@@ -34,10 +36,16 @@ import { loadPermisos, puedeVer, accesoTotal, DEFAULT_VISIBLE, loadSecciones, sa
 import { useHelmTheme, acentoDe } from './theme'
 import './theme.css'
 
+// Secciones privadas: solo las ve el perfil cuyo slug se indica.
+const PRIVADAS = { radar: 'silvestre' }
+
 const NAV = [
   { key: 'informe', tono: 'oro', label: 'Informe', icon: LayoutDashboard, title: 'Informe', sub: 'Resumen del negocio', C: Informe },
   { key: 'onboarding', tono: 'azul', label: 'Onboarding', icon: Rocket, title: 'Onboarding', sub: 'Alimenta a tu IA y trae tu sistema', C: Onboarding },
   { key: 'crm', tono: 'azul', label: 'CRM', icon: Users, title: 'CRM', sub: 'Tus contactos y pipeline', C: Crm },
+  { key: 'avatar', tono: 'azul', label: 'Avatar', icon: Target, title: 'Avatar del cliente', sub: 'Quién es tu cliente tipo, según tu CRM', C: Avatar },
+  // Radar: privado, solo para el perfil silvestre (se gatea por slug en `puede`).
+  { key: 'radar', tono: 'rojo', label: 'Radar', icon: Radar, title: 'Radar', sub: 'Tecnología e ideas nuevas para investigar', C: RadarView },
   { key: 'servicios', tono: 'oro', label: 'Servicios', icon: Package, title: 'Servicios', sub: 'El catálogo que lo conecta todo', C: Servicios },
   { key: 'documentos', tono: 'oro', label: 'Documentos', icon: FileText, title: 'Presupuestos y facturas', sub: 'Del presupuesto a la factura, con tu marca', C: Documentos },
   { key: 'gastos', tono: 'oro', label: 'Gastos', icon: Receipt, title: 'Gastos', sub: 'Facturas de compra, con captura por IA', C: Gastos },
@@ -337,11 +345,13 @@ export default function HelmApp() {
   // otros dos.
   const puede = useCallback(
     (key) => seccionDelProducto(key)
+      // Las privadas (Radar) solo las ve su perfil, por slug.
+      && (!PRIVADAS[key] || client?.slug === PRIVADAS[key])
       // `seccionSiempre` es para lo que ES el producto (el Scraper en
       // scraper.s4sf.net): apagarlo dejaría el dominio en una pantalla vacía.
       && (seccionSiempre(key) || seccionEncendida(secciones, key))
       && puedeVer(visible, clientSession?.teamRole, key, clientSession?.level),
-    [secciones, visible, clientSession],
+    [secciones, visible, clientSession, client],
   )
 
   async function toggleSeccion(key) {

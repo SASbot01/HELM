@@ -283,6 +283,7 @@ a.aip-hilo:hover .aip-candado { color: var(--rosa); }
 .aip-nn-banner .aip-kicker { margin-bottom: 10px; color: var(--rosa); }
 @media (max-width: 640px) { .aip-nn-banner { grid-template-columns: 1fr; padding: 16px; } .aip-nn-banner img { max-width: 220px; margin: 0 auto; } }
 .aip-sec .aip-nn-banner { margin: 22px 0 6px; }
+.aip-portada .aip-nn-banner { max-width: 880px; margin: 0 auto 30px; }
 
 .aip-nn-cab { display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: center; }
 .aip-nn-3d { width: 100%; height: auto; filter: drop-shadow(0 34px 34px rgba(0, 0, 0, .6)) drop-shadow(0 0 46px rgba(166, 43, 70, .35)); animation: aip-flota 5s ease-in-out infinite alternate; }
@@ -361,3 +362,119 @@ a.aip-hilo:hover .aip-candado { color: var(--rosa); }
 .aip-noticia .aip-btn { justify-self: start; }
 
 @media (prefers-reduced-motion: reduce) { .aip-nn-3d { animation: none; } .aip-nn-banner, .aip-siguiente { transition: none; } }
+
+/* ── News: el diario ─────────────────────────────────────────────────────────
+   Un periódico: titulares con serifa, foto grande en la pieza de portada y
+   una rejilla debajo. La serifa es la del sistema (no se descarga nada: la
+   CSP solo deja fuentes de este servidor) y en móvil todo va a una columna. */
+.aip-diario, .aip-articulo { --serifa: 'Iowan Old Style', 'Charter', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif; }
+.aip-diario { max-width: 1120px; }
+.aip-diario-cab { padding: 26px 0 18px; border-bottom: 1px solid var(--linea-2); margin-bottom: 26px; }
+.aip-diario-fecha { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font: 600 12.5px var(--mono); color: var(--papel-3); }
+.aip-diario-nombre { margin: 0; font-family: var(--serifa); font-size: clamp(38px, 6.4vw, 72px); font-weight: 700; line-height: 1; letter-spacing: -.02em; }
+.aip-diario-cab .aip-sub { max-width: 720px; }
+.aip-diario-temas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 20px; }
+.aip-diario-temas a { padding: 8px 14px; border-radius: 999px; text-decoration: none; font-size: 14px; font-weight: 700; color: var(--papel-2); border: 1px solid var(--linea); }
+.aip-diario-temas a:hover { color: var(--papel); border-color: var(--linea-2); }
+.aip-diario-temas a.on { color: #fff; border-color: transparent; background: linear-gradient(135deg, var(--granate-2), var(--granate)); }
+
+.aip-foto { display: block; width: 100%; height: 100%; object-fit: cover; background: #120609; }
+.aip-foto-propia { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: rgba(255, 255, 255, .85);
+  background: radial-gradient(circle at 30% 20%, rgba(255, 143, 163, .28), transparent 55%), linear-gradient(135deg, #3a0d1a, #0d0507); }
+.aip-foto-propia.tecnologia { background: radial-gradient(circle at 30% 20%, rgba(120, 170, 255, .28), transparent 55%), linear-gradient(135deg, #10203d, #05070d); }
+.aip-foto-propia.ciberseguridad { background: radial-gradient(circle at 30% 20%, rgba(74, 222, 128, .22), transparent 55%), linear-gradient(135deg, #0d2a1a, #030805); }
+.aip-foto-propia span { font: 600 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; opacity: .75; }
+
+.aip-art-kicker { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 12px; font: 600 12px var(--mono); color: var(--papel-3); }
+.aip-tema-chip { padding: 3px 9px; border-radius: 6px; font: 700 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: #fff; background: var(--granate-2); }
+.aip-tema-chip.tecnologia { background: #2b5bb8; }
+.aip-tema-chip.ciberseguridad { background: #1f7a45; }
+
+.aip-art-portada { display: grid; grid-template-columns: 1.35fr 1fr; gap: 28px; align-items: center; text-decoration: none; padding-bottom: 30px; margin-bottom: 30px; border-bottom: 1px solid var(--linea); }
+.aip-art-portada-foto { aspect-ratio: 16 / 10; border-radius: 16px; overflow: hidden; border: 1px solid var(--linea); }
+.aip-art-portada h2 { margin: 0 0 14px; font-family: var(--serifa); font-size: clamp(30px, 3.6vw, 46px); font-weight: 700; line-height: 1.06; letter-spacing: -.015em; }
+.aip-art-portada p:not(.aip-art-kicker) { margin: 0 0 18px; font-family: var(--serifa); font-size: 19px; line-height: 1.55; color: var(--papel-2); }
+.aip-art-leer { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--rosa); }
+.aip-art-portada:hover h2 { color: #fff; text-decoration: underline; text-decoration-color: var(--granate-2); text-underline-offset: 6px; }
+@media (max-width: 820px) { .aip-art-portada { grid-template-columns: 1fr; gap: 18px; } }
+
+.aip-diario-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px 22px; }
+@media (max-width: 980px) { .aip-diario-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px) { .aip-diario-grid { grid-template-columns: 1fr; } }
+.aip-art-tarjeta { display: flex; flex-direction: column; text-decoration: none; }
+.aip-art-tarjeta-foto { aspect-ratio: 16 / 9; margin-bottom: 14px; border-radius: 12px; overflow: hidden; border: 1px solid var(--linea); }
+.aip-art-tarjeta h3 { margin: 0 0 8px; font-family: var(--serifa); font-size: 22px; font-weight: 700; line-height: 1.15; }
+.aip-art-tarjeta p:not(.aip-art-kicker) { margin: 0; font-size: 15px; line-height: 1.55; color: var(--papel-2); }
+.aip-art-tarjeta:hover h3 { text-decoration: underline; text-decoration-color: var(--granate-2); text-underline-offset: 4px; }
+.aip-diario-vacio b { display: block; margin-bottom: 6px; font-size: 18px; }
+
+.aip-breves { margin-top: 40px; padding-top: 22px; border-top: 3px double var(--linea-2); }
+.aip-breves h2 { margin: 0 0 14px; font-family: var(--serifa); font-size: 26px; }
+.aip-breves ul { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 22px; }
+@media (max-width: 860px) { .aip-breves ul { grid-template-columns: 1fr; } }
+.aip-breves a { display: block; padding: 12px 0; border-bottom: 1px solid var(--linea); text-decoration: none; }
+.aip-breves span { display: block; margin-bottom: 4px; font: 600 11.5px var(--mono); color: var(--papel-3); }
+.aip-breves b { font-size: 15.5px; line-height: 1.4; }
+.aip-breves a:hover b { color: var(--rosa); }
+
+/* La pieza */
+.aip-articulo { max-width: 820px; }
+.aip-articulo-cab { padding: 26px 0 22px; }
+.aip-articulo-cab h1 { margin: 0 0 16px; font-family: var(--serifa); font-size: clamp(34px, 5.4vw, 56px); font-weight: 700; line-height: 1.04; letter-spacing: -.02em; }
+.aip-articulo-entradilla { margin: 0 0 16px; font-family: var(--serifa); font-size: clamp(19px, 2.3vw, 23px); line-height: 1.5; color: var(--papel); }
+.aip-articulo-firma { margin: 0; font: 600 12.5px var(--mono); color: var(--papel-3); text-transform: none; }
+.aip-articulo-foto { margin: 0 0 28px; }
+.aip-articulo-foto > .aip-foto { aspect-ratio: 16 / 9; height: auto; border-radius: 16px; border: 1px solid var(--linea); }
+.aip-articulo-foto figcaption { margin-top: 8px; font: 500 12px var(--mono); color: var(--papel-3); }
+.aip-articulo-foto figcaption a { color: var(--papel-2); }
+.aip-articulo-cuerpo { font-family: var(--serifa); font-size: 19.5px; line-height: 1.75; color: #ecdfe2; }
+.aip-articulo-cuerpo p { margin: 0 0 22px; }
+.aip-articulo-cuerpo h2 { margin: 40px 0 14px; font-family: 'Inter Tight', system-ui, sans-serif; font-size: 25px; font-weight: 800; letter-spacing: -.02em; line-height: 1.2; color: var(--papel); }
+.aip-articulo-cuerpo ul { margin: 0 0 24px; padding-left: 0; list-style: none; display: grid; gap: 10px; }
+.aip-articulo-cuerpo li { position: relative; padding-left: 26px; }
+.aip-articulo-cuerpo li::before { content: ''; position: absolute; left: 4px; top: .7em; width: 9px; height: 9px; border-radius: 2px; background: var(--granate-2); }
+.aip-articulo-cuerpo blockquote { margin: 30px 0; padding: 4px 0 4px 24px; border-left: 4px solid var(--granate-2); }
+.aip-articulo-cuerpo blockquote p { margin: 0 0 8px; font-size: 24px; line-height: 1.45; font-style: italic; color: var(--papel); }
+.aip-articulo-cuerpo cite { font: 600 12.5px var(--mono); font-style: normal; color: var(--papel-3); }
+.aip-articulo-cuerpo.cortado { position: relative; }
+.aip-articulo-cuerpo.cortado::after { content: ''; position: absolute; inset: auto 0 0 0; height: 160px; background: linear-gradient(transparent, var(--negro)); }
+.aip-articulo-ati { margin-top: 22px; padding: 22px 24px; border-radius: 16px; border-left: 4px solid var(--rosa); background: rgba(126, 31, 53, 0.2); }
+.aip-articulo-ati h2 { margin: 0 0 8px; font-size: 20px; font-weight: 800; }
+.aip-articulo-ati p { margin: 0; font-size: 17px; line-height: 1.65; color: var(--papel); }
+.aip-articulo-nota { margin: 22px 0 0; font-size: 13.5px; line-height: 1.6; color: var(--papel-3); }
+.aip-articulo-nota a { color: var(--papel-2); }
+.aip-articulo .aip-puerta { margin-top: 6px; }
+.aip-diario-mas { margin-top: 44px; padding-top: 22px; border-top: 3px double var(--linea-2); }
+.aip-diario-mas h2 { margin: 0 0 18px; font-family: var(--serifa); font-size: 26px; }
+@media (max-width: 600px) { .aip-articulo-cuerpo { font-size: 18px; } .aip-articulo-cuerpo blockquote p { font-size: 20px; } }
+
+/* ── Listado en tarjetas (Guía y Skills), al estilo del PDF de los no
+   negociables: portada arriba, tema, título y botón. ─────────────────────── */
+.aip-tarjetas { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; width: 100%; }
+@media (max-width: 760px) { .aip-tarjetas { grid-template-columns: 1fr; } }
+.aip-tarjeta {
+  display: flex; flex-direction: column; text-decoration: none; overflow: hidden;
+  border-radius: 20px; border: 1px solid var(--linea-2); background: var(--panel);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  transition: transform .18s, border-color .18s, box-shadow .18s;
+}
+.aip-tarjeta:hover { transform: translateY(-3px); border-color: var(--rosa); box-shadow: 0 24px 50px -24px rgba(166, 43, 70, 0.9); }
+.aip-tarjeta.pronto { opacity: .62; }
+.aip-tarjeta.pronto:hover { transform: none; border-color: var(--linea-2); box-shadow: none; }
+.aip-tarjeta-cover {
+  position: relative; display: grid; place-items: center; aspect-ratio: 16 / 8; color: var(--rosa);
+  background: radial-gradient(circle at 32% 24%, rgba(255, 143, 163, .3), transparent 58%), linear-gradient(140deg, #3a0d1a, #0d0507);
+  border-bottom: 1px solid var(--linea);
+}
+.aip-tarjeta-cover.mcp { color: #a8c3fb; background: radial-gradient(circle at 32% 24%, rgba(122, 165, 248, .28), transparent 58%), linear-gradient(140deg, #10203d, #05070d); }
+.aip-tarjeta-cover img { position: absolute; inset: 0; margin: auto; width: 74%; height: auto; filter: drop-shadow(0 20px 22px rgba(0, 0, 0, .55)); }
+.aip-tarjeta-n { position: absolute; left: 16px; top: 12px; font: 800 20px var(--mono); color: var(--rosa); opacity: .9; }
+.aip-tarjeta-txt { display: flex; flex-direction: column; gap: 8px; padding: 18px 20px 20px; flex: 1; }
+.aip-tarjeta-txt .aip-kicker { margin: 0; color: var(--rosa); }
+.aip-tarjeta-txt h3 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.02em; line-height: 1.12; }
+.aip-tarjeta-txt p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--papel-2); }
+.aip-tarjeta-pie { display: flex; align-items: center; gap: 12px; margin-top: auto; padding-top: 6px; }
+.aip-tarjeta-pie small { font: 500 12px var(--mono); color: var(--papel-3); }
+.aip-tarjetas-vacio { grid-column: 1 / -1; }
+.aip-tarjetas-vacio b { display: block; margin-bottom: 6px; font-size: 18px; }
+.aip-tarjetas-vacio p { margin: 0; color: var(--papel-2); }
