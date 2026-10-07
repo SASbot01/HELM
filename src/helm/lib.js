@@ -604,3 +604,8 @@ export const avatarApi = {
   lista: (clientId) => apiFetch(`/api/avatar?action=lista&clientId=${clientId}`),
   ahora: (clientId) => apiFetch(`/api/avatar?action=ahora&clientId=${clientId}`, { method: 'POST' }),
 }
+
+export const radarApi = {
+  lista: (clientId) => apiFetch(`/api/radar?action=lista&clientId=${clientId}`),
+  ahora: (clientId) => apiFetch(`/api/radar?action=ahora&clientId=${clientId}`, { method: 'POST' }),
+}

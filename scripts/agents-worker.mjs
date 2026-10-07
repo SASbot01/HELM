@@ -106,7 +106,7 @@ async function coge() {
   let { data, error } = await pendientes().like('tipo', 'drive-%')
   // Después, las noticias y el equipo de agentes: son pocos trabajos al día y
   // cortos, y lo de la mañana no puede esperar a que se vacíe la cola de reels.
-  if (!error && !data?.length) ({ data, error } = await pendientes().in('tipo', ['noticias', 'articulo', 'equipo', 'avatar']))
+  if (!error && !data?.length) ({ data, error } = await pendientes().in('tipo', ['noticias', 'articulo', 'equipo', 'avatar', 'radar']))
   if (!error && !data?.length) ({ data, error } = await pendientes())
   if (error) { log('error leyendo la cola:', error.message); return null }
   const job = data?.[0]
@@ -726,13 +726,15 @@ const { generaNoticias, miraNoticias } = await import('../api/_lib/noticias.js')
 const { generaArticulo, miraRedaccion } = await import('../api/_lib/redaccion.js')
 // El estudio de clientes (api/_lib/avatar.js): a petición, no por horario.
 const { generaAvatar } = await import('../api/_lib/avatar.js')
+// El radar de tecnología (api/_lib/radar.js): una pasada al día y a petición.
+const { generaRadar, miraRadar } = await import('../api/_lib/radar.js')
 
 const CADA_CUANTO_AGENDA_MS = 60_000
 let ultimaAgenda = 0
 
 // ── Bucle ───────────────────────────────────────────────────────────────────
 
-const PASOS = { descargar, transcribir, etiquetar, 'drive-ingesta': driveIngesta, estudiar, equipo: ejecutaAgente, noticias: generaNoticias, articulo: generaArticulo, avatar: generaAvatar }
+const PASOS = { descargar, transcribir, etiquetar, 'drive-ingesta': driveIngesta, estudiar, equipo: ejecutaAgente, noticias: generaNoticias, articulo: generaArticulo, avatar: generaAvatar, radar: generaRadar }
 
 let parando = false
 for (const s of ['SIGINT', 'SIGTERM']) {
@@ -760,6 +762,7 @@ async function bucle() {
         await miraAgenda().catch(e => log('no pude mirar la agenda del equipo:', e.message))
         await miraNoticias().catch(e => log('no pude mirar las noticias del día:', e.message))
         await miraRedaccion().catch(e => log('no pude mirar la redacción del diario:', e.message))
+        await miraRadar().catch(e => log('no pude mirar el radar:', e.message))
       }
       job = await coge()
       if (!job) { await duerme(ESPERA_VACIO_MS); continue }

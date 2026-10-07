@@ -55,6 +55,7 @@ export const SECCIONES = [
   { key: 'onboarding', label: 'Onboarding', desc: 'Formularios y Biblia' },
   { key: 'crm', label: 'CRM', desc: 'Contactos y pipeline' },
   { key: 'avatar', label: 'Avatar', desc: 'Estudio del cliente tipo a partir del CRM' },
+  { key: 'radar', label: 'Radar', desc: 'Tecnología e ideas nuevas para investigar (privado)' },
   { key: 'servicios', label: 'Servicios', desc: 'Catálogo de servicios' },
   { key: 'documentos', label: 'Documentos', desc: 'Presupuestos y facturas' },
   { key: 'gastos', label: 'Gastos', desc: 'Facturas de compra' },
