@@ -1,0 +1,566 @@
+/* ============================================================================
+   HELM — tema «lienzo»: un editor de nodos en negro.
+
+   Se carga DESPUÉS de theme.css (ver main.jsx) y solo redefine tokens y unas
+   pocas superficies: toda la interfaz ya pinta con variables.
+
+   Plan (skill frontend-design de Anthropic):
+     idea        HELM es el esquema de un negocio. El fondo es un lienzo negro
+                 de puntos, como el de un editor de nodos, y todo lo demás son
+                 piezas que flotan encima. Los puntos pasan por detrás y las
+                 sombras los apagan: eso es lo que hace que se lea «flota».
+     color       negro #000, grises neutros, texto blanco. Oro, rojo y azul
+                 NO contornean: son el filo de luz de la esquina superior
+                 izquierda de cada pieza (--borde), como metal que coge luz.
+                 Dicen en qué rama del negocio se está (--tono).
+     tipo        una sola familia, Geist, con los titulares apretados.
+     forma       radio por nivel: 18 paneles, 14 recuadros, 10 controles.
+     audacia     en un solo sitio: el menú-esquema. Lo demás, callado: sin
+                 brillos, sin cajitas de color, sin botones en relieve.
+   ============================================================================ */
+@import url('../fonts/geist.css');
+
+.helm, .helm-swatch {
+  --bg:        #000000;
+  --bg-1:      #0a0a0b;
+  --panel:     #121213;
+  --panel-2:   #19191b;
+  --hover:     #202023;
+  --border:    rgba(255, 255, 255, 0.08);
+  --border-2:  rgba(255, 255, 255, 0.16);
+  --text:      #ffffff;
+  --text-dim:  #c9c9ce;
+  --text-mut:  #8d8d95;
+
+  /* Los tres filos de la casa y el gris de lo que no es de ninguna rama.
+     Bajados de saturación a propósito: metal y esmalte, no rotulador. */
+  --oro:       #d9b66b;
+  --rojo:      #e0525a;
+  --azul:      #7aa5f8;
+  --plata:     #a3a3ad;
+  --tono:      var(--oro);
+
+  /* El acento (botón primario, lo activo, las gráficas) es el oro, fijo: si
+     siguiera al tono, en las secciones rojas el botón de guardar parecería el
+     de borrar. --cyan/--violet son los nombres históricos del acento. */
+  --cyan:      var(--oro);
+  --violet:    #e8cf95;
+
+  --green:     #4cc38a;
+  --red:       #f0616a;
+  --amber:     #f0943a;
+  --pink:      #e58fb8;
+
+  --on-accent: #0d0a02;
+  --scrim:     0, 0, 0;
+
+  /* El filo: color de la rama donde da la luz, gris en el resto del canto. */
+  --borde: linear-gradient(140deg,
+    color-mix(in srgb, var(--tono) 80%, transparent) 0%,
+    rgba(255, 255, 255, 0.12) 26%,
+    rgba(255, 255, 255, 0.05) 100%);
+  --borde-neutro: linear-gradient(140deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.06) 40%, rgba(255, 255, 255, 0.04) 100%);
+  --superficie: linear-gradient(180deg, #161617 0%, #0f0f10 100%);
+  --superficie-2: linear-gradient(180deg, #1c1c1e 0%, #141415 100%);
+  /* La elevación: un anillo negro que recorta la pieza del lienzo, un hilo de
+     luz arriba y dos sombras, una corta y una larga. */
+  --shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.8),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 12px 24px -14px rgba(0, 0, 0, 0.9),
+    0 36px 64px -32px #000;
+  --shadow-sm:
+    0 0 0 1px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 8px 16px -10px rgba(0, 0, 0, 0.95);
+  --radius:    18px;
+  --radius-sm: 10px;
+  --radius-xs: 8px;
+
+  /* Los tokens globales que usa el Agent OS embebido (agentos.css). */
+  --bg-card:        var(--panel);
+  --bg-card-hover:  var(--hover);
+  --text-secondary: var(--text-dim);
+  --text-muted:     var(--text-mut);
+  --border-hover:   var(--border-2);
+  --accent:         var(--cyan);
+  --radius-lg:      18px;
+
+  --vidrio: blur(16px) saturate(120%);
+  --titular: 'Geist', system-ui, sans-serif;
+}
+[data-tono="oro"]   { --tono: var(--oro); }
+[data-tono="rojo"]  { --tono: var(--rojo); }
+[data-tono="azul"]  { --tono: var(--azul); }
+[data-tono="plata"] { --tono: var(--plata); }
+
+.helm {
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  accent-color: var(--oro);
+  /* El lienzo: puntos cada 22px y una luz muy baja arriba a la izquierda. */
+  background:
+    radial-gradient(1100px 520px at 22% -8%, rgba(255, 255, 255, 0.055), transparent 62%),
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.085) 1px, transparent 1.6px) 0 0 / 22px 22px,
+    var(--bg);
+  background-attachment: fixed;
+}
+.helm h1, .helm h2, .helm h3 { font-family: var(--titular); letter-spacing: -.02em; }
+
+/* El lienzo vivo (Lienzo.jsx): los mismos puntos, dibujados en 3D por debajo
+   de todo. Cuando está en marcha, los puntos de CSS se quitan y queda solo la
+   luz de arriba. `isolation` hace que el z-index negativo se quede dentro del
+   panel, por encima de su fondo y por debajo de su contenido. */
+.helm { isolation: isolate; }
+/* La franja de la barra de estado en la app de la pantalla de inicio: lo que
+   pasa por debajo al hacer scroll no se ve detrás de la hora. Debajo de los
+   overlays (z-index 50), que ya llevan su propia zona segura. */
+.helm::before {
+  content: ''; position: fixed; inset: 0 0 auto 0; z-index: 40; pointer-events: none;
+  height: env(safe-area-inset-top, 0px); background: var(--bg);
+}
+.helm-lienzo { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: -1; pointer-events: none; display: none; }
+.helm.vivo > .helm-lienzo { display: block; }
+.helm.vivo {
+  background:
+    radial-gradient(1100px 520px at 22% -8%, rgba(255, 255, 255, 0.055), transparent 62%),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+/* ── Las piezas que flotan ──────────────────────────────────────────────────
+   Ojo: ni backdrop-filter ni transform en los CONTENEDORES (panel, tarjeta).
+   Cualquiera de los dos convierte al elemento en el marco de sus hijos con
+   position: fixed, y un modal abierto desde dentro de un panel (Clientes,
+   Servicios…) saldría cortado. Solo se mueven las hojas. */
+.helm-panel, .helm-card, .helm-plugin, .ag-card {
+  background: var(--superficie) padding-box, var(--borde) border-box;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.helm-card::before, .helm-panel::before, .helm-card::after, .helm-panel::after { display: none !important; }
+.helm-plugin:hover, .ag-card:hover { border-color: transparent; background: var(--superficie-2) padding-box, var(--borde) border-box; }
+
+/* Las columnas de un tablero son huecos, no piezas: lo que flota son las
+   tarjetas de dentro. */
+.helm-col {
+  background: rgba(8, 8, 9, 0.82);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: inset 0 1px 12px rgba(0, 0, 0, 0.6);
+}
+.helm-kcard, .ed-tarjeta {
+  background: var(--superficie-2) padding-box, var(--borde-neutro) border-box;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  transition: transform .14s ease, background .14s ease;
+}
+.helm-kcard:hover, .ed-tarjeta:hover { transform: translateY(-1px); border-color: transparent; background: var(--superficie-2) padding-box, var(--borde) border-box; }
+.ed-cal-dia, .ed-datos div, .helm-col-empty { border-radius: var(--radius-sm); }
+.ed-dep { border-radius: var(--radius); }
+
+.helm-tabs, .helm-search, .helm-select, .helm-input, .helm-field select, .helm-field textarea { border-radius: var(--radius-sm); }
+.helm-tabs, .helm-search, .helm-select { background: var(--panel); border-color: var(--border-2); }
+
+.helm-modal, .helm-drawer {
+  background: linear-gradient(180deg, #18181a, #101011) padding-box, var(--borde) border-box;
+  border: 1px solid transparent;
+  box-shadow: var(--shadow), 0 60px 120px -40px #000;
+}
+.helm-modal { border-radius: 20px; }
+.helm-drawer { border-radius: 20px 0 0 20px; }
+.helm-overlay { background: rgba(0, 0, 0, 0.72); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+
+/* Botones: planos y precisos. El primario es la única mancha de oro. */
+.helm .helm-btn {
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  border: 1px solid var(--border-2);
+  color: var(--text);
+  font-weight: 500;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: background .14s ease, border-color .14s ease, transform .1s ease;
+}
+.helm .helm-btn:hover { background: var(--hover); border-color: rgba(255, 255, 255, 0.28); color: var(--text) !important; }
+.helm .helm-btn:active { transform: scale(.98); }
+.helm .helm-btn.primary {
+  background: linear-gradient(180deg, var(--violet), var(--oro));
+  color: var(--on-accent) !important;
+  border-color: transparent; font-weight: 600;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.helm .helm-btn.primary:hover { color: var(--on-accent) !important; border-color: transparent; filter: brightness(1.07); }
+.helm .helm-btn.primary svg { stroke: currentColor !important; }
+
+/* index.css tiene una regla global y antigua que pinta con --on-primary (el
+   texto para ir SOBRE el acento) cualquier pestaña «.active», con !important.
+   Las pestañas de HELM no llevan fondo de acento, así que el texto salía
+   oscuro sobre oscuro. Aquí se devuelve al texto normal. */
+.helm .helm-tab.active, .helm .helm-vista-tab.active { color: var(--text) !important; }
+.helm .helm-tab.active svg { color: var(--cyan) !important; stroke: currentColor !important; }
+/* Un enlace con aspecto de botón no se subraya. */
+.helm a.helm-btn { text-decoration: none; }
+
+
+/* ── El armazón: nada pegado a los bordes de la pantalla ─────────────────── */
+.helm-shell { grid-template-columns: 264px 1fr; }
+.helm-side { background: transparent; border-right: 0; padding: 22px 12px 18px 20px; gap: 0; }
+.helm-brand { padding: 0 2px 6px; }
+.helm-brand img { border-radius: 9px; object-fit: cover; }
+.helm-brand > div { min-width: 0; }
+.helm-brand b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* El menú como esquema: cada rama es un nodo, un cable que baja y recuadros
+   enchufados a él por un puerto. El color de la rama es su --tono. */
+.helm-grupo { position: relative; margin-top: 20px; padding-left: 18px; }
+.helm-grupo::before {
+  content: ''; position: absolute; left: 3px; top: 13px; bottom: 32px; width: 1px;
+  background: color-mix(in srgb, var(--tono) 55%, transparent);
+}
+.helm-grupo-cab {
+  position: relative; font-size: 12px; font-weight: 500; color: var(--text-dim);
+}
+.helm-grupo-cab::before {
+  content: ''; position: absolute; left: -18px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px;
+  border-radius: 50%; background: var(--tono);
+}
+.helm-grupo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+
+.helm-tile {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 12px;
+  min-width: 0; min-height: 70px; padding: 11px 12px 10px;
+  font: inherit; font-size: 12.5px; font-weight: 500; line-height: 1.25; text-align: left; letter-spacing: -.005em;
+  color: var(--text); cursor: pointer; user-select: none;
+  background: var(--superficie) padding-box, var(--borde-neutro) border-box;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  transition: transform .14s ease, background .14s ease;
+}
+/* El cable y el puerto: solo en la columna que toca el tronco. */
+.helm-tile:nth-child(odd)::before {
+  content: ''; position: absolute; left: -15px; top: 50%; width: 11px; height: 1px;
+  background: color-mix(in srgb, var(--tono) 55%, transparent);
+}
+.helm-tile:nth-child(odd)::after {
+  content: ''; position: absolute; left: -4px; top: 50%; width: 5px; height: 5px; margin-top: -3px;
+  border-radius: 50%; background: #000; border: 1px solid color-mix(in srgb, var(--tono) 75%, transparent);
+}
+.helm-tile span { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.helm-tile small { display: block; font-size: 10.5px; font-weight: 400; color: var(--text-mut); margin-top: 1px; }
+.helm-tile svg { width: 18px; height: 18px; flex-shrink: 0; stroke-width: 1.6; color: var(--text-mut); transition: color .14s ease; }
+.helm-tile:hover { transform: translateY(-1px); background: var(--superficie-2) padding-box, var(--borde) border-box; }
+.helm-tile:hover svg { color: var(--text); }
+.helm-tile:active { transform: scale(.98); }
+.helm-tile.activa {
+  background:
+    radial-gradient(120px 80px at 0% 0%, color-mix(in srgb, var(--tono) 26%, transparent), transparent 70%) padding-box,
+    var(--superficie-2) padding-box,
+    linear-gradient(140deg, var(--tono) 0%, color-mix(in srgb, var(--tono) 35%, transparent) 55%, rgba(255, 255, 255, 0.08) 100%) border-box;
+}
+.helm-tile.activa svg { color: var(--tono); }
+.helm-tile.activa:nth-child(odd)::after { background: var(--tono); }
+
+.helm-side-foot { border-top: 0; padding-top: 0; }
+.helm-user {
+  margin-top: 20px; padding: 10px 12px;
+  background: var(--superficie) padding-box, var(--borde-neutro) border-box;
+  border: 1px solid transparent; border-radius: 14px; box-shadow: var(--shadow-sm);
+}
+.helm-avatar { border-radius: 50%; background: var(--panel-2); color: var(--text); border: 1px solid var(--border-2); box-shadow: none; }
+.helm-logout {
+  display: grid; place-items: center; width: 30px; height: 30px; padding: 0; flex-shrink: 0;
+  border-radius: 9px; border: 0; background: transparent; color: var(--text-mut);
+}
+.helm-logout:hover { color: var(--red); background: var(--hover); }
+
+/* La cabecera de la sección: una barra suelta, con el filo de su rama. */
+.helm-top {
+  margin: 18px 22px 0 10px; padding: 14px 20px; top: 18px;
+  background: linear-gradient(180deg, rgba(24, 24, 26, 0.86), rgba(15, 15, 16, 0.86)) padding-box, var(--borde) border-box;
+  border: 1px solid transparent;
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  -webkit-backdrop-filter: var(--vidrio); backdrop-filter: var(--vidrio);
+}
+.helm-top h1 { font-size: 19px; font-weight: 600; }
+.helm-top p { color: var(--text-mut); }
+.helm-body { padding: 22px 22px 60px 10px; }
+
+@media (max-width: 820px) {
+  .helm-shell { grid-template-columns: 1fr; }
+  /* Con HELM en la pantalla de inicio del iPhone la web va a pantalla completa
+     (viewport-fit=cover y barra de estado translúcida): sin sumar la zona
+     segura, la cabecera y el menú quedaban debajo de la hora y de la Dynamic
+     Island. En Safari normal la zona segura es 0 y esto no cambia nada. */
+  .helm-side {
+    background: #050505; padding: 18px 16px; border-right: 1px solid var(--border);
+    padding-top: max(18px, env(safe-area-inset-top)); padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+  .helm-top {
+    margin: calc(10px + env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left));
+    top: calc(10px + env(safe-area-inset-top)); padding: 12px 14px;
+  }
+  .helm-top p { display: none; }
+  .helm-body { padding: 16px 10px calc(48px + env(safe-area-inset-bottom)); }
+  .helm-drawer { border-radius: 0; }
+  /* La cabecera solo lleva el botón de Perfiles: el desplegable y «Nuevo
+     perfil» no caben al lado del título, y los dos están en el tablero. */
+  .helm-top-actions .helm-select, .helm-top-actions .helm-select + .helm-btn { display: none; }
+}
+
+/* ── El tablero de perfiles (la entrada del administrador) ───────────────── */
+.helm-perfiles { max-width: 1080px; margin: 0 auto; padding: 72px 24px 80px; }
+.helm-perfiles-cab {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; flex-wrap: wrap;
+  margin-bottom: 30px;
+}
+.helm-perfiles-cab h1 { margin: 0; font-size: 34px; font-weight: 600; letter-spacing: -.035em; line-height: 1.05; }
+.helm-perfiles-cab p { margin: 8px 0 0; font-size: 14px; color: var(--text-mut); }
+.helm-perfiles-acc { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.helm-perfiles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.helm-perfil {
+  position: relative; display: flex; align-items: center; gap: 14px;
+  min-width: 0; padding: 16px 18px;
+  font: inherit; text-align: left; color: var(--text); cursor: pointer;
+  background: var(--superficie) padding-box, var(--borde-neutro) border-box;
+  border: 1px solid transparent; border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  transition: transform .16s ease, background .16s ease;
+}
+.helm-perfil:hover { transform: translateY(-2px); background: var(--superficie-2) padding-box, var(--borde) border-box; }
+.helm-perfil:active { transform: scale(.99); }
+.helm-perfil-logo {
+  display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; overflow: hidden;
+  font-size: 17px; font-weight: 600; color: var(--text);
+  background: var(--panel-2); border: 1px solid var(--border-2); border-radius: 12px;
+}
+.helm-perfil-logo img { width: 100%; height: 100%; object-fit: cover; }
+.helm-perfil-txt { flex: 1; min-width: 0; }
+.helm-perfil-txt b { display: block; font-size: 15.5px; font-weight: 600; letter-spacing: -.015em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.helm-perfil-txt small { display: block; margin-top: 3px; font-size: 12.5px; color: var(--text-mut); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.helm-perfil-ir { flex-shrink: 0; color: var(--text-mut); transition: color .16s ease, transform .16s ease; }
+.helm-perfil:hover .helm-perfil-ir { color: var(--tono); transform: translate(2px, -2px); }
+.helm-perfil-ultimo { flex-shrink: 0; font-size: 11.5px; font-weight: 500; color: var(--tono); }
+.helm-perfil.nuevo { --tono: var(--plata); background: transparent; border: 1px dashed var(--border-2); box-shadow: none; color: var(--text-dim); }
+.helm-perfil.nuevo:hover { background: rgba(18, 18, 19, 0.9); border-color: rgba(255, 255, 255, 0.3); color: var(--text); }
+.helm-perfil.nuevo .helm-perfil-logo { background: transparent; border-style: dashed; }
+@media (max-width: 600px) { .helm-perfiles { padding: 28px 14px 60px; } }
+
+/* ── Tira de cifras ──────────────────────────────────────────────────────── */
+.helm-kpis {
+  background: linear-gradient(rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.07)) padding-box, var(--borde) border-box;
+  border: 1px solid transparent;
+  box-shadow: var(--shadow);
+}
+.helm-kpis .helm-card { background: #111112; border: 0; border-radius: 0; box-shadow: none; }
+.helm-kpis .helm-card:hover { background: #161617; }
+.helm-tablon .helm-col { border-radius: var(--radius); }
+
+/* ── Login y registro ───────────────────────────────────────────────────────
+   Pintan con la paleta de index.css (:root), que comparten las páginas
+   públicas. Se redefine solo dentro de su página para no tocar las demás. */
+.admin-login-page {
+  --orange: #d9b66b; --border-focus: #d9b66b; --text-dark: #0d0a02;
+  --bg: #000; --bg-card: #121213; --bg-card-solid: #121213; --bg-card-light: #0a0a0b;
+  --border: rgba(255, 255, 255, 0.08); --border-hover: rgba(255, 255, 255, 0.16);
+  --text: #fff; --text-secondary: #c9c9ce; --text-muted: #8d8d95;
+  font-family: 'Geist', system-ui, sans-serif;
+  background:
+    radial-gradient(900px 480px at 50% -6%, rgba(255, 255, 255, 0.06), transparent 62%),
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.085) 1px, transparent 1.6px) 0 0 / 22px 22px,
+    #000;
+}
+.admin-login-glow { display: none; }
+.admin-login-card {
+  background: linear-gradient(180deg, #18181a, #0f0f10) padding-box,
+    linear-gradient(140deg, rgba(217, 182, 107, 0.8) 0%, rgba(255, 255, 255, 0.12) 26%, rgba(255, 255, 255, 0.05) 100%) border-box;
+  border: 1px solid transparent; border-radius: 20px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 50px 90px -40px #000;
+}
+.admin-input-group input { border-radius: 10px; }
+.admin-login-btn {
+  border-radius: 10px; letter-spacing: 0; font-weight: 600;
+  background: linear-gradient(180deg, #e8cf95, #d9b66b);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+/* ── Rótulos: frase normal, no versalitas ───────────────────────────────── */
+.helm-panel-head h2, .helm-kpi .lbl, .helm-table th, .helm-navlabel,
+.helm-drawer-section, .helm-cal-dow, .helm-kv > div:first-child,
+.helm-substages small, .helm-lead-summary small, .helm-form-resp-head small,
+.helm-tablon .helm-col-head, .helm-ticket-prio, .helm-link-cat, .helm-badge,
+.helm-est-table th, .helm-eq-bloque-t, .helm-doc-lineas-head, .helm-guia-step,
+.helm-onb-card-tag, .helm-onb-part, .helm-est-kicker, .helm-eq-idea-tag,
+.helm-est-modal-sub, .helm-est-frame-carril, .helm-brand span,
+.ed-datos dt {
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: 'Geist', system-ui, sans-serif;
+}
+/* Los que vienen escritos en mayúsculas en el propio JSX (NEGOCIO, PLUGINS,
+   OPERATING LAYER): se bajan y se capitaliza solo la primera letra. */
+.helm-navlabel, .helm-brand span { text-transform: lowercase; }
+.helm-navlabel::first-letter, .helm-brand span::first-letter { text-transform: uppercase; }
+
+.helm-navlabel { font-size: 12px; font-weight: 600; color: var(--text-mut); padding-left: 10px; }
+.helm-brand b { font-family: var(--titular); letter-spacing: -.01em; font-size: 19px; }
+.helm-brand span { font-size: 12px; font-weight: 500; color: var(--text-mut); margin-top: 2px; }
+.helm-panel-head h2 { font-family: var(--titular); font-size: 16px; font-weight: 600; color: var(--text); }
+.helm-table th { font-size: 12px; font-weight: 600; color: var(--text-mut); }
+.helm-drawer-section, .helm-kv > div:first-child { font-size: 12.5px; font-weight: 600; color: var(--text-dim); }
+.helm-cal-dow { font-size: 12px; font-weight: 600; }
+.ed-datos dt { font-size: 12px; font-weight: 500; color: var(--text-mut); }
+
+
+
+/* ── Las cifras ─────────────────────────────────────────────────────────── */
+.helm-kpi .lbl { font-size: 13px; font-weight: 500; color: var(--text-mut); }
+.helm-kpi .val {
+  font-family: var(--titular); font-size: 32px; font-weight: 600;
+  letter-spacing: -.04em; line-height: 1.05; margin-top: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.helm-kpi .val.accent { color: var(--oro); }
+.helm-kpi .sub { font-size: 12.5px; color: var(--text-mut); margin-top: 6px; }
+
+/* Los contadores de Edición, en la cifra de la casa y no en monoespaciada. */
+.ed-col-cab small { font-family: var(--titular); letter-spacing: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .helm-tile, .helm-perfil, .helm-kcard, .ed-tarjeta, .helm .helm-btn { transition: none; }
+  .helm-tile:hover, .helm-perfil:hover, .helm-kcard:hover, .ed-tarjeta:hover { transform: none; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Pasada por secciones
+   Lo que quedaba del tema anterior en Onboarding, Agentes, Tareas, Gastos,
+   Llamadas y Ajustes: cajitas de color, contornos saturados, versalitas y
+   monoespaciada. Aquí todo vuelve a las piezas y al filo de la casa.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Rótulos que seguían en versalitas ──────────────────────────────────── */
+.helm-chat-memory-head, .helm-chat-kind, .helm-settings-block label,
+.helm-colab-bloque > b, .helm-onb-web, .helm-marca-preview-lbl,
+.helm-est-test > span, .helm-est-objetivo-tag,
+.helm .ag-seccion, .helm .ag-tabla th {
+  text-transform: none; letter-spacing: 0;
+}
+.helm-marca-preview-lbl { font-size: 12px; }
+.helm .ag-seccion { font-size: 13px; font-weight: 600; color: var(--text-dim); }
+/* «octubre de 2026» → «Octubre de 2026», no «Octubre De 2026». */
+.helm-cal-mes { display: block; text-transform: none; font-weight: 600; }
+.helm-cal-mes::first-letter { text-transform: uppercase; }
+
+/* ── Iconos e iniciales: caja neutra, nunca teñida ──────────────────────── */
+.helm-onb-card-ico, .helm-onb-banner-ico, .helm .ag-cas-ico, .helm .ag-avatar {
+  background: var(--panel-2); border: 1px solid var(--border-2); color: var(--text);
+}
+.helm .ag-casilla.pendiente .ag-cas-ico { background: transparent; border-style: dashed; color: var(--text-mut); }
+
+/* ── Onboarding y Agentes: sus tarjetas son piezas como las demás ───────── */
+.helm-onb-card, .helm-onb-biblia-cta, .helm-onb-banner, .helm .ag-casilla {
+  background: var(--superficie) padding-box, var(--borde) border-box;
+  border: 1px solid transparent; border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.helm-onb-card:not(.soon):hover, .helm-onb-biblia-cta:hover, .helm-onb-banner:hover,
+.helm a.ag-casilla:hover, .helm button.ag-casilla:hover {
+  border-color: transparent; transform: none; box-shadow: var(--shadow);
+  background: var(--superficie-2) padding-box, var(--borde) border-box;
+}
+.helm-onb-card.soon, .helm .ag-casilla.pendiente {
+  background: transparent; border: 1px dashed var(--border-2); box-shadow: none;
+}
+/* Las etiquetas de tipo de guion: el color va en la letra, no en el canto. */
+.helm .ag-tipo { border-color: var(--border-2); }
+
+/* ── El día de hoy en los calendarios: filo, no contorno ────────────────── */
+.helm-cal-dia.hoy, .helm .ag-cal-dia.hoy {
+  border: 1px solid transparent;
+  background: var(--superficie-2) padding-box,
+    linear-gradient(140deg, var(--oro) 0%, rgba(255, 255, 255, 0.12) 45%, rgba(255, 255, 255, 0.05) 100%) border-box;
+}
+
+/* ── Etiquetas de estado: el color en la letra; el canto, gris ──────────── */
+.helm-chip.green, .helm-chip.cyan, .helm-chip.amber, .helm-chip.red,
+.helm-badge.green, .helm-badge.amber, .helm-badge.red {
+  border-color: var(--border-2); background: var(--panel-2);
+}
+
+/* ── Tareas: el ticket es una tarjeta de tablero ────────────────────────────
+   Sin franja de color, sin muescas y sin ladearse: la prioridad es el filo
+   de la esquina y la etiqueta. */
+.helm-tablon .helm-col { background: rgba(8, 8, 9, 0.82); }
+.helm-tablon .helm-col-head { font-size: 13px; }
+.helm-tablon .helm-col-head b { font-weight: 600; }
+.helm-tablon .helm-col-empty { background: transparent; }
+.helm-ticket {
+  border: 1px solid transparent; border-radius: 12px;
+  background: var(--superficie-2) padding-box,
+    linear-gradient(140deg, color-mix(in srgb, var(--franja) 80%, transparent) 0%, rgba(255, 255, 255, 0.12) 26%, rgba(255, 255, 255, 0.05) 100%) border-box;
+  box-shadow: var(--shadow-sm);
+  transition: transform .14s ease;
+}
+.helm-ticket.p-low { --franja: var(--plata); }
+.helm-ticket::before { display: none; }
+.helm-ticket:hover, .helm-ticket.vencida { border-color: transparent; }
+.helm-ticket:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.helm-ticket-num { font-size: 12px; letter-spacing: 0; }
+.helm-ticket-prio { font-size: 11.5px; font-weight: 500; padding: 0; background: none; }
+.helm-ticket-titulo { font-weight: 600; }
+.helm-ticket-talon { border-top: 1px solid var(--border); background: transparent; }
+.helm-ticket-talon::before, .helm-ticket-talon::after { display: none; }
+.helm-ticket-quien { background: var(--panel-2); color: var(--text); border: 1px solid var(--border-2); box-shadow: none; }
+
+/* La regla global de index.css también pinta en oscuro el icono de la
+   pestaña de vista activa (Tablero / Calendario): salía un cuadro negro. */
+.helm .helm-vista-tab.active svg { stroke: currentColor !important; fill: none !important; }
+.helm-vista-tabs { border-radius: var(--radius-sm); border-color: var(--border-2); }
+
+/* ── Gastos: la entradilla iba pegada al canto del panel ────────────────── */
+.helm-panel > p.helm-settings-lead { padding: 16px 24px 0; }
+
+/* ── Llamadas y calendarios ─────────────────────────────────────────────── */
+.helm-cal-cell.today {
+  border: 1px solid transparent;
+  background: var(--superficie-2) padding-box,
+    linear-gradient(140deg, var(--oro) 0%, rgba(255, 255, 255, 0.12) 45%, rgba(255, 255, 255, 0.05) 100%) border-box;
+}
+/* La cita es una pieza gris; su estado es la raya de la izquierda. */
+.helm .helm-cal-item { background-color: var(--panel-2); }
+.helm .helm-cal-item:hover { background-color: var(--hover); }
+.helm-cal-item b { font-weight: 600; }
+.helm-cal-n { font-variant-numeric: normal; font-weight: 600; }
+
+/* El selector de estado: la opción elegida es gris con el color en la letra. */
+.helm .helm-segmented.estado button.on {
+  background: var(--panel-2); border: 1px solid var(--border-2); color: var(--text);
+}
+.helm .helm-segmented.estado button.on.doing { color: var(--oro); }
+.helm .helm-segmented.estado button.on.done, .helm .helm-segmented.estado button.on.hecha { color: var(--green); }
+.helm .helm-segmented.estado button.on.no_show, .helm .helm-segmented.estado button.on.cancelada { color: var(--red); }
+
+/* Avisos (hecho, cuidado, error): caja neutra y el color solo en el texto. */
+.helm-settings-ok, .helm-settings-warn, .helm-formerror {
+  background: var(--panel-2); border: 1px solid var(--border-2);
+}
+.helm-badge[class*="tipo-"] { border-color: var(--border-2); }
+
+/* Pestañas del Agent OS embebido: como las de HELM. */
+.helm .ag-pestanas { border-radius: var(--radius-sm); border-color: var(--border-2); background: var(--panel); }
+.helm .ag-pestanas a, .helm .ag-pestanas button { border-radius: 7px; }
+.helm .ag-pestanas a.active, .helm .ag-pestanas button.active { background: var(--hover); color: var(--text); }
+
+/* ── Móvil: barras que no cabían y empujaban la página a lo ancho ───────── */
+@media (max-width: 820px) {
+  .helm-crm-actions, .helm-tabs { flex-wrap: wrap; }
+  .helm-crm-actions > .helm-chips { min-width: 0; flex-basis: 100%; }
+  .helm-settings { padding-left: 0; padding-right: 0; }
+  .helm-panel > p.helm-settings-lead { padding: 14px 16px 0; }
+  .helm-onb-biblia-cta, .helm-onb-banner { align-items: flex-start; }
+}
+
+/* La cabecera pegajosa de una columna es un rectángulo negro: sin su radio
+   tapaba las esquinas redondeadas de la columna (CRM y Tareas). */
+.helm-col-head { border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0; }

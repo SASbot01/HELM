@@ -1,0 +1,53 @@
+/* HELM — Contenido: la cabecera que comparten el calendario y la lista.
+   Las dos vistas miran el mismo mes y se crean piezas igual desde las dos, así
+   que la navegación de mes y el botón de alta viven ARRIBA, fuera de la vista,
+   y no se repiten dentro de cada una. Antes la barra de mes era del calendario
+   y al cambiar de pestaña desaparecía: parecían dos secciones distintas.
+
+   Aquí no se escribe ningún color a pelo: todo pasa por las variables del tema. */
+
+.helm-contenido { display: flex; flex-direction: column; }
+
+.helm-cont-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.helm-cont-head-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* El mes en grande: es el dato que sitúa todo lo de debajo. */
+.helm-cont-mes { display: flex; align-items: baseline; gap: 8px; min-width: 168px; }
+/* `.helm-cal-nav b` fuerza 150px centrados para la etiqueta vieja «mes año»;
+   aquí el ancho lo pone el contenedor y el mes va pegado a la izquierda. */
+.helm-cont-mes b { min-width: 0; text-align: left; font-size: 17px; font-weight: 650; text-transform: capitalize; letter-spacing: -0.2px; }
+.helm-cont-mes small { font-size: 13px; color: var(--text-mut); font-family: 'JetBrains Mono', monospace; }
+
+/* Aviso de escritura fallida (típicamente: falta la columna `grabado` porque
+   la migración no se ha aplicado todavía). Se pinta arriba y se puede cerrar. */
+.helm-cont-aviso {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+  padding: 10px 12px; border-radius: var(--radius-sm); font-size: 13px;
+  background: color-mix(in srgb, var(--amber) 10%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--amber) 38%, transparent);
+  color: var(--text);
+}
+.helm-cont-aviso svg { color: var(--amber); flex-shrink: 0; }
+.helm-cont-aviso button { margin-left: auto; background: none; border: none; color: var(--text-mut); cursor: pointer; font-size: 13px; padding: 2px 4px; }
+.helm-cont-aviso button:hover { color: var(--text); }
+
+/* Resumen del mes bajo la cabecera del calendario: los chips de estado ya
+   filtran, así que el recuento va en ellos y aquí solo queda el total. */
+.helm-cont-barra { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.helm-cont-barra .helm-chips { flex-wrap: wrap; }
+
+@media (max-width: 720px) {
+  .helm-cont-head { align-items: stretch; }
+  .helm-cont-head-right { justify-content: space-between; }
+  .helm-cont-head-right .helm-btn.primary { flex: 1 1 auto; justify-content: center; }
+}
+
+/* La casilla de grabado también en el panel del día: mismo gesto que en la
+   lista, para que no haya que entrar en la ficha para marcar una pieza. */
+.helm-dia-item .helm-lista-check { flex-shrink: 0; }
+.helm-dia-item:has(.helm-lista-check.on) .helm-dia-item-main b {
+  text-decoration: line-through; text-decoration-color: var(--text-mut); color: var(--text-dim);
+}

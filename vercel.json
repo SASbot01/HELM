@@ -2,12 +2,60 @@
   "functions": {
     "api/admin.js": {
       "maxDuration": 30
+    },
+    "api/google.js": {
+      "maxDuration": 60
+    },
+    "api/chat.js": {
+      "maxDuration": 60
+    },
+    "api/ia.js": {
+      "maxDuration": 30
+    },
+    "api/prospeccion.js": {
+      "maxDuration": 60
+    },
+    "api/instagram.js": {
+      "maxDuration": 60
     }
   },
   "rewrites": [
     {
       "source": "/api/(.*)",
       "destination": "/api/$1"
+    },
+    {
+      "source": "/f/:formId",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Ww]hats[Aa]pp|facebookexternalhit|[Ff]acebot|[Tt]witterbot|LinkedInBot|TelegramBot|Slackbot|Discordbot|Googlebot|bingbot|Applebot|[Ee]mbedly|Iframely|redditbot|Pinterest|SkypeUriPreview|vkShare|Mastodon|Bluesky).*"
+        }
+      ],
+      "destination": "/api/portal-meta?formId=:formId&tipo=formulario"
+    },
+    {
+      "source": "/paginainicio",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Ww]hats[Aa]pp|facebookexternalhit|[Ff]acebot|[Tt]witterbot|LinkedInBot|TelegramBot|Slackbot|Discordbot|Googlebot|bingbot|Applebot|[Ee]mbedly|Iframely|redditbot|Pinterest|SkypeUriPreview|vkShare|Mastodon|Bluesky).*"
+        }
+      ],
+      "destination": "/inicio/preview.html"
+    },
+    {
+      "source": "/:slug((?!(?:api|assets|login|registro|admin|usersadmin|primermap|silvestreai|c|f|d|paginainicio|clase|gracias|privacidad|aviso-legal|socio|agents|aiparatodo|nonegociables|empresas)(?:[/?#]|$))[a-z0-9][a-z0-9-]*)",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Ww]hats[Aa]pp|facebookexternalhit|[Ff]acebot|[Tt]witterbot|LinkedInBot|TelegramBot|Slackbot|Discordbot|Googlebot|bingbot|Applebot|[Ee]mbedly|Iframely|redditbot|Pinterest|SkypeUriPreview|vkShare|Mastodon|Bluesky).*"
+        }
+      ],
+      "destination": "/api/portal-meta?slug=:slug&tipo=panel"
     },
     {
       "source": "/((?!api/).*)",

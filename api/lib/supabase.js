@@ -13,6 +13,10 @@ export const supabase = createClient(supabaseUrl || '', supabaseServiceKey || ''
 // `superadmins`, que es la única tabla que toca api/admin.js (login/verify).
 const SUPERADMINS_REVERSE_MAP = {
   created_at: 'createdAt',
+  // Sin esta línea el hash saldría como `password_hash` y el `delete
+  // user.passwordHash` de api/admin.js no lo alcanzaría: la respuesta del login
+  // se llevaría la credencial al navegador.
+  password_hash: 'passwordHash',
 }
 
 const TABLE_REVERSE_MAPS = {

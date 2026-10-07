@@ -181,7 +181,7 @@ export default async function handler(req, res) {
       const { data: knowledge } = await supabase
         .from('helm_knowledge').select('title, content')
         .eq('client_id', clientId).limit(6)
-      analysis = await analyzeStripeWindow({ clientName: client.name, summary, knowledge: knowledge || [] })
+      analysis = await analyzeStripeWindow({ clientId, clientName: client.name, summary, knowledge: knowledge || [] })
 
       if (analysis) {
         const titulo = `Análisis Stripe · últimos ${days} días`

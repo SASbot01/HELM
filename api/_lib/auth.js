@@ -60,6 +60,21 @@ export async function verifyJwt(token) {
 // validateAuth: lee Bearer token. Si no hay JWT pero header legacy 'x-client-slug',
 // permite modo compat sólo si process.env.ALLOW_LEGACY_AUTH === '1' (migración gradual).
 // ───────────────────────────────────────────────────────────────────────────
+// Se mira en la tabla y se recuerda un minuto: quitar a alguien tarda como
+// mucho eso en surtir efecto, y no se consulta la base en cada petición.
+const superadminsVistos = new Map() // sub -> { ok, exp }
+async function sigueSiendoSuperadmin(sub) {
+  if (!sub) return false
+  const visto = superadminsVistos.get(sub)
+  if (visto && visto.exp > Date.now()) return visto.ok
+  const { data, error } = await supabase.from('superadmins').select('active').eq('id', sub).maybeSingle()
+  // Si la base no contesta, no se echa a nadie por un fallo nuestro.
+  if (error) return true
+  const ok = Boolean(data) && data.active !== false
+  superadminsVistos.set(sub, { ok, exp: Date.now() + 60_000 })
+  return ok
+}
+
 export async function validateAuth(req, { required = true } = {}) {
   const header = req.headers?.authorization || req.headers?.Authorization || ''
   const token = header.startsWith('Bearer ') ? header.slice(7) : ''
@@ -67,6 +82,31 @@ export async function validateAuth(req, { required = true } = {}) {
   if (token) {
     try {
       const payload = await verifyJwt(token)
+
+      // Los tokens del PANEL no llevan `kind`. Los de propósito específico sí:
+      // 'community' (sesión de un miembro de la comunidad de un perfil) y
+      // 'google-oauth' (el state de un consentimiento). Todos ellos llevan
+      // clientId dentro, así que sin esta comprobación valdrían como sesión del
+      // panel — un alumno aprobado en una comunidad podría leer el CRM y las
+      // integraciones del negocio con su propio token. No es teórico: se
+      // detectó probándolo.
+      if (payload.kind) {
+        const e = new Error(`Unauthorized: este token es de tipo "${payload.kind}" y no sirve para el panel`)
+        e.statusCode = 401
+        throw e
+      }
+
+      // Un token de superadmin vale 7 días, pero la cuenta puede haberse
+      // borrado o desactivado antes: sin esto, quien ya no es superadmin
+      // seguiría viéndolo todo hasta que le caducara el token.
+      if (payload.superadmin === true || payload.role === 'superadmin') {
+        if (!(await sigueSiendoSuperadmin(payload.sub))) {
+          const e = new Error('Esta cuenta ya no es superadmin')
+          e.statusCode = 401
+          throw e
+        }
+      }
+
       return {
         userId: payload.sub || payload.userId || null,
         clientId: payload.clientId || null,
@@ -120,6 +160,9 @@ const buckets = new Map() // key -> { count, resetAt }
 export function rateLimit({ key, max = 60, windowMs = 60_000 }) {
   if (!key) return { ok: true, remaining: max }
   const now = Date.now()
+  // Con endpoints públicos hay una clave por IP: sin podar, el mapa crecería
+  // mientras viva el proceso. Se barren las caducadas cuando ya hay muchas.
+  if (buckets.size > 5000) for (const [k, v] of buckets) if (v.resetAt < now) buckets.delete(k)
   const b = buckets.get(key)
   if (!b || b.resetAt < now) {
     buckets.set(key, { count: 1, resetAt: now + windowMs })
@@ -142,6 +185,11 @@ function isValidIpish(s) {
 }
 
 export function getClientIp(req) {
+  // Detrás del túnel de Cloudflare, la IP real la pone Cloudflare en
+  // cf-connecting-ip y machaca la que mande el cliente. El primer valor de
+  // x-forwarded-for, en cambio, lo puede escribir cualquiera.
+  const cf = req.headers?.['cf-connecting-ip']
+  if (isValidIpish(cf)) return String(cf).trim()
   const xf = req.headers?.['x-forwarded-for']
   if (xf) {
     const first = String(xf).split(',')[0].trim()

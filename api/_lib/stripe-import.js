@@ -232,7 +232,7 @@ export async function importStripeWindow({ supabase, clientId, apiKey, days = 60
  * Devuelve el texto (o null si el modelo no está disponible: el import no debe
  * fallar por esto).
  */
-export async function analyzeStripeWindow({ clientName, summary, knowledge = [] }) {
+export async function analyzeStripeWindow({ clientId, clientName, summary, knowledge = [] }) {
   const porProducto = Object.entries(summary.porProducto)
     .sort((a, b) => b[1].importe - a[1].importe)
     .map(([name, d]) => `- ${name}: ${d.unidades} ventas, ${money(d.importe, summary.moneda)}`)
@@ -270,6 +270,7 @@ Escribe el análisis con estos apartados y nada más:
 
   try {
     return await llmChat({
+      clientId,
       system,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.5,

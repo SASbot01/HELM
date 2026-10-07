@@ -1,108 +1,128 @@
 /* ============================================================
-   THEME SYSTEM - Global CSS Variables
-   Dark Mode + Light Mode Support
+   HELM — variables globales
+   Un solo tema. Este fichero es la capa de más abajo: lo importa index.css
+   antes que nada, y define los tokens que el resto de hojas dan por hechos.
+
+   Antes se llamaba "Theme System — Dark Mode + Light Mode Support" y declaraba
+   una paleta oscura para `:root, html.theme-dark, body.theme-dark,
+   [data-theme="dark"]`. Junto con index.css y helm/theme.css eran TRES paletas
+   compitiendo por las mismas variables, y ganaba la que tuviera el selector más
+   específico: por eso el panel podía ser claro y el login seguir negro.
+
+   Ahora las tres dicen lo mismo. Los selectores antiguos se mantienen para que
+   nada se quede sin estilo si algún componente todavía pone esas clases, pero
+   todos apuntan a la misma paleta: no hay tema que elegir.
    ============================================================ */
 
-/* ─── DARK MODE (Default) ─── */
 :root,
 html.theme-dark,
 body.theme-dark,
-[data-theme="dark"] {
-  /* Primary Colors */
-  --orange: #FF6B00;
-  --yellow: #FFB800;
-  
-  /* Backgrounds */
-  --bg: #050510;
-  --bg-card: rgba(255, 255, 255, 0.02);
-  --bg-card-hover: rgba(255, 255, 255, 0.05);
-  --bg-card-solid: #0a0a14;
-  --bg-card-light: rgba(255, 255, 255, 0.04);
-  --bg-sidebar: rgba(5, 5, 16, 0.95);
-  --bg-elevated: rgba(10, 10, 20, 0.98);
-  --bg-overlay: rgba(0, 0, 0, 0.7);
-  
-  /* Borders & Dividers */
-  --border: rgba(255, 255, 255, 0.06);
-  --border-hover: rgba(255, 255, 255, 0.12);
-  --border-focus: rgba(255, 255, 255, 0.2);
-  --border-strong: rgba(255, 255, 255, 0.15);
-  
-  /* Text Colors */
-  --text: #E4E4E7;
-  --text-secondary: rgba(255, 255, 255, 0.5);
-  --text-tertiary: rgba(255, 255, 255, 0.35);
-  --text-muted: rgba(255, 255, 255, 0.25);
-  --text-dark: #000000;
+html.theme-light,
+body.theme-light,
+[data-theme="dark"],
+[data-theme="light"] {
+  color-scheme: dark;
+
+  /* Acento. Uno solo: cian. El nombre --orange viene del panel antiguo de
+     Black Wolf y se queda porque lo usan cientos de reglas. */
+  --orange: #35D0E8;
+  --yellow: #FFC155;
+
+  /* Fondos. Escalera de luminosidad: fondo → panel → panel elevado. En oscuro
+     es la luminosidad, y no la sombra, lo que separa un plano del siguiente. */
+  --bg: #080C10;
+  --bg-card: #101820;
+  --bg-card-hover: #16212B;
+  --bg-card-solid: #101820;
+  --bg-card-light: #0C1218;
+  --bg-sidebar: rgba(8, 12, 16, 0.95);
+  --bg-elevated: #16212B;
+  --bg-overlay: rgba(2, 8, 12, 0.72);
+
+  /* Bordes */
+  --border: rgba(96,186,214,0.14);
+  --border-hover: rgba(96,186,214,0.32);
+  --border-focus: #35D0E8;
+  --border-strong: rgba(96,186,214,0.42);
+
+  /* Texto */
+  --text: #D8E6F0;
+  --text-secondary: #8AA0B2;
+  --text-tertiary: #6E8496;
+  --text-muted: #5C7284;
+  /* El texto que va ENCIMA del acento: sobre el cian, casi negro. */
+  --text-dark: #04121A;
   --text-inverted: #FFFFFF;
-  
-  /* Semantic Colors */
-  --success: #22C55E;
-  --danger: #EF4444;
-  --warning: #F59E0B;
-  --info: #3B82F6;
-  --error: #DC2626;
 
-  /* Toast Colors */
-  --toast-bg-error: #2a0f10;
-  --toast-bg-success: #0b2516;
-  --toast-bg-warning: #2a1f05;
-  --toast-bg-info: #0d1b2b;
-  --toast-text-error: #fecaca;
-  --toast-text-success: #bbf7d0;
-  --toast-text-warning: #fde68a;
-  --toast-text-info: #dbeafe;
-  --toast-border-error: #7f1d1d;
-  --toast-border-success: #14532d;
-  --toast-border-warning: #78350f;
-  --toast-border-info: #1e3a8a;
+  /* Señal. Elegidos para que ninguno se confunda con el cian del acento. */
+  --success: #3FD68C;
+  --danger: #FF6B5E;
+  --warning: #FFC155;
+  --info: #58A8C8;
+  --error: #FF6B5E;
 
-  /* Tooltip Colors */
-  --tooltip-bg: #0f172a;
-  --tooltip-text: #ffffff;
+  /* Avisos: fondo muy oscuro del mismo tono y el texto en el color vivo. */
+  --toast-bg-error: #2A1512;
+  --toast-bg-success: #0F2419;
+  --toast-bg-warning: #2A2110;
+  --toast-bg-info: #101F28;
+  --toast-text-error: #FF6B5E;
+  --toast-text-success: #3FD68C;
+  --toast-text-warning: #FFC155;
+  --toast-text-info: #7FC4DC;
+  --toast-border-error: #5A2A22;
+  --toast-border-success: #1E4630;
+  --toast-border-warning: #55411C;
+  --toast-border-info: #22414F;
+
+  /* Tooltip: un escalón por encima del panel, que es lo que flota sobre todo. */
+  --tooltip-bg: #16212B;
+  --tooltip-text: #FFFFFF;
   --tooltip-border: rgba(255, 255, 255, 0.12);
-  
-  /* Accent Colors */
-  --accent-purple: #8B5CF6;
-  --accent-green: #22C55E;
-  --accent-red: #EF4444;
-  
-  /* Message Colors */
-  --msg-user-bg: rgba(255, 107, 0, 0.1);
-  --msg-user-text: #FF6B00;
-  --msg-assistant-bg: rgba(139, 92, 246, 0.1);
-  --msg-assistant-text: #E4E4E7;
-  
-  /* UI Elements */
-  --gradient: linear-gradient(135deg, #FF6B00, color-mix(in srgb, #FF6B00 70%, #000));
-  --glow: rgba(245, 245, 245, 0.08);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
-  --shadow-focus: 0 0 0 3px rgba(255, 107, 0, 0.2);
-  
-  /* Radius */
-  --radius: 16px;
-  --radius-sm: 10px;
-  --radius-lg: 20px;
+
+  /* Acentos secundarios, alineados con la paleta. */
+  --accent-purple: #9B7BD4;
+  --accent-green: #3FD68C;
+  --accent-red: #FF6B5E;
+
+  /* Mensajes del chat */
+  --msg-user-bg: color-mix(in srgb, #35D0E8 14%, transparent);
+  --msg-user-text: #35D0E8;
+  --msg-assistant-bg: #16212B;
+  --msg-assistant-text: #D8E6F0;
+
+  /* Superficie. En oscuro la sombra casi no hace falta —el panel ya es más
+     claro que el fondo— y solo asienta el objeto. Plano el degradado: el
+     acento aparece cuando significa algo, no de adorno. */
+  --gradient: var(--orange);
+  --glow: transparent;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.45);
+  --shadow-md: 0 1px 2px rgba(0,0,0,.45), 0 8px 20px -12px rgba(0,0,0,.6);
+  --shadow-lg: 0 12px 28px -6px rgba(0,0,0,.66), 0 32px 64px -24px rgba(0,0,0,.7);
+  --shadow-focus: 0 0 0 3px color-mix(in srgb, var(--orange) 24%, transparent);
+
+  /* Radios */
+  --radius: 10px;
+  --radius-sm: 7px;
+  --radius-lg: 14px;
   --radius-xs: 6px;
   --radius-pill: 9999px;
-  
-  /* Transitions */
+
+  /* Movimiento: arranca rápido y frena largo. */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --transition-base: 0.25s var(--ease-out-expo);
   --transition-fast: 0.15s var(--ease-out-expo);
   --transition-slow: 0.4s var(--ease-out-expo);
-  
-  /* Input & Form */
-  --input-bg: rgba(255, 255, 255, 0.03);
-  --input-border: rgba(255, 255, 255, 0.08);
-  --input-border-focus: rgba(255, 107, 0, 0.5);
-  --input-text: #E4E4E7;
-  --input-placeholder: rgba(255, 255, 255, 0.3);
-  
-  /* Disabled State */
-  --disabled-bg: rgba(255, 255, 255, 0.02);
-  --disabled-border: rgba(255, 255, 255, 0.04);
-  --disabled-text: rgba(255, 255, 255, 0.15);
+
+  /* Campos: el campo se HUNDE respecto al panel (más oscuro), no se ilumina. */
+  --input-bg: #0C1218;
+  --input-border: rgba(96,186,214,0.14);
+  --input-border-focus: color-mix(in srgb, var(--orange) 50%, transparent);
+  --input-text: #D8E6F0;
+  --input-placeholder: #4E6476;
+
+  /* Deshabilitado */
+  --disabled-bg: #0E141A;
+  --disabled-border: rgba(96,186,214,0.08);
+  --disabled-text: #445A6C;
 }
