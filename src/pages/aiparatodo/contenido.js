@@ -14,6 +14,8 @@
 // diseño en el plugin `example-skills`, y cada una se puede copiar suelta a
 // ~/.claude/skills. Comprobado contra los repos el 29/09/2026.
 
+import { MODOS_HILO } from './guiaModos.js'
+
 export const FUNDADOR = {
   nombre: 'Alex Silvestre',
   rol: 'Fundador de AI para todo',
@@ -57,8 +59,9 @@ export const SECCIONES = [
     ],
   },
   {
-    key: 'guia', titulo: 'Guía completa de Claude', desc: 'De cero a dirigir Claude: proyectos, skills, conectores, MCP y Claude Code. Y mis no negociables, en PDF.',
+    key: 'guia', titulo: 'Guía completa de Claude', desc: 'De cero a dirigir Claude: los Mods, proyectos, skills, conectores, MCP y Claude Code. En PDF.',
     temas: [
+      { key: 'modos', nombre: 'Modos de Claude', desc: 'Los Mods: 3 usos de los que nadie habla, en PDF' },
       { key: 'capitulos', nombre: 'Capítulos', desc: 'La guía, en orden' },
       { key: 'no-negociables', nombre: 'No negociables', desc: 'Mis 8 no negociables con Claude, en PDF' },
     ],
@@ -224,5 +227,5 @@ export const NN_RUTA = `/aiparatodo/${NN_HILO.seccion}/${NN_HILO.tema}/${NN_HILO
 
 // Los hilos de una sección (y de un tema). News no está aquí: viene de la API.
 // Los capítulos solo se listan si están en CAPITULOS_PUBLICADOS.
-export const hilosDe = (seccion, tema) => [...POSTS, ...CAPITULOS.filter(capituloVisible), NN_HILO]
+export const hilosDe = (seccion, tema) => [MODOS_HILO, ...POSTS, ...CAPITULOS.filter(capituloVisible), NN_HILO]
   .filter(h => h.seccion === seccion && (!tema || h.tema === tema))

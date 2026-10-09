@@ -33,6 +33,10 @@ import {
   NN_HILO, NN_RUTA,
 } from './contenido.js'
 import { NN_PDF, NN_PORTADA_3D, NN_INTRO, NN_PUNTOS, NN_ORDEN } from './noNegociables.js'
+import {
+  MODOS_HILO, MODOS_RUTA, MODOS_PDF, MODOS_PORTADA_3D, MODOS_GANCHO, MODOS_INTRO,
+  MODOS_INDICE, MODOS_BLOQUES, MODOS_CLAVES, MODOS_ORDEN, MODOS_FUENTES,
+} from './guiaModos.js'
 import { altaMiembro, anota, INGRESOS, PIPELINE_COMUNIDAD, PIPELINE_LEAD_MAGNET } from './crm.js'
 import '../../fonts/inter-tight.css'
 import '../../fonts/jetbrains-mono.css'
@@ -140,8 +144,8 @@ function Portada() {
   return (
     <main className="aip-main aip-portada">
       <h1>IA sin humo.</h1>
-      {/* Lo primero que se ve: la guía gratuita en PDF. */}
-      <BannerNoNegociables donde="portada" />
+      {/* Lo primero que se ve: la guía principal gratuita en PDF. */}
+      <BannerModos donde="portada" />
       <a
         className="aip-btn" href={FUNDADOR.instagram} target="_blank" rel="noopener noreferrer"
         onClick={() => track('clic_cta', { donde: 'aip-creador' })}
@@ -183,6 +187,21 @@ function BannerNoNegociables({ donde }) {
         <p className="aip-kicker"><FileText size={13} /> Guía gratuita en PDF</p>
         <h3>Mis 8 <em>no negociables</em> con Claude</h3>
         <p>Cómo trabajo para que la IA haga el trabajo de verdad, y no solo te dé conversación. Composio, Skills, Loops, Modo plan, Subagentes, Hooks, el modelo correcto y Todo a GitHub.</p>
+        <span className="aip-btn pequeno">Descárgala <ArrowRight size={14} /></span>
+      </div>
+    </Link>
+  )
+}
+
+// La guía principal en PDF: los Mods de Claude (el lead magnet del último Reel).
+function BannerModos({ donde }) {
+  return (
+    <Link className="aip-nn-banner" to={MODOS_RUTA} onClick={() => track('clic_cta', { donde: `aip-modos-${donde}` })}>
+      <img src={MODOS_PORTADA_3D} alt="" width="900" height="900" loading="lazy" />
+      <div>
+        <p className="aip-kicker"><FileText size={13} /> Guía gratuita en PDF</p>
+        <h3>Los <em>Mods</em> de Claude</h3>
+        <p>3 usos de los que nadie habla, los prompts para que Claude te los construya solo, y cómo no meterte un troyano. Todo comprobado contra la documentación oficial.</p>
         <span className="aip-btn pequeno">Descárgala <ArrowRight size={14} /></span>
       </div>
     </Link>
@@ -247,23 +266,26 @@ function Foro() {
 const PORTADA_HILO = { skills: Sparkles, mcp: Blocks, guia: BookOpen, comunidad: Users }
 function TarjetaHilo({ h, sk, tema }) {
   const esNN = h.slug === NN_HILO.slug
+  const esModos = h.slug === MODOS_HILO.slug
+  const esPdf = esNN || esModos
+  const cover3d = esNN ? NN_PORTADA_3D : esModos ? MODOS_PORTADA_3D : null
   const Icono = h.tipo === 'mcp' ? Blocks : PORTADA_HILO[sk] || Sparkles
-  const claseTema = sk === 'guia' ? (esNN ? 'nn' : 'cap') : (h.tema || sk)
+  const claseTema = sk === 'guia' ? (esPdf ? 'nn' : 'cap') : (h.tema || sk)
   return (
-    <Link className={'aip-tarjeta' + (h.pronto ? ' pronto' : '')} to={`/aiparatodo/${sk}/${h.tema}/${h.slug}`}>
+    <Link className={'aip-tarjeta' + (h.pronto ? ' pronto' : '') + (esModos ? ' principal' : '')} to={`/aiparatodo/${sk}/${h.tema}/${h.slug}`}>
       <div className={`aip-tarjeta-cover ${claseTema}`}>
-        {esNN
-          ? <img src={NN_PORTADA_3D} alt="" width="900" height="900" loading="lazy" />
+        {cover3d
+          ? <img src={cover3d} alt="" width="900" height="900" loading="lazy" />
           : <Icono size={44} />}
         {h.n && <span className="aip-tarjeta-n">{h.n}</span>}
       </div>
       <div className="aip-tarjeta-txt">
-        <p className="aip-kicker">{esNN ? <><FileText size={13} /> Guía en PDF</> : <>{tema?.nombre || ''}</>}</p>
+        <p className="aip-kicker">{esPdf ? <><FileText size={13} /> Guía en PDF{esModos ? ' · principal' : ''}</> : <>{tema?.nombre || ''}</>}</p>
         <h3>{h.titulo}</h3>
         {h.resumen && <p>{recorta(h.resumen, 150)}</p>}
         <span className="aip-tarjeta-pie">
           {h.pronto ? <span className="aip-pronto">pronto</span>
-            : <><span className="aip-btn pequeno">{esNN ? 'Descárgala' : 'Leer'} <ArrowRight size={14} /></span>{h.lectura && <small>{h.lectura}</small>}</>}
+            : <><span className="aip-btn pequeno">{esPdf ? 'Descárgala' : 'Leer'} <ArrowRight size={14} /></span>{h.lectura && <small>{h.lectura}</small>}</>}
         </span>
       </div>
     </Link>
@@ -281,6 +303,7 @@ function Hilo({ acceso, setAcceso }) {
   const noticias = recibidas === 'error' ? [] : recibidas
   const { hash } = useLocation()
   const esNN = sk === 'guia' && tema === NN_HILO.tema && slug === NN_HILO.slug
+  const esModos = sk === 'guia' && tema === MODOS_HILO.tema && slug === MODOS_HILO.slug
   const capitulo = sk === 'guia' && tema === 'capitulos' ? capituloPorSlug(slug) : null
   const post = sk === 'skills' ? postPorSlug(slug) : null
   const noticia = esNews ? (noticias || []).find(n => n.slug === slug && n.tema === tema) : null
@@ -296,20 +319,24 @@ function Hilo({ acceso, setAcceso }) {
   if (!s || !h) return <Navigate to={`/aiparatodo/${sk || ''}`} replace />
   const t = s.temas.find(x => x.key === tema)
 
-  // La puerta: en la guía en PDF entra al embudo «Lead magnet».
-  const puerta = esNN
-    ? <Puerta setAcceso={setAcceso} pipeline={PIPELINE_LEAD_MAGNET} nota="pidió la guía Mis 8 no negociables (PDF)"
-      titulo="Descárgate la guía" texto="Cuatro datos y es tuya, junto con todos los hilos de AI para todo." boton="Descargar" />
-    : <Puerta setAcceso={setAcceso} pipeline={PIPELINE_COMUNIDAD} nota={`entró por ${sk}/${slug}`} />
+  // La puerta: en las guías en PDF entra al embudo «Lead magnet».
+  const puerta = esModos
+    ? <Puerta setAcceso={setAcceso} pipeline={PIPELINE_LEAD_MAGNET} nota="pidió la guía Los Mods de Claude (PDF)"
+      titulo="Descárgate la guía" texto="Cuatro datos y es tuya, con todos los prompts, junto con todos los hilos de AI para todo." boton="Descargar" />
+    : esNN
+      ? <Puerta setAcceso={setAcceso} pipeline={PIPELINE_LEAD_MAGNET} nota="pidió la guía Mis 8 no negociables (PDF)"
+        titulo="Descárgate la guía" texto="Cuatro datos y es tuya, junto con todos los hilos de AI para todo." boton="Descargar" />
+      : <Puerta setAcceso={setAcceso} pipeline={PIPELINE_COMUNIDAD} nota={`entró por ${sk}/${slug}`} />
 
   let kicker = t?.nombre
   if (post) kicker += ` · ${post.skills.length} skills · ${post.lectura}`
   if (capitulo) kicker = `Capítulo ${capitulo.n}${capitulo.lectura ? ` · ${capitulo.lectura}` : ''}`
   if (noticia) kicker = `${t?.nombre} · ${noticia.fuente} · ${fechaLarga(noticia.fecha)}`
   if (esNN) kicker = `Guía en PDF · ${NN_PUNTOS.length} puntos`
+  if (esModos) kicker = `Guía en PDF · guía principal · ${MODOS_INDICE.length} puntos`
 
-  const titular = post ? post.gancho : capitulo?.texto ? capitulo.texto.gancho : esNN ? 'Mis 8 no negociables con Claude' : h.titulo
-  const sub = post ? post.resumen : capitulo ? capitulo.resumen : esNN ? NN_HILO.resumen : null
+  const titular = post ? post.gancho : capitulo?.texto ? capitulo.texto.gancho : esNN ? 'Mis 8 no negociables con Claude' : esModos ? MODOS_GANCHO : h.titulo
+  const sub = post ? post.resumen : capitulo ? capitulo.resumen : esNN ? NN_HILO.resumen : esModos ? MODOS_HILO.resumen : null
 
   return (
     <main className="aip-main aip-post">
@@ -320,23 +347,26 @@ function Hilo({ acceso, setAcceso }) {
         <span>{capitulo ? `${capitulo.n} · ${capitulo.titulo}` : h.titulo}</span>
       </nav>
 
-      <header className={'aip-post-cab' + (esNN ? ' aip-nn-cab' : '')}>
+      <header className={'aip-post-cab' + (esNN || esModos ? ' aip-nn-cab' : '')}>
         <div>
           <p className="aip-kicker"><span className="aip-punto" /> {kicker}</p>
           <h1 className="aip-h1">{titular}</h1>
           {sub && <p className="aip-sub">{sub}</p>}
         </div>
         {esNN && <img className="aip-nn-3d" src={NN_PORTADA_3D} alt="La guía «Mis 8 no negociables con Claude»" width="900" height="900" />}
+        {esModos && <img className="aip-nn-3d" src={MODOS_PORTADA_3D} alt="La guía «Los Mods de Claude»" width="900" height="900" />}
       </header>
 
       {/* Lo que se ve antes de dejar los datos: el índice, para saber qué hay dentro. */}
       {!acceso && capitulo?.texto && <IndiceCapitulo c={capitulo.texto} />}
       {!acceso && esNN && <IndiceNN />}
+      {!acceso && esModos && <IndiceModos />}
 
       {!acceso ? puerta
         : post ? <CuerpoPost p={post} />
           : capitulo?.texto ? <CuerpoCapitulo c={capitulo.texto} />
             : noticia ? <CuerpoNoticia n={noticia} />
+              : esModos ? <CuerpoGuiaModos acceso={acceso} />
               : esNN ? <CuerpoNoNegociables acceso={acceso} />
                 : (
                   <section className="aip-card aip-pronto-card">
@@ -600,6 +630,77 @@ function CuerpoNoNegociables({ acceso }) {
         <div className="aip-fila">
           <Descarga acceso={acceso} donde="abajo" />
           <Link className="aip-btn sec" to="/aiparatodo/guia/capitulos">Ir a la guía completa <ArrowRight size={16} /></Link>
+        </div>
+      </section>
+    </>
+  )
+}
+
+// ── La guía principal en PDF: los Mods de Claude ────────────────────────────
+function IndiceModos() {
+  return (
+    <section className="aip-card aip-indice">
+      <h2>Qué hay dentro</h2>
+      <ol className="aip-nn-indice">
+        {MODOS_INDICE.map(p => <li key={p.n}><span className="aip-indice-item"><span>{p.n}</span><b>{p.nombre}</b></span></li>)}
+      </ol>
+    </section>
+  )
+}
+
+function DescargaModos({ acceso, donde }) {
+  return (
+    <a
+      className="aip-btn aip-descarga" href={MODOS_PDF} download
+      onClick={() => { track('descarga', { recurso: 'modos-de-claude', donde }); anota(acceso?.id, 'AI para todo · descargó la guía Los Mods de Claude (PDF)') }}
+    >
+      <Download size={18} /> Descargar el PDF
+    </a>
+  )
+}
+
+function CuerpoGuiaModos({ acceso }) {
+  return (
+    <>
+      <section className="aip-card aip-nn-listo">
+        <p className="aip-kicker"><Check size={13} /> Lista para descargar</p>
+        <h2>Toda tuya{acceso?.nombre ? <>, <em>{acceso.nombre}</em></> : null}</h2>
+        <p>{MODOS_INTRO}</p>
+        <DescargaModos acceso={acceso} donde="arriba" />
+      </section>
+
+      <IndiceCapitulo c={{ bloques: MODOS_BLOQUES }} enlaces />
+      <article className="aip-capitulo">
+        {MODOS_BLOQUES.map((b, i) => <Bloque key={i} b={b} i={i} />)}
+      </article>
+
+      <section className="aip-card aip-claves">
+        <h2>Lo que te llevas</h2>
+        <ul>{MODOS_CLAVES.map((x, k) => <li key={k}><Check size={16} /><span><Rico texto={x} /></span></li>)}</ul>
+      </section>
+
+      <section className="aip-card aip-resumen">
+        <h2>Por dónde empezar</h2>
+        <table>
+          <tbody>{MODOS_ORDEN.map(o => <tr key={o.cuando}><td>{o.cuando}</td><td>{o.que}</td></tr>)}</tbody>
+        </table>
+      </section>
+
+      <section className="aip-fuentes">
+        <h3>Fuentes oficiales</h3>
+        <ul>
+          {MODOS_FUENTES.map(f => (
+            <li key={f.url}><a href={f.url} target="_blank" rel="noopener noreferrer">{f.texto} <ExternalLink size={12} /></a></li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="aip-card aip-nn-final">
+        <h2>Llévatela en PDF</h2>
+        <p>Toda la guía en limpio, con los prompts, para tenerla a mano mientras montas tus Mods.</p>
+        <div className="aip-fila">
+          <DescargaModos acceso={acceso} donde="abajo" />
+          <Link className="aip-btn sec" to={NN_RUTA}>Y mis 8 no negociables <ArrowRight size={16} /></Link>
         </div>
       </section>
     </>
