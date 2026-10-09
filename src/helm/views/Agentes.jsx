@@ -61,7 +61,7 @@ export default function Agentes({ clientId, client }) {
   }
 
   if (vista === 'estudio') {
-    return <EstudioInstagram client={client} onVolver={() => setVista('menu')} />
+    return <EstudioInstagram clientId={clientId} client={client} onVolver={() => setVista('menu')} />
   }
 
   if (vista === 'equipo') {

@@ -108,6 +108,27 @@
 .eig-marcados-tit { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 13.5px; margin: 0; }
 .eig-marcados { display: flex; flex-direction: column; gap: 2px; }
 
+/* Mi Instagram (análisis automático de reels publicados) */
+.eig-cargando { flex-direction: row; align-items: center; gap: 14px; }
+.eig-cargando > div { flex: 1; }
+.eig-resumen-ig { display: flex; gap: 22px; flex-wrap: wrap; padding: 4px 2px 8px; }
+.eig-resumen-ig > div { display: flex; flex-direction: column; }
+.eig-resumen-ig small { opacity: .62; font-size: 12px; margin-top: 2px; }
+.eig-reels { display: flex; flex-direction: column; gap: 8px; }
+.eig-reel { border: 1px solid rgba(128,128,128,.2); border-radius: 11px; padding: 11px 13px; display: flex; flex-direction: column; gap: 6px; }
+.eig-reel-top { display: flex; align-items: center; gap: 10px; }
+.eig-reel-top .eig-nota { font-size: 20px; }
+.eig-reel-verd { font-size: 12px; font-weight: 700; opacity: .7; }
+.eig-reel-vistas { font-size: 12px; opacity: .55; margin-left: auto; font-variant-numeric: tabular-nums; }
+.eig-reel-link { color: inherit; opacity: .5; display: inline-flex; }
+.eig-reel-link:hover { opacity: 1; }
+.eig-reel-linea { margin: 0; font-size: 13.5px; line-height: 1.45; }
+.eig-reel-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.eig-tagx { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,.25); }
+.eig-tagx.mal { background: rgba(239,68,68,.12); border-color: rgba(239,68,68,.3); }
+.eig-tagx.medio { background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.3); }
+.eig-tagx.ok { background: rgba(34,197,94,.12); border-color: rgba(34,197,94,.3); }
+
 /* Perfil */
 .eig-perfil-nota { display: flex; align-items: baseline; gap: 4px; }
 .eig-rubrica { display: flex; flex-direction: column; gap: 10px; }

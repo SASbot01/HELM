@@ -7,7 +7,8 @@
 //   · Humanizar— le quita el olor a IA (invisibles, tipografía, relleno) y lo puntúa.
 //   · Perfil   — la rúbrica de 12 partes sobre 100, con reescritura en orden.
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Sparkles, Hash, Wand2, UserSquare, Copy, Check, AlertTriangle, Target } from 'lucide-react'
+import { ArrowLeft, Sparkles, Hash, Wand2, UserSquare, Copy, Check, AlertTriangle, Target, Instagram, ExternalLink } from 'lucide-react'
+import { supabase } from '../../utils/supabase'
 import './estudioIg.css'
 
 async function calidad(action, body = {}) {
@@ -21,14 +22,15 @@ async function calidad(action, body = {}) {
 }
 
 const TABS = [
+  { key: 'mi-ig', label: 'Mi Instagram', icon: Instagram },
   { key: 'gancho', label: 'Gancho', icon: Sparkles },
   { key: 'caption', label: 'Caption', icon: Hash },
   { key: 'humano', label: 'Humanizar', icon: Wand2 },
   { key: 'perfil', label: 'Perfil', icon: UserSquare },
 ]
 
-export default function EstudioInstagram({ client, onVolver }) {
-  const [tab, setTab] = useState('gancho')
+export default function EstudioInstagram({ clientId, client, onVolver }) {
+  const [tab, setTab] = useState('mi-ig')
   return (
     <div className="ag embebido eig-root">
       <header className="ag-top dentro">
@@ -38,8 +40,8 @@ export default function EstudioInstagram({ client, onVolver }) {
           </button>
           <h1>Estudio de Instagram</h1>
           <p>
-            Las herramientas que miden el contenido de {client?.name || 'este perfil'} antes de publicar: el gancho,
-            la caption, el olor a IA y el perfil. Corren en tu máquina, sobre el texto que pegues. No publican nada.
+            Mide el contenido de {client?.name || 'este perfil'} antes de publicar. «Mi Instagram» analiza solo
+            tus reels ya publicados; las demás pestañas puntúan lo que pegues. Corre en tu máquina. No publica nada.
           </p>
         </div>
       </header>
@@ -55,10 +57,118 @@ export default function EstudioInstagram({ client, onVolver }) {
         })}
       </nav>
 
+      {tab === 'mi-ig' && <MiInstagram clientId={clientId} />}
       {tab === 'gancho' && <Gancho />}
       {tab === 'caption' && <Caption />}
       {tab === 'humano' && <Humanizar />}
       {tab === 'perfil' && <Perfil />}
+    </div>
+  )
+}
+
+// ── Mi Instagram: analiza automáticamente los reels ya publicados ───────────
+function MiInstagram({ clientId }) {
+  const [estado, setEstado] = useState('cargando') // 'cargando' | 'sin-ig' | 'analizando' | 'listo' | 'error'
+  const [error, setError] = useState('')
+  const [reels, setReels] = useState([])
+  const [progreso, setProgreso] = useState(0)
+
+  useEffect(() => {
+    let vivo = true
+    ;(async () => {
+      if (!clientId) { setEstado('sin-ig'); return }
+      try {
+        const { data, error } = await supabase
+          .from('helm_ig_media')
+          .select('media_id, caption, permalink, publicado_en, visitas, alcance, likes, guardados')
+          .eq('client_id', clientId)
+          .order('publicado_en', { ascending: false })
+          .limit(40)
+        if (error) throw error
+        const conCaption = (data || []).filter(r => (r.caption || '').trim())
+        if (!vivo) return
+        if (!conCaption.length) { setEstado('sin-ig'); return }
+        setEstado('analizando')
+        const total = Math.min(conCaption.length, 30)
+        const lista = []
+        for (let i = 0; i < total; i++) {
+          const r = conCaption[i]
+          try {
+            const a = await calidad('reel', { texto: r.caption })
+            lista.push({ ...r, gancho: a.gancho, lint: a.caption })
+          } catch { /* salta ese reel */ }
+          if (!vivo) return
+          setProgreso(Math.round(((i + 1) / total) * 100))
+        }
+        if (!vivo) return
+        // Lo más flojo primero: así se ve qué arreglar.
+        lista.sort((a, b) => (a.gancho?.score ?? 0) - (b.gancho?.score ?? 0))
+        setReels(lista)
+        setEstado('listo')
+      } catch (e) { if (vivo) { setError(e.message); setEstado('error') } }
+    })()
+    return () => { vivo = false }
+  }, [clientId])
+
+  if (estado === 'cargando' || estado === 'analizando') {
+    return (
+      <div className="eig-panel">
+        <div className="eig-card eig-cargando">
+          <Instagram size={22} />
+          <div>
+            <b>{estado === 'cargando' ? 'Cargando tus publicaciones…' : 'Analizando tus reels…'}</b>
+            {estado === 'analizando' && <div className="eig-barra" style={{ marginTop: 8 }}><span className="eig-barra-fill bien" style={{ width: `${progreso}%` }} /></div>}
+          </div>
+        </div>
+      </div>
+    )
+  }
+  if (estado === 'error') return <div className="eig-panel"><p className="ag-error">{error}</p></div>
+  if (estado === 'sin-ig') {
+    return (
+      <div className="eig-panel">
+        <div className="eig-card">
+          <p className="eig-ayuda">Aún no hay reels con caption para analizar. Conecta Instagram en <b>Ajustes → Instagram</b> y, cuando sincronice, aquí verás el análisis automático de cada publicación.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const media = Math.round(reels.reduce((s, r) => s + (r.gancho?.score || 0), 0) / reels.length)
+  const conProblema = reels.filter(r => (r.lint?.checks || []).some(c => c.estado === 'FAIL')).length
+  const flojos = reels.filter(r => (r.gancho?.score || 0) < 50).length
+
+  return (
+    <div className="eig-panel">
+      <p className="eig-ayuda">Analizados <b>{reels.length}</b> reels publicados: la <b>primera línea</b> de cada caption (lo que se ve en el feed) y la caption entera. De menor a mayor nota, para que sepas qué pulir primero.</p>
+      <div className="eig-resumen-ig">
+        <div><span className={`eig-nota grande ${tono(media)}`}>{media}</span><small>gancho medio /100</small></div>
+        <div><span className="eig-nota grande mal">{flojos}</span><small>ganchos flojos (&lt;50)</small></div>
+        <div><span className="eig-nota grande medio">{conProblema}</span><small>captions con fallos</small></div>
+      </div>
+
+      <div className="eig-reels">
+        {reels.map((r, i) => {
+          const fallos = (r.lint?.checks || []).filter(c => c.estado !== 'PASS')
+          const primera = String(r.caption).split('\n').map(s => s.trim()).filter(Boolean)[0] || ''
+          return (
+            <div key={r.media_id || i} className="eig-reel">
+              <div className="eig-reel-top">
+                <span className={`eig-nota ${tono(r.gancho?.score || 0)}`}>{r.gancho?.score}</span>
+                <span className="eig-reel-verd">{VEREDICTO[r.gancho?.verdict] || ''}</span>
+                {typeof r.visitas === 'number' && <span className="eig-reel-vistas">{r.visitas.toLocaleString('es-ES')} vistas</span>}
+                {r.permalink && <a className="eig-reel-link" href={r.permalink} target="_blank" rel="noopener noreferrer"><ExternalLink size={13} /></a>}
+              </div>
+              <p className="eig-reel-linea">«{primera.slice(0, 120)}»</p>
+              <div className="eig-reel-tags">
+                {r.gancho?.verdict !== 'STRONG' && <span className="eig-tagx mal">gancho: {PROP[r.gancho?.weakest]?.es || r.gancho?.weakest}</span>}
+                {fallos.map((c, k) => <span key={k} className={`eig-tagx ${BADGE[c.estado]}`}>{CHECK_ES[c.nombre] || c.nombre}</span>)}
+                {!fallos.length && r.gancho?.verdict === 'STRONG' && <span className="eig-tagx ok">bien</span>}
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

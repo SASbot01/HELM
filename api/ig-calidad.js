@@ -42,6 +42,12 @@ export default async function handler(req, res) {
       }
       case 'caption':
         return res.status(200).json(lintarCaption(texto, { keywords }))
+      case 'reel': {
+        // Una publicación real: puntúa la primera línea (lo que se ve en el feed)
+        // y linta la caption entera. Lo usa «Mi Instagram» para cada reel.
+        const linea = texto.split('\n').map(s => s.trim()).filter(Boolean)[0] || texto
+        return res.status(200).json({ gancho: { ...puntuarGancho(linea), formula: clasificaGancho(linea) }, caption: lintarCaption(texto, { keywords }) })
+      }
       case 'humano': {
         const limpio = humanizar(texto)
         // La nota del antes y del después, para enseñar la mejora.
