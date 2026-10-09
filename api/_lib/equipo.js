@@ -52,7 +52,12 @@ const MODELOS = {
   productor: process.env.AGENTS_MODELO_PRODUCTOR || 'claude-haiku-4-5',
   comercial: process.env.AGENTS_MODELO_COMERCIAL || 'claude-haiku-4-5',
   informe: process.env.AGENTS_MODELO_INFORME || 'claude-sonnet-5',
+  editor: process.env.AGENTS_MODELO_EDITOR || 'claude-haiku-4-5',
 }
+
+// Agentes que se pueden LANZAR a mano (o por MCP/Drive) pero que no entran en el
+// reparto diario del director: el editor de reels es uno.
+export const AGENTES_LANZABLES = [...AGENTES, 'editor']
 
 // ── Fechas: el día es el de Madrid ──────────────────────────────────────────
 const fmtDia = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -942,7 +947,48 @@ ${REGLAS_COMUNES}`,
   return String(out.hecho || 'Informe semanal escrito.').slice(0, 400)
 }
 
-const CORRE = { director, investigador, analista, productor, comercial, informe, guionista }
+// ── Editor de reels ─────────────────────────────────────────────────────────
+// Sigue el manual de edición que Alex guardó en la memoria (agent_memory,
+// ambito 'editor'). El motor de render (ffmpeg/composición) está en
+// construcción; por ahora el agente ENSEÑA el proceso paso a paso, para verlo
+// en vivo. Se dispara a mano, por el conector de Claude (MCP) o por Drive: las
+// tres vías encolan este mismo trabajo y el proceso se ve igual en el Registro.
+const dormir = (ms) => new Promise(r => setTimeout(r, ms))
+const PASOS_EDITOR = [
+  ['Inspeccionar', 'ffprobe: duración, resolución, fps, rotación y audio; hoja de fotogramas cada 3 s.'],
+  ['Transcribir', 'audio a 16 kHz mono; STT con tiempos por palabra (sherpa-onnx).'],
+  ['Limpiar', 'detectar trabas, repeticiones y silencios de más de 0,6 s; cortar vídeo y audio en el mismo valle.'],
+  ['Leer el contexto', 'una frase de qué defiende el vídeo; marcar palabras ancla: herramientas, cifras, pasos y la llamada a la acción.'],
+  ['Elegir el formato', 'puntuar las frases visualizables: ≥60% → A (pantalla partida), ≤40% → B (b-roll).'],
+  ['Plan de escenas', 'escenas de 2–4 s, una idea cada una; cada animación 0,05–0,15 s antes de su palabra ancla.'],
+  ['Capturar lo real', 'las webs y repos que se nombran, con el navegador y a resolución nativa, en la tarjeta de navegador.'],
+  ['Animar y componer', 'el estilo de la casa (#0A0A0C / rojo #E4362B / dorado #E8B93A); fotogramas con Pillow.'],
+  ['Subtítulos y sonido', 'palabra a palabra en Inter ExtraBold; efectos por código 20 dB por debajo de la voz.'],
+  ['Control de calidad', 'cada animación sobre su palabra (±0,15 s), zonas seguras de Instagram, voz ≈ -18 dB.'],
+]
+
+async function editor(ctx) {
+  const video = ctx.encargo && /drive|https?:|\.mp4|\.mov|v[ií]deo|reel/i.test(ctx.encargo) ? ctx.encargo : null
+  const { data: manual } = await supabase.from('agent_memory').select('contenido')
+    .eq('ambito', 'editor').eq('clave', 'editor-reels').is('client_id', null).maybeSingle()
+  await ctx.log(manual?.contenido
+    ? `Manual de edición cargado de la memoria de HELM (${manual.contenido.length} caracteres).`
+    : 'No encontré el manual de edición en la memoria. Guárdalo para que lo siga.')
+  await ctx.log(video
+    ? `Vídeo recibido: ${String(video).slice(0, 200)}.`
+    : 'Prueba en seco: todavía sin vídeo. Te enseño el proceso que seguiré cuando entre uno (por el conector de Claude o por la carpeta de Drive).')
+  for (const [titulo, que] of PASOS_EDITOR) {
+    await dormir(650)
+    await ctx.log(`${titulo} — ${que}`)
+  }
+  await dormir(400)
+  await ctx.log('Motor de render (ffmpeg + composición): EN CONSTRUCCIÓN. El plan y las decisiones salen; el montaje final llega por fases.')
+  return video
+    ? 'Proceso recorrido sobre el vídeo recibido. El render se monta por fases (motor en construcción).'
+    : 'Demostración del proceso, sin vídeo. Motor de render en construcción.'
+}
+
+const CORRE = { director, investigador, analista, productor, comercial, informe, guionista, editor }
 
 // ── Una ejecución ───────────────────────────────────────────────────────────
 

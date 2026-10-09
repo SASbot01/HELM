@@ -48,6 +48,17 @@ export const AGENTES = [
     // Tira de api/agents.js, que es solo para superadmin.
     soloAdmin: true,
   },
+  {
+    key: 'editor',
+    ruta: 'editor',
+    nombre: 'Editor de reels',
+    resumen: 'Monta tus reels en bruto según tu manual: formato, cortes, capturas reales y subtítulos.',
+    detalle: 'Cuando entra un vídeo —por el conector de Claude o por la carpeta de Drive— sigue tu manual de edición paso a paso. Aquí se ve el proceso en vivo. El motor de render está en construcción.',
+    estado: 'construido',
+    abrible: true,
+    icono: 'editor',
+    soloAdmin: true,
+  },
 ]
 
 // Las partes del agente de contenido, en el orden en que se enseñan.

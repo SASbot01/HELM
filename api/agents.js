@@ -21,7 +21,7 @@ import { wrap } from './_lib/auth.js'
 import { fichaDe } from './agentes-perfil.js'
 import { resumenDrive } from './_lib/ingesta.js'
 import { getIgConfig } from './_lib/instagram.js'
-import { AGENTES as AGENTES_EQUIPO, encolaAgente, tokensDeHoy, flujoPiezas } from './_lib/equipo.js'
+import { AGENTES as AGENTES_EQUIPO, AGENTES_LANZABLES, encolaAgente, tokensDeHoy, flujoPiezas } from './_lib/equipo.js'
 
 // Estados por los que pasa un reel, en orden.
 const ESTADOS = ['pendiente', 'descargando', 'transcribiendo', 'transcrito', 'etiquetado', 'error']
@@ -497,7 +497,7 @@ async function handler(req, res) {
     case 'equipo-lanzar': {
       const b = req.body || {}
       if (!b.clientId) return res.status(400).json({ error: 'Falta el perfil' })
-      if (!AGENTES_EQUIPO.includes(b.agente)) return res.status(400).json({ error: 'Ese agente no existe' })
+      if (!AGENTES_LANZABLES.includes(b.agente)) return res.status(400).json({ error: 'Ese agente no existe' })
       const { data: ya, error } = await supabase.from('agent_jobs').select('id').eq('tipo', 'equipo')
         .in('estado', ['pendiente', 'corriendo']).eq('payload->>clientId', b.clientId).eq('payload->>agente', b.agente).limit(1)
       if (error) throw error

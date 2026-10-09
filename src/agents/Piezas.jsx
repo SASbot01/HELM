@@ -3,13 +3,13 @@
 // cambia quién puede editar, no cómo se lee.
 import { Link } from 'react-router-dom'
 import {
-  ScatterChart, PenLine, FolderSync, FileBarChart, UserSquare, Brain, Clapperboard, Workflow, ArrowRight } from 'lucide-react'
+  ScatterChart, PenLine, FolderSync, FileBarChart, UserSquare, Brain, Clapperboard, Workflow, ArrowRight, Scissors } from 'lucide-react'
 import { ESTADOS as ESTADOS_AGENTE } from './agentes'
 import { ROLES, rol, compacto } from './ganchos'
 
 const ICONOS = {
   grafica: ScatterChart, pluma: PenLine, carpeta: FolderSync, informe: FileBarChart,
-  persona: UserSquare, memoria: Brain, contenido: Clapperboard, equipo: Workflow,
+  persona: UserSquare, memoria: Brain, contenido: Clapperboard, equipo: Workflow, editor: Scissors,
 }
 
 // ── El menú de agentes: una casilla por agente ──────────────────────────────
@@ -26,7 +26,9 @@ export function MenuAgentes({ agentes, metricaDe = () => null, onAbrir }) {
 function Casilla({ a, metrica, onAbrir }) {
   const Icono = ICONOS[a.icono] || ScatterChart
   const est = ESTADOS_AGENTE[a.estado] || ESTADOS_AGENTE.construido
-  const entrable = a.estado === 'activo'
+  // `abrible` deja abrir una casilla aún «en construcción» para ver su proceso,
+  // sin enseñarla como activa: lo usa el editor de reels (el render aún no está).
+  const entrable = a.estado === 'activo' || a.abrible
 
   // Todas las casillas tienen la misma anatomía y en el mismo orden: icono,
   // nombre, resumen, detalle y pie. Si a una le falta una pieza, su pie queda
