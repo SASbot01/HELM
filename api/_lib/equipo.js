@@ -34,6 +34,7 @@ import { calendario, TIPOS, FASES } from './ingesta.js'
 import { getIgConfig } from './instagram.js'
 import { sincronizar as sincronizarIg } from '../instagram.js'
 import { notificar } from './notificar.js'
+import { puntuarGancho, clasificaGancho } from './ig-calidad.js'
 
 export const AGENTES = ['director', 'investigador', 'analista', 'productor', 'comercial', 'informe', 'guionista']
 // En el orden en que corren: el guionista el último, para leer lo de los demás.
@@ -697,7 +698,19 @@ ${REGLAS_COMUNES}`,
     const fecha = libres.includes(g.fecha) ? g.fecha : libres[0]
     if (!fecha) break
     libres.splice(libres.indexOf(fecha), 1)
-    const cuerpo = g.inspirado_en ? `${guion}\n\n---\nInspirado en: ${String(g.inspirado_en).slice(0, 300)}` : guion
+    // Puntúa el gancho (la primera línea del guion) con el scorer determinista,
+    // para que el dueño vea en el propio borrador si el arranque aguanta. No
+    // bloquea nada: es una señal, y el guionista ya escribe buscando el gancho.
+    const primeraLinea = String(guion).split('\n').map(s => s.trim()).filter(Boolean)[0] || guion
+    const gp = puntuarGancho(primeraLinea)
+    const formula = clasificaGancho(primeraLinea)
+    const notaGancho = `Gancho (auto): ${gp.score}/100 · ${gp.verdict}`
+      + (gp.verdict !== 'STRONG' ? ` · a pulir: ${gp.weakest}` : '')
+      + (formula ? ` · fórmula: ${formula.nombre}` : '')
+    const partes = [guion]
+    if (g.inspirado_en) partes.push(`Inspirado en: ${String(g.inspirado_en).slice(0, 300)}`)
+    partes.push(notaGancho)
+    const cuerpo = partes.join('\n\n---\n')
     const { error } = await supabase.from('helm_content_calendar').insert({
       client_id: clientId, date: fecha, title: titulo, body: cuerpo, format: 'reel',
       tipo: TIPOS[g.tipo] ? g.tipo : null, source: 'agente', revision: 'borrador',

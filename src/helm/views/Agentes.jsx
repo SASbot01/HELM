@@ -8,7 +8,7 @@
 // Todo en solo lectura. Solo el superadmin elige qué creadores lleva el perfil
 // y tiene a mano el taller global (/agents), que es donde se editan.
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, Settings2, Link2, Copy, Check } from 'lucide-react'
+import { ArrowLeft, Settings2, Link2, Copy, Check, Sparkles, ChevronRight } from 'lucide-react'
 import { creadoresApi } from '../lib'
 import { agentsApi } from '../../agents/api'
 import { AGENTES } from '../../agents/agentes'
@@ -16,7 +16,9 @@ import { MenuAgentes, CreadoresGrid } from '../../agents/Piezas'
 import Ficha from '../../agents/Ficha'
 import PanelDrive from '../../agents/Drive'
 import Equipo from '../../agents/Equipo'
+import EstudioInstagram from './EstudioInstagram'
 import '../../agents/agentos.css'
+import './estudioIg.css'
 
 const esAdmin = () => Boolean(localStorage.getItem('bw_superadmin'))
 
@@ -46,8 +48,20 @@ export default function Agentes({ clientId, client }) {
             ? { n: creadores.length, lb: creadores.length === 1 ? 'creador' : 'creadores' }
             : null)}
         />
+        <button type="button" className="ag-estudio-btn" onClick={() => setVista('estudio')}>
+          <span className="ag-estudio-ico"><Sparkles size={18} /></span>
+          <span className="ag-estudio-txt">
+            <b>Estudio de Instagram</b>
+            <small>Puntúa el gancho, linta la caption, audita el perfil y quita el olor a IA. Sin publicar nada.</small>
+          </span>
+          <ChevronRight size={18} />
+        </button>
       </div>
     )
+  }
+
+  if (vista === 'estudio') {
+    return <EstudioInstagram client={client} onVolver={() => setVista('menu')} />
   }
 
   if (vista === 'equipo') {
