@@ -30,7 +30,7 @@ const TABS = [
 export default function EstudioInstagram({ client, onVolver }) {
   const [tab, setTab] = useState('gancho')
   return (
-    <div className="ag embebido">
+    <div className="ag embebido eig-root">
       <header className="ag-top dentro">
         <div>
           <button type="button" className="ag-volver" onClick={onVolver}>

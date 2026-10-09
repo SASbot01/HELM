@@ -49,8 +49,8 @@
 .eig-nota { font-weight: 800; font-variant-numeric: tabular-nums; }
 .eig-nota.grande { font-size: 40px; line-height: 1; }
 .eig-nota.muy-grande { font-size: 56px; line-height: 1; }
-.bien { color: #1f9d55; } .medio { color: #c9820a; } .mal { color: #d1443b; }
-@media (prefers-color-scheme: dark) { .bien { color: #4ade80; } .medio { color: #fbbf24; } .mal { color: #f87171; } }
+.eig-root .bien { color: #1f9d55; } .eig-root .medio { color: #c9820a; } .eig-root .mal { color: #d1443b; }
+@media (prefers-color-scheme: dark) { .eig-root .bien { color: #4ade80; } .eig-root .medio { color: #fbbf24; } .eig-root .mal { color: #f87171; } }
 
 /* Barras de propiedad */
 .eig-props { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; }
