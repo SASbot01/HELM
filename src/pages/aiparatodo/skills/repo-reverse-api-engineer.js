@@ -19,7 +19,7 @@ export default {
   fecha: '2026-10-10',
   lectura: '9 min',
   nota: 'Código abierto (licencia MIT, permite uso comercial) de kalil0321. Necesitas Python 3.11+ y una clave de API para el modo agente. Úsalo solo en webs donde tengas permiso y respeta siempre sus condiciones y su robots.txt.',
-  portada: '/aiparatodo/reverse-api-3d.webp',
+  portada: '/aiparatodo/reverse-api-eng.webp',
   skills: [
     {
       n: '01', clave: 'que-es', nombre: 'Qué es', corto: 'convierte el tráfico de una web en un cliente de API',
