@@ -268,7 +268,7 @@ function TarjetaHilo({ h, sk, tema }) {
   const esNN = h.slug === NN_HILO.slug
   const esModos = h.slug === MODOS_HILO.slug
   const esPdf = esNN || esModos
-  const cover3d = esNN ? NN_PORTADA_3D : esModos ? MODOS_PORTADA_3D : null
+  const cover3d = h.portada || (esNN ? NN_PORTADA_3D : esModos ? MODOS_PORTADA_3D : null)
   const Icono = h.tipo === 'mcp' ? Blocks : PORTADA_HILO[sk] || Sparkles
   const claseTema = sk === 'guia' ? (esPdf ? 'nn' : 'cap') : (h.tema || sk)
   return (
@@ -329,7 +329,7 @@ function Hilo({ acceso, setAcceso }) {
       : <Puerta setAcceso={setAcceso} pipeline={PIPELINE_COMUNIDAD} nota={`entró por ${sk}/${slug}`} />
 
   let kicker = t?.nombre
-  if (post) kicker += ` · ${post.skills.length} skills · ${post.lectura}`
+  if (post) kicker += ` · ${post.skills.length} ${post.tipo === 'repo' ? 'apartados' : 'skills'} · ${post.lectura}`
   if (capitulo) kicker = `Capítulo ${capitulo.n}${capitulo.lectura ? ` · ${capitulo.lectura}` : ''}`
   if (noticia) kicker = `${t?.nombre} · ${noticia.fuente} · ${fechaLarga(noticia.fecha)}`
   if (esNN) kicker = `Guía en PDF · ${NN_PUNTOS.length} puntos`
@@ -767,7 +767,7 @@ function CuerpoPost({ p }) {
       <section className="aip-card aip-resumen">
         <h2>Resumen rápido</h2>
         <table>
-          <thead><tr><th>#</th><th>{p.tipo === 'mcp' ? 'Qué' : 'Skill'}</th><th>Para qué</th></tr></thead>
+          <thead><tr><th>#</th><th>{p.tipo === 'mcp' ? 'Qué' : p.tipo === 'repo' ? 'Apartado' : 'Skill'}</th><th>Para qué</th></tr></thead>
           <tbody>
             {p.skills.map(s => <tr key={s.clave}><td>{s.n}</td><td>{s.github ? <a href={s.github} target="_blank" rel="noopener noreferrer">{s.nombre}</a> : s.nombre}</td><td>{s.corto}</td></tr>)}
           </tbody>

@@ -29,7 +29,7 @@ export const FUNDADOR = {
 // los hilos, como un foro. Lo que pide el correo es LEER un hilo.
 export const SECCIONES = [
   {
-    key: 'skills', titulo: 'Skills', desc: 'Habilidades que se le instalan a Claude para que haga un trabajo concreto, y bien.',
+    key: 'skills', titulo: 'Skills y repos', desc: 'Habilidades que se le instalan a Claude para que haga un trabajo concreto, y repos de código abierto que amplían lo que pueden hacer tus agentes.',
     temas: [
       { key: 'diseno', nombre: 'Diseño', desc: 'Webs, pósters, apps y paletas sin saber diseñar' },
       { key: 'contenido', nombre: 'Contenido', desc: 'Guiones, reels y copy con tu voz' },
@@ -38,6 +38,7 @@ export const SECCIONES = [
       { key: 'documentos', nombre: 'Documentos', desc: 'Word, Excel, PowerPoint y PDF sin pelearte con ellos' },
       { key: 'desarrollo', nombre: 'Claude Code', desc: 'Construir webs, automatizaciones y herramientas con método' },
       { key: 'mcp', nombre: 'MCP', desc: 'Conecta Claude a tus herramientas con el enchufe universal' },
+      { key: 'repos', nombre: 'Repos', desc: 'Herramientas de código abierto que potencian a tus agentes' },
     ],
   },
   {

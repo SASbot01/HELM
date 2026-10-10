@@ -66,6 +66,7 @@ export const SECCIONES = [
   { key: 'dia', label: 'Mi día', desc: 'Rituales diarios con la IA' },
   { key: 'noticias', label: 'Noticias', desc: 'Las tres noticias del día de IA y ciberseguridad, cada mañana a las 6:00' },
   { key: 'contenido', label: 'Agentes', desc: 'Agentes de IA y creadores de referencia' },
+  { key: 'roadmap', label: 'Roadmap', desc: 'Plan del negocio a seis meses, mes a mes y semana a semana' },
   { key: 'llamadas', label: 'Llamadas', desc: 'Agenda de llamadas' },
   { key: 'enlaces', label: 'Enlaces', desc: 'URLs del negocio' },
   { key: 'plugins', label: 'Plugins', desc: 'Catálogo de módulos' },

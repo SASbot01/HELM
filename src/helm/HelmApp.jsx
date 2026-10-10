@@ -2,7 +2,7 @@
 // Se monta en /admin. Gestiona un perfil (cliente) a la vez, con selector arriba.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, Link2, Settings, Plus, Rocket, Menu, X, Package, UserCog, PhoneCall, Layers, CalendarClock, BookOpen, FileText, Receipt, ShieldCheck, Bot, Sunrise, Newspaper, LayoutGrid, LogOut, Target, Radar } from 'lucide-react'
+import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, Link2, Settings, Plus, Rocket, Menu, X, Package, UserCog, PhoneCall, Layers, CalendarClock, CalendarRange, BookOpen, FileText, Receipt, ShieldCheck, Bot, Sunrise, Newspaper, LayoutGrid, LogOut, Target, Radar } from 'lucide-react'
 import { listClients, createProfile, slugify, usersApi, brandOf } from './lib'
 import { productoActual, seccionDelProducto, seccionSiempre } from './producto'
 import { Modal, Field, Input } from './ui'
@@ -16,6 +16,7 @@ import MiDia from './views/MiDia'
 import Noticias from './views/Noticias'
 import Avatar from './views/Avatar.jsx'
 import RadarView from './views/Radar.jsx'
+import Roadmap from './views/Roadmap.jsx'
 import Lienzo from './Lienzo'
 import Llamadas from './views/Llamadas'
 import Crm from './views/Crm'
@@ -68,6 +69,9 @@ const NAV = [
   // de las 6:00. Nace apagada: solo la quiere quien hace contenido de eso.
   { key: 'noticias', tono: 'rojo', label: 'Noticias', icon: Newspaper, title: 'Noticias', sub: 'Las tres del día de IA y ciberseguridad', C: Noticias },
   { key: 'contenido', tono: 'rojo', label: 'Agentes', icon: Bot, title: 'Agentes', sub: 'Tus agentes de IA y los creadores que estudian', C: Agentes },
+  // Roadmap semestral: el plan de contenido+ads a seis meses (mes → semana → día).
+  // Fase 1: muestra la estructura compartida; la Fase 2 la rellena un agente por cliente.
+  { key: 'roadmap', tono: 'rojo', label: 'Roadmap', icon: CalendarRange, title: 'Roadmap semestral', sub: 'El plan del negocio a seis meses', C: Roadmap },
   { key: 'llamadas', tono: 'azul', label: 'Llamadas', icon: PhoneCall, title: 'Llamadas', sub: 'Tu agenda de Google, con lo que pasó en cada una', C: Llamadas },
   { key: 'enlaces', tono: 'rojo', label: 'Enlaces', icon: Link2, title: 'Enlaces', sub: 'Las URLs del negocio, a mano', C: Enlaces },
   // Archivos se retiró: los archivos del negocio se llevan en Drive.
