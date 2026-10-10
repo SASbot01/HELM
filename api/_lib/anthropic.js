@@ -103,6 +103,51 @@ const traducirHerramientas = (tools) => (tools || []).map(t => ({
   input_schema: t.function?.parameters ?? t.input_schema ?? { type: 'object', properties: {} },
 }))
 
+// De vez en cuando el modelo escribe un parámetro de LISTA como XML dentro de un
+// texto («<item>…</item>») y, de paso, mete ahí los parámetros que le siguen
+// («</dolores><motivaciones>…»). El panel, que espera listas, se caía entero.
+// Se repara contra el esquema de la herramienta antes de devolver los args.
+const ITEM_RE = /<item>([\s\S]*?)<\/item>/g
+function trozosLista(s) {
+  const str = String(s)
+  const items = [...str.matchAll(ITEM_RE)].map(m => m[1].trim()).filter(Boolean)
+  if (items.length) return items
+  const t = str.trim()
+  if (t.startsWith('[')) { try { const j = JSON.parse(t); if (Array.isArray(j)) return j } catch { /* no era JSON */ } }
+  return t.split(/\n+/).map(x => x.replace(/^\s*(?:[-•*]|\d+[.)])\s*/, '').trim()).filter(Boolean)
+}
+export function reparaArgs(args, schema) {
+  const props = schema?.properties
+  if (!props || !args || typeof args !== 'object' || Array.isArray(args)) return args
+  const out = { ...args }
+  const nombres = Object.keys(props)
+  const textos = Object.values(args).filter(v => typeof v === 'string')
+  // 1) Parámetros que faltan porque se colaron dentro de otro texto.
+  for (const [k, def] of Object.entries(props)) {
+    const v = out[k]
+    if (v != null && !(def?.type === 'array' && Array.isArray(v) && !v.length)) continue
+    for (const s of textos) {
+      const m = s.match(new RegExp(`<${k}>([\\s\\S]*?)</${k}>`))
+      if (m) { out[k] = def?.type === 'array' ? trozosLista(m[1]) : m[1].trim(); break }
+    }
+  }
+  // 2) Textos con cola colada y listas que llegaron como texto.
+  const cola = new RegExp(`<\\/?(?:${nombres.join('|')})>|<\\/?(?:parameter|invoke)\\b`)
+  for (const [k, def] of Object.entries(props)) {
+    let v = out[k]
+    if (typeof v !== 'string') continue
+    const tieneItems = /<item>/.test(v)
+    const corte = v.search(cola)
+    if (corte >= 0) v = v.slice(0, corte)
+    if (def?.type === 'array') {
+      const deTexto = (def.items?.type ?? 'string') === 'string'
+      if (deTexto) out[k] = trozosLista(tieneItems && !/<item>/.test(v) ? out[k] : v)
+      else { try { const j = JSON.parse(v); out[k] = Array.isArray(j) ? j : [] } catch { out[k] = [] } }
+    } else out[k] = v.trim()
+  }
+  return out
+}
+
 /**
  * Un turno contra Claude. Misma forma de entrada y de salida que
  * `llmChatConHerramientas` en ./llm.js, para que el resto del código no tenga
@@ -157,9 +202,10 @@ export async function claudeTurno({ apiKey, model, system, messages, maxTokens =
     .join('\n')
     .trim()
 
+  const esquemas = Object.fromEntries(herramientas.map(h => [h.name, h.input_schema]))
   const toolCalls = res.content
     .filter(b => b.type === 'tool_use')
-    .map(b => ({ name: b.name, args: b.input || {} }))
+    .map(b => ({ name: b.name, args: reparaArgs(b.input || {}, esquemas[b.name]) }))
 
   // `usage` es para quien lleva la cuenta de lo que gasta (el registro del
   // equipo de agentes); el resto del código lo ignora.

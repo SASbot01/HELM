@@ -39,7 +39,7 @@ export default function Avatar({ clientId }) {
 
   const est = datos?.estudio
   const r = est?.resumen
-  const a = r?.avatar
+  const a = reparaAvatar(r?.avatar)
   const rep = r?.reparto
 
   const genero = useMemo(() => {
@@ -179,8 +179,34 @@ function Tile({ icon, label, valor }) {
   )
 }
 
+// Algunos estudios guardados traen una lista como texto con «<item>…</item>» y
+// las listas siguientes coladas dentro («</dolores><motivaciones>…»): el modelo
+// a veces escribe así los parámetros. Antes eso tumbaba el panel entero. Se
+// arregla al pintar (y api/_lib/anthropic.js ya lo repara al guardar).
+const LISTAS_AVATAR = ['dolores', 'motivaciones', 'donde_encontrarlos', 'huecos']
+const aLista = (v) => {
+  if (Array.isArray(v)) return v
+  if (typeof v !== 'string') return []
+  const items = [...v.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(m => m[1].trim()).filter(Boolean)
+  return items.length ? items : v.split(/\n+/).map(x => x.replace(/^\s*(?:[-•*]|\d+[.)])\s*/, '').trim()).filter(Boolean)
+}
+function reparaAvatar(av) {
+  if (!av || typeof av !== 'object') return av
+  const out = { ...av }
+  const textos = Object.values(av).filter(v => typeof v === 'string')
+  for (const k of LISTAS_AVATAR) {
+    if (out[k] == null || (Array.isArray(out[k]) && !out[k].length)) {
+      for (const s of textos) { const m = s.match(new RegExp(`<${k}>([\\s\\S]*?)</${k}>`)); if (m) { out[k] = m[1]; break } }
+    }
+    if (typeof out[k] === 'string') out[k] = out[k].split(new RegExp(`</${k}>|<\\/?(?:${LISTAS_AVATAR.join('|')})>`))[0]
+    out[k] = aLista(out[k])
+  }
+  return out
+}
+
 function Lista({ icon, titulo, items, tono, ancho }) {
-  if (!items?.length) return null
+  items = aLista(items)
+  if (!items.length) return null
   return (
     <section className={'av-lista' + (ancho ? ' ancho' : '') + (tono ? ` ${tono}` : '')}>
       <h3>{icon} {titulo}</h3>
