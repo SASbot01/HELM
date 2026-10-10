@@ -14,6 +14,7 @@
 
 export default {
   slug: 'skills-contenido-marca',
+  portada: '/aiparatodo/skills-contenido-marca.webp',
   seccion: 'skills',
   tema: 'contenido',
   titulo: '8 skills de contenido y marca para Claude',

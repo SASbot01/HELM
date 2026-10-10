@@ -16,6 +16,7 @@ const RUTA = 'coreyhaines31/marketingskills'
 
 export default {
   slug: 'skills-marketing-estrategia',
+  portada: '/aiparatodo/skills-marketing-estrategia.webp',
   seccion: 'skills',
   tema: 'estrategia',
   titulo: '8 skills de marketing y ventas para Claude',

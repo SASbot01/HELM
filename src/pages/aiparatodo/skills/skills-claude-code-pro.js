@@ -27,6 +27,7 @@ const sueltaMP = (ruta) =>
 
 export default {
   slug: 'skills-claude-code-pro',
+  portada: '/aiparatodo/skills-claude-code-pro.webp',
   seccion: 'skills',
   tema: 'desarrollo',
   titulo: '8 skills para que Claude Code trabaje con método',

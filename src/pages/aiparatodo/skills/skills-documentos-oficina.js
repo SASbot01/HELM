@@ -18,6 +18,7 @@ const LICENCIA_DOCS = 'Propietaria de Anthropic, source-available (no es código
 
 export default {
   slug: 'skills-documentos-oficina',
+  portada: '/aiparatodo/skills-documentos-oficina.webp',
   seccion: 'skills',
   tema: 'documentos',
   titulo: '5 skills de documentos para Claude',

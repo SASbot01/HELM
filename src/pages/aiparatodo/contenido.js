@@ -106,6 +106,7 @@ export const POSTS = [
     slug: '5-skills-diseno-claude',
     seccion: 'skills',
     tema: 'diseno',
+    portada: '/aiparatodo/5-skills-diseno-claude.webp',
     titulo: '5 skills de diseño para Claude',
     gancho: 'Diseña sin saber diseñar',
     resumen: 'Cinco skills gratis y oficiales de Anthropic que convierten a Claude en tu diseñador: webs completas, pósters, apps, paletas y arte generativo.',

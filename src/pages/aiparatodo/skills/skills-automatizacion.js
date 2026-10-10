@@ -15,6 +15,7 @@ const LIC_ANTHROPIC = 'Apache 2.0 (código abierto de verdad: puedes usarla, mod
 
 export default {
   slug: 'skills-automatizacion',
+  portada: '/aiparatodo/skills-automatizacion.webp',
   seccion: 'skills',
   tema: 'automatizacion',
   titulo: '7 skills para automatizar y construir con Claude',

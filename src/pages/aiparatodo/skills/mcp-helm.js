@@ -6,6 +6,7 @@
 // HELM a cada cuenta. Aquí se cuenta qué hace, no se reparte ningún token.
 export default {
   slug: 'mcp-helm',
+  portada: '/aiparatodo/mcp-helm.webp',
   seccion: 'skills',
   tema: 'mcp',
   tipo: 'mcp',
