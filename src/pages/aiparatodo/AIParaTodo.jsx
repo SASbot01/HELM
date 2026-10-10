@@ -273,7 +273,7 @@ function TarjetaHilo({ h, sk, tema }) {
   const claseTema = sk === 'guia' ? (esPdf ? 'nn' : 'cap') : (h.tema || sk)
   return (
     <Link className={'aip-tarjeta' + (h.pronto ? ' pronto' : '') + (esModos ? ' principal' : '')} to={`/aiparatodo/${sk}/${h.tema}/${h.slug}`}>
-      <div className={`aip-tarjeta-cover ${claseTema}`}>
+      <div className={`aip-tarjeta-cover ${claseTema}${h.portada ? ' llena' : ''}`}>
         {cover3d
           ? <img src={cover3d} alt="" width="900" height="900" loading="lazy" />
           : <Icono size={44} />}

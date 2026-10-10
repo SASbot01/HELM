@@ -468,6 +468,9 @@ a.aip-hilo:hover .aip-candado { color: var(--rosa); }
 }
 .aip-tarjeta-cover.mcp { color: #a8c3fb; background: radial-gradient(circle at 32% 24%, rgba(122, 165, 248, .28), transparent 58%), linear-gradient(140deg, #10203d, #05070d); }
 .aip-tarjeta-cover img { position: absolute; inset: 0; margin: auto; width: 74%; height: auto; filter: drop-shadow(0 20px 22px rgba(0, 0, 0, .55)); }
+/* Portada a sangre completa (skills y repos): llena el recuadro y no se desborda. */
+.aip-tarjeta-cover.llena { aspect-ratio: 1 / 1; overflow: hidden; }
+.aip-tarjeta-cover.llena img { position: absolute; inset: 0; margin: 0; width: 100%; height: 100%; object-fit: cover; filter: none; }
 .aip-tarjeta-n { position: absolute; left: 16px; top: 12px; font: 800 20px var(--mono); color: var(--rosa); opacity: .9; }
 .aip-tarjeta-txt { display: flex; flex-direction: column; gap: 8px; padding: 18px 20px 20px; flex: 1; }
 .aip-tarjeta-txt .aip-kicker { margin: 0; color: var(--rosa); }
