@@ -53,11 +53,12 @@ const MODELOS = {
   comercial: process.env.AGENTS_MODELO_COMERCIAL || 'claude-haiku-4-5',
   informe: process.env.AGENTS_MODELO_INFORME || 'claude-sonnet-5',
   editor: process.env.AGENTS_MODELO_EDITOR || 'claude-haiku-4-5',
+  programador: process.env.AGENTS_MODELO_PROGRAMADOR || 'claude-sonnet-5',
 }
 
 // Agentes que se pueden LANZAR a mano (o por MCP/Drive) pero que no entran en el
 // reparto diario del director: el editor de reels es uno.
-export const AGENTES_LANZABLES = [...AGENTES, 'editor']
+export const AGENTES_LANZABLES = [...AGENTES, 'editor', 'programador']
 
 // ── Fechas: el día es el de Madrid ──────────────────────────────────────────
 const fmtDia = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -79,9 +80,9 @@ const slug = (s) => String(s || '')
 // ── La cola ─────────────────────────────────────────────────────────────────
 // Un solo intento: si un agente falla, queda registrado como error y se
 // relanza a mano. Reintentar solo repetiría el gasto y el mismo fallo.
-export async function encolaAgente({ clientId, agente, origen, encargo = '', clave, turno = null }) {
+export async function encolaAgente({ clientId, agente, origen, encargo = '', clave, turno = null, params = null }) {
   const { error } = await supabase.from('agent_jobs').upsert({
-    tipo: 'equipo', payload: { clientId, agente, origen, encargo }, clave,
+    tipo: 'equipo', payload: { clientId, agente, origen, encargo, ...(params ? { params } : {}) }, clave,
     estado: 'pendiente', max_intentos: 1, correr_tras: new Date().toISOString(),
     ...(turno ? { created_at: turno } : {}),
   }, { onConflict: 'clave', ignoreDuplicates: true })
@@ -97,6 +98,22 @@ export async function miraAgenda() {
   const hoy = diaMadrid()
   for (const { client_id } of data || []) {
     await encolaAgente({ clientId: client_id, agente: 'director', origen: 'horario', clave: `equipo:director:${client_id}:${hoy}` })
+  }
+}
+
+/** Lunes a partir de las 7:00 de Madrid: el programador prepara el contenido de
+ *  la semana entrante para cada perfil activo, idempotente por semana (si ya
+ *  está montado un tipo, no lo repite). El botón manual hace lo mismo a demanda. */
+export async function miraProgramador() {
+  if (!esLunes(diaMadrid()) || horaMadrid() < 7) return
+  const { data, error } = await supabase.from('agent_perfiles').select('client_id').eq('activo', true)
+  if (error) throw error
+  const hoy = diaMadrid()
+  for (const { client_id } of data || []) {
+    await encolaAgente({
+      clientId: client_id, agente: 'programador', origen: 'horario',
+      clave: `programador:${client_id}:${hoy}`, params: { desde: masDias(hoy, 1), hasta: masDias(hoy, 7) },
+    })
   }
 }
 
@@ -658,10 +675,30 @@ function proximasFechas(hoy, n, ocupados, ranking) {
   return fechas
 }
 
-async function guionista(ctx) {
+// Las n fechas óptimas dentro de un periodo [desde, hasta]: libres y, con
+// ranking de métricas, en los mejores días primero; si no hay suficientes días
+// libres, se repiten (un día admite varias piezas).
+function fechasDePeriodo(desde, hasta, n, ocupados, ranking) {
+  const libres = []
+  for (let d = desde, i = 0; d <= hasta && i < 400; d = masDias(d, 1), i++) {
+    if (!ocupados.has(d)) libres.push(d)
+  }
+  if (ranking && ranking.length) {
+    const pref = (dia) => { const k = ranking.indexOf(diaSemanaFecha(dia)); return k < 0 ? 99 : k }
+    libres.sort((a, b) => pref(a) - pref(b) || (a < b ? -1 : 1))
+  }
+  const out = []
+  for (let i = 0; out.length < n && libres.length; i++) out.push(libres[i % libres.length])
+  return out
+}
+
+// Reúne el material del perfil y escribe guiones para unas fechas dadas, en
+// borrador. Lo comparten el guionista (día a día) y el programador (por periodo
+// y tipo). Con tipoForzado, TODOS son de ese tipo; sin él, el modelo elige.
+async function escribeGuiones(ctx, { fechas, tipoForzado = null, nota = null, avisar = true }) {
   const { clientId } = ctx
   const hoy = diaMadrid()
-  const n = Math.min(Math.max(Number(ctx.cfg.guiones_dia) || 2, 1), 5)
+  if (!fechas?.length) { await ctx.log('Sin fechas libres: no escribo.'); return [] }
   const creadores = (await creadoresDe(clientId)).filter(c => c.categoria !== 'Propio')
   const ids = creadores.map(c => c.id)
   const [reels, estudios, guia, biblia, propios, cal, notas] = await Promise.all([
@@ -670,27 +707,19 @@ async function guionista(ctx) {
     supabase.from('agent_memory').select('contenido').eq('ambito', 'global').is('client_id', null).limit(5),
     supabase.from('helm_biblia').select('kind, content').eq('client_id', clientId),
     reelsPropios(clientId),
-    calendarioTexto(clientId, masDias(hoy, -21), masDias(hoy, 21)),
+    calendarioTexto(clientId, masDias(hoy, -21), masDias(hoy, 35)),
     memoriaDe(clientId),
   ])
-
-  // Los días que tocan: los que mejor funcionan en esta cuenta por las métricas
-  // (día de la semana con más visitas de mediana), libres y a partir de mañana.
-  // Sin métricas suficientes, los primeros huecos libres como antes.
-  const ocupados = new Set(cal.guiones.map(g => g.date))
-  const ranking = await mejoresDiasSemana(clientId)
-  const fechas = proximasFechas(hoy, n, ocupados, ranking)
-
   const top = [...reels].filter(r => vistas(r) > 0).sort((a, b) => vistas(b) - vistas(a)).slice(0, 12)
   const nombre = (id) => creadores.find(c => c.id === id)?.nombre || '?'
   const guionDe = (r) => ((r.frases || []).length ? r.frases.map(f => `[${f.rol}] ${f.texto}`).join('\n') : String(r.transcripcion || '')).slice(0, 1400)
   const mejoresPropios = [...propios].filter(r => r.visitas > 0).sort((a, b) => b.visitas - a.visitas).slice(0, 6)
-  await ctx.log(`Material: ${top.length} reels más vistos de ${creadores.length} creadores, ${estudios.data?.length || 0} estudios, ${mejoresPropios.length} reels propios con métricas, ${notas.length} notas de memoria.`)
-  await ctx.log(`Fechas para los ${n} guiones: ${fechas.join(', ')}${ranking ? ` · mejores días por métricas: ${ranking.slice(0, 3).map(i => NOMBRE_DIA[i]).join(', ')}` : ' · sin métricas aún: primeros huecos libres'}.`)
+  const n = fechas.length
 
   const user = [
     `Perfil: ${ctx.perfil.name} (${ctx.perfil.slug}). Hoy es ${hoy}.`,
-    `Escribe ${n} ${n === 1 ? 'guion' : 'guiones'}, para estas fechas: ${fechas.join(', ')}.${ranking ? ' Son los días que mejor funcionan en esta cuenta según las métricas de Instagram.' : ''}`,
+    `Escribe ${n} ${n === 1 ? 'guion' : 'guiones'}, para estas fechas: ${fechas.join(', ')}.${tipoForzado ? ` TODOS de tipo "${TIPOS[tipoForzado] || tipoForzado}".` : ''}`,
+    nota || '',
     ctx.encargo ? `Encargo del director: ${ctx.encargo}` : '',
     `\n# Memoria compartida del perfil\n${memoriaTexto(notas, 'guionista')}`,
     (biblia.data || []).length ? `\n# Quién es este perfil\n${biblia.data.map(b => `## ${b.kind}\n${String(b.content).slice(0, 5000)}`).join('\n\n')}` : '',
@@ -710,7 +739,7 @@ Cómo escribes:
 · Las reglas del dueño y lo aprendido en la memoria mandan sobre todo lo demás.
 · Frases cortas. El gancho en los 3 primeros segundos. Entre 30 y 60 segundos hablados salvo que la memoria diga otra cosa.
 · No repitas un tema que ya esté en el calendario.
-· Cada guion lleva su tipo: viralidad (alcance), autoridad (demostrar que sabe), conversion (llevar a la conversación) o venta.
+· Cada guion lleva su tipo: viralidad (alcance), autoridad (demostrar que sabe), conversion (llevar a la conversación) o venta.${tipoForzado ? ` En esta tanda, TODOS son de tipo "${tipoForzado}".` : ''}
 · En "inspirado_en" di de qué reel o patrón sale la estructura.
 · Si te falta algo para escribir bien (reglas de marca, de qué va el perfil), déjalo como recado para el director.
 
@@ -756,9 +785,8 @@ ${REGLAS_COMUNES}`,
     const fecha = libres.includes(g.fecha) ? g.fecha : libres[0]
     if (!fecha) break
     libres.splice(libres.indexOf(fecha), 1)
-    // Puntúa el gancho (la primera línea del guion) con el scorer determinista,
-    // para que el dueño vea en el propio borrador si el arranque aguanta. No
-    // bloquea nada: es una señal, y el guionista ya escribe buscando el gancho.
+    // Puntúa el gancho (la primera línea) con el scorer determinista: una señal
+    // para el dueño, no un bloqueo.
     const primeraLinea = String(guion).split('\n').map(s => s.trim()).filter(Boolean)[0] || guion
     const gp = puntuarGancho(primeraLinea)
     const formula = clasificaGancho(primeraLinea)
@@ -769,27 +797,84 @@ ${REGLAS_COMUNES}`,
     if (g.inspirado_en) partes.push(`Inspirado en: ${String(g.inspirado_en).slice(0, 300)}`)
     partes.push(notaGancho)
     const cuerpo = partes.join('\n\n---\n')
+    const tipoFinal = tipoForzado || (TIPOS[g.tipo] ? g.tipo : null)
     const { error } = await supabase.from('helm_content_calendar').insert({
       client_id: clientId, date: fecha, title: titulo, body: cuerpo, format: 'reel',
-      tipo: TIPOS[g.tipo] ? g.tipo : null, source: 'agente', revision: 'borrador',
+      tipo: tipoFinal, source: 'agente', revision: 'borrador',
     })
     if (error) throw error
-    escritos.push(`${fecha} · ${titulo}`)
-    await ctx.log(`Borrador en el calendario: ${fecha} · «${titulo}» (${TIPOS[g.tipo] || 'sin tipo'}).`)
+    escritos.push({ fecha, titulo, tipo: tipoFinal })
+    await ctx.log(`Borrador: ${fecha} · «${titulo}» (${TIPOS[tipoFinal] || 'sin tipo'}).`)
   }
-  if (!escritos.length) await ctx.log('El modelo no devolvió ningún guion utilizable.')
-  else {
+  if (avisar && escritos.length) {
     await notificar(supabase, clientId, {
-      tipo: 'agentes',
+      tipo: 'agentes', destino: 'agentes',
       titulo: `${escritos.length} ${escritos.length === 1 ? 'guion nuevo' : 'guiones nuevos'} en borrador`,
-      cuerpo: `${escritos.join('\n')}\nRevísalos en Agentes → Equipo → Borradores.`,
-      destino: 'agentes',
+      cuerpo: `${escritos.map(e => `${e.fecha} · ${e.titulo}`).join('\n')}\nRevísalos en Agentes → Equipo → Borradores.`,
     })
   }
   await escribeMemoria(ctx, out)
+  return escritos
+}
+
+async function guionista(ctx) {
+  const { clientId } = ctx
+  const hoy = diaMadrid()
+  const n = Math.min(Math.max(Number(ctx.cfg.guiones_dia) || 2, 1), 5)
+  const cal = await calendarioTexto(clientId, masDias(hoy, -21), masDias(hoy, 21))
+  const ocupados = new Set(cal.guiones.map(g => g.date))
+  const ranking = await mejoresDiasSemana(clientId)
+  const fechas = proximasFechas(hoy, n, ocupados, ranking)
+  await ctx.log(`Fechas para los ${n} guiones: ${fechas.join(', ')}${ranking ? ` · mejores días: ${ranking.slice(0, 3).map(i => NOMBRE_DIA[i]).join(', ')}` : ' · primeros huecos libres'}.`)
+  const escritos = await escribeGuiones(ctx, { fechas })
   return escritos.length
-    ? `${escritos.length} ${escritos.length === 1 ? 'guion' : 'guiones'} en borrador: ${escritos.join('; ')}.`
+    ? `${escritos.length} ${escritos.length === 1 ? 'guion' : 'guiones'} en borrador: ${escritos.map(e => `${e.fecha} · ${e.titulo}`).join('; ')}.`
     : 'No escribí ningún guion.'
+}
+
+// ── El programador: contenido por TIPO y PERIODO, idempotente ───────────────
+// Para cada tipo pedido, si el periodo ya tiene suficientes guiones de ese tipo
+// no hace nada; si faltan, escribe los que falten en los mejores días libres.
+// Lo lanza el botón «iniciar estudio y creación» (ctx.params con desde/hasta/
+// tipos/porTipo) o, cada lunes, el horario para la semana entrante.
+const REPARTO_SEMANA = { viralidad: 3, autoridad: 2, conversion: 1, venta: 0 }
+async function programador(ctx) {
+  const { clientId } = ctx
+  const hoy = diaMadrid()
+  const p = ctx.params || {}
+  const desde = p.desde || masDias(hoy, 1)
+  const hasta = p.hasta || masDias(desde, 13)          // por defecto, dos semanas
+  const semanas = Math.max(1, Math.round((diasEntre(desde, hasta) + 1) / 7))
+  const tipos = (Array.isArray(p.tipos) && p.tipos.length ? p.tipos : Object.keys(REPARTO_SEMANA)).filter(t => TIPOS[t])
+  // Objetivo por tipo: si el botón manda porTipo, se usa tal cual; si no, el
+  // reparto semanal por el nº de semanas del periodo.
+  const objetivo = (t) => Math.max(0, Math.round(p.porTipo?.[t] != null ? Number(p.porTipo[t]) : (REPARTO_SEMANA[t] || 0) * semanas))
+
+  const { data: existentes } = await supabase.from('helm_content_calendar')
+    .select('date, tipo').eq('client_id', clientId).gte('date', desde).lte('date', hasta)
+  const hay = {}; for (const g of existentes || []) hay[g.tipo] = (hay[g.tipo] || 0) + 1
+  const ocupados = new Set((existentes || []).map(g => g.date))
+  const ranking = await mejoresDiasSemana(clientId)
+
+  await ctx.log(`Periodo ${desde} → ${hasta} (${semanas} sem). Tipos: ${tipos.map(t => TIPOS[t]).join(', ')}.`)
+  const resumen = []
+  for (const tipo of tipos) {
+    const meta = objetivo(tipo)
+    const tiene = hay[tipo] || 0
+    const faltan = meta - tiene
+    if (faltan <= 0) { await ctx.log(`${TIPOS[tipo]}: ya hay ${tiene}/${meta}, no toco nada (idempotente).`); resumen.push(`${TIPOS[tipo]}: ya estaba (${tiene})`); continue }
+    const fechas = fechasDePeriodo(desde, hasta, faltan, ocupados, ranking)
+    for (const f of fechas) ocupados.add(f)              // repartir entre días
+    await ctx.log(`${TIPOS[tipo]}: faltan ${faltan} (hay ${tiene}/${meta}). Escribo en ${fechas.join(', ')}.`)
+    const escritos = await escribeGuiones(ctx, { fechas, tipoForzado: tipo, avisar: false })
+    resumen.push(`${TIPOS[tipo]}: +${escritos.length}`)
+  }
+  await notificar(supabase, clientId, {
+    tipo: 'agentes', destino: 'roadmap',
+    titulo: `Programación de contenido lista · ${desde} → ${hasta}`,
+    cuerpo: `${resumen.join('\n')}\nRevísalos en el Roadmap (día a día) o en Agentes → Por aprobar.`,
+  }).catch(() => {})
+  return resumen.join(' · ') || 'Nada que programar.'
 }
 
 // Sin nada que contar no se llama al modelo, pero los avisos de la vez
@@ -1041,13 +1126,13 @@ async function editor(ctx) {
     : 'Demostración del proceso, sin vídeo. Motor de render en construcción.'
 }
 
-const CORRE = { director, investigador, analista, productor, comercial, informe, guionista, editor }
+const CORRE = { director, investigador, analista, productor, comercial, informe, guionista, editor, programador }
 
 // ── Una ejecución ───────────────────────────────────────────────────────────
 
 /** Lo que llama el worker para un trabajo de tipo 'equipo'. */
 export async function ejecutaAgente(job) {
-  const { clientId, agente, origen = 'manual', encargo = '' } = job.payload || {}
+  const { clientId, agente, origen = 'manual', encargo = '', params = null } = job.payload || {}
   if (!CORRE[agente]) throw new Error(`Agente desconocido: ${agente}`)
   const [{ data: perfil }, { data: cfg }] = await Promise.all([
     supabase.from('clients').select('id, slug, name').eq('id', clientId).maybeSingle(),
@@ -1067,7 +1152,7 @@ export async function ejecutaAgente(job) {
   const acaba = (estado, extra) => guarda({ estado, acabado_en: new Date().toISOString(), ...extra })
 
   const ctx = {
-    clientId, agente, origen, encargo, perfil, modelo,
+    clientId, agente, origen, encargo, params, perfil, modelo,
     cfg: cfg || { activo: false, guiones_dia: 2, tope_tokens_dia: 400000 },
     // Cada paso se guarda al momento: la pantalla lo va enseñando en vivo.
     async log(texto) { pasos.push({ t: new Date().toISOString(), texto: String(texto).slice(0, 600) }); await guarda() },

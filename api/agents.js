@@ -509,6 +509,27 @@ async function handler(req, res) {
       return res.status(200).json({ ok: true })
     }
 
+    // Botón «iniciar estudio y creación»: el programador crea+programa el
+    // contenido de un periodo por tipo, idempotente (no repite lo ya montado).
+    case 'equipo-programar': {
+      const b = req.body || {}
+      if (!b.clientId) return res.status(400).json({ error: 'Falta el perfil' })
+      const params = {}
+      if (b.desde) params.desde = String(b.desde).slice(0, 10)
+      if (b.hasta) params.hasta = String(b.hasta).slice(0, 10)
+      if (Array.isArray(b.tipos) && b.tipos.length) params.tipos = b.tipos.slice(0, 4)
+      if (b.porTipo && typeof b.porTipo === 'object') params.porTipo = b.porTipo
+      const { data: ya, error } = await supabase.from('agent_jobs').select('id').eq('tipo', 'equipo')
+        .in('estado', ['pendiente', 'corriendo']).eq('payload->>clientId', b.clientId).eq('payload->>agente', 'programador').limit(1)
+      if (error) throw error
+      if (ya?.length) return res.status(409).json({ error: 'El programador ya está en cola o trabajando' })
+      await encolaAgente({
+        clientId: b.clientId, agente: 'programador', origen: 'manual',
+        clave: `programador:${b.clientId}:manual:${Date.now()}`, params,
+      })
+      return res.status(200).json({ ok: true })
+    }
+
     // Aprobar o descartar un borrador. Solo toca filas que siguen en borrador:
     // un guion ya aprobado no se borra desde aquí.
     case 'equipo-guion': {

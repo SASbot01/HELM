@@ -71,6 +71,7 @@ export const agentsApi = {
   equipo: (clientId) => pide(url('equipo', clientId ? `&clientId=${clientId}` : '')),
   equipoConfig: (body) => pide(url('equipo-config'), { method: 'POST', body }),
   equipoLanzar: (body) => pide(url('equipo-lanzar'), { method: 'POST', body }),
+  equipoProgramar: (body) => pide(url('equipo-programar'), { method: 'POST', body }),
   equipoGuion: (body) => pide(url('equipo-guion'), { method: 'POST', body }),
   equipoTarea: (body) => pide(url('equipo-tarea'), { method: 'POST', body }),
   equipoNota: (body) => pide(url('equipo-nota'), { method: 'POST', body }),
