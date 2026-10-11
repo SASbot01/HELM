@@ -728,13 +728,16 @@ const { generaArticulo, miraRedaccion } = await import('../api/_lib/redaccion.js
 const { generaAvatar } = await import('../api/_lib/avatar.js')
 // El radar de tecnología (api/_lib/radar.js): una pasada al día y a petición.
 const { generaRadar, miraRadar } = await import('../api/_lib/radar.js')
+// Métricas de Instagram (api/_lib/metricas-ig.js): a las 6:00 de Madrid se
+// resincronizan todas las cuentas conectadas, tengan equipo de agentes o no.
+const { miraMetricas, sincronizaMetricas } = await import('../api/_lib/metricas-ig.js')
 
 const CADA_CUANTO_AGENDA_MS = 60_000
 let ultimaAgenda = 0
 
 // ── Bucle ───────────────────────────────────────────────────────────────────
 
-const PASOS = { descargar, transcribir, etiquetar, 'drive-ingesta': driveIngesta, estudiar, equipo: ejecutaAgente, noticias: generaNoticias, articulo: generaArticulo, avatar: generaAvatar, radar: generaRadar }
+const PASOS = { descargar, transcribir, etiquetar, 'drive-ingesta': driveIngesta, estudiar, equipo: ejecutaAgente, noticias: generaNoticias, articulo: generaArticulo, avatar: generaAvatar, radar: generaRadar, metricas: sincronizaMetricas }
 
 let parando = false
 for (const s of ['SIGINT', 'SIGTERM']) {
@@ -763,6 +766,7 @@ async function bucle() {
         await miraNoticias().catch(e => log('no pude mirar las noticias del día:', e.message))
         await miraRedaccion().catch(e => log('no pude mirar la redacción del diario:', e.message))
         await miraRadar().catch(e => log('no pude mirar el radar:', e.message))
+        await miraMetricas().catch(e => log('no pude mirar las métricas del día:', e.message))
       }
       job = await coge()
       if (!job) { await duerme(ESPERA_VACIO_MS); continue }
