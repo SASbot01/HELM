@@ -75,7 +75,7 @@ export default function AIParaTodo() {
   }, [])
   useCabeceraPublica({
     titulo: 'AI para todo — la comunidad de IA de Alex Silvestre',
-    descripcion: 'Skills para Claude, noticias de cada día, comunidad y la guía completa de Claude. En español y gratis.',
+    descripcion: 'Skills para Claude, noticias de cada día, comunidad y la guía completa de Claude. En español, para miembros.',
     imagen: '/inicio/og.jpg', colorBarra: '#050203',
   })
   return (
@@ -169,8 +169,8 @@ function Portada() {
       </a>
       <p className="aip-sub">
         Skills para Claude, las noticias del día que importan, una comunidad para preguntar y enseñar lo que
-        montas, y la guía completa de Claude. En español y gratis. Entra donde quieras: para leer un
-        hilo solo te pedimos cuatro datos, una vez.
+        montas, y la guía completa de Claude. En español. Hazte miembro por <b>1,97 €/mes</b> y se te
+        abre todo: hilos, capítulos y noticias.
       </p>
       <div className="aip-zonas">
         {SECCIONES.map(s => {
@@ -199,7 +199,7 @@ function BannerNoNegociables({ donde }) {
     <Link className="aip-nn-banner" to={NN_RUTA} onClick={() => track('clic_cta', { donde: `aip-nn-${donde}` })}>
       <img src={NN_PORTADA_3D} alt="" width="900" height="900" loading="lazy" />
       <div>
-        <p className="aip-kicker"><FileText size={13} /> Guía gratuita en PDF</p>
+        <p className="aip-kicker"><FileText size={13} /> Guía en PDF · miembros</p>
         <h3>Mis 8 <em>no negociables</em> con Claude</h3>
         <p>Cómo trabajo para que la IA haga el trabajo de verdad, y no solo te dé conversación. Composio, Skills, Loops, Modo plan, Subagentes, Hooks, el modelo correcto y Todo a GitHub.</p>
         <span className="aip-btn pequeno">Descárgala <ArrowRight size={14} /></span>
@@ -214,7 +214,7 @@ function BannerModos({ donde }) {
     <Link className="aip-nn-banner" to={MODOS_RUTA} onClick={() => track('clic_cta', { donde: `aip-modos-${donde}` })}>
       <img src={MODOS_PORTADA_3D} alt="" width="900" height="900" loading="lazy" />
       <div>
-        <p className="aip-kicker"><FileText size={13} /> Guía gratuita en PDF</p>
+        <p className="aip-kicker"><FileText size={13} /> Guía en PDF · miembros</p>
         <h3>Los <em>Mods</em> de Claude</h3>
         <p>3 usos de los que nadie habla, los prompts para que Claude te los construya solo, y cómo no meterte un troyano. Todo comprobado contra la documentación oficial.</p>
         <span className="aip-btn pequeno">Descárgala <ArrowRight size={14} /></span>
