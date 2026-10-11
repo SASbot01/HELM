@@ -45,6 +45,11 @@ import './aip.css'
 // v2: desde octubre de 2026 la puerta pide cuatro datos. Quien entró antes
 // solo con el correo los deja una vez más.
 const LLAVE = 's4sf.aiparatodo.v2'
+// Acceso de pago: suscripción 1,97 €/mes (de por vida) — rebajado de 12 €/mes.
+// El Payment Link de Stripe redirige a /aiparatodo?pago=ok al terminar, y eso
+// desbloquea el acceso. (Es un desbloqueo simple; para verificación real haría
+// falta un webhook de Stripe.)
+const PAGO_LINK = 'https://buy.stripe.com/test_7sY3cu5aratnexD1eM5kk01'
 const ICONOS = { skills: Sparkles, news: Newspaper, comunidad: Users, guia: BookOpen }
 const fechaCorta = (f) => new Date(`${f}T12:00:00`).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
 const fechaLarga = (f) => new Date(`${f}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -58,6 +63,15 @@ export default function AIParaTodo() {
   // dentro las quitan, y el alta las necesita para saber de qué Reel vino.
   useState(() => origen())
   const [acceso, setAcceso] = useState(accesoGuardado)
+  // Vuelta del pago de Stripe (?pago=ok): desbloquea el acceso y limpia la URL.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('pago') !== 'ok') return
+    const acc = { id: null, pago: true, at: new Date().toISOString() }
+    try { localStorage.setItem(LLAVE, JSON.stringify(acc)) } catch { /* incógnito */ }
+    setAcceso(acc)
+    track('pago', { donde: 'aiparatodo' })
+    try { window.history.replaceState({}, '', window.location.pathname) } catch { /* noop */ }
+  }, [])
   useCabeceraPublica({
     titulo: 'AI para todo — la comunidad de IA de Alex Silvestre',
     descripcion: 'Skills para Claude, noticias de cada día, comunidad y la guía completa de Claude. En español y gratis.',
@@ -385,62 +399,22 @@ function Hilo({ acceso, setAcceso }) {
   )
 }
 
-// ── La puerta: cuatro datos para leer ───────────────────────────────────────
-function Puerta({
-  setAcceso, pipeline, nota,
-  titulo = 'Deja tus datos para leerlo',
-  texto = 'Una sola vez: con estos cuatro datos se abren todos los hilos, los capítulos de la guía y las noticias. Te avisamos cuando haya nuevos.',
-  boton = 'Leer',
-}) {
-  const [f, setF] = useState({ nombre: '', email: '', profesion: '', ingresos: '' })
-  const [estado, setEstado] = useState(null)
-  const [error, setError] = useState(null)
-  const pon = (campo) => (e) => setF(s => ({ ...s, [campo]: e.target.value }))
-  const completo = f.nombre.trim() && f.email.trim() && f.profesion.trim() && f.ingresos
-
-  async function entrar(e) {
-    e.preventDefault()
-    if (!completo) return
-    setEstado('enviando'); setError(null)
-    try {
-      const lead = await altaMiembro({ ...f, nombre: f.nombre.trim(), email: f.email.trim(), pipeline, nota })
-      const acceso = {
-        id: lead?.id || null, nombre: f.nombre.trim(), profesion: f.profesion.trim(),
-        ingresos: f.ingresos, at: new Date().toISOString(),
-      }
-      try { localStorage.setItem(LLAVE, JSON.stringify(acceso)) } catch { /* modo incógnito */ }
-      track('lead', { donde: 'aiparatodo', embudo: pipeline, ingresos: f.ingresos })
-      setAcceso(acceso)
-    } catch (err) {
-      setError(err.message); setEstado(null)
-    }
-  }
-
+// ── La puerta: suscripción de pago (1,97 €/mes de por vida) ─────────────────
+function Puerta({ titulo = 'Acceso a AI para todo' }) {
   return (
-    <form className="aip-card aip-puerta" onSubmit={entrar}>
+    <div className="aip-card aip-puerta aip-muro">
       <p className="aip-kicker"><Lock size={13} /> contenido para miembros</p>
       <h2>{titulo}</h2>
-      <p>{texto}</p>
-      <div className="aip-campos cuatro">
-        <input aria-label="Nombre" placeholder="Tu nombre" required value={f.nombre} maxLength={80} autoComplete="given-name" onChange={pon('nombre')} />
-        <input aria-label="Correo" type="email" placeholder="Tu correo" required value={f.email} maxLength={160} autoComplete="email" inputMode="email" onChange={pon('email')} />
-        <input className="ancho" aria-label="Profesión" placeholder="Tu profesión (ej. editor de vídeo, nutricionista, abogada)" required value={f.profesion} maxLength={120} autoComplete="organization-title" onChange={pon('profesion')} />
-        <fieldset className="aip-ingresos">
-          <legend>Tus ingresos al mes</legend>
-          {Object.entries(INGRESOS).map(([valor, etiqueta]) => (
-            <label key={valor} className={f.ingresos === valor ? 'on' : ''}>
-              <input type="radio" name="ingresos" value={valor} aria-label={etiqueta} required checked={f.ingresos === valor} onChange={pon('ingresos')} />
-              <span>{etiqueta.replace('/mes', '')}</span>
-            </label>
-          ))}
-        </fieldset>
-        <button className="aip-btn" disabled={estado === 'enviando' || !completo}>
-          {estado === 'enviando' ? 'Abriendo…' : <>{boton} <ArrowRight size={18} /></>}
-        </button>
+      <p>Con el acceso se abren <b>todos los hilos</b>, los <b>capítulos de la guía</b> y las <b>noticias</b>. Un solo pago al mes.</p>
+      <div className="aip-precio">
+        <span className="aip-precio-ahora">1,97 €<small>/mes</small></span>
+        <span className="aip-precio-antes">12 €/mes</span>
+        <span className="aip-precio-vida">precio de por vida</span>
       </div>
-      {error && <p className="aip-error" role="alert">{error}</p>}
-      <p className="aip-legal">Usamos tus datos solo para enviarte contenido de AI para todo. Puedes darte de baja cuando quieras. <a href="/privacidad">Privacidad</a></p>
-    </form>
+      <p className="aip-urgencia"><b>⏳ En 30 días sube a 12 €/mes</b> para los nuevos. Entra ahora y te quedas en <b>1,97 €/mes para siempre</b>.</p>
+      <a className="aip-btn grande" href={PAGO_LINK}>Pagar y acceder <ArrowRight size={18} /></a>
+      <p className="aip-legal">Suscripción mensual, cancela cuando quieras. Pago seguro con Stripe. <a href="/privacidad">Privacidad</a></p>
+    </div>
   )
 }
 
