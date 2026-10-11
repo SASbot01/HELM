@@ -1,14 +1,14 @@
 // HELM — Roadmap semestral: el plan del negocio a seis meses, mes → semana → día.
 //
-// FASE 1: muestra la ESTRUCTURA compartida (misma para todos los clientes, para
-// llegar a 50.000 €/mes), como una línea temporal. Los meses son los círculos
-// grandes; dentro, las semanas; y la semana actual se abre con sus días y toda
-// la cadencia (reels por formato, historias, CTA). La plantilla va embebida aquí
-// a propósito: en la Fase 2 un agente la rellenará por cliente con guiones y
-// fechas reales (y entonces leerá de la memoria/el calendario). Agnóstica al
-// servicio: la adaptación por cliente viene después.
-import { useMemo, useState } from 'react'
-import { CalendarRange, ChevronLeft, ChevronRight, Megaphone, Target, Zap } from 'lucide-react'
+// La metodología (meses → semanas → cadencia por día) va embebida como plantilla
+// compartida, igual para todos los perfiles. Sobre ella se pintan los datos
+// REALES del perfil: al abrir un día se ven los guiones que el equipo ya tiene
+// programados para esa fecha (de helm_content_calendar), su plan de reels y el
+// contexto de ads del mes. Los meses, las semanas y ahora también los días son
+// desplegables.
+import { useEffect, useMemo, useState } from 'react'
+import { CalendarRange, ChevronLeft, ChevronRight, Megaphone, Target, Zap, FileText, Check } from 'lucide-react'
+import { supabase } from '../../utils/supabase'
 import './roadmap.css'
 
 // ── Plantilla compartida (metodología) ──────────────────────────────────────
@@ -62,13 +62,17 @@ const FORMATO = {
 const TEMPORADA = ['Propósitos de año nuevo', 'San Valentín', '—', 'Semana Santa', '—', 'Rebajas de verano', 'Verano', 'Verano (flojo)', 'Vuelta al cole', 'Halloween', 'Black Friday', 'Navidad']
 const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
+const pad2 = (n) => String(n).padStart(2, '0')
+const iso = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 const mismoMes = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth()
 const mismoDia = (a, b) => mismoMes(a, b) && a.getDate() === b.getDate()
 const lunes0 = (d) => (d.getDay() + 6) % 7 // 0 = lunes
+const lunes0Iso = (f) => (new Date(`${f}T12:00:00`).getDay() + 6) % 7
 const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1)
 const mesLargo = (d) => capital(d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }))
 const mesCorto = (d) => capital(d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', ''))
 const dd = (d) => d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }).replace('.', '')
+const fechaLarga = (f) => capital(new Date(`${f}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }))
 
 // Las semanas (lun–dom) que tocan un mes: la del día 1 y las siguientes hasta
 // que el lunes se pasa del último día. Alguna puede empezar en el mes anterior.
@@ -85,11 +89,78 @@ function semanasDelMes(y, m) {
   return semanas
 }
 
-export default function Roadmap({ client }) {
+// Panel con lo que hay para un día: los guiones ya programados (reales) y el
+// plan de la metodología para ese día de la semana, con el contexto de ads.
+function DetalleDia({ fecha, guiones, mes, onCerrar }) {
+  const plan = PLANTILLA.semana[lunes0Iso(fecha)]
+  return (
+    <section className="rm-detalle">
+      <header className="rm-detalle-cab">
+        <h4>{fechaLarga(fecha)}</h4>
+        <button type="button" className="rm-detalle-x" onClick={onCerrar} aria-label="Cerrar">×</button>
+      </header>
+      <div className="rm-detalle-cols">
+        <div className="rm-detalle-bloque">
+          <h5><FileText size={14} /> Guiones programados</h5>
+          {guiones.length ? (
+            <ul className="rm-guiones">
+              {guiones.map(g => (
+                <li key={g.id} className="rm-guion">
+                  <span className="rm-guion-tit">{g.title || '(sin título)'}</span>
+                  <span className="rm-guion-meta">
+                    {g.tipo && <span className="rm-tag">{g.tipo}</span>}
+                    {g.format && g.format !== 'reel' && <span className="rm-tag tenue">{g.format}</span>}
+                    <span className={'rm-tag ' + (g.revision === 'aprobado' ? 'ok' : 'bor')}>{g.revision === 'aprobado' ? 'aprobado' : 'borrador'}</span>
+                    {g.grabado && <span className="rm-tag ok"><Check size={11} /> grabado</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="rm-detalle-vacio">Ningún guion programado todavía. Los que proponga el equipo caerán aquí, en su mejor día; cuando los apruebes se quedan fijados.</p>
+          )}
+        </div>
+        <div className="rm-detalle-bloque">
+          <h5><Target size={14} /> Plan del día</h5>
+          <div className="rm-dia-reels">
+            {plan.reels.map((r, j) => <span className="rm-reel" key={j} style={{ '--c': FORMATO[r].color }}>{FORMATO[r].nombre}</span>)}
+          </div>
+          <p className="rm-detalle-nota">Historias a diario{plan.cta ? ' · hoy toca CTA' : ''} · {plan.reels.length} reels.</p>
+          <div className="rm-detalle-ads">
+            <Megaphone size={13} /> Ads de {mesCorto(mes.fecha)}: {mes.ads.presupuesto.toLocaleString('es-ES')} € · {mes.ads.campanas.join(', ')}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+export default function Roadmap({ client, clientId }) {
   const hoy = useMemo(() => new Date(), [])
   const [offset, setOffset] = useState(0)          // meses que se desplaza el inicio del semestre
   const [mesSel, setMesSel] = useState(0)
   const [semanaSel, setSemanaSel] = useState(null) // null → semana actual (o la 1ª)
+  const [diaSel, setDiaSel] = useState(null)       // 'AAAA-MM-DD' del día abierto, o null
+
+  // Los guiones reales del perfil, para colgarlos de su día. RLS abierta en la
+  // tabla, así que se leen directo como en el resto de vistas.
+  const [guiones, setGuiones] = useState([])
+  useEffect(() => {
+    if (!clientId) { setGuiones([]); return }
+    let vivo = true
+    supabase.from('helm_content_calendar')
+      .select('id, date, title, format, tipo, revision, grabado, status')
+      .eq('client_id', clientId)
+      .order('date', { ascending: true })
+      .limit(500)
+      .then(({ data, error }) => { if (vivo && !error) setGuiones(data || []) })
+    return () => { vivo = false }
+  }, [clientId])
+  const guionesPorDia = useMemo(() => {
+    const m = {}
+    for (const g of guiones) (m[g.date] ||= []).push(g)
+    return m
+  }, [guiones])
 
   const base = useMemo(() => new Date(hoy.getFullYear(), hoy.getMonth() + offset, 1), [hoy, offset])
   const meses = useMemo(() => PLANTILLA.meses.map((p, i) => {
@@ -105,16 +176,18 @@ export default function Roadmap({ client }) {
   const semIdx = semanaSel != null ? Math.min(semanaSel, semanas.length - 1) : (semActualIdx >= 0 ? semActualIdx : 0)
   const semana = semanas[semIdx]
 
-  const elegirMes = (i) => { setMesSel(i); setSemanaSel(null) }
+  const elegirMes = (i) => { setMesSel(i); setSemanaSel(null); setDiaSel(null) }
   // Desplazar el semestre también resetea la semana (como al elegir mes).
-  const desplazar = (n) => { setOffset(o => o + n); setSemanaSel(null) }
+  const desplazar = (n) => { setOffset(o => o + n); setSemanaSel(null); setDiaSel(null) }
+  const elegirSemana = (k) => { setSemanaSel(k); setDiaSel(null) }
+  const abrirDia = (f) => setDiaSel(s => (s === f ? null : f))
 
   return (
     <div className="helm-roadmap">
       <header className="rm-cab">
         <div>
           <p className="rm-cab-sub">
-            El sistema compartido a seis meses para llegar a <b>{PLANTILLA.objetivo}</b>, igual para todos los perfiles. Se adaptará a {client?.name ? <b>{client.name}</b> : 'cada cliente'} con guiones y fechas en la siguiente fase.
+            El sistema compartido a seis meses para llegar a <b>{PLANTILLA.objetivo}</b>, igual para todos los perfiles. Abre un día para ver los guiones de {client?.name ? <b>{client.name}</b> : 'este perfil'} y su plan.
           </p>
         </div>
         <div className="rm-inicio">
@@ -161,7 +234,7 @@ export default function Roadmap({ client }) {
         {semanas.map((s, k) => {
           const actual = k === semActualIdx
           return (
-            <button key={k} className={'rm-sem' + (k === semIdx ? ' sel' : '') + (actual ? ' hoy' : '')} onClick={() => setSemanaSel(k)} aria-pressed={k === semIdx} aria-current={actual ? 'date' : undefined}>
+            <button key={k} className={'rm-sem' + (k === semIdx ? ' sel' : '') + (actual ? ' hoy' : '')} onClick={() => elegirSemana(k)} aria-pressed={k === semIdx} aria-current={actual ? 'date' : undefined}>
               <span className="rm-sem-bola" />
               <span className="rm-sem-lbl">Sem {k + 1}</span>
               {actual && <span className="rm-sem-hoy">Esta semana</span>}
@@ -182,8 +255,15 @@ export default function Roadmap({ client }) {
             const plan = PLANTILLA.semana[lunes0(d)]
             const fuera = !mismoMes(d, mes.fecha)
             const esHoy = mismoDia(d, hoy) && !fuera
+            const f = iso(d)
+            const gs = guionesPorDia[f] || []
+            const sel = diaSel === f
             return (
-              <article key={k} className={'rm-dia' + (fuera ? ' fuera' : '') + (esHoy ? ' hoy' : '')}>
+              <article key={k}
+                className={'rm-dia' + (fuera ? ' fuera' : '') + (esHoy ? ' hoy' : '') + (sel ? ' sel' : '') + (gs.length ? ' tiene' : '')}
+                role="button" tabIndex={0} aria-pressed={sel}
+                onClick={() => abrirDia(f)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirDia(f) } }}>
                 <div className="rm-dia-cab">
                   <span className="rm-dia-nom">{DIAS[k]} {d.getDate()}</span>
                   {plan.cta && <span className="rm-cta">CTA</span>}
@@ -194,13 +274,19 @@ export default function Roadmap({ client }) {
                   ))}
                 </div>
                 <div className="rm-dia-pie">
-                  <span className="rm-hist">Historias</span>
+                  {gs.length
+                    ? <span className="rm-dia-guiones"><FileText size={12} /> {gs.length} {gs.length === 1 ? 'guion' : 'guiones'}</span>
+                    : <span className="rm-hist">Historias</span>}
                   <span className="rm-reels-n">{plan.reels.length} reels</span>
                 </div>
               </article>
             )
           })}
         </div>
+
+        {diaSel && (
+          <DetalleDia fecha={diaSel} guiones={guionesPorDia[diaSel] || []} mes={mes} onCerrar={() => setDiaSel(null)} />
+        )}
 
         {/* Leyenda + resumen de la cadencia */}
         <div className="rm-leyenda">
