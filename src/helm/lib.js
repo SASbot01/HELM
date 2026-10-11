@@ -419,6 +419,16 @@ export const stripeApi = {
     apiFetch('/api/stripe?action=sync', { method: 'POST', body: { clientId, days } }),
 }
 
+// Ads (anuncios) por perfil, con test de 5 días por conversiones UTM. Viven en
+// la sección Roadmap, junto al contenido orgánico.
+export const adsApi = {
+  list: (clientId) => apiFetch(`/api/ads?action=list&clientId=${clientId}`),
+  create: (clientId, ad) => apiFetch('/api/ads?action=create', { method: 'POST', body: { clientId, ...ad } }),
+  publicar: (clientId, id) => apiFetch('/api/ads?action=publicar', { method: 'POST', body: { clientId, id } }),
+  estado: (clientId, id, estado) => apiFetch('/api/ads?action=estado', { method: 'POST', body: { clientId, id, estado } }),
+  borrar: (clientId, id) => apiFetch(`/api/ads?action=borrar&clientId=${clientId}&id=${id}`, { method: 'DELETE' }),
+}
+
 // Instagram por perfil (sección Contenido). El token vive en el servidor y solo
 // vuelve enmascarado; las métricas se leen luego de helm_ig_media, no de Meta.
 export const instagramApi = {

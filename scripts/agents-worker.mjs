@@ -731,13 +731,16 @@ const { generaRadar, miraRadar } = await import('../api/_lib/radar.js')
 // Métricas de Instagram (api/_lib/metricas-ig.js): a las 6:00 de Madrid se
 // resincronizan todas las cuentas conectadas, tengan equipo de agentes o no.
 const { miraMetricas, sincronizaMetricas } = await import('../api/_lib/metricas-ig.js')
+// Test de ads (api/_lib/ads.js): al pasar los 5 días de un ad publicado, se
+// cuenta su conversión por UTM y se deja el veredicto.
+const { estudiaAd } = await import('../api/_lib/ads.js')
 
 const CADA_CUANTO_AGENDA_MS = 60_000
 let ultimaAgenda = 0
 
 // ── Bucle ───────────────────────────────────────────────────────────────────
 
-const PASOS = { descargar, transcribir, etiquetar, 'drive-ingesta': driveIngesta, estudiar, equipo: ejecutaAgente, noticias: generaNoticias, articulo: generaArticulo, avatar: generaAvatar, radar: generaRadar, metricas: sincronizaMetricas }
+const PASOS = { descargar, transcribir, etiquetar, 'drive-ingesta': driveIngesta, estudiar, equipo: ejecutaAgente, noticias: generaNoticias, articulo: generaArticulo, avatar: generaAvatar, radar: generaRadar, metricas: sincronizaMetricas, 'ad-estudio': estudiaAd }
 
 let parando = false
 for (const s of ['SIGINT', 'SIGTERM']) {
