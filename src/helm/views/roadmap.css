@@ -155,3 +155,8 @@
 .rm-prog-op.on { color: var(--c, #d9b66b); border-color: color-mix(in srgb, var(--c, #d9b66b) 55%, transparent); background: color-mix(in srgb, var(--c, #d9b66b) 14%, transparent); }
 .rm-prog-ok { color: #4ade80; font: 14px inherit; margin: 0 0 14px; }
 .rm-prog-err { color: #f87171; font: 14px inherit; margin: 0 0 14px; }
+
+/* Botón PDF de la semana */
+.rm-semana-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.rm-pdf-btn { white-space: nowrap; font-size: 13px; font-weight: 600; }
+.rm-pdf-btn:disabled { opacity: .45; cursor: not-allowed; }

@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CalendarRange, ChevronLeft, ChevronRight, Megaphone, Target, Zap, FileText, Download, Sparkles, ExternalLink } from 'lucide-react'
 import { supabase } from '../../utils/supabase'
 import { agentsApi } from '../../agents/api'
+import { descargarPDFGuiones } from './pdfGuiones'
 import './roadmap.css'
 
 // ── Plantilla compartida (metodología) ──────────────────────────────────────
@@ -238,7 +239,7 @@ export default function Roadmap({ client, clientId }) {
     if (!clientId) { setGuiones([]); return }
     let vivo = true
     supabase.from('helm_content_calendar')
-      .select('id, date, title, format, tipo, revision, grabado, status')
+      .select('id, date, title, body, format, tipo, revision, grabado, status')
       .eq('client_id', clientId)
       .order('date', { ascending: true })
       .limit(500)
@@ -264,6 +265,7 @@ export default function Roadmap({ client, clientId }) {
   const semActualIdx = useMemo(() => (mismoMes(mes.fecha, hoy) ? semanas.findIndex(s => s.dias.some(d => mismoDia(d, hoy))) : -1), [semanas, hoy, mes])
   const semIdx = semanaSel != null ? Math.min(semanaSel, semanas.length - 1) : (semActualIdx >= 0 ? semActualIdx : 0)
   const semana = semanas[semIdx]
+  const guionesSemana = useMemo(() => semana.dias.flatMap(d => guionesPorDia[iso(d)] || []), [semana, guionesPorDia])
 
   const elegirMes = (i) => { setMesSel(i); setSemanaSel(null) }
   // Desplazar el semestre también resetea la semana (como al elegir mes).
@@ -339,8 +341,12 @@ export default function Roadmap({ client, clientId }) {
       {/* Panel de la semana: los días */}
       <section className="rm-semana">
         <h3 className="rm-semana-cab">
-          Semana {semIdx + 1} · del {dd(semana.inicio)} al {dd(semana.fin)}
-          {semIdx === semActualIdx && <span className="rm-ahora">en curso</span>}
+          <span>Semana {semIdx + 1} · del {dd(semana.inicio)} al {dd(semana.fin)}
+          {semIdx === semActualIdx && <span className="rm-ahora">en curso</span>}</span>
+          <button type="button" className="helm-btn sec rm-pdf-btn" disabled={!guionesSemana.length}
+            onClick={() => descargarPDFGuiones(guionesSemana, { perfil: client?.name, desde: iso(semana.inicio), hasta: iso(semana.fin) })}>
+            <Download size={14} /> PDF de la semana{guionesSemana.length ? ` (${guionesSemana.length})` : ''}
+          </button>
         </h3>
 
         <div className="rm-dias">
