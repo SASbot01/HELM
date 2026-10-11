@@ -52,7 +52,7 @@ export default function Registro() {
     <div className="admin-login-page">
       <div className="admin-login-glow" />
       <div className="admin-login-card">
-        <img src="/assets/logos/apex-mark-platinum.svg" alt="HELM" className="admin-login-logo" />
+        <img src="/assets/logos/helm-mark.svg" alt="HELM" className="admin-login-logo" />
         <h1 className="admin-login-title" style={{ letterSpacing: '4px' }}>HELM</h1>
 
         {done ? (
