@@ -429,6 +429,14 @@ export const adsApi = {
   borrar: (clientId, id) => apiFetch(`/api/ads?action=borrar&clientId=${clientId}&id=${id}`, { method: 'DELETE' }),
 }
 
+// Contenido: marcar un guion como grabado (dispara la detección del vídeo en
+// Drive y lo archiva en su pieza) y leer en qué fase de Drive está cada guion.
+export const contenidoApi = {
+  grabar: (clientId, guionId, grabado = true) =>
+    apiFetch(`/api/agentes-perfil?action=grabar&clientId=${clientId}`, { method: 'POST', body: { guionId, grabado } }),
+  fases: (clientId) => apiFetch(`/api/agentes-perfil?action=fases&clientId=${clientId}`),
+}
+
 // Instagram por perfil (sección Contenido). El token vive en el servidor y solo
 // vuelve enmascarado; las métricas se leen luego de helm_ig_media, no de Meta.
 export const instagramApi = {

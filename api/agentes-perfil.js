@@ -11,7 +11,7 @@
 import { supabase } from './lib/supabase.js'
 import { applyCors } from './_lib/auth.js'
 import { requireProfileAccess } from './_lib/access.js'
-import { resumenDrive } from './_lib/ingesta.js'
+import { resumenDrive, enEntrada } from './_lib/ingesta.js'
 
 async function creadoresDe(clientId) {
   const { data, error } = await supabase.from('agent_identity_clients')
@@ -57,6 +57,53 @@ export default async function handler(req, res) {
 
     // El calendario de guiones y lo que ha pasado por su Entrada de Drive.
     if (accion === 'drive') return res.status(200).json(await resumenDrive(clientId))
+
+    // Solo las fases de cada guion (dónde está su carpeta en Drive), para que el
+    // roadmap pinte "Sin editar / Editado / Publicado" sin traerse todo el Drive.
+    if (accion === 'fases') {
+      const r = await resumenDrive(clientId).catch(() => ({ conectado: false }))
+      if (!r.conectado) return res.status(200).json({ conectado: false, fases: {} })
+      const fases = {}
+      for (const g of r.guiones || []) fases[g.id] = g.fase
+      return res.status(200).json({ conectado: true, fases, carpeta: r.carpeta })
+    }
+
+    // Marcar un guion como grabado y disparar una pasada de Entrada: el worker
+    // detecta el vídeo, lo archiva en la pieza del guion y lo deja enlazado. Así
+    // nada se queda suelto. Si Drive no está conectado, el guion queda grabado
+    // igualmente y el vídeo se archivará cuando lo esté.
+    if (accion === 'grabar') {
+      const guionId = String(req.body?.guionId || '')
+      if (!guionId) return res.status(400).json({ error: 'Falta el guion' })
+      const { data: g, error } = await supabase.from('helm_content_calendar')
+        .select('id, grabado, grabado_at, drive_carpeta_id').eq('id', guionId).eq('client_id', clientId).maybeSingle()
+      if (error) throw error
+      if (!g) return res.status(404).json({ error: 'Ese guion no existe en este perfil' })
+
+      const desmarcar = req.body?.grabado === false
+      const patch = desmarcar
+        ? { grabado: false, grabado_at: null, updated_at: new Date().toISOString() }
+        : { grabado: true, grabado_at: g.grabado_at || new Date().toISOString(), updated_at: new Date().toISOString() }
+      const { error: e2 } = await supabase.from('helm_content_calendar').update(patch).eq('id', g.id)
+      if (e2) throw e2
+
+      let detectando = 0
+      if (!desmarcar) {
+        try {
+          for (const v of await enEntrada(clientId)) {
+            const { data: ya } = await supabase.from('agent_drive_videos').select('drive_id').eq('drive_id', v.id).maybeSingle()
+            if (ya) continue
+            await supabase.from('agent_drive_videos').insert({ drive_id: v.id, client_id: clientId, nombre: v.name })
+            await supabase.from('agent_jobs').upsert(
+              { tipo: 'drive-ingesta', payload: { clientId, driveId: v.id }, clave: `drive:${v.id}`, estado: 'pendiente', correr_tras: new Date().toISOString() },
+              { onConflict: 'clave', ignoreDuplicates: true })
+            detectando++
+          }
+        } catch { /* Drive puede no estar conectado: el guion queda grabado igual */ }
+      }
+      const driveUrl = g.drive_carpeta_id ? `https://drive.google.com/drive/folders/${g.drive_carpeta_id}` : null
+      return res.status(200).json({ grabado: !desmarcar, driveUrl, detectando })
+    }
 
     return res.status(400).json({ error: `Acción desconocida: ${accion || '(ninguna)'}` })
   } catch (err) {

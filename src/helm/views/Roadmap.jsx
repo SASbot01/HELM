@@ -7,9 +7,10 @@
 // contexto de ads del mes. Los meses, las semanas y ahora también los días son
 // desplegables.
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarRange, ChevronLeft, ChevronRight, Megaphone, Target, Zap, FileText, Download, Sparkles, ExternalLink } from 'lucide-react'
+import { CalendarRange, ChevronLeft, ChevronRight, Megaphone, Target, Zap, FileText, Download, Sparkles, ExternalLink, Check, Clapperboard, FolderOpen } from 'lucide-react'
 import { supabase } from '../../utils/supabase'
 import { agentsApi } from '../../agents/api'
+import { contenidoApi } from '../lib'
 import { descargarPDFGuiones } from './pdfGuiones'
 import './roadmap.css'
 
@@ -96,6 +97,12 @@ const TIPOS_LBL = { viralidad: 'Viral', autoridad: 'Autoridad', conversion: 'Val
 const TIPO_COLOR = { viralidad: '#7aa5f8', autoridad: '#d9b66b', conversion: '#4ade80', venta: '#e4362b' }
 const TIPOS_OPC = Object.keys(TIPOS_LBL)
 
+// La fase de Drive de cada pieza (dónde está su carpeta): por_grabar → sin_editar
+// → editado → publicado. Es lo que deja ver que un vídeo ya no se pierde.
+const FASE_LBL = { por_grabar: 'Por grabar', sin_editar: 'Sin editar', editado: 'Editado', publicado: 'Publicado' }
+const FASE_COLOR = { por_grabar: '#8d8d95', sin_editar: '#d9b66b', editado: '#4ade80', publicado: '#7aa5f8' }
+const driveCarpetaUrl = (id) => `https://drive.google.com/drive/folders/${id}`
+
 // El cuerpo del guion lleva el guion, la referencia y la nota de gancho,
 // separados por "\n\n---\n" (ver el agente). Se parten para enseñarlos aparte.
 function parseGuion(body) {
@@ -133,9 +140,32 @@ function descargarGuion(g) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000)
 }
 
-// Pop-up con el guion entero, su referencia de vídeo y el botón de descarga.
-function GuionModal({ g, onCerrar }) {
+// Pop-up con el guion entero, su referencia de vídeo, el botón de descarga y el
+// de «marcar grabado»: al pulsarlo el vídeo que esté en la Entrada de Drive se
+// detecta, se archiva en la pieza del guion y queda enlazado — nada se pierde.
+function GuionModal({ g, fase, entradaUrl, onGrabar, onCerrar }) {
   const { script, referencia, gancho } = parseGuion(g.body)
+  const [grabado, setGrabado] = useState(!!g.grabado)
+  const [driveUrl, setDriveUrl] = useState(g.drive_carpeta_id ? driveCarpetaUrl(g.drive_carpeta_id) : null)
+  const [cargando, setCargando] = useState(false)
+  const [aviso, setAviso] = useState('')
+
+  async function toggle() {
+    setCargando(true); setAviso('')
+    try {
+      const r = await onGrabar(g, !grabado)
+      setGrabado(r.grabado)
+      if (r.driveUrl) setDriveUrl(r.driveUrl)
+      if (r.grabado && !r.driveUrl) {
+        setAviso(r.detectando > 0
+          ? `Buscando tu vídeo en la Entrada de Drive (${r.detectando})… en cuanto lo reconozca lo archivo y lo enlazo aquí.`
+          : 'Marcado como grabado. Deja el vídeo en la Entrada de Drive y lo archivo y enlazo solo.')
+      }
+    } catch (e) { setAviso(e.message || 'No se pudo guardar.') }
+    setCargando(false)
+  }
+
+  const faseV = grabado && fase ? fase : (grabado ? 'sin_editar' : null)
   return (
     <div className="rm-modal-fondo" onClick={onCerrar}>
       <div className="rm-modal" onClick={e => e.stopPropagation()} role="dialog" aria-label="Guion">
@@ -143,7 +173,7 @@ function GuionModal({ g, onCerrar }) {
           <div className="rm-modal-tags">
             <span className={'rm-tag ' + (g.revision === 'aprobado' ? 'ok' : 'bor')}>{g.revision === 'aprobado' ? 'aprobado' : 'borrador'}</span>
             {g.tipo && <span className="rm-tag" style={{ '--c': TIPO_COLOR[g.tipo] }}>{TIPOS_LBL[g.tipo] || g.tipo}</span>}
-            {g.grabado && <span className="rm-tag ok">grabado</span>}
+            {faseV && <span className="rm-tag" style={{ '--c': FASE_COLOR[faseV] }}>{FASE_LBL[faseV]}</span>}
             <span className="rm-modal-fecha">{fechaLarga(g.date)}</span>
           </div>
           <button type="button" className="rm-detalle-x" onClick={onCerrar} aria-label="Cerrar">×</button>
@@ -154,8 +184,17 @@ function GuionModal({ g, onCerrar }) {
           <b><FileText size={13} /> Vídeo de referencia:</b> {referencia ? <Linkify text={referencia} /> : <span className="rm-modal-ref-vacio">—</span>}
         </div>
         {gancho && <p className="rm-modal-gancho">{gancho}</p>}
+        {aviso && <p className="rm-modal-aviso">{aviso}</p>}
         <div className="rm-modal-pie">
-          <button type="button" className="helm-btn" onClick={() => descargarGuion(g)}><Download size={15} /> Descargar guion</button>
+          <button type="button" className={'helm-btn' + (grabado ? ' sec' : '')} disabled={cargando} onClick={toggle}>
+            {grabado ? <><Check size={15} /> Grabado</> : <><Clapperboard size={15} /> {cargando ? 'Guardando…' : 'Marcar grabado'}</>}
+          </button>
+          {driveUrl
+            ? <a className="helm-btn sec" href={driveUrl} target="_blank" rel="noopener noreferrer"><FolderOpen size={15} /> Ver vídeo en Drive</a>
+            : grabado && entradaUrl
+              ? <a className="helm-btn sec" href={entradaUrl} target="_blank" rel="noopener noreferrer"><FolderOpen size={15} /> Abrir Entrada de Drive</a>
+              : null}
+          <button type="button" className="helm-btn sec" onClick={() => descargarGuion(g)}><Download size={15} /> Descargar guion</button>
         </div>
       </div>
     </div>
@@ -239,13 +278,31 @@ export default function Roadmap({ client, clientId }) {
     if (!clientId) { setGuiones([]); return }
     let vivo = true
     supabase.from('helm_content_calendar')
-      .select('id, date, title, body, format, tipo, revision, grabado, status')
+      .select('id, date, title, body, format, tipo, revision, grabado, grabado_at, drive_carpeta_id, status')
       .eq('client_id', clientId)
       .order('date', { ascending: true })
       .limit(500)
       .then(({ data, error }) => { if (vivo && !error) setGuiones(data || []) })
     return () => { vivo = false }
   }, [clientId])
+
+  // En qué fase de Drive está cada guion (dónde vive su carpeta) + la Entrada,
+  // para que el pop-up pueda enlazar al vídeo. Se pide aparte y sin bloquear: si
+  // Drive no está conectado, el roadmap va igual con el estado "grabado".
+  const [fases, setFases] = useState({})
+  const [entradaUrl, setEntradaUrl] = useState(null)
+  const cargaFases = (cid) => contenidoApi.fases(cid)
+    .then(r => { if (r?.conectado) { setFases(r.fases || {}); setEntradaUrl(r.carpeta?.entrada || null) } })
+    .catch(() => {})
+  useEffect(() => { if (!clientId) { setFases({}); return } let v = true; contenidoApi.fases(clientId).then(r => { if (v && r?.conectado) { setFases(r.fases || {}); setEntradaUrl(r.carpeta?.entrada || null) } }).catch(() => {}); return () => { v = false } }, [clientId])
+
+  const patchGuion = (id, campos) => setGuiones(gs => gs.map(g => (g.id === id ? { ...g, ...campos } : g)))
+  async function marcarGrabado(g, grabado) {
+    const r = await contenidoApi.grabar(clientId, g.id, grabado)
+    patchGuion(g.id, { grabado: r.grabado, grabado_at: r.grabado ? (g.grabado_at || new Date().toISOString()) : null })
+    cargaFases(clientId) // la pieza puede haber cambiado de carpeta
+    return r
+  }
   const guionesPorDia = useMemo(() => {
     const m = {}
     for (const g of guiones) (m[g.date] ||= []).push(g)
@@ -365,9 +422,10 @@ export default function Roadmap({ client, clientId }) {
                 {gs.length > 0 && (
                   <div className="rm-dia-guiones-lista">
                     {gs.map(g => (
-                      <button key={g.id} type="button" title={g.title}
-                        className={'rm-guion-chip' + (g.revision === 'aprobado' ? ' ok' : '')}
+                      <button key={g.id} type="button" title={g.grabado ? `${g.title} · grabado` : g.title}
+                        className={'rm-guion-chip' + (g.revision === 'aprobado' ? ' ok' : '') + (g.grabado ? ' grabado' : '')}
                         style={{ '--c': TIPO_COLOR[g.tipo] || '#8d8d95' }} onClick={() => setGuionSel(g)}>
+                        {g.grabado && <Check size={11} strokeWidth={3} className="rm-chip-ok" />}
                         {g.title}
                       </button>
                     ))}
@@ -402,7 +460,7 @@ export default function Roadmap({ client, clientId }) {
         </div>
       </section>
 
-      {guionSel && <GuionModal g={guionSel} onCerrar={() => setGuionSel(null)} />}
+      {guionSel && <GuionModal g={guionSel} fase={fases[guionSel.id]} entradaUrl={entradaUrl} onGrabar={marcarGrabado} onCerrar={() => setGuionSel(null)} />}
       {progAbierto && <ProgramarDialog clientId={clientId} mes={mes} hoy={hoy} onCerrar={() => setProgAbierto(false)} />}
     </div>
   )
