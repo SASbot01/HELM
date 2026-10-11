@@ -604,6 +604,60 @@ ${REGLAS_COMUNES}`,
   return String(out.hecho || 'Análisis hecho.').slice(0, 400)
 }
 
+// ── El mejor día para publicar, por las métricas del perfil ─────────────────
+// La mediana de visitas de cada día de la semana (hora de Madrid). Con esto el
+// guionista programa los borradores en los días que de verdad funcionan en esta
+// cuenta, no en el primer hueco. Sin datos suficientes devuelve null y se vuelve
+// al comportamiento de antes (primeros días libres). Es el mismo criterio que la
+// sección «Informe de contenido», calculado aquí desde helm_ig_media para no
+// depender de nada más.
+const DOW_MADRID = new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: 'Europe/Madrid' })
+const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] // lunes=0 … domingo=6
+const diaSemanaDe = (iso) => DOW.indexOf(DOW_MADRID.format(new Date(iso)))
+const diaSemanaFecha = (dia) => (new Date(`${dia}T12:00:00Z`).getUTCDay() + 6) % 7
+const NOMBRE_DIA = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
+const medianaNum = (xs) => {
+  const o = xs.filter(x => x != null).sort((a, b) => a - b)
+  if (!o.length) return null
+  const m = Math.floor(o.length / 2)
+  return o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2
+}
+
+/** Días de la semana (0=lunes…6=domingo) ordenados de mejor a peor por mediana
+ *  de visitas, o null si no hay piezas suficientes para fiarse. */
+async function mejoresDiasSemana(clientId) {
+  const { data } = await supabase.from('helm_ig_media')
+    .select('publicado_en, visitas').eq('client_id', clientId).not('publicado_en', 'is', null)
+  const piezas = (data || []).filter(p => p.visitas != null)
+  if (piezas.length < 8) return null
+  const porDia = Array.from({ length: 7 }, () => [])
+  for (const p of piezas) { const d = diaSemanaDe(p.publicado_en); if (d >= 0) porDia[d].push(p.visitas) }
+  const rank = porDia
+    .map((vs, i) => ({ i, med: vs.length >= 2 ? medianaNum(vs) : null }))
+    .filter(d => d.med != null)
+    .sort((a, b) => b.med - a.med)
+  return rank.length >= 2 ? rank.map(d => d.i) : null
+}
+
+/** Las n fechas para los guiones: libres, a partir de mañana. Con ranking, las
+ *  más próximas que caigan en los mejores días; si faltan (o no hay ranking), se
+ *  completan con los primeros huecos libres. */
+function proximasFechas(hoy, n, ocupados, ranking) {
+  const fechas = []
+  if (ranking && ranking.length) {
+    const buenos = new Set(ranking.slice(0, Math.max(2, n)))
+    for (let i = 1; i <= 56 && fechas.length < n; i++) {
+      const d = masDias(hoy, i)
+      if (!ocupados.has(d) && buenos.has(diaSemanaFecha(d))) fechas.push(d)
+    }
+  }
+  for (let i = 1; fechas.length < n && i < 40; i++) {
+    const d = masDias(hoy, i)
+    if (!ocupados.has(d) && !fechas.includes(d)) fechas.push(d)
+  }
+  return fechas
+}
+
 async function guionista(ctx) {
   const { clientId } = ctx
   const hoy = diaMadrid()
@@ -620,24 +674,23 @@ async function guionista(ctx) {
     memoriaDe(clientId),
   ])
 
-  // Los días que tocan: los primeros libres a partir de mañana.
+  // Los días que tocan: los que mejor funcionan en esta cuenta por las métricas
+  // (día de la semana con más visitas de mediana), libres y a partir de mañana.
+  // Sin métricas suficientes, los primeros huecos libres como antes.
   const ocupados = new Set(cal.guiones.map(g => g.date))
-  const fechas = []
-  for (let i = 1; fechas.length < n && i < 40; i++) {
-    const d = masDias(hoy, i)
-    if (!ocupados.has(d)) fechas.push(d)
-  }
+  const ranking = await mejoresDiasSemana(clientId)
+  const fechas = proximasFechas(hoy, n, ocupados, ranking)
 
   const top = [...reels].filter(r => vistas(r) > 0).sort((a, b) => vistas(b) - vistas(a)).slice(0, 12)
   const nombre = (id) => creadores.find(c => c.id === id)?.nombre || '?'
   const guionDe = (r) => ((r.frases || []).length ? r.frases.map(f => `[${f.rol}] ${f.texto}`).join('\n') : String(r.transcripcion || '')).slice(0, 1400)
   const mejoresPropios = [...propios].filter(r => r.visitas > 0).sort((a, b) => b.visitas - a.visitas).slice(0, 6)
   await ctx.log(`Material: ${top.length} reels más vistos de ${creadores.length} creadores, ${estudios.data?.length || 0} estudios, ${mejoresPropios.length} reels propios con métricas, ${notas.length} notas de memoria.`)
-  await ctx.log(`Fechas libres para los ${n} guiones: ${fechas.join(', ')}.`)
+  await ctx.log(`Fechas para los ${n} guiones: ${fechas.join(', ')}${ranking ? ` · mejores días por métricas: ${ranking.slice(0, 3).map(i => NOMBRE_DIA[i]).join(', ')}` : ' · sin métricas aún: primeros huecos libres'}.`)
 
   const user = [
     `Perfil: ${ctx.perfil.name} (${ctx.perfil.slug}). Hoy es ${hoy}.`,
-    `Escribe ${n} ${n === 1 ? 'guion' : 'guiones'}, para estas fechas: ${fechas.join(', ')}.`,
+    `Escribe ${n} ${n === 1 ? 'guion' : 'guiones'}, para estas fechas: ${fechas.join(', ')}.${ranking ? ' Son los días que mejor funcionan en esta cuenta según las métricas de Instagram.' : ''}`,
     ctx.encargo ? `Encargo del director: ${ctx.encargo}` : '',
     `\n# Memoria compartida del perfil\n${memoriaTexto(notas, 'guionista')}`,
     (biblia.data || []).length ? `\n# Quién es este perfil\n${biblia.data.map(b => `## ${b.kind}\n${String(b.content).slice(0, 5000)}`).join('\n\n')}` : '',
