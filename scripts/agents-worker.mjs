@@ -717,7 +717,7 @@ async function estudiar(job) {
 // Director, investigador, analista y guionista (api/_lib/equipo.js). Aquí solo
 // se mira la hora: a partir de las 6:00 de Madrid se encola el director de
 // cada perfil activo, y él reparte el trabajo de los demás.
-const { ejecutaAgente, miraAgenda, miraProgramador, cierraHuerfanas } = await import('../api/_lib/equipo.js')
+const { ejecutaAgente, miraAgenda, miraProgramador, miraVirales, cierraHuerfanas } = await import('../api/_lib/equipo.js')
 // Las tres noticias del día (api/_lib/noticias.js): desde las 5:30 de Madrid,
 // para los perfiles que tienen encendida la sección Noticias.
 const { generaNoticias, miraNoticias } = await import('../api/_lib/noticias.js')
@@ -767,6 +767,7 @@ async function bucle() {
         ultimaAgenda = Date.now()
         await miraAgenda().catch(e => log('no pude mirar la agenda del equipo:', e.message))
         await miraProgramador().catch(e => log('no pude mirar el programador semanal:', e.message))
+        await miraVirales().catch(e => log('no pude mirar el agente de virales:', e.message))
         await miraNoticias().catch(e => log('no pude mirar las noticias del día:', e.message))
         await miraRedaccion().catch(e => log('no pude mirar la redacción del diario:', e.message))
         await miraRadar().catch(e => log('no pude mirar el radar:', e.message))

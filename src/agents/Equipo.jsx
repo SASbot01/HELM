@@ -22,6 +22,8 @@ const AGENTES = {
   comercial:    { nombre: 'Comercial',    hace: 'Repasa leads, llamadas y cobros y avisa de lo que se enfría. No escribe a nadie.' },
   informe:      { nombre: 'Informe',      hace: 'Los lunes cruza el contenido con los leads y las ventas de la semana.' },
   guionista:    { nombre: 'Guionista',    hace: 'Escribe los guiones del día y los deja en el calendario como borrador.' },
+  programador:  { nombre: 'Programador',  hace: 'Los lunes (o a mano) prepara el contenido de la semana por tipo —viral, autoridad, valor, venta—; no repite un tipo ya montado.' },
+  virales:      { nombre: 'Virales',      hace: 'Los lunes rastrea los reels recientes de los creadores de referencia, elige los que mejor encajan y los mete en el corpus.' },
 }
 // Las columnas del flujo, en el orden en que pasa el trabajo.
 const MIRAN = ['investigador', 'analista', 'productor', 'comercial', 'informe']

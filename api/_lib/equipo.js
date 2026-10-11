@@ -35,6 +35,7 @@ import { getIgConfig } from './instagram.js'
 import { sincronizar as sincronizarIg } from '../instagram.js'
 import { notificar } from './notificar.js'
 import { puntuarGancho, clasificaGancho } from './ig-calidad.js'
+import { apifyListo, rastreaCuentas } from './apify.js'
 
 export const AGENTES = ['director', 'investigador', 'analista', 'productor', 'comercial', 'informe', 'guionista']
 // En el orden en que corren: el guionista el último, para leer lo de los demás.
@@ -54,11 +55,12 @@ const MODELOS = {
   informe: process.env.AGENTS_MODELO_INFORME || 'claude-sonnet-5',
   editor: process.env.AGENTS_MODELO_EDITOR || 'claude-haiku-4-5',
   programador: process.env.AGENTS_MODELO_PROGRAMADOR || 'claude-sonnet-5',
+  virales: process.env.AGENTS_MODELO_VIRALES || 'claude-sonnet-5',
 }
 
 // Agentes que se pueden LANZAR a mano (o por MCP/Drive) pero que no entran en el
 // reparto diario del director: el editor de reels es uno.
-export const AGENTES_LANZABLES = [...AGENTES, 'editor', 'programador']
+export const AGENTES_LANZABLES = [...AGENTES, 'editor', 'programador', 'virales']
 
 // ── Fechas: el día es el de Madrid ──────────────────────────────────────────
 const fmtDia = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -114,6 +116,21 @@ export async function miraProgramador() {
       clientId: client_id, agente: 'programador', origen: 'horario',
       clave: `programador:${client_id}:${hoy}`, params: { desde: masDias(hoy, 1), hasta: masDias(hoy, 7) },
     })
+  }
+}
+
+/** Lunes a partir de las 7:00 de Madrid: el agente de virales rastrea los reels
+ *  recientes de los creadores de referencia de cada perfil activo y mete los
+ *  mejores en el corpus, una vez por semana (clave con la fecha). El botón
+ *  manual hace lo mismo a demanda. */
+export async function miraVirales() {
+  if (!apifyListo()) return
+  if (!esLunes(diaMadrid()) || horaMadrid() < 7) return
+  const { data, error } = await supabase.from('agent_perfiles').select('client_id').eq('activo', true)
+  if (error) throw error
+  const hoy = diaMadrid()
+  for (const { client_id } of data || []) {
+    await encolaAgente({ clientId: client_id, agente: 'virales', origen: 'horario', clave: `virales:${client_id}:${hoy}` })
   }
 }
 
@@ -1126,7 +1143,118 @@ async function editor(ctx) {
     : 'Demostración del proceso, sin vídeo. Motor de render en construcción.'
 }
 
-const CORRE = { director, investigador, analista, productor, comercial, informe, guionista, editor, programador }
+// ── El agente de virales (lunes 7:00 · o a mano) ─────────────────────────────
+// Rastrea con Apify los reels recientes de los creadores de referencia del
+// perfil, se queda con los que de verdad despegaron (visualizaciones muy por
+// encima de la mediana de su propia cuenta), el modelo elige los que mejor
+// encajan con ESTE perfil y los MANDA AL CORPUS (se transcriben y etiquetan
+// solos, igual que si se pegaran a mano) + deja el informe en la memoria para
+// que el guionista los use. Solo LEE Instagram: ni sigue, ni comenta, ni publica.
+async function virales(ctx) {
+  const { clientId } = ctx
+  if (!apifyListo()) { await ctx.log('No hay APIFY_TOKEN en el worker: no puedo rastrear Instagram.'); return 'Sin APIFY_TOKEN.' }
+  const creadores = (await creadoresDe(clientId)).filter(c => c.categoria !== 'Propio')
+  // El nombre de la identidad es el usuario de IG (p. ej. "soybedia", "hormozi").
+  const cuentas = creadores.map(c => c.nombre).filter(h => /^[a-z0-9._]{1,30}$/i.test(h || ''))
+  if (!cuentas.length) { await ctx.log('El perfil no tiene creadores de referencia con cuenta de Instagram.'); return 'Sin cuentas de referencia.' }
+  const porHandle = new Map(creadores.map(c => [String(c.nombre).toLowerCase(), c]))
+  await ctx.log(`Rastreo ${cuentas.length} cuentas de referencia (reels de los últimos 7 días): ${cuentas.map(c => '@' + c).join(', ')}.`)
+
+  let reels = []
+  try { reels = await rastreaCuentas(cuentas, { dias: 7, porCuenta: 12 }) }
+  catch (e) { await ctx.log(`Apify falló: ${String(e.message).slice(0, 200)}`); return `Apify falló: ${String(e.message).slice(0, 160)}` }
+  if (!reels.length) { await ctx.log('Apify no devolvió reels recientes de esas cuentas.'); return 'Sin reels recientes.' }
+
+  // Fuera los que ya están en el corpus (cualquier estado) y los marcados como IA.
+  const sinCola = (u) => String(u || '').split('?')[0].replace(/\/$/, '')
+  const { data: yaFilas } = await supabase.from('agent_reels')
+    .select('url').in('identity_id', creadores.map(c => c.id)).limit(5000)
+  const enCorpus = new Set((yaFilas || []).map(r => sinCola(r.url)))
+  const cand = reels.filter(r => !r.es_ia && !enCorpus.has(sinCola(r.url)))
+  await ctx.log(`${reels.length} reels recientes; ${cand.length} candidatos tras quitar los de IA y los que ya están en el corpus.`)
+  if (!cand.length) return 'No hay reels nuevos esta semana que no estén ya en el corpus.'
+
+  const notas = await memoriaDe(clientId)
+  const { data: biblia } = await supabase.from('helm_biblia').select('kind, content').eq('client_id', clientId)
+  const topa = cand.slice(0, 40)
+  const lista = topa.map((r, i) =>
+    `${i + 1}. ${r.url} · @${r.cuenta} · ${r.vistas.toLocaleString('es-ES')} visualizaciones · viralidad ×${r.viralidad ?? '?'}`
+    + ` · ${r.likes.toLocaleString('es-ES')} likes · ${r.duracion ? r.duracion + 's' : '?'} · «${r.texto.slice(0, 140)}»`).join('\n')
+
+  const out = await ctx.pide({
+    system: `Eres el agente de virales semanales de HELM. De una lista de reels recientes de los creadores de referencia del perfil, eliges los 8 que mejor le sirven para inspirar sus guiones de esta semana.
+Criterios, por orden: 1) ENCAJE con el cliente — ¿puede grabar algo así con su voz, su cara y sus medios? ¿conecta con lo que vende o con su nicho? ¿aporta un ángulo que aún no ha tocado? Este es el criterio que manda. 2) Viralidad relativa (ya calculada: visualizaciones ÷ mediana de su cuenta; ×2 o más es que despegó de verdad). 3) Variedad de formato y de tema; como mucho 2 del mismo creador. Prioriza los de encaje alto aunque otro sin encaje tenga más viralidad.
+Para cada elegido di su número en la lista, por qué encaja (1 frase con el dato) y cómo lo adaptaría ESTE cliente (1 frase). Añade hasta 3 conclusiones sobre qué está funcionando en el nicho esta semana.
+${REGLAS_COMUNES}`,
+    user: [
+      `Perfil: ${ctx.perfil.name} (${ctx.perfil.slug}).`,
+      (biblia || []).length ? `\n# Quién es este perfil\n${(biblia || []).map(b => `## ${b.kind}\n${String(b.content).slice(0, 2500)}`).join('\n\n')}` : '',
+      `\n# Memoria del perfil\n${memoriaTexto(notas, 'guionista')}`,
+      `\n# Reels candidatos (recientes, del nicho)\n${lista}`,
+    ].filter(Boolean).join('\n'),
+    herramienta: {
+      name: 'elige_virales',
+      description: 'Los reels elegidos (máximo 8, los de mejor encaje primero) y las conclusiones del nicho.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          elegidos: {
+            type: 'array',
+            description: 'Máximo 8.',
+            items: {
+              type: 'object',
+              properties: {
+                n: { type: 'integer', description: 'El número del reel en la lista.' },
+                porque: { type: 'string', description: 'Por qué encaja, con el dato.' },
+                adaptacion: { type: 'string', description: 'Cómo lo grabaría este cliente.' },
+              },
+              required: ['n', 'porque'],
+            },
+          },
+          conclusiones: { type: 'array', items: { type: 'string' }, description: 'Máximo 3.' },
+          ...ESQUEMA_MEMORIA,
+        },
+        required: ['elegidos', 'hecho'],
+      },
+    },
+    maxTokens: 3500, esfuerzo: 'medium',
+  })
+
+  const elegidos = (Array.isArray(out.elegidos) ? out.elegidos : [])
+    .map(e => ({ ...topa[Number(e.n) - 1], porque: e.porque, adaptacion: e.adaptacion }))
+    .filter(e => e && e.url).slice(0, 8)
+  if (!elegidos.length) { await ctx.log('El modelo no eligió ningún reel.'); return 'No se eligieron virales.' }
+
+  // Al corpus: cada uno bajo la identidad de su creador, para que se descargue,
+  // transcriba y etiquete solo y entre en el material del guionista.
+  const { anadeReels } = await import('../agents.js')
+  let anadidos = 0
+  for (const e of elegidos) {
+    const ident = porHandle.get(String(e.cuenta).toLowerCase())
+    try {
+      const { nuevos } = await anadeReels([e.url], ident?.id || null, e.cuenta || '')
+      anadidos += nuevos.length
+    } catch (err) { await ctx.log(`No pude añadir ${e.url} al corpus: ${String(err.message).slice(0, 120)}`) }
+  }
+  await ctx.log(`${elegidos.length} virales elegidos; ${anadidos} enviados al corpus (se transcriben y etiquetan por detrás).`)
+
+  // El informe de la semana queda en la memoria del perfil: lo lee el guionista.
+  const informe = `Virales de la semana (${diaMadrid()}):\n`
+    + elegidos.map((e, i) =>
+      `${i + 1}. ${e.url} — @${e.cuenta} · ${e.vistas.toLocaleString('es-ES')} vis · ×${e.viralidad ?? '?'}\n   ${e.porque || ''}${e.adaptacion ? `\n   Adaptación: ${e.adaptacion}` : ''}`).join('\n')
+    + (Array.isArray(out.conclusiones) && out.conclusiones.length ? `\n\nQué funciona en el nicho:\n- ${out.conclusiones.slice(0, 3).join('\n- ')}` : '')
+  await guardaNota(clientId, { clave: `virales-${diaMadrid()}`, agente: 'virales', tipo: 'aprendido', contenido: informe.slice(0, 1500) })
+
+  await notificar(supabase, clientId, {
+    tipo: 'agentes',
+    titulo: `${elegidos.length} virales nuevos de referencia`,
+    cuerpo: elegidos.map(e => `${e.url} (@${e.cuenta}, ×${e.viralidad ?? '?'})`).join('\n'),
+  })
+  await escribeMemoria(ctx, out)
+  return `${elegidos.length} virales al corpus de ${ctx.perfil.name}: ${[...new Set(elegidos.map(e => '@' + e.cuenta))].join(', ')}.`
+}
+
+const CORRE = { director, investigador, analista, productor, comercial, informe, guionista, editor, programador, virales }
 
 // ── Una ejecución ───────────────────────────────────────────────────────────
 
