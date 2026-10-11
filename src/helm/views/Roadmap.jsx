@@ -7,8 +7,9 @@
 // contexto de ads del mes. Los meses, las semanas y ahora también los días son
 // desplegables.
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarRange, ChevronLeft, ChevronRight, Megaphone, Target, Zap, FileText, Check } from 'lucide-react'
+import { CalendarRange, ChevronLeft, ChevronRight, Megaphone, Target, Zap, FileText, Download, Sparkles, ExternalLink } from 'lucide-react'
 import { supabase } from '../../utils/supabase'
+import { agentsApi } from '../../agents/api'
 import './roadmap.css'
 
 // ── Plantilla compartida (metodología) ──────────────────────────────────────
@@ -89,49 +90,136 @@ function semanasDelMes(y, m) {
   return semanas
 }
 
-// Panel con lo que hay para un día: los guiones ya programados (reales) y el
-// plan de la metodología para ese día de la semana, con el contexto de ads.
-function DetalleDia({ fecha, guiones, mes, onCerrar }) {
-  const plan = PLANTILLA.semana[lunes0Iso(fecha)]
+// Los tipos de contenido del calendario, con etiqueta y color.
+const TIPOS_LBL = { viralidad: 'Viral', autoridad: 'Autoridad', conversion: 'Valor', venta: 'Venta' }
+const TIPO_COLOR = { viralidad: '#7aa5f8', autoridad: '#d9b66b', conversion: '#4ade80', venta: '#e4362b' }
+const TIPOS_OPC = Object.keys(TIPOS_LBL)
+
+// El cuerpo del guion lleva el guion, la referencia y la nota de gancho,
+// separados por "\n\n---\n" (ver el agente). Se parten para enseñarlos aparte.
+function parseGuion(body) {
+  const partes = String(body || '').split('\n\n---\n')
+  let referencia = '', gancho = ''
+  for (const p of partes.slice(1)) {
+    const t = p.trim()
+    if (/^inspirado en:/i.test(t)) referencia = t.replace(/^inspirado en:\s*/i, '')
+    else if (/^gancho/i.test(t)) gancho = t
+  }
+  return { script: partes[0] || '', referencia, gancho }
+}
+
+// Convierte las URLs del texto en enlaces (los vídeos de referencia).
+function Linkify({ text }) {
+  const s = String(text || ''), out = []; const re = /(https?:\/\/[^\s)]+)/g
+  let last = 0, m
+  while ((m = re.exec(s))) {
+    if (m.index > last) out.push(s.slice(last, m.index))
+    out.push(<a key={m.index} href={m[0]} target="_blank" rel="noopener noreferrer">{m[0]} <ExternalLink size={11} /></a>)
+    last = m.index + m[0].length
+  }
+  if (last < s.length) out.push(s.slice(last))
+  return out.length ? out : s
+}
+
+function descargarGuion(g) {
+  const { script, referencia } = parseGuion(g.body)
+  const txt = `${g.title}\nTipo: ${TIPOS_LBL[g.tipo] || g.tipo || '—'} · ${g.date}\n\n${script}${referencia ? `\n\n— Vídeo de referencia: ${referencia}` : ''}\n`
+  const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `${g.date} · ${String(g.title || 'guion').replace(/[^\w\sáéíóúñ·-]/gi, '').slice(0, 70)}.txt`
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+}
+
+// Pop-up con el guion entero, su referencia de vídeo y el botón de descarga.
+function GuionModal({ g, onCerrar }) {
+  const { script, referencia, gancho } = parseGuion(g.body)
   return (
-    <section className="rm-detalle">
-      <header className="rm-detalle-cab">
-        <h4>{fechaLarga(fecha)}</h4>
-        <button type="button" className="rm-detalle-x" onClick={onCerrar} aria-label="Cerrar">×</button>
-      </header>
-      <div className="rm-detalle-cols">
-        <div className="rm-detalle-bloque">
-          <h5><FileText size={14} /> Guiones programados</h5>
-          {guiones.length ? (
-            <ul className="rm-guiones">
-              {guiones.map(g => (
-                <li key={g.id} className="rm-guion">
-                  <span className="rm-guion-tit">{g.title || '(sin título)'}</span>
-                  <span className="rm-guion-meta">
-                    {g.tipo && <span className="rm-tag">{g.tipo}</span>}
-                    {g.format && g.format !== 'reel' && <span className="rm-tag tenue">{g.format}</span>}
-                    <span className={'rm-tag ' + (g.revision === 'aprobado' ? 'ok' : 'bor')}>{g.revision === 'aprobado' ? 'aprobado' : 'borrador'}</span>
-                    {g.grabado && <span className="rm-tag ok"><Check size={11} /> grabado</span>}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="rm-detalle-vacio">Ningún guion programado todavía. Los que proponga el equipo caerán aquí, en su mejor día; cuando los apruebes se quedan fijados.</p>
-          )}
+    <div className="rm-modal-fondo" onClick={onCerrar}>
+      <div className="rm-modal" onClick={e => e.stopPropagation()} role="dialog" aria-label="Guion">
+        <header className="rm-modal-cab">
+          <div className="rm-modal-tags">
+            <span className={'rm-tag ' + (g.revision === 'aprobado' ? 'ok' : 'bor')}>{g.revision === 'aprobado' ? 'aprobado' : 'borrador'}</span>
+            {g.tipo && <span className="rm-tag" style={{ '--c': TIPO_COLOR[g.tipo] }}>{TIPOS_LBL[g.tipo] || g.tipo}</span>}
+            {g.grabado && <span className="rm-tag ok">grabado</span>}
+            <span className="rm-modal-fecha">{fechaLarga(g.date)}</span>
+          </div>
+          <button type="button" className="rm-detalle-x" onClick={onCerrar} aria-label="Cerrar">×</button>
+        </header>
+        <h3 className="rm-modal-tit">{g.title}</h3>
+        <pre className="rm-modal-guion">{script}</pre>
+        <div className="rm-modal-ref">
+          <b><FileText size={13} /> Vídeo de referencia:</b> {referencia ? <Linkify text={referencia} /> : <span className="rm-modal-ref-vacio">—</span>}
         </div>
-        <div className="rm-detalle-bloque">
-          <h5><Target size={14} /> Plan del día</h5>
-          <div className="rm-dia-reels">
-            {plan.reels.map((r, j) => <span className="rm-reel" key={j} style={{ '--c': FORMATO[r].color }}>{FORMATO[r].nombre}</span>)}
-          </div>
-          <p className="rm-detalle-nota">Historias a diario{plan.cta ? ' · hoy toca CTA' : ''} · {plan.reels.length} reels.</p>
-          <div className="rm-detalle-ads">
-            <Megaphone size={13} /> Ads de {mesCorto(mes.fecha)}: {mes.ads.presupuesto.toLocaleString('es-ES')} € · {mes.ads.campanas.join(', ')}
-          </div>
+        {gancho && <p className="rm-modal-gancho">{gancho}</p>}
+        <div className="rm-modal-pie">
+          <button type="button" className="helm-btn" onClick={() => descargarGuion(g)}><Download size={15} /> Descargar guion</button>
         </div>
       </div>
-    </section>
+    </div>
+  )
+}
+
+// Diálogo del botón «Iniciar estudio y creación»: elige periodo y tipos y lanza
+// el programador, que crea+programa lo que falte en los mejores días.
+function ProgramarDialog({ clientId, mes, hoy, onCerrar }) {
+  const [periodo, setPeriodo] = useState('quincena')
+  const [tipos, setTipos] = useState(['viralidad', 'autoridad', 'conversion'])
+  const [cargando, setCargando] = useState(false)
+  const [estado, setEstado] = useState(null)
+  const rango = () => {
+    const man = new Date(hoy); man.setDate(hoy.getDate() + 1)
+    const desde = iso(man)
+    if (periodo === 'semana') return { desde, hasta: iso(new Date(man.getTime() + 6 * 864e5)) }
+    if (periodo === 'mes') {
+      const fin = new Date(mes.fecha.getFullYear(), mes.fecha.getMonth() + 1, 0)
+      const ini = new Date(Math.max(man.getTime(), new Date(mes.fecha.getFullYear(), mes.fecha.getMonth(), 1).getTime()))
+      return { desde: iso(ini), hasta: iso(fin) }
+    }
+    return { desde, hasta: iso(new Date(man.getTime() + 13 * 864e5)) }
+  }
+  async function lanzar() {
+    if (!clientId || !tipos.length) return
+    setCargando(true); setEstado(null)
+    try { const { desde, hasta } = rango(); await agentsApi.equipoProgramar({ clientId, desde, hasta, tipos }); setEstado('ok') }
+    catch (e) { setEstado(e.message || 'No se pudo lanzar') }
+    setCargando(false)
+  }
+  return (
+    <div className="rm-modal-fondo" onClick={onCerrar}>
+      <div className="rm-modal rm-modal-prog" onClick={e => e.stopPropagation()} role="dialog" aria-label="Iniciar estudio y creación">
+        <header className="rm-modal-cab">
+          <h3 className="rm-modal-tit"><Sparkles size={16} /> Iniciar estudio y creación</h3>
+          <button type="button" className="rm-detalle-x" onClick={onCerrar} aria-label="Cerrar">×</button>
+        </header>
+        <p className="rm-prog-sub">El equipo estudia tus referencias y propone los guiones que falten del periodo, programados en tu mejor día. No repite lo que ya tengas montado.</p>
+        <div className="rm-prog-campo">
+          <label>Periodo</label>
+          <div className="rm-prog-ops">
+            {[['semana', 'Próxima semana'], ['quincena', '2 próximas semanas'], ['mes', `Mes de ${mesCorto(mes.fecha)}`]].map(([k, l]) => (
+              <button key={k} type="button" className={'rm-prog-op' + (periodo === k ? ' on' : '')} onClick={() => setPeriodo(k)}>{l}</button>
+            ))}
+          </div>
+        </div>
+        <div className="rm-prog-campo">
+          <label>Tipos de contenido</label>
+          <div className="rm-prog-ops">
+            {TIPOS_OPC.map(k => (
+              <button key={k} type="button" className={'rm-prog-op' + (tipos.includes(k) ? ' on' : '')} style={{ '--c': TIPO_COLOR[k] }}
+                onClick={() => setTipos(ts => ts.includes(k) ? ts.filter(x => x !== k) : [...ts, k])}>{TIPOS_LBL[k]}</button>
+            ))}
+          </div>
+        </div>
+        {estado === 'ok' ? <p className="rm-prog-ok">✓ En marcha. Los guiones irán cayendo en sus días; apruébalos en Agentes → Por aprobar.</p>
+          : estado ? <p className="rm-prog-err">{estado}</p> : null}
+        <div className="rm-modal-pie">
+          {estado === 'ok'
+            ? <button type="button" className="helm-btn" onClick={onCerrar}>Cerrar</button>
+            : <button type="button" className="helm-btn" disabled={cargando || !tipos.length} onClick={lanzar}>{cargando ? 'Lanzando…' : 'Iniciar'}</button>}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -140,7 +228,8 @@ export default function Roadmap({ client, clientId }) {
   const [offset, setOffset] = useState(0)          // meses que se desplaza el inicio del semestre
   const [mesSel, setMesSel] = useState(0)
   const [semanaSel, setSemanaSel] = useState(null) // null → semana actual (o la 1ª)
-  const [diaSel, setDiaSel] = useState(null)       // 'AAAA-MM-DD' del día abierto, o null
+  const [guionSel, setGuionSel] = useState(null)   // el guion abierto en el pop-up
+  const [progAbierto, setProgAbierto] = useState(false) // diálogo «iniciar estudio y creación»
 
   // Los guiones reales del perfil, para colgarlos de su día. RLS abierta en la
   // tabla, así que se leen directo como en el resto de vistas.
@@ -176,24 +265,28 @@ export default function Roadmap({ client, clientId }) {
   const semIdx = semanaSel != null ? Math.min(semanaSel, semanas.length - 1) : (semActualIdx >= 0 ? semActualIdx : 0)
   const semana = semanas[semIdx]
 
-  const elegirMes = (i) => { setMesSel(i); setSemanaSel(null); setDiaSel(null) }
+  const elegirMes = (i) => { setMesSel(i); setSemanaSel(null) }
   // Desplazar el semestre también resetea la semana (como al elegir mes).
-  const desplazar = (n) => { setOffset(o => o + n); setSemanaSel(null); setDiaSel(null) }
-  const elegirSemana = (k) => { setSemanaSel(k); setDiaSel(null) }
-  const abrirDia = (f) => setDiaSel(s => (s === f ? null : f))
+  const desplazar = (n) => { setOffset(o => o + n); setSemanaSel(null) }
+  const elegirSemana = (k) => setSemanaSel(k)
 
   return (
     <div className="helm-roadmap">
       <header className="rm-cab">
         <div>
           <p className="rm-cab-sub">
-            El sistema compartido a seis meses para llegar a <b>{PLANTILLA.objetivo}</b>, igual para todos los perfiles. Abre un día para ver los guiones de {client?.name ? <b>{client.name}</b> : 'este perfil'} y su plan.
+            El plan de contenido de {client?.name ? <b>{client.name}</b> : 'este perfil'} a seis meses, para llegar a <b>{PLANTILLA.objetivo}</b>. Pincha un guion para verlo entero y descargarlo.
           </p>
         </div>
-        <div className="rm-inicio">
-          <button className="rm-flecha" onClick={() => desplazar(-1)} aria-label="Mes anterior"><ChevronLeft size={18} /></button>
-          <span><CalendarRange size={15} /> {mesLargo(base)}</span>
-          <button className="rm-flecha" onClick={() => desplazar(1)} aria-label="Mes siguiente"><ChevronRight size={18} /></button>
+        <div className="rm-cab-acc">
+          <button type="button" className="helm-btn rm-prog-btn" onClick={() => setProgAbierto(true)} disabled={!clientId}>
+            <Sparkles size={15} /> Iniciar estudio y creación
+          </button>
+          <div className="rm-inicio">
+            <button className="rm-flecha" onClick={() => desplazar(-1)} aria-label="Mes anterior"><ChevronLeft size={18} /></button>
+            <span><CalendarRange size={15} /> {mesLargo(base)}</span>
+            <button className="rm-flecha" onClick={() => desplazar(1)} aria-label="Mes siguiente"><ChevronRight size={18} /></button>
+          </div>
         </div>
       </header>
 
@@ -257,36 +350,36 @@ export default function Roadmap({ client, clientId }) {
             const esHoy = mismoDia(d, hoy) && !fuera
             const f = iso(d)
             const gs = guionesPorDia[f] || []
-            const sel = diaSel === f
             return (
-              <article key={k}
-                className={'rm-dia' + (fuera ? ' fuera' : '') + (esHoy ? ' hoy' : '') + (sel ? ' sel' : '') + (gs.length ? ' tiene' : '')}
-                role="button" tabIndex={0} aria-pressed={sel}
-                onClick={() => abrirDia(f)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirDia(f) } }}>
+              <article key={k} className={'rm-dia' + (fuera ? ' fuera' : '') + (esHoy ? ' hoy' : '') + (gs.length ? ' tiene' : '')}>
                 <div className="rm-dia-cab">
                   <span className="rm-dia-nom">{DIAS[k]} {d.getDate()}</span>
                   {plan.cta && <span className="rm-cta">CTA</span>}
                 </div>
+                {gs.length > 0 && (
+                  <div className="rm-dia-guiones-lista">
+                    {gs.map(g => (
+                      <button key={g.id} type="button" title={g.title}
+                        className={'rm-guion-chip' + (g.revision === 'aprobado' ? ' ok' : '')}
+                        style={{ '--c': TIPO_COLOR[g.tipo] || '#8d8d95' }} onClick={() => setGuionSel(g)}>
+                        {g.title}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="rm-dia-reels">
                   {plan.reels.map((r, j) => (
-                    <span className="rm-reel" key={j} style={{ '--c': FORMATO[r].color }}>{FORMATO[r].nombre}</span>
+                    <span className="rm-reel plan" key={j} style={{ '--c': FORMATO[r].color }}>{FORMATO[r].nombre}</span>
                   ))}
                 </div>
                 <div className="rm-dia-pie">
-                  {gs.length
-                    ? <span className="rm-dia-guiones"><FileText size={12} /> {gs.length} {gs.length === 1 ? 'guion' : 'guiones'}</span>
-                    : <span className="rm-hist">Historias</span>}
+                  <span className="rm-hist">Historias</span>
                   <span className="rm-reels-n">{plan.reels.length} reels</span>
                 </div>
               </article>
             )
           })}
         </div>
-
-        {diaSel && (
-          <DetalleDia fecha={diaSel} guiones={guionesPorDia[diaSel] || []} mes={mes} onCerrar={() => setDiaSel(null)} />
-        )}
 
         {/* Leyenda + resumen de la cadencia */}
         <div className="rm-leyenda">
@@ -302,6 +395,9 @@ export default function Roadmap({ client, clientId }) {
           </p>
         </div>
       </section>
+
+      {guionSel && <GuionModal g={guionSel} onCerrar={() => setGuionSel(null)} />}
+      {progAbierto && <ProgramarDialog clientId={clientId} mes={mes} hoy={hoy} onCerrar={() => setProgAbierto(false)} />}
     </div>
   )
 }
