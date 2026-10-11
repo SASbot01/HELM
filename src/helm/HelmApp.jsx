@@ -97,16 +97,33 @@ const LAST_CLIENT_KEY = 'helm_last_client'
 // El isotipo hereda el acento del tema: en verde es esmeralda, en negro pasa a
 // blanco→gris y en blanco a verde oscuro. Antes tenía el azul/violeta antiguo
 // cosido a mano y era lo único que no cambiaba con el resto de la marca.
+// El logo de HELM: la rueda de timón («helm»), en platino sobre fondo oscuro.
+// Es el mismo icono que la app instalada y el favicon (public/assets/logos/helm-mark.svg),
+// inline aquí para no gastar una petición.
 function Mark() {
   return (
-    <svg viewBox="0 0 32 32" width="30" height="30" aria-label="HELM">
+    <svg viewBox="0 0 100 100" width="30" height="30" aria-label="HELM">
       <defs>
-        <linearGradient id="helmg" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="var(--cyan)" /><stop offset="1" stopColor="var(--violet)" />
+        <linearGradient id="helmBgM" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#191C24" /><stop offset="1" stopColor="#06060B" />
+        </linearGradient>
+        <linearGradient id="helmPlatM" x1="24" y1="18" x2="78" y2="86" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#FAFBFE" /><stop offset="0.52" stopColor="#C6CCD7" /><stop offset="1" stopColor="#7A8494" />
         </linearGradient>
       </defs>
-      <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#helmg)" />
-      <path d="M10 22V10M22 22V10M10 16h12" stroke="var(--on-accent)" strokeWidth="2.4" strokeLinecap="round" />
+      <rect width="100" height="100" rx="22" fill="url(#helmBgM)" />
+      <g stroke="url(#helmPlatM)" fill="none" strokeWidth="3" strokeLinecap="round">
+        <circle cx="50" cy="50" r="23.5" />
+        <line x1="50" y1="50" x2="50" y2="20" /><line x1="50" y1="50" x2="50" y2="80" />
+        <line x1="50" y1="50" x2="20" y2="50" /><line x1="50" y1="50" x2="80" y2="50" />
+        <line x1="50" y1="50" x2="28.8" y2="28.8" /><line x1="50" y1="50" x2="71.2" y2="71.2" />
+        <line x1="50" y1="50" x2="28.8" y2="71.2" /><line x1="50" y1="50" x2="71.2" y2="28.8" />
+      </g>
+      <g fill="url(#helmPlatM)">
+        <circle cx="50" cy="20" r="3.6" /><circle cx="50" cy="80" r="3.6" /><circle cx="20" cy="50" r="3.6" /><circle cx="80" cy="50" r="3.6" />
+        <circle cx="28.8" cy="28.8" r="3.6" /><circle cx="71.2" cy="71.2" r="3.6" /><circle cx="28.8" cy="71.2" r="3.6" /><circle cx="71.2" cy="28.8" r="3.6" />
+      </g>
+      <circle cx="50" cy="50" r="5.5" fill="url(#helmPlatM)" />
     </svg>
   )
 }
