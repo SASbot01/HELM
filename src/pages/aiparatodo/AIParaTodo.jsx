@@ -42,9 +42,10 @@ import '../../fonts/inter-tight.css'
 import '../../fonts/jetbrains-mono.css'
 import './aip.css'
 
-// v2: desde octubre de 2026 la puerta pide cuatro datos. Quien entró antes
-// solo con el correo los deja una vez más.
-const LLAVE = 's4sf.aiparatodo.v2'
+// v3: desde octubre de 2026 el acceso es de pago (muro). Subimos la versión
+// de la llave para invalidar los desbloqueos gratuitos antiguos (v2): quien
+// entró gratis vuelve a ver el muro y solo el pago (?pago=ok) desbloquea.
+const LLAVE = 's4sf.aiparatodo.v3'
 // Acceso de pago: suscripción 1,97 €/mes (de por vida) — rebajado de 12 €/mes.
 // El Payment Link de Stripe redirige a /aiparatodo?pago=ok al terminar, y eso
 // desbloquea el acceso. (Es un desbloqueo simple; para verificación real haría
