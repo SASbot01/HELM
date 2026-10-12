@@ -61,6 +61,8 @@ const FORMATO = {
   valor: { nombre: 'Valor', color: '#4ade80' },
   testimonio: { nombre: 'Testimonio', color: '#e86fa6' },
 }
+// Del formato del plan (plantilla) al tipo real del guion en el calendario.
+const PLAN_A_TIPO = { viral: 'viralidad', autoridad: 'autoridad', valor: 'conversion', testimonio: 'venta' }
 // Lo que se aprovecha cada mes natural (0 = enero).
 const TEMPORADA = ['Propósitos de año nuevo', 'San Valentín', '—', 'Semana Santa', '—', 'Rebajas de verano', 'Verano', 'Verano (flojo)', 'Vuelta al cole', 'Halloween', 'Black Friday', 'Navidad']
 const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -201,6 +203,32 @@ function GuionModal({ g, fase, entradaUrl, onGrabar, onCerrar }) {
   )
 }
 
+// Pop-up al pinchar un hueco del PLAN que todavía no tiene guion escrito.
+function PlanModal({ sel, onProgramar, onCerrar }) {
+  const fm = FORMATO[sel.plan] || { nombre: sel.plan, color: '#8d8d95' }
+  return (
+    <div className="rm-modal-fondo" onClick={onCerrar}>
+      <div className="rm-modal rm-modal-plan" onClick={e => e.stopPropagation()} role="dialog" aria-label="Hueco del plan">
+        <header className="rm-modal-cab">
+          <div className="rm-modal-tags">
+            <span className="rm-tag" style={{ '--c': fm.color }}>{fm.nombre}</span>
+            <span className="rm-modal-fecha">{fechaLarga(sel.fecha)}</span>
+          </div>
+          <button type="button" className="rm-detalle-x" onClick={onCerrar} aria-label="Cerrar">×</button>
+        </header>
+        <h3 className="rm-modal-tit">Aún no hay guion para esto</h3>
+        <p className="rm-plan-txt">
+          En el plan de este día toca un reel de <b style={{ color: fm.color }}>{fm.nombre}</b>, pero el equipo
+          todavía no lo ha escrito. Lánzalo con «Iniciar estudio y creación» y caerá aquí como borrador para que lo apruebes.
+        </p>
+        <div className="rm-modal-pie">
+          <button type="button" className="helm-btn" onClick={onProgramar}><Sparkles size={15} /> Iniciar estudio y creación</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Diálogo del botón «Iniciar estudio y creación»: elige periodo y tipos y lanza
 // el programador, que crea+programa lo que falte en los mejores días.
 function ProgramarDialog({ clientId, mes, hoy, onCerrar }) {
@@ -269,6 +297,7 @@ export default function Roadmap({ client, clientId }) {
   const [mesSel, setMesSel] = useState(0)
   const [semanaSel, setSemanaSel] = useState(null) // null → semana actual (o la 1ª)
   const [guionSel, setGuionSel] = useState(null)   // el guion abierto en el pop-up
+  const [planSel, setPlanSel] = useState(null)     // un hueco del plan sin guion todavía
   const [progAbierto, setProgAbierto] = useState(false) // diálogo «iniciar estudio y creación»
 
   // Los guiones reales del perfil, para colgarlos de su día. RLS abierta en la
@@ -436,9 +465,20 @@ export default function Roadmap({ client, clientId }) {
                   </div>
                 )}
                 <div className="rm-dia-reels">
-                  {plan.reels.map((r, j) => (
-                    <span className="rm-reel plan" key={j} style={{ '--c': FORMATO[r].color }}>{FORMATO[r].nombre}</span>
-                  ))}
+                  {(() => {
+                    const libres = [...gs] // se van consumiendo: cada guion casa con un hueco
+                    return plan.reels.map((r, j) => {
+                      const idx = libres.findIndex(x => x.tipo === PLAN_A_TIPO[r])
+                      const gTipo = idx >= 0 ? libres.splice(idx, 1)[0] : null
+                      return (
+                        <button type="button" className={'rm-reel plan' + (gTipo ? ' tiene' : '')} key={j} style={{ '--c': FORMATO[r].color }}
+                          title={gTipo ? gTipo.title : `${FORMATO[r].nombre} · aún sin guion`}
+                          onClick={() => (gTipo ? setGuionSel(gTipo) : setPlanSel({ fecha: f, plan: r }))}>
+                          {FORMATO[r].nombre}
+                        </button>
+                      )
+                    })
+                  })()}
                 </div>
                 <div className="rm-dia-pie">
                   <span className="rm-hist">Historias</span>
@@ -465,6 +505,7 @@ export default function Roadmap({ client, clientId }) {
       </section>
 
       {guionSel && <GuionModal g={guionSel} fase={fases[guionSel.id]} entradaUrl={entradaUrl} onGrabar={marcarGrabado} onCerrar={() => setGuionSel(null)} />}
+      {planSel && <PlanModal sel={planSel} onProgramar={() => { setPlanSel(null); setProgAbierto(true) }} onCerrar={() => setPlanSel(null)} />}
       {progAbierto && <ProgramarDialog clientId={clientId} mes={mes} hoy={hoy} onCerrar={() => setProgAbierto(false)} />}
     </div>
   )
