@@ -4,16 +4,22 @@
 //                                   actividad (perfiles, consumo, último acceso)
 //   GET  ?action=agencia&id=      → una agencia por dentro: administradores,
 //                                   perfiles, movimientos, gasto y fallos
+//   POST ?action=borrar-agencia { id, confirma }
+//                                 → borra la agencia entera; `confirma` es su
+//                                   slug, escrito a mano por quien borra
 //
 // Solo la plataforma (superadmins.plataforma). Sumar o quitar saldo sigue en
 // /api/creditos?action=ajuste y desactivar a un administrador en
-// /api/users?action=set-active: aquí solo se mira.
+// /api/users?action=set-active.
 //
 // El consumo sale de agencia_movimientos, así que la agencia de la casa
 // (sin_cobro) no tiene: lo suyo no se apunta.
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { supabase } from './lib/supabase.js'
-import { applyCors, requirePlataforma } from './_lib/auth.js'
+import { applyCors, requirePlataforma, writeAudit } from './_lib/auth.js'
 import { CREDITOS_POR_EURO, MARGEN, precioEuros } from './_lib/creditos.js'
+import { borrarPerfil, DIR_COPIAS } from './perfiles.js'
 
 const DIA = 86_400_000
 const hace = (dias) => new Date(Date.now() - dias * DIA).toISOString()
@@ -110,7 +116,7 @@ async function resumen() {
       sinCobro: a.sin_cobro,
       casa: suyos.some(s => s.plataforma),
       creditos: aCreditos(a.saldo),
-      admin: suyos.find(s => !s.plataforma)?.email || suyos[0]?.email || null,
+      admin: (suyos.find(s => s.active && !s.plataforma) || suyos.find(s => s.active) || suyos[0])?.email || null,
       admins: suyos.length,
       adminsActivos: suyos.filter(s => s.active).length,
       perfiles: susPerfiles.length,
@@ -204,14 +210,62 @@ async function agencia(id) {
   }
 }
 
+// Borra una agencia y todo lo suyo: cada perfil con su copia (borrarPerfil, la
+// misma baja que usa el tablero), sus administradores, su saldo y sus
+// movimientos. Antes, una copia de la agencia en disco. Nunca la de la
+// plataforma, y nunca una que haya pagado: esos pagos hay que conservarlos
+// (para esa, desactivar a sus administradores).
+async function borrarAgencia(id, confirma, auth, req) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(id || ''))) throw falla('Agencia inválida')
+  const { data: a, error } = await supabase.from('agencias').select('*').eq('id', id).maybeSingle()
+  if (error) throw error
+  if (!a) throw falla('Esa agencia no existe', 404)
+  const admins = await todas(supabase.from('superadmins').select('*').eq('agencia_id', id))
+  if (admins.some(s => s.plataforma)) throw falla('La agencia de la plataforma no se puede borrar', 403)
+  if (String(confirma || '').trim() !== a.slug) throw falla(`Para borrar la agencia escribe su identificador exacto: ${a.slug}`)
+  const movs = await todas(supabase.from('agencia_movimientos').select('*').eq('agencia_id', id))
+  if (movs.some(m => m.tipo === 'recarga')) {
+    throw falla('Esta agencia ha pagado recargas y sus pagos hay que conservarlos. Desactiva a sus administradores en lugar de borrarla.', 409)
+  }
+
+  const sello = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const dir = path.join(DIR_COPIAS, `agencia-${a.slug}-${sello}`)
+  await fs.mkdir(dir, { recursive: true, mode: 0o700 })
+  // Lleva hashes de contraseña: solo el dueño la lee.
+  await fs.writeFile(path.join(dir, 'agencia.json'), JSON.stringify({ agencia: a, admins, movimientos: movs }, null, 1), { mode: 0o600 })
+
+  const perfiles = await todas(supabase.from('clients').select('*').eq('agencia_id', id))
+  const borrados = []
+  for (const c of perfiles) {
+    const r = await borrarPerfil(c, auth, req)
+    borrados.push({ slug: c.slug, copia: r.copia })
+  }
+  const { error: e1 } = await supabase.from('superadmins').delete().eq('agencia_id', id)
+  if (e1) throw falla(`Perfiles borrados, pero no sus administradores: ${e1.message}. La copia está en ${dir}.`, 500)
+  // Los movimientos y el enlace del conector caen con la agencia (ON DELETE CASCADE).
+  const { error: e2 } = await supabase.from('agencias').delete().eq('id', id)
+  if (e2) throw falla(`No se pudo borrar la agencia: ${e2.message}. La copia está en ${dir}.`, 500)
+
+  await writeAudit({
+    actor: auth, action: 'agencia.borrada', resourceType: 'agencia', resourceId: id, req,
+    metadata: { nombre: a.nombre, slug: a.slug, copia: dir, perfiles: borrados, admins: admins.map(s => s.email) },
+  })
+  return { copia: dir, perfiles: borrados.length, admins: admins.length }
+}
+
 export default async function handler(req, res) {
   applyCors(req, res)
   if (req.method === 'OPTIONS') return res.status(200).end()
   try {
-    await requirePlataforma(req)
+    const auth = await requirePlataforma(req)
     const accion = String(req.query?.action || '')
     if (accion === 'resumen') return res.status(200).json(await resumen())
     if (accion === 'agencia') return res.status(200).json(await agencia(req.query?.id))
+    if (accion === 'borrar-agencia') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' })
+      const b = req.body || {}
+      return res.status(200).json({ ok: true, ...(await borrarAgencia(b.id, b.confirma, auth, req)) })
+    }
     return res.status(400).json({ error: `Acción desconocida: ${accion}` })
   } catch (e) {
     const code = e.statusCode || (/unauthori/i.test(e.message) ? 401 : 500)

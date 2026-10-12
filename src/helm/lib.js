@@ -332,6 +332,11 @@ async function apiFetch(path, { method = 'GET', body } = {}) {
     if (typeof window !== 'undefined') window.location.href = '/login'
     throw new Error('Tu sesión ha caducado. Vuelve a iniciar sesión.')
   }
+  // Sin créditos: el panel abre la recarga esté donde esté (AvisoSinSaldo, en
+  // Creditos.jsx). El error sigue su camino para que la vista lo pinte también.
+  if (r.status === 402 && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('helm:sin-saldo', { detail: data?.error || null }))
+  }
   if (!r.ok) throw new Error(data?.error || `Error ${r.status}`)
   return data
 }
@@ -597,6 +602,7 @@ export const creditosApi = {
   saldo: (agenciaId) => apiFetch(`/api/creditos?action=saldo${agenciaId ? `&agenciaId=${agenciaId}` : ''}`),
   comprar: (pack) => apiFetch('/api/creditos?action=comprar', { method: 'POST', body: { pack } }),
   confirmar: (sessionId) => apiFetch('/api/creditos?action=confirmar', { method: 'POST', body: { sessionId } }),
+  bienvenida: () => apiFetch('/api/creditos?action=bienvenida', { method: 'POST', body: {} }),
   agencias: () => apiFetch('/api/creditos?action=agencias'),
   ajuste: (agenciaId, euros, nota) => apiFetch('/api/creditos?action=ajuste', { method: 'POST', body: { agenciaId, euros, nota } }),
   // El enlace del conector de Claude de la agencia entera (sin perfil).
@@ -608,6 +614,7 @@ export const creditosApi = {
 export const plataformaApi = {
   resumen: () => apiFetch('/api/plataforma?action=resumen'),
   agencia: (id) => apiFetch(`/api/plataforma?action=agencia&id=${encodeURIComponent(id)}`),
+  borrar: (id, confirma) => apiFetch('/api/plataforma?action=borrar-agencia', { method: 'POST', body: { id, confirma } }),
 }
 
 // ── Mi día: los rituales diarios con la IA ─────────────────────────────────

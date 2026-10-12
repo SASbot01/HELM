@@ -5,6 +5,10 @@
 //                                               agencia (la plataforma, de cualquiera)
 //   POST ?action=comprar  { pack }           → (admin) { url } de pago en Stripe
 //   POST ?action=confirmar { sessionId }     → (admin) al volver de Stripe
+//   POST ?action=bienvenida                  → (admin) los créditos de regalo,
+//                                               una sola vez por agencia: se dan
+//                                               al cerrar la oferta de compra
+//                                               que sale al entrar por primera vez
 //   POST ?action=webhook                     → Stripe avisa de un pago
 //   POST ?action=ajuste { agenciaId, euros } → (plataforma) sumar o quitar a mano
 //   GET  ?action=agencias                    → (plataforma) todas, con saldo
@@ -118,14 +122,16 @@ export default async function handler(req, res) {
     if (!agenciaId) throw falla('Tu cuenta no tiene agencia', 403)
 
     if (accion === 'saldo') {
-      const [{ data: agencia, error: e1 }, { data: movs, error: e2 }] = await Promise.all([
+      const [{ data: agencia, error: e1 }, { data: movs, error: e2 }, { data: regalo, error: e3 }] = await Promise.all([
         supabase.from('agencias').select('id, nombre, slug, saldo, sin_cobro').eq('id', agenciaId).maybeSingle(),
         supabase.from('agencia_movimientos')
           .select('id, tipo, importe, origen, modelo, tokens_in, tokens_out, client_id, created_at, clients(name)')
           .eq('agencia_id', agenciaId).order('created_at', { ascending: false }).limit(100),
+        supabase.from('agencia_movimientos').select('id').eq('referencia', `bienvenida:${agenciaId}`).maybeSingle(),
       ])
       if (e1) throw e1
       if (e2) throw e2
+      if (e3) throw e3
       if (!agencia) throw falla('Esa agencia no existe', 404)
       return res.status(200).json({
         agencia: { id: agencia.id, nombre: agencia.nombre, slug: agencia.slug, sinCobro: agencia.sin_cobro },
@@ -134,6 +140,11 @@ export default async function handler(req, res) {
         creditos: aCreditos(agencia.saldo),
         pagosActivos: Boolean(claveStripe()),
         packs: PACKS,
+        // La oferta de bienvenida sale mientras no se haya cobrado el regalo.
+        bienvenida: {
+          pendiente: !agencia.sin_cobro && BIENVENIDA_EUROS > 0 && !regalo,
+          creditos: aCreditos(BIENVENIDA_EUROS),
+        },
         movimientos: (movs || []).map(m => ({
           id: m.id, tipo: m.tipo, origen: m.origen, modelo: m.modelo,
           creditos: Math.round(Number(m.importe) * CREDITOS_POR_EURO * 100) / 100,
@@ -170,6 +181,17 @@ export default async function handler(req, res) {
     if (accion === 'confirmar') {
       const r = await acreditarSesion(req.body?.sessionId)
       return res.status(200).json(r)
+    }
+
+    if (accion === 'bienvenida') {
+      // Siempre a la agencia de quien lo pide: la plataforma no cobra regalos ajenos.
+      const suya = auth.agenciaId
+      if (!suya) throw falla('Tu cuenta no tiene agencia', 403)
+      const { data: a } = await supabase.from('agencias').select('sin_cobro').eq('id', suya).maybeSingle()
+      if (!a || a.sin_cobro || BIENVENIDA_EUROS <= 0) return res.status(200).json({ nuevo: false, creditos: 0 })
+      // La referencia es única: dos clics (o dos pestañas) no regalan dos veces.
+      const saldo = await sumarSaldo(suya, BIENVENIDA_EUROS, { tipo: 'regalo', origen: 'registro', referencia: `bienvenida:${suya}` })
+      return res.status(200).json({ nuevo: saldo != null, creditos: aCreditos(BIENVENIDA_EUROS), saldo: saldo != null ? aCreditos(saldo) : null })
     }
 
     return res.status(400).json({ error: `Acción desconocida: ${accion}` })

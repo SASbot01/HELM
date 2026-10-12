@@ -2,8 +2,9 @@
 //
 // Quien se registra crea SU agencia y entra como su administrador: el mismo
 // papel que tiene Silvestre AI con sus clientes, pero con los suyos. Sin
-// aprobación manual — se paga por uso, y para probar se le regalan unos
-// créditos de bienvenida (api/_lib/creditos.js).
+// aprobación manual — se paga por uso. Los créditos de bienvenida no se dan
+// aquí: al entrar se le ofrece comprar y, si cierra la oferta, se le regalan
+// (api/creditos.js → action=bienvenida).
 //
 // Los perfiles (sus clientes) los crea luego desde el panel.
 //
@@ -13,7 +14,6 @@
 import { supabase, toAppFormat } from './lib/supabase.js'
 import { applyCors, rateLimit, getClientIp, writeAudit, signJwt } from './_lib/auth.js'
 import { hashPassword } from './_lib/passwords.js'
-import { sumarSaldo, BIENVENIDA_EUROS } from './_lib/creditos.js'
 
 function slugify(text) {
   return String(text || '').toLowerCase()
@@ -74,15 +74,6 @@ export default async function handler(req, res) {
   if (uErr) {
     await supabase.from('agencias').delete().eq('id', nueva.id)   // sin admin, la agencia no sirve
     return res.status(500).json({ error: uErr.message })
-  }
-
-  try {
-    if (BIENVENIDA_EUROS > 0) {
-      await sumarSaldo(nueva.id, BIENVENIDA_EUROS, { tipo: 'regalo', origen: 'registro', referencia: `bienvenida:${nueva.id}` })
-    }
-  } catch (err) {
-    // El alta vale igual: los créditos de regalo se pueden poner luego a mano.
-    console.warn('[register] no se pudieron dar los créditos de bienvenida:', err?.message)
   }
 
   const user = { ...toAppFormat(admin, 'superadmins'), agencia: nueva, plataforma: false }

@@ -100,7 +100,7 @@ export async function exigirSaldo() {
   const p = await quienPaga()
   if (!p) return
   if (Number(p.agencia.saldo) <= 0) {
-    const e = new Error('Te has quedado sin créditos. Recarga en Ajustes → Créditos para que la IA siga trabajando.')
+    const e = new Error('Te has quedado sin créditos. Recarga para que la IA siga trabajando.')
     e.statusCode = 402
     throw e
   }

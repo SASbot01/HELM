@@ -115,3 +115,11 @@
 .pl-ajuste .helm-field { margin: 0; }
 .pl-ajuste-nota { grid-column: 1 / -1; color: var(--text-mut); font-size: 12px; }
 @media (max-width: 600px) { .pl-ajuste { grid-template-columns: 1fr; } }
+
+/* Zona de borrar la agencia: al final del cajón, separada del resto. */
+.pl-peligro { margin-top: 28px; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--red) 30%, transparent); }
+.pl-peligro .pl-h { color: var(--red); }
+.pl-peligro > p { margin-bottom: 12px; }
+.pl-borrar { display: grid; gap: 10px; }
+.pl-borrar .helm-field { margin: 0; }
+.pl-borrar-acc { display: flex; justify-content: flex-end; gap: 8px; }

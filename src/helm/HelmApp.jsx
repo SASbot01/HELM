@@ -37,6 +37,7 @@ import Ajustes from './views/Ajustes'
 import { PLUGINS, PLUGIN_MAP } from './plugins/registry'
 import { loadPermisos, puedeVer, accesoTotal, DEFAULT_VISIBLE, loadSecciones, saveSecciones, seccionEncendida, esOptIn } from './permisos'
 import { useHelmTheme, acentoDe } from './theme'
+import { AvisoSinSaldo } from './Creditos'
 import './theme.css'
 
 // Secciones privadas: solo las ve el perfil cuyo slug se indica.
@@ -454,6 +455,7 @@ export default function HelmApp() {
     // prevista: cada perfil trae el suyo.
     <div className="helm" data-theme={theme} data-tono={eligiendo ? 'oro' : tono} style={acentoDe(marca.color) || undefined}>
       <Lienzo vista={view} />
+      <AvisoSinSaldo />
       {eligiendo ? (
         <Perfiles
           clients={clients} loading={loadingClients}

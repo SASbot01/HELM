@@ -21,7 +21,7 @@ import { applyCors, requireSuperAdmin, writeAudit } from './_lib/auth.js'
 import { puedeVerPerfil } from './_lib/access.js'
 
 // Fuera del repo: una copia no puede acabar en un commit ni en el build.
-const DIR_COPIAS = process.env.HELM_BACKUP_DIR || path.join(os.homedir(), 'helm-copias')
+export const DIR_COPIAS = process.env.HELM_BACKUP_DIR || path.join(os.homedir(), 'helm-copias')
 const BUCKET = 'helm'
 
 function falla(msg, code = 400) {
@@ -76,7 +76,8 @@ function rutaEnBucket(url) {
   return m ? decodeURIComponent(m[1]) : null
 }
 
-async function borrarPerfil(client, auth, req) {
+// También lo usa la plataforma al borrar una agencia entera (api/plataforma.js).
+export async function borrarPerfil(client, auth, req) {
   const tablas = await tablasDelPerfil()
 
   // ── 1 · La copia ──────────────────────────────────────────────────────────

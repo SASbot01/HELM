@@ -3,11 +3,12 @@
 // cuenta de siempre; si no es de la plataforma, el servidor dice que no y se
 // vuelve a /admin.
 //
-// Aquí se mira y se corrige a mano: sumar o quitar saldo (api/creditos.js) y
-// desactivar o reactivar a un administrador (api/users.js).
+// Aquí se mira y se corrige a mano: sumar o quitar saldo (api/creditos.js),
+// desactivar o reactivar a un administrador (api/users.js) y borrar una
+// agencia entera (api/plataforma.js, con copia previa en el servidor).
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, RotateCw, Search, ArrowUpRight } from 'lucide-react'
+import { ArrowLeft, RotateCw, Search, ArrowUpRight, Trash2 } from 'lucide-react'
 import { plataformaApi, creditosApi, usersApi } from './lib'
 import { useHelmTheme } from './theme'
 import { Kpi, Panel, Drawer, Field, Input, FormNote, Empty } from './ui'
@@ -132,7 +133,7 @@ export default function Plataforma() {
                       {a.casa && <i className="pl-marca">La casa</i>}
                       {a.sinCobro && !a.casa && <i className="pl-marca">No paga</i>}
                       {!a.sinCobro && a.creditos <= 0 && <i className="pl-marca pl-marca--mal">Sin saldo</i>}
-                      {a.fallos7d > 0 && <i className="pl-marca pl-marca--mal">{a.fallos7d} fallos</i>}
+                      {a.fallos7d > 0 && <i className="pl-marca pl-marca--mal" title="Trabajos de sus agentes que fallaron en los últimos 7 días">{a.fallos7d} fallos</i>}
                       {a.adminsActivos === 0 && a.admins > 0 && <i className="pl-marca pl-marca--mal">Desactivada</i>}
                     </span>
                   </span>
@@ -312,8 +313,51 @@ function Agencia({ fila, onClose, onCambio }) {
               ))}
             </ul>
           ) : <p className="pl-vacio">Sin movimientos todavía.</p>}
+
+          {!fila.casa && <BorrarAgencia fila={fila} onBorrada={() => { onClose(); onCambio() }} />}
         </>
       )}
     </Drawer>
+  )
+}
+
+// Borrar una agencia entera. El servidor guarda antes una copia, se niega con
+// la de la plataforma y con las que han pagado, y exige el slug escrito.
+function BorrarAgencia({ fila, onBorrada }) {
+  const [abierto, setAbierto] = useState(false)
+  const [texto, setTexto] = useState('')
+  const [borrando, setBorrando] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function borrar(e) {
+    e.preventDefault(); setError(null); setBorrando(true)
+    try { await plataformaApi.borrar(fila.id, texto.trim()); onBorrada() }
+    catch (err) { setError(err.message); setBorrando(false) }
+  }
+
+  return (
+    <div className="pl-peligro">
+      <h4 className="pl-h">Borrar la agencia</h4>
+      <p className="pl-vacio">
+        Se borran {fila.perfiles === 1 ? 'su perfil' : `sus ${fila.perfiles} perfiles`} con todos sus datos, sus
+        administradores, su saldo y sus movimientos. Antes se guarda una copia en el servidor. No se puede deshacer.
+      </p>
+      {!abierto ? (
+        <button type="button" className="helm-btn danger" onClick={() => setAbierto(true)}><Trash2 size={14} /> Borrar agencia</button>
+      ) : (
+        <form onSubmit={borrar} className="pl-borrar">
+          <Field label={`Escribe ${fila.slug} para confirmar`}>
+            <Input value={texto} onChange={e => setTexto(e.target.value)} autoFocus autoComplete="off" spellCheck={false} />
+          </Field>
+          <FormNote>{error}</FormNote>
+          <div className="pl-borrar-acc">
+            <button type="button" className="helm-btn" onClick={() => { setAbierto(false); setTexto(''); setError(null) }}>Cancelar</button>
+            <button type="submit" className="helm-btn danger" disabled={borrando || texto.trim() !== fila.slug}>
+              {borrando ? 'Borrando…' : 'Borrar para siempre'}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
   )
 }

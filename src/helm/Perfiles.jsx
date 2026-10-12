@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Search, ArrowUpRight, LogOut, Users, MoreHorizontal, EyeOff, Trash2, RotateCcw, Building2 } from 'lucide-react'
 import { brandOf, notificacionesApi, perfilesApi, creditosApi } from './lib'
-import Creditos, { BotonCreditos } from './Creditos'
+import Creditos, { BotonCreditos, Bienvenida } from './Creditos'
 import { Modal, Field, Input, FormNote } from './ui'
 import './perfiles.css'
 
@@ -18,6 +18,7 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
   const [error, setError] = useState(null)
   const [agencia, setAgencia] = useState(null)      // { id, nombre, plataforma }
   const [verCreditos, setVerCreditos] = useState(false)
+  const [bienvenida, setBienvenida] = useState(null)  // { saldo, pagado }: la oferta de la agencia nueva
   const [recarga, setRecarga] = useState(0)         // para que el botón relea el saldo
   const caja = useRef(null)
   const navigate = useNavigate()
@@ -38,16 +39,21 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
     if (!localStorage.getItem('bw_admin_jwt')) return
     notificacionesApi.resumen().then(r => setAvisos(r.porPerfil || {})).catch(() => {})
     cargarInactivos()
-    creditosApi.saldo().then(r => setAgencia({ id: r.agencia?.id, nombre: r.agencia?.nombre, plataforma: r.plataforma })).catch(() => {})
     // Vuelta de pagar en Stripe: se confirma el pago (el servidor se lo
-    // pregunta a Stripe) y se enseña el saldo nuevo.
+    // pregunta a Stripe) antes de leer el saldo, para enseñar el nuevo.
     const p = new URLSearchParams(window.location.search)
     const sesion = p.get('session_id')
-    if (p.get('creditos')) {
-      window.history.replaceState(null, '', window.location.pathname)
-      const fin = () => { setRecarga(n => n + 1); setVerCreditos(true) }
-      if (sesion) creditosApi.confirmar(sesion).then(fin).catch(e => setError(e.message))
-    }
+    if (p.get('creditos')) window.history.replaceState(null, '', window.location.pathname)
+    const pago = sesion
+      ? creditosApi.confirmar(sesion).then(() => true).catch(e => { setError(e.message); return false })
+      : Promise.resolve(false)
+    pago.then(pagado => creditosApi.saldo().then(r => {
+      setAgencia({ id: r.agencia?.id, nombre: r.agencia?.nombre, plataforma: r.plataforma })
+      // Agencia recién llegada: primero la oferta de compra (o, si viene de
+      // pagar, directamente el regalo de bienvenida).
+      if (r.bienvenida?.pendiente) setBienvenida({ saldo: r, pagado })
+      else if (pagado) { setRecarga(n => n + 1); setVerCreditos(true) }
+    })).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -90,6 +96,12 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
 
       <FormNote>{error}</FormNote>
       {verCreditos && <Creditos onClose={() => { setVerCreditos(false); setRecarga(n => n + 1) }} />}
+      {bienvenida && (
+        <Bienvenida
+          saldo={bienvenida.saldo} pagado={bienvenida.pagado}
+          onFin={() => { setBienvenida(null); setRecarga(n => n + 1) }}
+        />
+      )}
 
       {!loading && (
         <div className="helm-perfiles-grid">
