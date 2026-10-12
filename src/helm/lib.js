@@ -21,7 +21,7 @@ export async function listClients() {
     .from('clients')
     // logo_url / brand_name / brand_subtitle son la marca blanca: con ellos el
     // panel se pinta con la identidad del negocio en vez de con la de HELM.
-    .select('id, slug, name, client_type, primary_color, logo_url, brand_name, brand_subtitle')
+    .select('id, slug, name, client_type, primary_color, logo_url, brand_name, brand_subtitle, agencia_id')
     .eq('active', true)
     .order('created_at', { ascending: true })
   if (error) { console.warn('[helm] listClients', error.message); return [] }
@@ -602,6 +602,12 @@ export const creditosApi = {
   // El enlace del conector de Claude de la agencia entera (sin perfil).
   enlaceMcp: () => apiFetch('/api/agents?action=mcp-enlace'),
   nuevoEnlaceMcp: () => apiFetch('/api/agents?action=mcp-enlace', { method: 'POST', body: {} }),
+}
+
+// ── Plataforma: las agencias de HELM (solo superadmins de plataforma) ──────
+export const plataformaApi = {
+  resumen: () => apiFetch('/api/plataforma?action=resumen'),
+  agencia: (id) => apiFetch(`/api/plataforma?action=agencia&id=${encodeURIComponent(id)}`),
 }
 
 // ── Mi día: los rituales diarios con la IA ─────────────────────────────────

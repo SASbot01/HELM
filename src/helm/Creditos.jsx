@@ -10,7 +10,7 @@
 import { useEffect, useState } from 'react'
 import { Coins, Copy, Check } from 'lucide-react'
 import { creditosApi } from './lib'
-import { Modal, Field, Input, FormNote } from './ui'
+import { Modal, FormNote } from './ui'
 
 const fmt = (n) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 }).format(Math.floor(Number(n) || 0))
 const fecha = (d) => new Date(d).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -128,57 +128,5 @@ function EnlaceMcp() {
       {estado?.existe && !url && estado.ultimo_uso && <small className="helm-field-hint"> Último uso: {fecha(estado.ultimo_uso)}</small>}
       <FormNote>{error}</FormNote>
     </div>
-  )
-}
-
-/** Solo la plataforma: todas las agencias, su saldo y un ajuste a mano. */
-export function Agencias({ onClose }) {
-  const [lista, setLista] = useState(null)
-  const [error, setError] = useState(null)
-  const [ajuste, setAjuste] = useState({ agenciaId: '', euros: '', nota: '' })
-  const cargar = () => creditosApi.agencias().then(r => setLista(r.agencias)).catch(e => setError(e.message))
-  useEffect(() => { cargar() }, [])
-
-  async function ajustar(e) {
-    e.preventDefault(); setError(null)
-    try {
-      await creditosApi.ajuste(ajuste.agenciaId, Number(ajuste.euros), ajuste.nota)
-      setAjuste({ agenciaId: '', euros: '', nota: '' }); cargar()
-    } catch (err) { setError(err.message) }
-  }
-
-  return (
-    <Modal title="Agencias" onClose={onClose} wide>
-      <FormNote>{error}</FormNote>
-      {lista && (
-        <ul className="helm-creditos-movs">
-          {lista.map(a => (
-            <li key={a.id}>
-              <span>{a.nombre}{a.sin_cobro ? ' · no paga' : ''}</span>
-              <small>desde {new Date(a.created_at).toLocaleDateString('es-ES')}</small>
-              <b className={a.creditos < 0 ? 'resta' : ''}>{fmt(a.creditos)}</b>
-            </li>
-          ))}
-        </ul>
-      )}
-      <form onSubmit={ajustar} className="helm-creditos-ajuste">
-        <h4>Sumar o quitar a mano</h4>
-        <Field label="Agencia">
-          <select className="helm-input" value={ajuste.agenciaId} onChange={e => setAjuste({ ...ajuste, agenciaId: e.target.value })} required>
-            <option value="">Elige…</option>
-            {(lista || []).map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
-          </select>
-        </Field>
-        <Field label="Euros" hint="En negativo para quitar. 1 € = 100 créditos.">
-          <Input type="number" step="0.01" value={ajuste.euros} onChange={e => setAjuste({ ...ajuste, euros: e.target.value })} required />
-        </Field>
-        <Field label="Nota">
-          <Input value={ajuste.nota} onChange={e => setAjuste({ ...ajuste, nota: e.target.value })} placeholder="Por qué" />
-        </Field>
-        <div className="helm-modal-actions">
-          <button type="submit" className="helm-btn primary">Aplicar</button>
-        </div>
-      </form>
-    </Modal>
   )
 }

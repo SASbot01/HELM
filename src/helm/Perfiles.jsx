@@ -2,9 +2,10 @@
 // recuadros, y él decide en cuál entra. Un cliente nunca llega aquí: entra
 // directo al suyo (ver HelmApp).
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Plus, Search, ArrowUpRight, LogOut, Users, MoreHorizontal, EyeOff, Trash2, RotateCcw, Building2 } from 'lucide-react'
 import { brandOf, notificacionesApi, perfilesApi, creditosApi } from './lib'
-import Creditos, { BotonCreditos, Agencias } from './Creditos'
+import Creditos, { BotonCreditos } from './Creditos'
 import { Modal, Field, Input, FormNote } from './ui'
 import './perfiles.css'
 
@@ -15,24 +16,29 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
   const [menu, setMenu] = useState(null)            // id del perfil con el menú abierto
   const [borrando, setBorrando] = useState(null)    // perfil en el modal de borrado
   const [error, setError] = useState(null)
-  const [agencia, setAgencia] = useState(null)      // { nombre, plataforma }
+  const [agencia, setAgencia] = useState(null)      // { id, nombre, plataforma }
   const [verCreditos, setVerCreditos] = useState(false)
-  const [verAgencias, setVerAgencias] = useState(false)
   const [recarga, setRecarga] = useState(0)         // para que el botón relea el saldo
   const caja = useRef(null)
+  const navigate = useNavigate()
 
+  // La plataforma ve los perfiles de todas las agencias, pero en su tablero
+  // solo salen los de su agencia: los demás se abren desde /plataforma.
+  const propios = useMemo(() => (
+    agencia?.plataforma && agencia.id ? clients.filter(c => !c.agencia_id || c.agencia_id === agencia.id) : clients
+  ), [clients, agencia])
   const lista = useMemo(() => {
     const t = q.trim().toLowerCase()
-    if (!t) return clients
-    return clients.filter(c => (c.name + ' ' + (c.brand_name || '') + ' ' + c.slug).toLowerCase().includes(t))
-  }, [clients, q])
+    if (!t) return propios
+    return propios.filter(c => (c.name + ' ' + (c.brand_name || '') + ' ' + c.slug).toLowerCase().includes(t))
+  }, [propios, q])
 
   const cargarInactivos = () => perfilesApi.inactivos().then(r => setInactivos(r.perfiles)).catch(() => {})
   useEffect(() => {
     if (!localStorage.getItem('bw_admin_jwt')) return
     notificacionesApi.resumen().then(r => setAvisos(r.porPerfil || {})).catch(() => {})
     cargarInactivos()
-    creditosApi.saldo().then(r => setAgencia({ nombre: r.agencia?.nombre, plataforma: r.plataforma })).catch(() => {})
+    creditosApi.saldo().then(r => setAgencia({ id: r.agencia?.id, nombre: r.agencia?.nombre, plataforma: r.plataforma })).catch(() => {})
     // Vuelta de pagar en Stripe: se confirma el pago (el servidor se lo
     // pregunta a Stripe) y se enseña el saldo nuevo.
     const p = new URLSearchParams(window.location.search)
@@ -64,10 +70,10 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
       <header className="helm-perfiles-cab">
         <div>
           <h1>Perfiles de {agencia?.nombre || producto}</h1>
-          <p>{loading ? 'Cargando perfiles…' : clients.length ? 'Elige en cuál quieres entrar.' : 'Todavía no hay ninguno.'}</p>
+          <p>{loading ? 'Cargando perfiles…' : propios.length ? 'Elige en cuál quieres entrar.' : 'Todavía no hay ninguno.'}</p>
         </div>
         <div className="helm-perfiles-acc">
-          {clients.length > 6 && (
+          {propios.length > 6 && (
             <label className="helm-search">
               <Search size={15} />
               <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar perfil" autoFocus />
@@ -75,7 +81,7 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
           )}
           <BotonCreditos onAbrir={() => setVerCreditos(true)} recarga={recarga} />
           {agencia?.plataforma && (
-            <button type="button" className="helm-btn" onClick={() => setVerAgencias(true)}><Building2 size={15} /> Agencias</button>
+            <button type="button" className="helm-btn" onClick={() => navigate('/plataforma')}><Building2 size={15} /> Agencias</button>
           )}
           <button type="button" className="helm-btn" onClick={onUsers}><Users size={15} /> Usuarios</button>
           <button type="button" className="helm-btn" onClick={onLogout} title={email}><LogOut size={15} /> Salir</button>
@@ -84,10 +90,19 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
 
       <FormNote>{error}</FormNote>
       {verCreditos && <Creditos onClose={() => { setVerCreditos(false); setRecarga(n => n + 1) }} />}
-      {verAgencias && <Agencias onClose={() => setVerAgencias(false)} />}
 
       {!loading && (
         <div className="helm-perfiles-grid">
+          {agencia?.plataforma && !q && (
+            <button type="button" className="helm-perfil helm-perfil--plataforma" onClick={() => navigate('/plataforma')}>
+              <span className="helm-perfil-logo"><img src="/assets/logos/helm-mark.svg" alt="" /></span>
+              <span className="helm-perfil-txt">
+                <b>Plataforma</b>
+                <small>Las agencias de HELM</small>
+              </span>
+              <ArrowUpRight className="helm-perfil-ir" size={16} />
+            </button>
+          )}
           {lista.map(c => {
             const m = brandOf(c)
             const av = avisos[c.id]
@@ -123,7 +138,7 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
             <span className="helm-perfil-logo"><Plus size={18} /></span>
             <span className="helm-perfil-txt">
               <b>Nuevo perfil</b>
-              <small>{clients.length ? 'Añadir otro negocio' : 'Crea el primero para empezar'}</small>
+              <small>{propios.length ? 'Añadir otro negocio' : 'Crea el primero para empezar'}</small>
             </span>
           </button>
         </div>

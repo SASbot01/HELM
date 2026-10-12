@@ -42,6 +42,7 @@ const Gracias = perezoso(() => import('./pages/inicio/socio/Gracias.jsx'))
 const Legal = perezoso(() => import('./pages/inicio/socio/Legal.jsx'))
 const AgentOS = perezoso(() => import('./agents/AgentOS.jsx'))
 const WebHelm = perezoso(() => import('./pages/helm/Web.jsx'))
+const Plataforma = perezoso(() => import('./helm/Plataforma.jsx'))
 // El tema de HELM va después de theme.css (que carga HelmApp) para mandar sobre él.
 import './helm/tema.css'
 
@@ -128,6 +129,9 @@ createRoot(document.getElementById('root')).render(
           <Route path="/login" element={<SoloEnElPanel><SuperAdminLogin /></SoloEnElPanel>} />
           {/* Registro público: crea la agencia y entra directo, sin aprobación. */}
           <Route path="/registro" element={<SoloEnElPanel><Registro /></SoloEnElPanel>} />
+          {/* La web del producto, también con sesión abierta (en / se salta al panel). */}
+          <Route path="/web" element={<SoloEnElPanel><WebHelm /></SoloEnElPanel>} />
+          <Route path="/plataforma" element={<SoloEnElPanel><Plataforma /></SoloEnElPanel>} />
           {/* Panel de usuarios — solo superadmins (la propia página lo comprueba). */}
           <Route path="/usersadmin" element={<SoloEnElPanel><UsersAdmin /></SoloEnElPanel>} />
           {/* Lead magnet público: diagnóstico operativo. Los leads entran al
