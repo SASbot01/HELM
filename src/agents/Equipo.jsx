@@ -117,6 +117,19 @@ export default function Equipo({ clientId: fijo }) {
     try { await fn(); await cargar() } catch (e) { setError(e.message) }
   }
 
+  // El estado visual de cada agente en la oficina, y el registro en vivo: todos
+  // los pasos de las últimas ejecuciones, el más reciente primero. Se calculan
+  // ANTES de los returns tempranos: los hooks no pueden ir detrás de un return.
+  const estadosOffice = useMemo(() => {
+    const m = {}; for (const a of (d?.agentes || [])) m[a.agente] = estadoOficina(a); return m
+  }, [d])
+  const feed = useMemo(() => {
+    const items = []
+    for (const e of (d?.ejecuciones || [])) for (const p of (e.pasos || [])) items.push({ t: p.t, agente: e.agente, texto: p.texto })
+    items.sort((a, b) => (a.t < b.t ? 1 : -1))
+    return items.slice(0, 80)
+  }, [d])
+
   if (!d) return error ? <p className="ag-error">{error}</p> : <p className="ag-vacio">Cargando…</p>
 
   // Dentro de un perfil que aún no tiene equipo: se da de alta con un botón.
@@ -138,18 +151,6 @@ export default function Equipo({ clientId: fijo }) {
   const propuestas = memoria.filter(n => n.tipo === 'propuesta' && n.estado === 'pendiente').length
   const porAprobar = borradores.length + tareas.length
   const lanzar = (agente) => accion(() => agentsApi.equipoLanzar({ clientId: perfil.id, agente }))
-
-  // El estado visual de cada agente en la oficina, y el registro en vivo: todos
-  // los pasos de las últimas ejecuciones, el más reciente primero.
-  const estadosOffice = useMemo(() => {
-    const m = {}; for (const a of agentes) m[a.agente] = estadoOficina(a); return m
-  }, [agentes])
-  const feed = useMemo(() => {
-    const items = []
-    for (const e of ejecuciones) for (const p of (e.pasos || [])) items.push({ t: p.t, agente: e.agente, texto: p.texto })
-    items.sort((a, b) => (a.t < b.t ? 1 : -1))
-    return items.slice(0, 80)
-  }, [ejecuciones])
   const sel = agenteSel ? { k: agenteSel, info: AGENTES[agenteSel], a: de(agenteSel), estado: estadosOffice[agenteSel], tareas: tareas.filter(t => t.agente === agenteSel) } : null
 
   return (
