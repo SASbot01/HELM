@@ -451,7 +451,10 @@ async function handler(req, res) {
       ])
       for (const r of [runs, jobs, memoria, borradores, creadores, tareas]) if (r.error) throw r.error
 
-      const agentes = AGENTES_EQUIPO.map(a => {
+      // La plantilla de la oficina: los 7 del reparto diario + los dos semanales
+      // (programador y virales, de los lunes). El editor de reels no entra aquí.
+      const ROSTER = [...AGENTES_EQUIPO, 'programador', 'virales']
+      const agentes = ROSTER.map(a => {
         const suyas = (runs.data || []).filter(r => r.agente === a)
         const job = (jobs.data || []).find(j => j.payload?.agente === a)
         return {

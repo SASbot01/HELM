@@ -9,10 +9,14 @@
 //
 // Se usa en /agents/equipo (con selector de perfil) y en la sección Agentes de
 // un perfil (con `clientId` fijo). Solo superadmin: tira de api/agents.js.
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Play, ChevronRight, Check, X, Trash2, ArrowRight } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react'
+import { Play, ChevronRight, Check, X, Trash2, ArrowRight, Radio } from 'lucide-react'
 import { agentsApi } from './api'
 import { nf } from './ganchos'
+
+// La oficina 3D carga aparte (Three.js es pesado): así no entra en el bundle
+// principal y el resto del panel aparece al momento.
+const Office3D = lazy(() => import('./Office3D'))
 
 const AGENTES = {
   director:     { nombre: 'Director',     hace: 'A las 6:00 mira el calendario, la agenda, las tareas y la memoria, deja el plan del día y reparte el trabajo.' },
@@ -25,8 +29,6 @@ const AGENTES = {
   programador:  { nombre: 'Programador',  hace: 'Los lunes (o a mano) prepara el contenido de la semana por tipo —viral, autoridad, valor, venta—; no repite un tipo ya montado.' },
   virales:      { nombre: 'Virales',      hace: 'Los lunes rastrea los reels recientes de los creadores de referencia, elige los que mejor encajan y los mete en el corpus.' },
 }
-// Las columnas del flujo, en el orden en que pasa el trabajo.
-const MIRAN = ['investigador', 'analista', 'productor', 'comercial', 'informe']
 const ETAPAS = [
   { k: 'borrador',   nombre: 'Borrador',   sub: 'espera tu visto bueno' },
   { k: 'por_grabar', nombre: 'Por grabar' },
@@ -43,6 +45,30 @@ const ESTADO = {
   saltado:   { label: 'No corrió',  tono: 'espera' },
 }
 const TIPOS = { viralidad: 'Viralidad', conversion: 'Conversión', autoridad: 'Autoridad', venta: 'Venta' }
+
+// El color de cada agente (igual que su personaje en la oficina 3D): tiñe su
+// nombre en el registro en vivo y el borde de su ficha.
+const COLOR = {
+  director: '#d9b66b', investigador: '#7aa5f8', analista: '#4ade80', productor: '#e0894a',
+  comercial: '#e86fa6', informe: '#b08bdd', guionista: '#d9b66b', programador: '#7aa5f8', virales: '#4ade80',
+}
+// El estado que se le pinta en la oficina, con su etiqueta.
+const EST_OFI = {
+  working: { label: 'Trabajando ahora', c: '#7aa5f8' },
+  done: { label: 'Terminó hoy', c: '#4ade80' },
+  idle: { label: 'En reposo', c: '#6b6b73' },
+  error: { label: 'Con un error', c: '#e4362b' },
+}
+const hoyMadrid = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' })
+const esDeHoy = (iso) => iso && new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' }) === hoyMadrid()
+// De los estados internos del agente al estado visual de la oficina.
+function estadoOficina(a) {
+  if (!a) return 'idle'
+  if (a.estado === 'corriendo' || a.estado === 'en_cola') return 'working'
+  if (a.ultima?.estado === 'error') return 'error'
+  if (a.ultima?.estado === 'hecho' && esDeHoy(a.ultima.empezado_en)) return 'done'
+  return 'idle'
+}
 
 const hora = (t, seg) => new Date(t).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', ...(seg ? { second: '2-digit' } : {}) })
 const diaLargo = (t) => new Date(t).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -65,8 +91,9 @@ export default function Equipo({ clientId: fijo }) {
   const [elegido, setElegido] = useState(fijo || '')
   const [d, setD] = useState(null)
   const [error, setError] = useState('')
-  const [pestana, setPestana] = useState('registro')
+  const [pestana, setPestana] = useState('aprobar')
   const [ahora, setAhora] = useState(() => Date.now())
+  const [agenteSel, setAgenteSel] = useState(null) // el agente abierto en la ficha
 
   const cargar = useCallback(
     () => agentsApi.equipo(elegido).then(r => {
@@ -108,12 +135,22 @@ export default function Equipo({ clientId: fijo }) {
 
   const { perfil, agentes, ejecuciones, memoria, borradores, tareas = [], piezas, fuentes, tokensHoy } = d
   const de = (k) => agentes.find(a => a.agente === k)
-  const plan = memoria.find(n => n.tipo === 'plan')
   const propuestas = memoria.filter(n => n.tipo === 'propuesta' && n.estado === 'pendiente').length
-  const avisos = memoria.filter(n => n.tipo === 'aviso').length
   const porAprobar = borradores.length + tareas.length
-  const vivo = (lista) => lista.some(k => de(k)?.estado !== 'parado')
   const lanzar = (agente) => accion(() => agentsApi.equipoLanzar({ clientId: perfil.id, agente }))
+
+  // El estado visual de cada agente en la oficina, y el registro en vivo: todos
+  // los pasos de las últimas ejecuciones, el más reciente primero.
+  const estadosOffice = useMemo(() => {
+    const m = {}; for (const a of agentes) m[a.agente] = estadoOficina(a); return m
+  }, [agentes])
+  const feed = useMemo(() => {
+    const items = []
+    for (const e of ejecuciones) for (const p of (e.pasos || [])) items.push({ t: p.t, agente: e.agente, texto: p.texto })
+    items.sort((a, b) => (a.t < b.t ? 1 : -1))
+    return items.slice(0, 80)
+  }, [ejecuciones])
+  const sel = agenteSel ? { k: agenteSel, info: AGENTES[agenteSel], a: de(agenteSel), estado: estadosOffice[agenteSel], tareas: tareas.filter(t => t.agente === agenteSel) } : null
 
   return (
     <div className="eq">
@@ -149,44 +186,39 @@ export default function Equipo({ clientId: fijo }) {
 
       <Avisos fuentes={fuentes} />
 
-      {/* ── El flujo ───────────────────────────────────────────────────── */}
-      <section className="eq-flujo" aria-label="Cómo trabaja el equipo">
-        <div className="eq-cols">
-          <div className="eq-col">
-            <h4><span>1</span>Planifica</h4>
-            <Nodo k="director" a={de('director')} ahora={ahora} onLanzar={lanzar} />
-          </div>
-          <div className={`eq-col ancha${vivo(MIRAN) ? ' viva' : ''}`}>
-            <h4><span>2</span>Miran y avisan</h4>
-            <div className="eq-col-rejilla">
-              {MIRAN.map(k => <Nodo key={k} k={k} a={de(k)} ahora={ahora} onLanzar={lanzar} />)}
+      {/* ── La oficina + el registro en vivo ───────────────────────────── */}
+      <section className="eq-oficina" aria-label="El equipo, trabajando">
+        <div className="eq-escena">
+          <div className="eq-escena-cab">
+            <h3>El equipo, trabajando</h3>
+            <div className="eq-leyenda">
+              {Object.entries(EST_OFI).map(([k, v]) => <span key={k}><i style={{ background: v.c }} /> {v.label.replace(' ahora', '').replace(' hoy', '').replace(' un', '').toLowerCase()}</span>)}
             </div>
           </div>
-          <div className={`eq-col${vivo(['guionista']) ? ' viva' : ''}`}>
-            <h4><span>3</span>Escribe</h4>
-            <Nodo k="guionista" a={de('guionista')} ahora={ahora} onLanzar={lanzar} />
-          </div>
-          <div className="eq-col">
-            <h4><span>4</span>Decides tú</h4>
-            <div className="eq-nodo eq-decides">
-              <Pendiente n={borradores.length} uno="guion en borrador" varios="guiones en borrador" onClick={() => setPestana('aprobar')} />
-              <Pendiente n={tareas.length} uno="tarea propuesta" varios="tareas propuestas" onClick={() => setPestana('aprobar')} />
-              <Pendiente n={propuestas} uno="cambio de estrategia" varios="cambios de estrategia" onClick={() => setPestana('memoria')} />
-              <Pendiente n={avisos} uno="aviso de hoy" varios="avisos de hoy" onClick={() => setPestana('memoria')} />
-              <p>Nada se publica, se aprueba ni se envía sin ti.</p>
-            </div>
-          </div>
+          <Suspense fallback={<div className="eq-escena-carga">Montando la oficina…</div>}>
+            <Office3D estados={estadosOffice} onSelect={setAgenteSel} />
+          </Suspense>
+          <p className="eq-escena-pie">Arrastra para girar · pincha un agente para ver sus normas y tareas · lo manual se lanza por el MCP</p>
         </div>
-        <button type="button" className="eq-memoria" onClick={() => setPestana('memoria')}>
-          <header>
-            <b>Memoria compartida</b>
-            <span>Todos la leen antes de actuar y escriben al terminar · {memoria.length} {memoria.length === 1 ? 'nota' : 'notas'}</span>
-          </header>
-          {plan
-            ? <p><em>Plan del {diaCorto(plan.updated_at)}</em>{plan.contenido}</p>
-            : <p className="vacia">Todavía no hay plan del día. Lo escribe el director cuando corre.</p>}
-        </button>
+
+        <aside className="eq-log">
+          <header><Radio size={14} aria-hidden="true" /> Registro en vivo</header>
+          {feed.length ? (
+            <ul>
+              {feed.map((f, i) => (
+                <li key={i}>
+                  <time>{hora(f.t)}</time>
+                  <span><b style={{ color: COLOR[f.agente] || '#c9c9ce' }}>{AGENTES[f.agente]?.nombre || f.agente}</b> · {f.texto}</span>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="eq-log-vacio">Aquí irá apareciendo, en directo, lo que hace cada agente.</p>}
+        </aside>
       </section>
+
+      {sel && (
+        <AgenteSheet sel={sel} ahora={ahora} onLanzar={() => lanzar(sel.k)} onCerrar={() => setAgenteSel(null)} />
+      )}
 
       <Recorrido piezas={piezas} />
 
@@ -218,6 +250,43 @@ export default function Equipo({ clientId: fijo }) {
   )
 }
 
+// La ficha de un agente: al pinchar su personaje en la oficina. Su nombre, sus
+// normas (lo que hace) y sus tareas. Lanzarlo a mano queda discreto: lo normal
+// es que corra solo o se lance por el MCP.
+function AgenteSheet({ sel, ahora, onLanzar, onCerrar }) {
+  const { k, info, a, estado, tareas } = sel
+  const est = EST_OFI[estado] || EST_OFI.idle
+  const corriendo = a?.estado === 'corriendo'
+  const ultimoPaso = a?.enCurso?.pasos?.at(-1)?.texto
+  const esLunes = k === 'programador' || k === 'virales'
+  return (
+    <div className="eq-sheet-fondo" onClick={onCerrar}>
+      <div className="eq-sheet" style={{ '--c': COLOR[k] || '#d9b66b' }} onClick={e => e.stopPropagation()} role="dialog" aria-label={info?.nombre || k}>
+        <button type="button" className="eq-sheet-x" onClick={onCerrar} aria-label="Cerrar">×</button>
+        <span className="eq-sheet-rol">{esLunes ? 'Agente semanal · lunes' : 'Equipo diario'}</span>
+        <h3 className="eq-sheet-tit">{info?.nombre || k}</h3>
+        <p className="eq-sheet-est" style={{ color: est.c }}>
+          {corriendo ? 'Trabajando ahora' : est.label}
+          {!corriendo && a?.ultima && <span className="eq-sheet-hace"> · {hace(a.ultima.empezado_en, ahora)}</span>}
+        </p>
+        <h4>Sus normas</h4>
+        <p className="eq-sheet-normas">{info?.hace || 'Agente del equipo.'}</p>
+        <h4>Sus tareas</h4>
+        {corriendo && ultimoPaso && <p className="eq-sheet-ahora">Ahora: {ultimoPaso}</p>}
+        {tareas.length > 0 ? (
+          <ul className="eq-sheet-tareas">{tareas.map(t => <li key={t.id}>{t.titulo}</li>)}</ul>
+        ) : (!corriendo && <p className="eq-sheet-vacio">{a?.ultima?.resumen || a?.ultima?.error || 'Sin tareas pendientes ahora mismo.'}</p>)}
+        <div className="eq-sheet-pie">
+          <button type="button" className="eq-sheet-lanzar" disabled={a?.estado !== 'parado'} onClick={onLanzar}>
+            <Play size={13} strokeWidth={2.4} aria-hidden="true" /> Lanzar ahora
+          </button>
+          <span className="eq-sheet-mcp">Lo normal es que corra solo. A mano, por el MCP.</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Lo que le falta al equipo para trabajar entero. Se dice una vez, arriba, y
 // con qué hay que hacer: un agente que no hace nada sin explicar por qué
 // parece roto.
@@ -229,15 +298,6 @@ function Avisos({ fuentes }) {
   ].filter(Boolean)
   if (!avisos.length) return null
   return <ul className="eq-avisos">{avisos.map(a => <li key={a}>{a}</li>)}</ul>
-}
-
-// Una línea de la columna «Decides tú»: lo que hay esperando, y lleva a ello.
-function Pendiente({ n, uno, varios, onClick }) {
-  return (
-    <button type="button" className={`eq-pendiente${n ? '' : ' cero'}`} onClick={onClick}>
-      <b>{n}</b>{n === 1 ? uno : varios}
-    </button>
-  )
 }
 
 // Por dónde va cada pieza de contenido, de borrador a publicado.
@@ -275,44 +335,6 @@ function Recorrido({ piezas }) {
         })}
       </ol>
     </section>
-  )
-}
-
-function Nodo({ k, a, ahora, onLanzar }) {
-  const info = AGENTES[k]
-  const vivo = a?.estado === 'corriendo'
-  const ultimoPaso = a?.enCurso?.pasos?.at(-1)?.texto
-  return (
-    <article className={`eq-nodo ${a?.estado || 'parado'}`}>
-      <header>
-        <i className="eq-luz" aria-hidden="true" />
-        <h3>{info.nombre}</h3>
-        <button
-          type="button" className="eq-lanzar" disabled={a?.estado !== 'parado'}
-          onClick={() => onLanzar(k)} title={`Lanzar al ${info.nombre.toLowerCase()} ahora`}
-        >
-          <Play size={12} strokeWidth={2.4} aria-hidden="true" /> Lanzar
-        </button>
-      </header>
-      <p className="eq-hace">{info.hace}</p>
-      <div className="eq-ahora" aria-live="polite">
-        {vivo ? (
-          <>
-            <b>Trabajando · {dura(a.enCurso.empezado_en, new Date(ahora).toISOString())}</b>
-            <span>{ultimoPaso || 'Empezando…'}</span>
-          </>
-        ) : a?.estado === 'en_cola' ? (
-          <><b>En cola</b><span>Espera su turno en el worker.</span></>
-        ) : a?.ultima ? (
-          <>
-            <b className={ESTADO[a.ultima.estado]?.tono}>{ESTADO[a.ultima.estado]?.label} {hace(a.ultima.empezado_en, ahora)}</b>
-            <span>{a.ultima.resumen || a.ultima.error}</span>
-          </>
-        ) : (
-          <><b>Sin estrenar</b><span>Todavía no ha corrido ninguna vez.</span></>
-        )}
-      </div>
-    </article>
   )
 }
 

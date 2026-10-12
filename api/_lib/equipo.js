@@ -103,11 +103,11 @@ export async function miraAgenda() {
   }
 }
 
-/** Lunes a partir de las 7:00 de Madrid: el programador prepara el contenido de
+/** Lunes a partir de las 6:00 de Madrid: el programador prepara el contenido de
  *  la semana entrante para cada perfil activo, idempotente por semana (si ya
  *  está montado un tipo, no lo repite). El botón manual hace lo mismo a demanda. */
 export async function miraProgramador() {
-  if (!esLunes(diaMadrid()) || horaMadrid() < 7) return
+  if (!esLunes(diaMadrid()) || horaMadrid() < 6) return
   const { data, error } = await supabase.from('agent_perfiles').select('client_id').eq('activo', true)
   if (error) throw error
   const hoy = diaMadrid()
@@ -119,13 +119,13 @@ export async function miraProgramador() {
   }
 }
 
-/** Lunes a partir de las 7:00 de Madrid: el agente de virales rastrea los reels
+/** Lunes a partir de las 6:00 de Madrid: el agente de virales rastrea los reels
  *  recientes de los creadores de referencia de cada perfil activo y mete los
  *  mejores en el corpus, una vez por semana (clave con la fecha). El botón
  *  manual hace lo mismo a demanda. */
 export async function miraVirales() {
   if (!apifyListo()) return
-  if (!esLunes(diaMadrid()) || horaMadrid() < 7) return
+  if (!esLunes(diaMadrid()) || horaMadrid() < 6) return
   const { data, error } = await supabase.from('agent_perfiles').select('client_id').eq('activo', true)
   if (error) throw error
   const hoy = diaMadrid()
