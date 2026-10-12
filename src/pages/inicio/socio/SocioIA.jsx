@@ -125,7 +125,8 @@ export default function SocioIA() {
       <header className="so-hero" id="so-hero">
         <div className="so-hero-glow" aria-hidden="true" />
         <div className="so-hero-txt">
-          <p className="so-tag"><span className="so-hex" aria-hidden="true" /> HELM · EL PUESTO DE MANDO DE TU NEGOCIO</p>
+          <img src="/assets/logos/helm-mark.svg" alt="HELM" className="so-logo" width="46" height="46" />
+          <p className="so-tag"><span className="so-hex" aria-hidden="true" /> EL PUESTO DE MANDO DE TU NEGOCIO</p>
           <h1>{linea1} <em>{linea2}</em></h1>
           <p className="so-sub">
             <b>HELM</b> reúne tu contenido, tus clientes, tus ventas y tus finanzas en un solo panel,
