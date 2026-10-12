@@ -229,6 +229,38 @@ function PlanModal({ sel, onProgramar, onCerrar }) {
   )
 }
 
+// Pop-up de un hueco «Viral»: el reel de referencia que lo inspira, con toda su
+// info y el enlace a Instagram. Si ese día ya hay guion viral, enlaza a él.
+function ViralModal({ sel, onGuion, onCerrar }) {
+  const v = sel.viral
+  const nf = (n) => (n != null ? Number(n).toLocaleString('es-ES') : null)
+  return (
+    <div className="rm-modal-fondo" onClick={onCerrar}>
+      <div className="rm-modal rm-modal-viral" onClick={e => e.stopPropagation()} role="dialog" aria-label="Viral de referencia">
+        <header className="rm-modal-cab">
+          <div className="rm-modal-tags">
+            <span className="rm-tag" style={{ '--c': '#7aa5f8' }}>Viral de referencia</span>
+            <span className="rm-modal-fecha">{fechaLarga(sel.fecha)}</span>
+          </div>
+          <button type="button" className="rm-detalle-x" onClick={onCerrar} aria-label="Cerrar">×</button>
+        </header>
+        <h3 className="rm-modal-tit">@{v.cuenta}</h3>
+        <div className="rm-viral-datos">
+          {v.vistas != null && <span><b>{nf(v.vistas)}</b> visualizaciones</span>}
+          {v.duracion != null && <span>{v.duracion}s</span>}
+          {v.fecha && <span>{dd(new Date(`${v.fecha}T12:00:00`))}</span>}
+        </div>
+        {v.descripcion && <p className="rm-viral-desc">{v.descripcion}</p>}
+        <div className="rm-modal-pie">
+          <a className="helm-btn" href={v.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={15} /> Ver en Instagram</a>
+          {sel.guion && <button type="button" className="helm-btn sec" onClick={() => onGuion(sel.guion)}><FileText size={15} /> Ver el guion</button>}
+        </div>
+        <p className="rm-viral-nota">Es el viral en el que inspirarte para este hueco: coge su gancho y su estructura, con tu tema.</p>
+      </div>
+    </div>
+  )
+}
+
 // Diálogo del botón «Iniciar estudio y creación»: elige periodo y tipos y lanza
 // el programador, que crea+programa lo que falte en los mejores días.
 function ProgramarDialog({ clientId, mes, hoy, onCerrar }) {
@@ -298,7 +330,22 @@ export default function Roadmap({ client, clientId }) {
   const [semanaSel, setSemanaSel] = useState(null) // null → semana actual (o la 1ª)
   const [guionSel, setGuionSel] = useState(null)   // el guion abierto en el pop-up
   const [planSel, setPlanSel] = useState(null)     // un hueco del plan sin guion todavía
+  const [viralSel, setViralSel] = useState(null)   // el reel viral de referencia en el pop-up
   const [progAbierto, setProgAbierto] = useState(false) // diálogo «iniciar estudio y creación»
+
+  // Los virales de referencia del perfil (helm_virales): el reel que inspira cada
+  // hueco «Viral» del plan, con su enlace y su descripción.
+  const [virales, setVirales] = useState([])
+  useEffect(() => {
+    if (!clientId) { setVirales([]); return }
+    let vivo = true
+    supabase.from('helm_virales')
+      .select('url, cuenta, descripcion, vistas, fecha, duracion')
+      .eq('client_id', clientId)
+      .order('vistas', { ascending: false, nullsFirst: false })
+      .then(({ data, error }) => { if (vivo && !error) setVirales(data || []) })
+    return () => { vivo = false }
+  }, [clientId])
 
   // Los guiones reales del perfil, para colgarlos de su día. RLS abierta en la
   // tabla, así que se leen directo como en el resto de vistas.
@@ -467,13 +514,22 @@ export default function Roadmap({ client, clientId }) {
                 <div className="rm-dia-reels">
                   {(() => {
                     const libres = [...gs] // se van consumiendo: cada guion casa con un hueco
+                    const semilla = [...f].reduce((a, c) => a + c.charCodeAt(0), 0)
                     return plan.reels.map((r, j) => {
                       const idx = libres.findIndex(x => x.tipo === PLAN_A_TIPO[r])
                       const gTipo = idx >= 0 ? libres.splice(idx, 1)[0] : null
+                      // Cada hueco «Viral» enseña un viral de referencia (estable por día+posición).
+                      const viral = r === 'viral' && virales.length ? virales[(semilla + j) % virales.length] : null
+                      const tiene = gTipo || viral
+                      const onClick = () => {
+                        if (viral) setViralSel({ viral, guion: gTipo, fecha: f })
+                        else if (gTipo) setGuionSel(gTipo)
+                        else setPlanSel({ fecha: f, plan: r })
+                      }
                       return (
-                        <button type="button" className={'rm-reel plan' + (gTipo ? ' tiene' : '')} key={j} style={{ '--c': FORMATO[r].color }}
-                          title={gTipo ? gTipo.title : `${FORMATO[r].nombre} · aún sin guion`}
-                          onClick={() => (gTipo ? setGuionSel(gTipo) : setPlanSel({ fecha: f, plan: r }))}>
+                        <button type="button" className={'rm-reel plan' + (tiene ? ' tiene' : '')} key={j} style={{ '--c': FORMATO[r].color }}
+                          title={viral ? `Viral de @${viral.cuenta}` : gTipo ? gTipo.title : `${FORMATO[r].nombre} · aún sin guion`}
+                          onClick={onClick}>
                           {FORMATO[r].nombre}
                         </button>
                       )
@@ -506,6 +562,7 @@ export default function Roadmap({ client, clientId }) {
 
       {guionSel && <GuionModal g={guionSel} fase={fases[guionSel.id]} entradaUrl={entradaUrl} onGrabar={marcarGrabado} onCerrar={() => setGuionSel(null)} />}
       {planSel && <PlanModal sel={planSel} onProgramar={() => { setPlanSel(null); setProgAbierto(true) }} onCerrar={() => setPlanSel(null)} />}
+      {viralSel && <ViralModal sel={viralSel} onGuion={(g) => { setViralSel(null); setGuionSel(g) }} onCerrar={() => setViralSel(null)} />}
       {progAbierto && <ProgramarDialog clientId={clientId} mes={mes} hoy={hoy} onCerrar={() => setProgAbierto(false)} />}
     </div>
   )
