@@ -129,7 +129,7 @@ export default function SocioIA() {
           <h1>{linea1} <em>{linea2}</em></h1>
           <p className="so-sub">
             <b>HELM</b> reúne tu contenido, tus clientes, tus ventas y tus finanzas en un solo panel,
-            con un <b>equipo de IA trabajando dentro</b>. Y te lo monto y lo llevo yo:
+            con un <b>equipo de IA trabajando dentro</b>. Y te lo monto y lo llevo yo:{' '}
             <b className="oro">1.000&nbsp;€</b> por ponerlo en marcha y después, porcentaje de lo que crezcas.
           </p>
           <BotonAuditoria donde="hero" />
