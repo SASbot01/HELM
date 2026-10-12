@@ -888,7 +888,8 @@ async function programador(ctx) {
     const fechas = fechasDePeriodo(desde, hasta, faltan, ocupados, ranking)
     for (const f of fechas) ocupados.add(f)              // repartir entre días
     await ctx.log(`${TIPOS[tipo]}: faltan ${faltan} (hay ${tiene}/${meta}). Escribo en ${fechas.join(', ')}.`)
-    const escritos = await escribeGuiones(ctx, { fechas, tipoForzado: tipo, avisar: false })
+    const nota = `IMPORTANTE: faltan ${faltan} guiones de ${TIPOS[tipo]} para completar el plan de estas semanas. Escribe EXACTAMENTE ${faltan}, uno por cada fecha pedida, aunque el calendario ya tenga temas parecidos: dales un ángulo, un gancho o un sub-tema NUEVO. No devuelvas la lista vacía ni menos de ${faltan}.`
+    const escritos = await escribeGuiones(ctx, { fechas, tipoForzado: tipo, nota, avisar: false })
     resumen.push(`${TIPOS[tipo]}: +${escritos.length}`)
   }
   await notificar(supabase, clientId, {
