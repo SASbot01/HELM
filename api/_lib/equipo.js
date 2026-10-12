@@ -696,10 +696,15 @@ function proximasFechas(hoy, n, ocupados, ranking) {
 // ranking de métricas, en los mejores días primero; si no hay suficientes días
 // libres, se repiten (un día admite varias piezas).
 function fechasDePeriodo(desde, hasta, n, ocupados, ranking) {
+  const todos = []
   const libres = []
   for (let d = desde, i = 0; d <= hasta && i < 400; d = masDias(d, 1), i++) {
+    todos.push(d)
     if (!ocupados.has(d)) libres.push(d)
   }
+  // Si ya no quedan días libres (el plan pide varias piezas por día), se reparte
+  // igualmente sobre todos los días: mejor dos guiones un día que ninguno.
+  if (!libres.length) libres.push(...todos)
   if (ranking && ranking.length) {
     const pref = (dia) => { const k = ranking.indexOf(diaSemanaFecha(dia)); return k < 0 ? 99 : k }
     libres.sort((a, b) => pref(a) - pref(b) || (a < b ? -1 : 1))
