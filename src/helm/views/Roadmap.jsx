@@ -63,6 +63,20 @@ const FORMATO = {
 }
 // Del formato del plan (plantilla) al tipo real del guion en el calendario.
 const PLAN_A_TIPO = { viral: 'viralidad', autoridad: 'autoridad', valor: 'conversion', testimonio: 'venta' }
+
+// El índice de cada hueco «Viral» dentro de la semana (0..N), según la plantilla,
+// para repartir los virales de referencia EN ORDEN y sin repetir: el 1.er hueco
+// de la semana lleva el viral 0, el 2.º el 1, etc., y de una semana a la otra
+// sigue la cuenta. Así se colocan todos.
+const VIRAL_SEQ = {}
+let _vc = 0
+for (let wd = 0; wd < PLANTILLA.semana.length; wd++) {
+  PLANTILLA.semana[wd].reels.forEach((r, j) => { if (r === 'viral') { VIRAL_SEQ[`${wd}-${j}`] = _vc++ } })
+}
+const VIRALES_POR_SEMANA = _vc || 1
+// Nº de semana estable (alineado a lunes) para que cada semana coja virales distintos.
+const LUNES_REF = Date.parse('2026-01-05T12:00:00Z')
+const semanaDe = (fiso) => Math.floor((Date.parse(`${fiso}T12:00:00Z`) - LUNES_REF) / (7 * 86_400_000))
 // Lo que se aprovecha cada mes natural (0 = enero).
 const TEMPORADA = ['Propósitos de año nuevo', 'San Valentín', '—', 'Semana Santa', '—', 'Rebajas de verano', 'Verano', 'Verano (flojo)', 'Vuelta al cole', 'Halloween', 'Black Friday', 'Navidad']
 const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -514,12 +528,14 @@ export default function Roadmap({ client, clientId }) {
                 <div className="rm-dia-reels">
                   {(() => {
                     const libres = [...gs] // se van consumiendo: cada guion casa con un hueco
-                    const semilla = [...f].reduce((a, c) => a + c.charCodeAt(0), 0)
+                    const sem = semanaDe(f)
                     return plan.reels.map((r, j) => {
                       const idx = libres.findIndex(x => x.tipo === PLAN_A_TIPO[r])
                       const gTipo = idx >= 0 ? libres.splice(idx, 1)[0] : null
-                      // Cada hueco «Viral» enseña un viral de referencia (estable por día+posición).
-                      const viral = r === 'viral' && virales.length ? virales[(semilla + j) % virales.length] : null
+                      // Cada hueco «Viral» coge el viral que le toca EN ORDEN (todos, sin repetir en la semana).
+                      const viral = r === 'viral' && virales.length
+                        ? virales[(sem * VIRALES_POR_SEMANA + (VIRAL_SEQ[`${lunes0Iso(f)}-${j}`] || 0)) % virales.length]
+                        : null
                       const tiene = gTipo || viral
                       const onClick = () => {
                         if (viral) setViralSel({ viral, guion: gTipo, fecha: f })
