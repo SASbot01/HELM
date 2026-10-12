@@ -9,6 +9,8 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { enContexto } from '../api/_lib/contexto.js'
+import { pasarela } from '../api/_lib/pasarela.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const API_ROOT = path.resolve(HERE, '..', 'api')
@@ -46,7 +48,10 @@ function readBody(req) {
       chunks.push(c)
     })
     req.on('end', () => {
-      const raw = Buffer.concat(chunks).toString('utf8')
+      // El cuerpo tal cual llegó: las firmas de los webhooks (Stripe) se
+      // calculan sobre estos bytes, no sobre el JSON vuelto a escribir.
+      req.rawBody = Buffer.concat(chunks)
+      const raw = req.rawBody.toString('utf8')
       const ct = (req.headers['content-type'] || '')
       if (!raw) return resolve(undefined)
       if (ct.includes('application/json')) { try { return resolve(JSON.parse(raw)) } catch { return resolve(undefined) } }
@@ -69,8 +74,15 @@ function decorateRes(res) {
   return res
 }
 
-const server = http.createServer(async (req, res) => {
+// Cada petición, con su propio contexto (quién la hace y a quién se cobra lo
+// que gaste en IA): ver api/_lib/contexto.js.
+const server = http.createServer((req, res) => enContexto({ origen: 'panel' }, () => atiende(req, res)))
+
+async function atiende(req, res) {
   decorateRes(res)
+  // La base de datos del panel: va por su propia puerta, que reenvía el cuerpo
+  // sin leerlo (puede ser un archivo) y filtra por agencia.
+  if (req.url.startsWith('/api/db/')) return pasarela(req, res)
   try {
     const u = new URL(req.url, `http://localhost:${PORT}`)
     const resolved = resolveHandlerFile(u.pathname)
@@ -93,6 +105,6 @@ const server = http.createServer(async (req, res) => {
     if (!res.headersSent) res.status(500).json({ error: 'Error interno' })
     else if (!res.writableEnded) res.end()
   }
-})
+}
 
 server.listen(PORT, '127.0.0.1', () => console.log(`[api] listening on 127.0.0.1:${PORT} -> ${API_ROOT}`))

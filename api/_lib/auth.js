@@ -1,13 +1,16 @@
 // api/_lib/auth.js
 // Helpers reutilizables para todos los endpoints serverless de Vercel.
 // - validateAuth(req): verifica JWT y devuelve { userId, clientId, role, email } o lanza.
-// - requireSuperAdmin(req): versión estricta que exige rol superadmin.
+// - requireSuperAdmin(req): versión estricta que exige rol superadmin (el
+//   administrador de una agencia; con `plataforma`, de todas).
+// - requirePlataforma(req): solo quien cuida del sistema entero.
 // - rateLimit({ key, max, windowMs }): in-memory + soft fallback. Para SaaS serio, migrar a Redis.
 // - writeAudit({...}): inserta en audit_logs. Nunca lanza — la auditoría no debe romper el flujo.
 // - getClientIp(req): IP respetando x-forwarded-for de Vercel.
 // - corsHeaders(req, res): setea CORS controlado (whitelist por env CORS_ORIGINS).
 
 import { supabase } from '../lib/supabase.js'
+import { anotar } from './contexto.js'
 
 const JWT_SECRET = process.env.JWT_SECRET || ''
 
@@ -60,19 +63,27 @@ export async function verifyJwt(token) {
 // validateAuth: lee Bearer token. Si no hay JWT pero header legacy 'x-client-slug',
 // permite modo compat sólo si process.env.ALLOW_LEGACY_AUTH === '1' (migración gradual).
 // ───────────────────────────────────────────────────────────────────────────
-// Se mira en la tabla y se recuerda un minuto: quitar a alguien tarda como
-// mucho eso en surtir efecto, y no se consulta la base en cada petición.
-const superadminsVistos = new Map() // sub -> { ok, exp }
-async function sigueSiendoSuperadmin(sub) {
-  if (!sub) return false
+// Se mira en la tabla y se recuerda un minuto: quitar a alguien, o cambiarlo
+// de agencia, tarda como mucho eso en surtir efecto, y no se consulta la base
+// en cada petición. De aquí sale también su agencia: el JWT la lleva, pero la
+// tabla manda (un token de antes de las agencias no la trae).
+const superadminsVistos = new Map() // sub -> { cuenta, exp }
+async function cuentaSuperadmin(sub, payload) {
+  if (!sub) return { ok: false }
   const visto = superadminsVistos.get(sub)
-  if (visto && visto.exp > Date.now()) return visto.ok
-  const { data, error } = await supabase.from('superadmins').select('active').eq('id', sub).maybeSingle()
-  // Si la base no contesta, no se echa a nadie por un fallo nuestro.
-  if (error) return true
-  const ok = Boolean(data) && data.active !== false
-  superadminsVistos.set(sub, { ok, exp: Date.now() + 60_000 })
-  return ok
+  if (visto && visto.exp > Date.now()) return visto.cuenta
+  const { data, error } = await supabase.from('superadmins')
+    .select('active, agencia_id, plataforma').eq('id', sub).maybeSingle()
+  // Si la base no contesta, no se echa a nadie por un fallo nuestro: vale lo
+  // que diga su token, que está firmado.
+  if (error) return { ok: true, agenciaId: payload.agenciaId || null, plataforma: payload.plataforma === true }
+  const cuenta = {
+    ok: Boolean(data) && data.active !== false,
+    agenciaId: data?.agencia_id || null,
+    plataforma: data?.plataforma === true,
+  }
+  superadminsVistos.set(sub, { cuenta, exp: Date.now() + 60_000 })
+  return cuenta
 }
 
 export async function validateAuth(req, { required = true } = {}) {
@@ -99,22 +110,32 @@ export async function validateAuth(req, { required = true } = {}) {
       // Un token de superadmin vale 7 días, pero la cuenta puede haberse
       // borrado o desactivado antes: sin esto, quien ya no es superadmin
       // seguiría viéndolo todo hasta que le caducara el token.
+      // Un superadmin es el administrador de UNA agencia: ve los perfiles de
+      // la suya. `plataforma` ve todas.
+      let cuenta = { agenciaId: null, plataforma: false }
       if (payload.superadmin === true || payload.role === 'superadmin') {
-        if (!(await sigueSiendoSuperadmin(payload.sub))) {
+        cuenta = await cuentaSuperadmin(payload.sub, payload)
+        if (!cuenta.ok) {
           const e = new Error('Esta cuenta ya no es superadmin')
           e.statusCode = 401
           throw e
         }
       }
 
-      return {
+      const auth = {
         userId: payload.sub || payload.userId || null,
         clientId: payload.clientId || null,
         clientSlug: payload.clientSlug || null,
         role: payload.role || 'user',
         email: payload.email || null,
         superadmin: payload.superadmin === true,
+        agenciaId: cuenta.agenciaId,
+        plataforma: cuenta.plataforma,
       }
+      // Para el cobro de créditos (ver ./creditos.js): a quién se le apunta lo
+      // que gaste esta petición.
+      anotar({ agenciaId: auth.agenciaId, clientId: auth.clientId })
+      return auth
     } catch (err) {
       if (required) {
         const e = new Error('Unauthorized: ' + err.message)
@@ -145,6 +166,16 @@ export async function requireSuperAdmin(req) {
   const auth = await validateAuth(req, { required: true })
   if (!auth.superadmin && auth.role !== 'superadmin') {
     const e = new Error('Forbidden: superadmin required')
+    e.statusCode = 403
+    throw e
+  }
+  return auth
+}
+
+export async function requirePlataforma(req) {
+  const auth = await requireSuperAdmin(req)
+  if (!auth.plataforma) {
+    const e = new Error('Solo la plataforma puede hacer esto')
     e.statusCode = 403
     throw e
   }

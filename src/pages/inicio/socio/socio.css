@@ -50,10 +50,7 @@ body { margin: 0; }
 /* Sin motivo hexagonal ni texturas: superficie negra y limpia (premium tech). */
 .so::before { content: none; }
 /* Grano: da textura al negro y evita que los degradados se vean a bandas. */
-.so-grano {
-  position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: .06; mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
+
 .so > header, .so > main, .so > footer { position: relative; z-index: 2; }
 
 .so h1, .so h2, .so h3 {
@@ -127,12 +124,7 @@ body { margin: 0; }
   margin: 0 auto;
   padding: 28px 20px 48px;
 }
-.so-hero-glow {
-  position: absolute; z-index: -1; pointer-events: none;
-  width: 620px; height: 620px; left: 50%; top: -260px; transform: translateX(-50%);
-  background: radial-gradient(closest-side, rgba(217, 182, 107, .28), rgba(217, 182, 107, .08) 55%, transparent 75%);
-  filter: blur(10px);
-}
+
 .so-tag {
   display: inline-flex; align-items: center; gap: 8px;
   margin: 0 0 22px;
@@ -166,42 +158,6 @@ body { margin: 0; }
 .so-plazas-hex i.on { background: var(--oro); }
 
 .so-hero-visual { margin-top: 34px; display: grid; gap: 14px; }
-.so-foto { border-radius: var(--radio); overflow: hidden; border: 1px solid var(--linea); }
-.so-foto img { display: block; width: 100%; height: auto; }
-.so-prueba {
-  display: flex; align-items: center; gap: 8px; margin: 0;
-  padding: 10px 14px; border-radius: 12px;
-  background: var(--bg-2); border: 1px solid var(--linea);
-  font-size: 14px; color: var(--txt-2);
-}
-.so-prueba svg { flex: none; color: var(--oro); }
-.so-prueba b { color: var(--txt); }
-.so-prueba b.oro { color: var(--oro); }
-
-/* El esquema vivo del sistema */
-.so-vivo {
-  margin: 0; padding: 14px 12px 12px;
-  border-radius: var(--radio);
-  background: linear-gradient(180deg, rgba(24, 9, 13, .92), rgba(11, 4, 5, .92));
-  border: 1px solid var(--linea-2);
-  box-shadow: 0 30px 60px -30px rgba(0, 0, 0, .8), 0 0 0 1px rgba(255, 255, 255, .02) inset;
-}
-.so-vivo-cab { display: flex; align-items: center; gap: 8px; padding: 0 4px 6px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--txt-2); }
-.so-vivo-luz { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 0 rgba(74, 222, 128, .6); animation: so-latido 2s infinite; }
-@keyframes so-latido { 70% { box-shadow: 0 0 0 8px rgba(74, 222, 128, 0); } 100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); } }
-.so-vivo svg { display: block; width: 100%; height: auto; overflow: visible; }
-.so-vivo-ruta { animation: so-ruta 1.2s linear infinite; }
-@keyframes so-ruta { to { stroke-dashoffset: -20; } }
-.so-vivo-hex { fill: #1c0b10; stroke: #4a2029; stroke-width: 1.5; }
-.so-vivo-hex.filtro { stroke: var(--rojo); fill: rgba(217, 182, 107, .14); }
-.so-vivo-hex.venta { stroke: var(--oro); fill: rgba(232, 185, 58, .12); }
-.so-vivo-n { fill: var(--txt); font: 900 18px var(--titular); }
-.so-vivo-t { fill: var(--txt-2); font: 700 11.5px var(--cuerpo); }
-.so-vivo figcaption { display: flex; gap: 16px; justify-content: center; padding-top: 2px; font-size: 12px; color: var(--txt-3); }
-.so-vivo figcaption span { display: inline-flex; align-items: center; gap: 6px; }
-.so-vivo figcaption i { width: 8px; height: 8px; border-radius: 50%; }
-.so-vivo figcaption i.blanco { background: var(--txt); }
-.so-vivo figcaption i.oro { background: var(--oro); box-shadow: 0 0 8px var(--oro); }
 
 /* ── Secciones ──────────────────────────────────────────────────────────── */
 .so-sec {
@@ -224,24 +180,6 @@ body { margin: 0; }
 [data-reveal].visto { opacity: 1; transform: none; }
 
 /* 01 · El problema */
-.so-problema-grid { display: grid; gap: 22px; }
-.so-chat {
-  margin: 0; padding: 14px;
-  border-radius: 22px;
-  background: #0b0405; border: 1px solid var(--linea-2);
-  box-shadow: 0 30px 60px -35px rgba(0, 0, 0, .9);
-  display: flex; flex-direction: column; gap: 6px;
-  font-size: 15px; font-weight: 600;
-}
-.so-chat-cab { display: flex; align-items: center; gap: 10px; padding: 2px 4px 10px; border-bottom: 1px solid var(--linea); margin-bottom: 6px; }
-.so-chat-cab b { display: block; font-size: 14px; }
-.so-chat-cab small { color: var(--txt-3); font-size: 12px; }
-.so-chat-avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #f58529, #dd2a7b 50%, #8134af); padding: 2px; box-shadow: 0 0 0 2px #0b0405 inset; }
-.so-chat p { margin: 0; max-width: 82%; padding: 9px 13px; border-radius: 18px; line-height: 1.35; }
-.so-chat .ellos { align-self: flex-start; background: #2a1419; border-bottom-left-radius: 6px; }
-.so-chat .tu { align-self: flex-end; background: linear-gradient(135deg, #6d28d9, #3b5bdb); color: #fff; border-bottom-right-radius: 6px; }
-.so-chat .visto { align-self: flex-start; background: none; padding: 2px 6px; color: var(--txt-3); font-size: 12px; }
-.so-chat figcaption { align-self: center; margin-top: 4px; font-size: 11px; color: var(--txt-3); letter-spacing: .08em; text-transform: uppercase; }
 
 .so-dolores { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; align-content: center; }
 .so-dolores li {
@@ -258,33 +196,6 @@ body { margin: 0; }
   border: 1px solid rgba(217, 182, 107, .35);
   font: 900 clamp(28px, 8vw, 38px)/1.02 var(--titular); text-transform: uppercase;
 }
-
-/* 02 · Las 5 fases: línea vertical en el móvil */
-.so-fases { list-style: none; margin: 0; padding: 0; position: relative; display: grid; gap: 14px; }
-.so-fases::before {
-  content: ''; position: absolute; left: 22px; top: 28px; bottom: 28px;
-  width: 2px; background: linear-gradient(var(--rojo), rgba(217, 182, 107, .1));
-}
-.so-fases li {
-  position: relative; margin-left: 58px;
-  padding: 18px 18px 16px;
-  background: var(--bg-2); border: 1px solid var(--linea); border-radius: var(--radio);
-}
-.so-fase-n {
-  position: absolute; left: -58px; top: 12px;
-  display: grid; place-items: center;
-  width: 46px; height: 52px;
-  background: var(--rojo);
-  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
-  font: 900 24px/1 var(--titular); color: #fff;
-}
-.so-fases li:last-child .so-fase-n { background: var(--oro); color: #1a1406; }
-.so-fases h3 { font-size: 26px; margin: 0 0 10px; }
-.so-fases p { margin: 0; }
-.so-fases p small { display: block; margin-bottom: 2px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--txt-3); }
-.so-fase-monto { color: var(--txt-2); }
-.so-fase-dejas { margin-top: 12px !important; padding-top: 12px; border-top: 1px dashed var(--linea-2); color: var(--txt); }
-.so-fase-dejas small { color: #4ade80 !important; }
 
 /* 04 · Oferta */
 .so-oferta { display: grid; gap: 16px; }
@@ -308,20 +219,6 @@ body { margin: 0; }
 .so-oferta-dos .so-oferta-fila { border-bottom: 0; }
 .so-oferta-dos .so-oferta-fila > b { font-size: 38px; }
 
-.so-cobro { margin: 0; height: 100%; padding: 20px; border-radius: 20px; background: var(--bg-2); border: 1px solid var(--linea); }
-.so-cobro-barras { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: end; height: 280px; }
-.so-cobro-col { display: flex; flex-direction: column; height: 100%; justify-content: flex-end; gap: 8px; }
-.so-cobro-col small { text-align: center; color: var(--txt-2); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; }
-.so-cobro-barra { display: flex; flex-direction: column; height: 45%; border-radius: 12px; overflow: hidden; }
-.so-cobro-barra.alta { height: 100%; }
-.so-cobro-barra span { display: flex; flex-direction: column; justify-content: center; padding: 10px; font-size: 13px; line-height: 1.25; color: var(--txt-2); text-align: center; }
-.so-cobro-barra span b { display: block; margin-top: 4px; font-size: 13px; }
-.so-cobro-barra .base { flex: 1 1 45%; background: repeating-linear-gradient(135deg, #1c0b10 0 8px, #230e14 8px 16px); border: 1px solid var(--linea-2); border-radius: 0 0 12px 12px; }
-.so-cobro-barra:not(.alta) .base { border-radius: 12px; }
-.so-cobro-barra .crece { flex: 1 1 55%; background: linear-gradient(180deg, rgba(232, 185, 58, .35), rgba(217, 182, 107, .25)); border: 1px solid rgba(232, 185, 58, .6); border-bottom: 0; border-radius: 12px 12px 0 0; color: var(--txt); }
-.so-cobro-barra .crece b { color: var(--oro); }
-.so-cobro-barra.alta .base { flex-basis: 45%; flex-grow: 0; height: 45%; }
-
 .so-garantia {
   margin: 28px 0 0;
   padding: 28px 24px 24px;
@@ -334,14 +231,6 @@ body { margin: 0; }
 .so-garantia p { margin: 0; font: 900 clamp(28px, 7.6vw, 44px)/1.03 var(--titular); text-transform: uppercase; }
 .so-garantia em { font-style: normal; color: var(--oro); }
 .so-garantia cite { display: block; margin-top: 14px; font-style: normal; color: var(--txt-2); font-size: 14px; }
-
-/* 05 · Proceso */
-.so-proceso { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; counter-reset: p; }
-.so-proceso li { position: relative; padding: 18px 18px 16px; border-radius: var(--radio); background: var(--bg-2); border: 1px solid var(--linea); }
-.so-proceso-n { display: block; font: 900 44px/1 var(--titular); color: transparent; -webkit-text-stroke: 1.5px var(--rojo); margin-bottom: 8px; }
-.so-proceso h3 { font-size: 24px; margin-bottom: 6px; }
-.so-proceso p { margin: 0 0 10px; color: var(--txt-2); font-size: 15px; }
-.so-proceso small { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
 
 /* 06 · Es para ti / no */
 .so-encaje { display: grid; gap: 12px; }
@@ -372,11 +261,7 @@ body { margin: 0; }
 
 /* ── 08 · Formulario ────────────────────────────────────────────────────── */
 .so-form-sec { overflow: visible; }
-.so-form-glow {
-  position: absolute; z-index: -1; left: 50%; top: 40%; transform: translate(-50%, -50%);
-  width: 700px; height: 700px; pointer-events: none;
-  background: radial-gradient(closest-side, rgba(217, 182, 107, .16), transparent 70%);
-}
+
 .so-form-promesa { list-style: none; margin: -6px 0 22px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--txt-2); font-size: 14px; }
 .so-form-promesa li { display: inline-flex; align-items: center; gap: 6px; }
 .so-form-promesa svg { color: var(--oro); }
@@ -493,7 +378,7 @@ body { margin: 0; }
 
 /* ── Tableta ────────────────────────────────────────────────────────────── */
 @media (min-width: 640px) {
-  .so-proceso { grid-template-columns: 1fr 1fr; }
+
   .so-encaje { grid-template-columns: 1fr 1fr; }
 }
 
@@ -504,7 +389,7 @@ body { margin: 0; }
     display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 64px; align-items: center;
     padding: 84px 32px 96px;
   }
-  .so-hero-glow { left: 30%; top: -200px; width: 900px; height: 900px; }
+
   .so-hero h1 { font-size: 88px; }
   .so-hero .so-btn { width: auto; display: inline-flex; padding: 18px 34px; }
   .so-hero .so-nota { text-align: left; }
@@ -517,21 +402,12 @@ body { margin: 0; }
   .so-sec + .so-sec::before { left: 32px; right: 32px; }
 
   .so-problema { max-width: 1180px; }
-  .so-problema-grid { grid-template-columns: .9fr 1.1fr; gap: 40px; align-items: center; }
+
   .so-problema .so-remate { max-width: 760px; }
 
   /* Las fases en horizontal: una línea con cinco paradas. */
-  .so-fases { grid-template-columns: repeat(5, 1fr); gap: 14px; }
-  .so-fases::before { left: 40px; right: 40px; top: 26px; bottom: auto; width: auto; height: 2px; background: linear-gradient(90deg, var(--rojo), var(--oro)); }
-  .so-fases li { margin: 0; padding: 72px 16px 18px; }
-  .so-fase-n { left: 16px; top: 0; }
-  .so-fases h3 { font-size: 24px; }
-
 
   .so-oferta { grid-template-columns: 1.1fr .9fr; gap: 20px; align-items: stretch; }
-  .so-cobro-barras { height: 100%; min-height: 300px; }
-
-  .so-proceso { grid-template-columns: repeat(4, 1fr); }
 
   .so-cierre h2 { font-size: 76px; }
   .so-cierre .so-btn { width: auto; display: inline-flex; padding: 18px 34px; }
@@ -546,118 +422,7 @@ body { margin: 0; }
 }
 
 /* ── Ajustes tras revisar en Playwright ─────────────────────────────────── */
-/* El registro de actividad del esquema vivo: solo en escritorio, donde el
-   hero tiene sitio; en el móvil alargaría la primera pantalla. */
-.so-vivo-log { display: none; list-style: none; margin: 12px 0 0; padding: 12px 4px 0; border-top: 1px solid var(--linea); }
-.so-vivo-log li {
-  display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 13.5px; color: var(--txt-2);
-  opacity: .5; animation: so-log 7s calc(var(--i) * 1.4s) infinite;
-}
-.so-vivo-log li.so-vivo-nota { opacity: 1; animation: none; padding-top: 10px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--txt-3); }
-@keyframes so-log { 0%, 100% { opacity: .5; } 6%, 18% { opacity: 1; color: var(--txt); } 30% { opacity: .5; } }
-.so-vivo-tag { flex: none; min-width: 78px; padding: 3px 8px; border-radius: 6px; background: var(--bg-3); border: 1px solid var(--linea-2); color: var(--txt); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; text-align: center; }
-.so-vivo-tag.rojo { border-color: rgba(217, 182, 107, .5); color: var(--rojo-txt); }
-.so-vivo-tag.oro { border-color: rgba(232, 185, 58, .6); color: var(--oro); }
-
-/* Caso: en el móvil, las cifras en filas (número a la izquierda, texto al lado). */
-@media (max-width: 959px) {
-}
-@media (min-width: 960px) {
-  .so-vivo { padding: 18px 18px 14px; }
-  .so-vivo-log { display: block; }
-}
 .so-garantia::before { top: -30px; }
-
-/* ── 03 · El sistema: HELM ─────────────────────────────────────────────────
-   Un panel de muestra, los módulos en cuatro trabajos, la IA, las
-   integraciones y el antes/después. Mismo papel de colores: rojo acento,
-   oro solo para lo que se cobra (la columna «Ganado»). */
-.so-helm-sec .so-intro b { color: var(--txt); }
-
-/* El panel de muestra: una ventana de app, sin cifras. */
-.so-panel {
-  margin: 0 0 28px; border-radius: 18px; overflow: hidden;
-  background: #0b0405; border: 1px solid var(--linea-2);
-  box-shadow: 0 40px 80px -40px rgba(0, 0, 0, .95), 0 0 0 1px rgba(217, 182, 107, .08);
-}
-.so-panel-barra { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--linea); background: #10070a; }
-.so-panel-barra i { width: 9px; height: 9px; border-radius: 50%; background: var(--linea-2); }
-.so-panel-barra span { margin-left: 8px; font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--txt-3); }
-/* En el móvil el menú no cabe: el panel se queda con el Informe y el CRM. */
-.so-panel-cuerpo { display: grid; grid-template-columns: 1fr; min-height: 200px; }
-.so-panel-menu { display: none; }
-.so-panel-cuerpo > .so-panel-menu { flex-direction: column; gap: 4px; padding: 14px 10px; border-right: 1px solid var(--linea); font-size: 12px; color: var(--txt-3); }
-.so-panel-menu b { font: 900 17px/1 var(--titular); letter-spacing: .08em; color: var(--txt); margin-bottom: 10px; }
-.so-panel-menu span { padding: 5px 7px; border-radius: 7px; }
-.so-panel-menu span.on { background: rgba(217, 182, 107, .15); color: var(--rojo-txt); }
-.so-panel-main { padding: 14px; display: grid; gap: 14px; align-content: start; min-width: 0; }
-.so-panel-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.so-panel-kpis > div { padding: 10px; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--linea); min-width: 0; }
-.so-panel-kpis small { display: block; font-size: 10.5px; color: var(--txt-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 8px; }
-.so-panel-bar { display: block; height: 6px; border-radius: 3px; background: var(--bg-3); overflow: hidden; }
-.so-panel-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--rojo), var(--oro)); transform-origin: left; animation: so-barra 2.4s cubic-bezier(.2, .7, .2, 1) both; }
-@keyframes so-barra { from { transform: scaleX(0); } }
-.so-panel-kanban { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.so-panel-kanban > div { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--linea); min-height: 104px; min-width: 0; }
-.so-panel-kanban small { font-size: 10.5px; color: var(--txt-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.so-panel-kanban > div.fin { border-color: rgba(232, 185, 58, .45); }
-.so-panel-kanban > div.fin small { color: var(--oro); }
-.so-panel-ficha { height: 22px; border-radius: 6px; background: var(--bg-3); border: 1px solid var(--linea-2); }
-.so-panel-kanban > div.fin .so-panel-ficha { background: rgba(232, 185, 58, .12); border-color: rgba(232, 185, 58, .35); }
-/* La ficha que viaja de «Lead» a «Ganado»: una venta cerrándose sola. */
-.so-panel-viaja {
-  position: absolute; top: 29px; left: 8px; width: calc(25% - 22px); height: 22px; border-radius: 6px;
-  background: var(--rojo); box-shadow: 0 6px 18px -6px rgba(217, 182, 107, .9);
-  animation: so-viaja 6s cubic-bezier(.6, 0, .3, 1) infinite;
-}
-@keyframes so-viaja {
-  0%, 12% { transform: translateX(0); background: var(--rojo); }
-  30%, 40% { transform: translateX(calc(100% + 22px)); background: var(--rojo); }
-  58%, 66% { transform: translateX(calc(200% + 44px)); background: var(--rojo); }
-  84%, 100% { transform: translateX(calc(300% + 66px)); background: var(--oro); box-shadow: 0 6px 18px -6px rgba(232, 185, 58, .9); }
-}
-.so-panel figcaption { padding: 8px 14px 10px; border-top: 1px solid var(--linea); font-size: 11px; color: var(--txt-3); letter-spacing: .08em; text-transform: uppercase; text-align: center; }
-
-/* La IA */
-.so-helm-ia {
-  margin-top: 14px; padding: 22px; border-radius: 20px; display: grid; gap: 18px;
-  background: radial-gradient(120% 100% at 0% 0%, rgba(217, 182, 107, .12), transparent 55%), var(--bg-2);
-  border: 1px solid rgba(217, 182, 107, .3);
-}
-.so-helm-ia h3 { font-size: 30px; margin: 0 0 6px; }
-.so-helm-ia p { margin: 0; color: var(--txt-2); }
-.so-helm-ia ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-.so-helm-ia li { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; line-height: 1.4; color: var(--txt-2); }
-.so-helm-ia li svg { flex: none; margin-top: 2px; color: var(--rojo-txt); }
-.so-helm-ia li b { color: var(--txt); }
-
-/* Integraciones */
-.so-helm-integ { margin-top: 28px; text-align: center; }
-.so-helm-integ small { display: block; margin-bottom: 12px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--txt-3); }
-.so-helm-integ ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-.so-helm-integ li { padding: 7px 13px; border-radius: 999px; border: 1px solid var(--linea-2); background: var(--bg-2); font-size: 14px; color: var(--txt-2); }
-
-/* Hoy / con HELM */
-.so-antes { margin-top: 36px; border-radius: var(--radio); border: 1px solid var(--linea); overflow: hidden; }
-.so-antes-cab, .so-antes-fila { display: grid; grid-template-columns: 1fr 20px 1fr; gap: 10px; align-items: center; padding: 13px 16px; }
-.so-antes-cab { background: var(--bg-3); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--txt-3); }
-.so-antes-cab span:last-child { grid-column: 3; color: #4ade80; }
-.so-antes-fila { border-top: 1px solid var(--linea); font-size: 15px; line-height: 1.35; }
-.so-antes-fila .antes { color: var(--txt-3); text-decoration: line-through; text-decoration-color: rgba(217, 182, 107, .6); }
-.so-antes-fila .despues { color: var(--txt); }
-.so-antes-fila svg { color: var(--rojo-txt); }
-
-@media (min-width: 640px) {
-  .so-helm-mods { grid-template-columns: 1fr 1fr; }
-  .so-panel-cuerpo { grid-template-columns: 120px 1fr; min-height: 260px; }
-  .so-panel-menu { display: flex; }
-}
-@media (min-width: 960px) {
-  .so-helm-mods { grid-template-columns: repeat(3, 1fr); }
-  .so-helm-ia { grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; padding: 32px; }
-  .so-antes { max-width: 820px; margin-left: auto; margin-right: auto; }
-  .so-antes-fila { font-size: 16px; }
-}
 
 /* ── 02 · El equipo: un empleado por cada parte del proceso ────────────────
    Cada fase es un departamento; cada empleado, una tarjeta de terminal con su
@@ -693,23 +458,6 @@ body { margin: 0; }
 @keyframes so-turno { 50% { opacity: .35; } }
 .so-agente b { display: block; font: 900 24px/1 var(--titular); text-transform: uppercase; letter-spacing: .01em; margin-bottom: 6px; }
 .so-agente p { margin: 0; font-size: 14.5px; line-height: 1.45; color: var(--txt-2); }
-
-/* Los módulos de HELM, en rejilla */
-.so-helm-ico { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: rgba(217, 182, 107, .16); color: var(--rojo-txt); }
-.so-helm-ico.grande { width: 46px; height: 46px; border-radius: 13px; margin-bottom: 12px; }
-.so-helm-mods { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.so-helm-mods li {
-  display: flex; gap: 12px; align-items: flex-start; padding: 16px;
-  border-radius: 14px; background: rgba(18, 7, 9, 0.72); border: 1px solid var(--linea);
-  font-size: 14.5px; line-height: 1.4; color: var(--txt-2);
-}
-.so-helm-mods li b { display: block; color: var(--txt); font-size: 15.5px; margin-bottom: 1px; }
-
-/* Líneas de monitor sobre toda la página, muy suaves. */
-.so-lineas {
-  position: fixed; inset: 0; pointer-events: none; z-index: 1;
-  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px);
-}
 
 /* El cierre: la capucha mirando, y la línea de terminal. */
 .so-capucha {
@@ -747,7 +495,6 @@ body { margin: 0; }
 
 /* ═══ Rediseño «Tech premium oscuro»: pantallas reales, sin adornos ═══ */
 /* Fuera las texturas/brillos (los elementos ya no se pintan, por si acaso). */
-.so-grano, .so-lineas, .so-hero-glow, .so-form-glow { display: none !important; }
 
 .so-hero { align-items: center; }
 .so-hero-visual { display: flex; justify-content: center; }

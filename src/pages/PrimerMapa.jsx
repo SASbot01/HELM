@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { SECTIONS, visibles, textoDe } from './primermapa/preguntas'
 import { compute, calificar, señales, eur, DIMENSIONES } from './primermapa/calculo'
-import { getClientId, crearLead, guardarDiagnostico, origenDeLaUrl } from './primermapa/guardar'
+import { crearLead, guardarDiagnostico, origenDeLaUrl } from './primermapa/guardar'
 import './primermapa/primermapa.css'
 
 const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i
@@ -22,7 +22,7 @@ export default function PrimerMapa() {
   const [A, setA] = useState({})
   const [cursor, setCursor] = useState(0)
   const [historia, setHistoria] = useState([])
-  const [lead, setLead] = useState(null)       // { clientId, contactId, nombre, email }
+  const [lead, setLead] = useState(null)       // { contactId, nombre, email } — contactId es la ficha firmada del servidor
 
   const vis = useMemo(() => visibles(A), [A])
   const q = vis[cursor]
@@ -115,13 +115,11 @@ function Puerta({ onEntrar }) {
     if (!ok) return
     setEnviando(true)
     try {
-      const clientId = await getClientId()
-      if (!clientId) throw new Error('No se pudo conectar. Inténtalo en un momento.')
       // De qué anuncio o enlace viene, capturado al entrar: al terminar el
       // diagnóstico la URL ya no tiene por qué conservar los parámetros.
       const origen = origenDeLaUrl()
-      const contactId = await crearLead(clientId, f, origen)
-      onEntrar({ clientId, contactId, origen, ...f })
+      const contactId = await crearLead(f, origen)
+      onEntrar({ contactId, origen, ...f })
     } catch (err) {
       setError(err.message || 'No se pudo continuar. Inténtalo de nuevo.')
       setEnviando(false)
@@ -320,7 +318,7 @@ function Resultados({ A, lead, onEnviado }) {
     if (!rgpd) { setError('Necesitamos tu permiso para mandarte el informe.'); return }
     setEnviando(true); setError(null)
     try {
-      await guardarDiagnostico(lead.clientId, lead.contactId, {
+      await guardarDiagnostico(lead.contactId, {
         A, R, calif,
         extra: { web, quiereRevision: revision, nombre: lead.nombre, origen: lead.origen },
       })

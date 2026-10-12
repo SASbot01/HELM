@@ -3,7 +3,7 @@
 // La comunidad gratuita de Alex, desde el botón principal de la bio.
 //
 //   /aiparatodo                              portada: título, sigue al creador,
-//                                            qué hay dentro y las 4 secciones
+//                                            HELM, qué hay dentro y las secciones
 //   /aiparatodo/<seccion>                    el foro de la sección: temas e hilos
 //   /aiparatodo/<seccion>/<tema>             un tema
 //   /aiparatodo/<seccion>/<tema>/<hilo>      un hilo
@@ -21,7 +21,7 @@ import { Routes, Route, Link, Navigate, useParams, useLocation } from 'react-rou
 import {
   ArrowRight, ArrowLeft, Lock, Instagram, Sparkles, Newspaper, BookOpen, Users,
   Copy, Check, Github, Terminal, ChevronRight, MessageSquare, Hash, Download,
-  Lightbulb, AlertTriangle, Info, ExternalLink, FileText, BrainCircuit, Cpu, ShieldAlert, Blocks,
+  Lightbulb, AlertTriangle, Info, ExternalLink, FileText, BrainCircuit, Cpu, ShieldAlert, Blocks, Workflow,
 } from 'lucide-react'
 import { useCabeceraPublica } from '../inicio/cabecera.js'
 import { track } from '../inicio/socio/track.js'
@@ -32,12 +32,13 @@ import {
   FUNDADOR, SECCIONES, seccionPorClave, postPorSlug, hilosDe, CAPITULOS, capituloPorSlug,
   NN_HILO, NN_RUTA,
 } from './contenido.js'
+import { HELM_REGISTRO, HELM_WEB } from './operaciones.js'
 import { NN_PDF, NN_PORTADA_3D, NN_INTRO, NN_PUNTOS, NN_ORDEN } from './noNegociables.js'
 import {
   MODOS_HILO, MODOS_RUTA, MODOS_PDF, MODOS_PORTADA_3D, MODOS_GANCHO, MODOS_INTRO,
   MODOS_INDICE, MODOS_BLOQUES, MODOS_CLAVES, MODOS_ORDEN, MODOS_FUENTES,
 } from './guiaModos.js'
-import { altaMiembro, anota, INGRESOS, PIPELINE_COMUNIDAD, PIPELINE_LEAD_MAGNET } from './crm.js'
+import { anota, INGRESOS, PIPELINE_COMUNIDAD, PIPELINE_LEAD_MAGNET } from './crm.js'
 import '../../fonts/inter-tight.css'
 import '../../fonts/jetbrains-mono.css'
 import './aip.css'
@@ -51,7 +52,7 @@ const LLAVE = 's4sf.aiparatodo.v3'
 // desbloquea el acceso. (Es un desbloqueo simple; para verificación real haría
 // falta un webhook de Stripe.)
 const PAGO_LINK = 'https://buy.stripe.com/test_7sY3cu5aratnexD1eM5kk01'
-const ICONOS = { skills: Sparkles, news: Newspaper, comunidad: Users, guia: BookOpen }
+const ICONOS = { operaciones: Workflow, skills: Sparkles, news: Newspaper, comunidad: Users, guia: BookOpen }
 const fechaCorta = (f) => new Date(`${f}T12:00:00`).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
 const fechaLarga = (f) => new Date(`${f}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
 
@@ -75,7 +76,7 @@ export default function AIParaTodo() {
   }, [])
   useCabeceraPublica({
     titulo: 'AI para todo — la comunidad de IA de Alex Silvestre',
-    descripcion: 'Skills para Claude, noticias de cada día, comunidad y la guía completa de Claude. En español, para miembros.',
+    descripcion: 'Cómo opera Silvestre AI a sus clientes con HELM, para que lo hagas con los tuyos. Y skills para Claude, noticias de cada día, comunidad y la guía completa de Claude. En español, para miembros.',
     imagen: '/inicio/og.jpg', colorBarra: '#050203',
   })
   return (
@@ -153,7 +154,7 @@ function Cabecera() {
   )
 }
 
-// ── Portada: una frase, el creador, qué hay y las cuatro puertas ───────────
+// ── Portada: una frase, el creador, HELM, qué hay y las puertas ────────────
 function Portada() {
   useEffect(() => { track('vista_pagina', { pagina: 'aiparatodo' }) }, [])
   return (
@@ -168,16 +169,18 @@ function Portada() {
         <Instagram size={18} /> Sigue a nuestro creador
       </a>
       <p className="aip-sub">
-        Skills para Claude, las noticias del día que importan, una comunidad para preguntar y enseñar lo que
-        montas, y la guía completa de Claude. En español. Hazte miembro por <b>1,97 €/mes</b> y se te
-        abre todo: hilos, capítulos y noticias.
+        Cómo operamos a nuestros clientes con HELM, para que lo hagas igual con los tuyos. Y skills para
+        Claude, las noticias del día que importan, una comunidad para preguntar y enseñar lo que montas, y la
+        guía completa de Claude. En español. Hazte miembro por <b>1,97 €/mes</b> y se te abre todo: hilos,
+        capítulos y noticias.
       </p>
+      <BloqueHelm donde="portada" />
       <div className="aip-zonas">
         {SECCIONES.map(s => {
           const Icono = ICONOS[s.key]
           const n = hilosDe(s.key).length
           return (
-            <Link key={s.key} className="aip-zona" to={`/aiparatodo/${s.key}`}>
+            <Link key={s.key} className={`aip-zona ${s.key}`} to={`/aiparatodo/${s.key}`}>
               <span className="aip-zona-ico"><Icono size={22} /></span>
               <h3>{s.titulo}</h3>
               <p>{s.desc}</p>
@@ -190,6 +193,29 @@ function Portada() {
         })}
       </div>
     </main>
+  )
+}
+
+// HELM, el sistema con el que operamos: crear cuenta o verlo. Sin muro: es
+// gratis registrarse, y es justo lo que queremos que haga quien lee.
+function BloqueHelm({ donde }) {
+  return (
+    <aside className="aip-helm">
+      <p className="aip-kicker"><Workflow size={13} /> HELM · el sistema de Silvestre AI</p>
+      <h3>Opera a tus clientes con HELM</h3>
+      <p>
+        Redes, contenido y ventas de cada cliente en un solo panel, con agentes que trabajan solos y conectado a
+        Claude. Sin suscripción: pagas por uso, con créditos de regalo al empezar.
+      </p>
+      <div className="aip-helm-btns">
+        <a className="aip-btn pequeno" href={HELM_REGISTRO} onClick={() => track('clic_cta', { donde: `aip-helm-registro-${donde}` })}>
+          Crea tu cuenta <ArrowRight size={14} />
+        </a>
+        <a className="aip-btn sec pequeno" href={HELM_WEB} target="_blank" rel="noopener noreferrer" onClick={() => track('clic_cta', { donde: `aip-helm-web-${donde}` })}>
+          Ver HELM <ExternalLink size={14} />
+        </a>
+      </div>
+    </aside>
   )
 }
 
@@ -278,7 +304,7 @@ function Foro() {
 // Una tarjeta de hilo, al estilo del banner de los no negociables: portada,
 // tema, título y un botón. La portada es el render 3D en los no negociables, y
 // un icono sobre degradado en el resto (capítulos, skills, MCP).
-const PORTADA_HILO = { skills: Sparkles, mcp: Blocks, guia: BookOpen, comunidad: Users }
+const PORTADA_HILO = { operaciones: Workflow, skills: Sparkles, mcp: Blocks, guia: BookOpen, comunidad: Users }
 function TarjetaHilo({ h, sk, tema }) {
   const esNN = h.slug === NN_HILO.slug
   const esModos = h.slug === MODOS_HILO.slug
@@ -323,6 +349,8 @@ function Hilo({ acceso, setAcceso }) {
   const post = sk === 'skills' ? postPorSlug(slug) : null
   const noticia = esNews ? (noticias || []).find(n => n.slug === slug && n.tema === tema) : null
   const h = esNews ? noticia : hilosDe(sk, tema).find(x => x.slug === slug)
+  // Un hilo con bloques (los de Operaciones) se lee igual que un capítulo.
+  const texto = capitulo?.texto || (!esNews && h?.bloques ? h : null)
 
   useEffect(() => { if (h && acceso) track('vista_pagina', { pagina: 'aiparatodo-hilo', seccion: sk, slug }) }, [h, acceso, sk, slug])
   // Un enlace con #apartado abierto en frío: cuando se monta el hilo (la página
@@ -346,12 +374,13 @@ function Hilo({ acceso, setAcceso }) {
   let kicker = t?.nombre
   if (post) kicker += ` · ${post.skills.length} ${post.tipo === 'repo' ? 'apartados' : 'skills'} · ${post.lectura}`
   if (capitulo) kicker = `Capítulo ${capitulo.n}${capitulo.lectura ? ` · ${capitulo.lectura}` : ''}`
+  else if (texto?.lectura) kicker += ` · ${texto.lectura}`
   if (noticia) kicker = `${t?.nombre} · ${noticia.fuente} · ${fechaLarga(noticia.fecha)}`
   if (esNN) kicker = `Guía en PDF · ${NN_PUNTOS.length} puntos`
   if (esModos) kicker = `Guía en PDF · guía principal · ${MODOS_INDICE.length} puntos`
 
-  const titular = post ? post.gancho : capitulo?.texto ? capitulo.texto.gancho : esNN ? 'Mis 8 no negociables con Claude' : esModos ? MODOS_GANCHO : h.titulo
-  const sub = post ? post.resumen : capitulo ? capitulo.resumen : esNN ? NN_HILO.resumen : esModos ? MODOS_HILO.resumen : null
+  const titular = post ? post.gancho : texto ? texto.gancho : esNN ? 'Mis 8 no negociables con Claude' : esModos ? MODOS_GANCHO : h.titulo
+  const sub = post ? post.resumen : capitulo ? capitulo.resumen : texto ? texto.resumen : esNN ? NN_HILO.resumen : esModos ? MODOS_HILO.resumen : null
 
   return (
     <main className="aip-main aip-post">
@@ -373,13 +402,13 @@ function Hilo({ acceso, setAcceso }) {
       </header>
 
       {/* Lo que se ve antes de dejar los datos: el índice, para saber qué hay dentro. */}
-      {!acceso && capitulo?.texto && <IndiceCapitulo c={capitulo.texto} />}
+      {!acceso && texto && <IndiceCapitulo c={texto} />}
       {!acceso && esNN && <IndiceNN />}
       {!acceso && esModos && <IndiceModos />}
 
       {!acceso ? puerta
         : post ? <CuerpoPost p={post} />
-          : capitulo?.texto ? <CuerpoCapitulo c={capitulo.texto} />
+          : texto ? <CuerpoCapitulo c={texto} />
             : noticia ? <CuerpoNoticia n={noticia} />
               : esModos ? <CuerpoGuiaModos acceso={acceso} />
               : esNN ? <CuerpoNoNegociables acceso={acceso} />
@@ -393,6 +422,7 @@ function Hilo({ acceso, setAcceso }) {
                 )}
 
       {acceso && capitulo && <SiguienteCapitulo actual={capitulo} />}
+      {sk === 'operaciones' && <BloqueHelm donde={`hilo-${slug}`} />}
       {acceso && (capitulo || post) && <BannerNoNegociables donde={capitulo ? 'capitulo' : 'skills'} />}
 
       <Link className="aip-volver" to={`/aiparatodo/${sk}`}><ArrowLeft size={16} /> Volver a {s.titulo}</Link>

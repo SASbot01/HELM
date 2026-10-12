@@ -1,20 +1,19 @@
-// HELM — registro público con aprobación.
+// HELM — alta de una agencia.
 //
-// Crea un negocio (clients.active=false) y su acceso (team.active=false), ambos
-// PENDIENTES. Un superadmin los aprueba desde /usersadmin (activa los dos). El
-// usuario no puede entrar hasta entonces: el login exige active=true.
-import { supabase } from './lib/supabase.js'
-import { applyCors, rateLimit, getClientIp, writeAudit } from './_lib/auth.js'
+// Quien se registra crea SU agencia y entra como su administrador: el mismo
+// papel que tiene Silvestre AI con sus clientes, pero con los suyos. Sin
+// aprobación manual — se paga por uso, y para probar se le regalan unos
+// créditos de bienvenida (api/_lib/creditos.js).
+//
+// Los perfiles (sus clientes) los crea luego desde el panel.
+//
+//   POST ?action=register  { agencia, name, email, password }
+//     → { success, user, token }, igual que el login de api/admin.js, para que
+//       el navegador entre al panel sin pasar por /login.
+import { supabase, toAppFormat } from './lib/supabase.js'
+import { applyCors, rateLimit, getClientIp, writeAudit, signJwt } from './_lib/auth.js'
 import { hashPassword } from './_lib/passwords.js'
-
-const DEFAULT_PIPELINE_STAGES = [
-  { key: 'lead', label: 'Lead', color: '#64748B' },
-  { key: 'contacted', label: 'Contactado', color: '#3B82F6' },
-  { key: 'qualified', label: 'Cualificado', color: '#8B5CF6' },
-  { key: 'proposal', label: 'Propuesta', color: '#F59E0B' },
-  { key: 'won', label: 'Ganado', color: '#22C55E' },
-  { key: 'lost', label: 'Perdido', color: '#EF4444' },
-]
+import { sumarSaldo, BIENVENIDA_EUROS } from './_lib/creditos.js'
 
 function slugify(text) {
   return String(text || '').toLowerCase()
@@ -36,73 +35,74 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'Demasiados registros seguidos. Prueba más tarde.' })
   }
 
-  const { businessName, name, email, password, logoUrl, brandName, brandSubtitle } = req.body || {}
+  const { agencia, name, email, password } = req.body || {}
+  const nombreAgencia = String(agencia || '').trim().slice(0, 80)
+  const nombre = String(name || '').trim().slice(0, 80)
   const mail = String(email || '').trim().toLowerCase()
-  if (!businessName?.trim() || !name?.trim() || !mail || !password) {
+  if (!nombreAgencia || !nombre || !mail || !password) {
     return res.status(400).json({ error: 'Faltan campos obligatorios' })
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) return res.status(400).json({ error: 'Email inválido' })
-  if (String(password).length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' })
+  if (String(password).length < 8) return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' })
 
-  // Email único entre superadmins y accesos de cliente.
+  // Email único entre administradores y accesos de cliente: el login mira las
+  // dos tablas con el mismo email.
   const [{ data: t }, { data: sa }] = await Promise.all([
     supabase.from('team').select('id').eq('email', mail).limit(1),
-    supabase.from('superadmins').select('id').eq('email', mail).limit(1),
+    supabase.from('superadmins').select('id').ilike('email', mail).limit(1),
   ])
   if ((t && t.length) || (sa && sa.length)) {
     return res.status(409).json({ error: 'Ya existe una cuenta con ese email' })
   }
 
-  // Slug único para el negocio.
-  const base = slugify(businessName) || 'negocio'
+  const base = slugify(nombreAgencia) || 'agencia'
   let slug = base
   for (let n = 2; ; n++) {
-    const { data } = await supabase.from('clients').select('id').eq('slug', slug).maybeSingle()
+    const { data } = await supabase.from('agencias').select('id').eq('slug', slug).maybeSingle()
     if (!data) break
     slug = `${base}-${n}`
   }
 
-  // 1) Negocio pendiente, ya con su marca: el logo y el nombre que puso en el
-  //    formulario son con lo que verá el panel el día que se le apruebe.
-  const negocio = {
-    slug, name: businessName.trim(), client_type: 'growth', active: false, is_demo: false,
-  }
-  const marca = {
-    logo_url: typeof logoUrl === 'string' && /^https?:\/\//.test(logoUrl) ? logoUrl : null,
-    brand_name: brandName?.trim() ? String(brandName).trim().slice(0, 40) : null,
-    brand_subtitle: brandSubtitle?.trim() ? String(brandSubtitle).trim().slice(0, 40) : null,
-  }
+  const { data: nueva, error: aErr } = await supabase.from('agencias')
+    .insert({ nombre: nombreAgencia, slug }).select('id, nombre, slug').single()
+  if (aErr) return res.status(500).json({ error: aErr.message })
 
-  let { data: client, error: cErr } = await supabase.from('clients')
-    .insert({ ...negocio, ...marca }).select('id, slug').single()
-
-  // Si `migrations/helm_marca.sql` todavía no está aplicada, esas columnas no
-  // existen. Perder el registro entero por la marca sería absurdo: se reintenta
-  // sin ella y el negocio entra igual.
-  if (cErr && (cErr.code === '42703' || cErr.code === 'PGRST204' || /column .* does not exist|schema cache/i.test(cErr.message || ''))) {
-    console.warn('[register] sin columnas de marca — aplica migrations/helm_marca.sql');
-    ({ data: client, error: cErr } = await supabase.from('clients').insert(negocio).select('id, slug').single())
-  }
-  if (cErr) return res.status(500).json({ error: cErr.message })
-
-  // 2) Pipeline por defecto (best-effort).
-  try {
-    await supabase.from('crm_pipelines').insert({
-      client_id: client.id, name: 'Pipeline', stages: DEFAULT_PIPELINE_STAGES, is_default: true,
-    })
-  } catch { /* no bloquea el registro */ }
-
-  // 3) Acceso pendiente.
-  const { error: uErr } = await supabase.from('team').insert({
-    client_id: client.id, name: name.trim(), email: mail,
-    password_hash: hashPassword(password), role: 'admin,ceo,director',
-    active: false, guide_seen: false,
-  })
+  const { data: admin, error: uErr } = await supabase.from('superadmins').insert({
+    email: mail, name: nombre, password_hash: hashPassword(String(password)),
+    active: true, agencia_id: nueva.id,
+  }).select('*').single()
   if (uErr) {
-    await supabase.from('clients').delete().eq('id', client.id)   // rollback
+    await supabase.from('agencias').delete().eq('id', nueva.id)   // sin admin, la agencia no sirve
     return res.status(500).json({ error: uErr.message })
   }
 
-  await writeAudit({ action: 'register.pending', req, statusCode: 200, metadata: { email: mail, slug } })
-  return res.status(200).json({ success: true, pending: true })
+  try {
+    if (BIENVENIDA_EUROS > 0) {
+      await sumarSaldo(nueva.id, BIENVENIDA_EUROS, { tipo: 'regalo', origen: 'registro', referencia: `bienvenida:${nueva.id}` })
+    }
+  } catch (err) {
+    // El alta vale igual: los créditos de regalo se pueden poner luego a mano.
+    console.warn('[register] no se pudieron dar los créditos de bienvenida:', err?.message)
+  }
+
+  const user = { ...toAppFormat(admin, 'superadmins'), agencia: nueva, plataforma: false }
+  delete user.password
+  delete user.passwordHash
+  delete user.password_hash
+
+  let token = null
+  try {
+    token = await signJwt({
+      sub: admin.id, email: admin.email, role: 'superadmin', superadmin: true,
+      clientId: null, clientSlug: null, agenciaId: nueva.id, plataforma: false, via: 'registro',
+    }, { expiresIn: 60 * 60 * 12 })
+  } catch (err) {
+    console.warn('[register] could not sign JWT (JWT_SECRET missing?):', err?.message)
+  }
+
+  await writeAudit({
+    action: 'register.agencia', actor: { userId: admin.id, email: mail, role: 'superadmin', superadmin: true },
+    req, statusCode: 200, metadata: { email: mail, agencia: slug },
+  })
+  return res.status(200).json({ success: true, user, token })
 }

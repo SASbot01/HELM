@@ -23,7 +23,7 @@ const VEREDICTO = {
 const PLATAFORMAS = ['Meta', 'Instagram', 'TikTok', 'YouTube', 'Google']
 const eur = (n) => (Number(n) || 0).toLocaleString('es-ES') + ' €'
 
-export default function Ads({ client, clientId }) {
+export default function Ads({ clientId }) {
   const [ads, setAds] = useState(null)
   const [error, setError] = useState('')
   const [creando, setCreando] = useState(false)

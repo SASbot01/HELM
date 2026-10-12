@@ -36,6 +36,7 @@ import { sincronizar as sincronizarIg } from '../instagram.js'
 import { notificar } from './notificar.js'
 import { puntuarGancho, clasificaGancho } from './ig-calidad.js'
 import { apifyListo, rastreaCuentas } from './apify.js'
+import { validaArgs } from './esquema.js'
 
 export const AGENTES = ['director', 'investigador', 'analista', 'productor', 'comercial', 'informe', 'guionista']
 // En el orden en que corren: el guionista el último, para leer lo de los demás.
@@ -1300,7 +1301,17 @@ export async function ejecutaAgente(job) {
       tokens.out += r.usage?.out || 0
       await ctx.log(`Respuesta recibida: ${r.usage?.in || 0} tokens de entrada, ${r.usage?.out || 0} de salida.`)
       const llamada = r.toolCalls.find(c => c.name === herramienta.name)
-      if (!llamada) throw new Error('El modelo contestó sin entregar el resultado en su formato')
+      if (!llamada) {
+        // Qué hizo en vez de entregar: así el registro dice algo más que "falló".
+        const otras = r.toolCalls.map(c => c.name).join(', ')
+        throw new Error(`El modelo contestó sin llamar a "${herramienta.name}", que es como entrega el resultado.${
+          otras ? ` Llamó a: ${otras}.` : ''}${r.content ? ` Escribió: «${String(r.content).slice(0, 200)}${r.content.length > 200 ? '…' : ''}»` : ' No escribió nada (¿se quedó sin tokens?).'}`)
+      }
+      // Lo entregado, contra su esquema. No se para por esto (cada agente ya
+      // sabe arreglarse con lo que falte): queda en los pasos qué campo vino
+      // mal, que es lo que hace falta para entender un resultado raro.
+      const { errores } = validaArgs(herramienta.input_schema, llamada.args || {})
+      if (errores.length) await ctx.log(`Lo entregado no cuadra del todo con "${herramienta.name}": ${errores.slice(0, 5).join(' ')}`)
       return llamada.args || {}
     },
   }

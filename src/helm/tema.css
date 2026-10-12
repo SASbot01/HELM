@@ -20,7 +20,7 @@
    ============================================================================ */
 @import url('../fonts/geist.css');
 
-.helm, .helm-swatch {
+.helm {
   --bg:        #000000;
   --bg-1:      #0a0a0b;
   --panel:     #121213;
@@ -149,16 +149,15 @@
   border-radius: var(--radius);
   box-shadow: inset 0 1px 12px rgba(0, 0, 0, 0.6);
 }
-.helm-kcard, .ed-tarjeta {
+.helm-kcard {
   background: var(--superficie-2) padding-box, var(--borde-neutro) border-box;
   border: 1px solid transparent;
   border-radius: 12px;
   box-shadow: var(--shadow-sm);
   transition: transform .14s ease, background .14s ease;
 }
-.helm-kcard:hover, .ed-tarjeta:hover { transform: translateY(-1px); border-color: transparent; background: var(--superficie-2) padding-box, var(--borde) border-box; }
-.ed-cal-dia, .ed-datos div, .helm-col-empty { border-radius: var(--radius-sm); }
-.ed-dep { border-radius: var(--radius); }
+.helm-kcard:hover { transform: translateY(-1px); border-color: transparent; background: var(--superficie-2) padding-box, var(--borde) border-box; }
+.helm-col-empty { border-radius: var(--radius-sm); }
 
 .helm-tabs, .helm-search, .helm-select, .helm-input, .helm-field select, .helm-field textarea { border-radius: var(--radius-sm); }
 .helm-tabs, .helm-search, .helm-select { background: var(--panel); border-color: var(--border-2); }
@@ -201,7 +200,6 @@
 .helm .helm-tab.active svg { color: var(--cyan) !important; stroke: currentColor !important; }
 /* Un enlace con aspecto de botón no se subraya. */
 .helm a.helm-btn { text-decoration: none; }
-
 
 /* ── El armazón: nada pegado a los bordes de la pantalla ─────────────────── */
 .helm-shell { grid-template-columns: 264px 1fr; }
@@ -341,7 +339,7 @@
 .helm-perfil-txt small { display: block; margin-top: 3px; font-size: 12.5px; color: var(--text-mut); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .helm-perfil-ir { flex-shrink: 0; color: var(--text-mut); transition: color .16s ease, transform .16s ease; }
 .helm-perfil:hover .helm-perfil-ir { color: var(--tono); transform: translate(2px, -2px); }
-.helm-perfil-ultimo { flex-shrink: 0; font-size: 11.5px; font-weight: 500; color: var(--tono); }
+
 .helm-perfil.nuevo { --tono: var(--plata); background: transparent; border: 1px dashed var(--border-2); box-shadow: none; color: var(--text-dim); }
 .helm-perfil.nuevo:hover { background: rgba(18, 18, 19, 0.9); border-color: rgba(255, 255, 255, 0.3); color: var(--text); }
 .helm-perfil.nuevo .helm-perfil-logo { background: transparent; border-style: dashed; }
@@ -400,19 +398,15 @@
 }
 /* Los que vienen escritos en mayúsculas en el propio JSX (NEGOCIO, PLUGINS,
    OPERATING LAYER): se bajan y se capitaliza solo la primera letra. */
-.helm-navlabel, .helm-brand span { text-transform: lowercase; }
-.helm-navlabel::first-letter, .helm-brand span::first-letter { text-transform: uppercase; }
+.helm-brand span { text-transform: lowercase; }
+.helm-brand span::first-letter { text-transform: uppercase; }
 
-.helm-navlabel { font-size: 12px; font-weight: 600; color: var(--text-mut); padding-left: 10px; }
 .helm-brand b { font-family: var(--titular); letter-spacing: -.01em; font-size: 19px; }
 .helm-brand span { font-size: 12px; font-weight: 500; color: var(--text-mut); margin-top: 2px; }
 .helm-panel-head h2 { font-family: var(--titular); font-size: 16px; font-weight: 600; color: var(--text); }
 .helm-table th { font-size: 12px; font-weight: 600; color: var(--text-mut); }
 .helm-drawer-section, .helm-kv > div:first-child { font-size: 12.5px; font-weight: 600; color: var(--text-dim); }
 .helm-cal-dow { font-size: 12px; font-weight: 600; }
-.ed-datos dt { font-size: 12px; font-weight: 500; color: var(--text-mut); }
-
-
 
 /* ── Las cifras ─────────────────────────────────────────────────────────── */
 .helm-kpi .lbl { font-size: 13px; font-weight: 500; color: var(--text-mut); }
@@ -424,12 +418,9 @@
 .helm-kpi .val.accent { color: var(--oro); }
 .helm-kpi .sub { font-size: 12.5px; color: var(--text-mut); margin-top: 6px; }
 
-/* Los contadores de Edición, en la cifra de la casa y no en monoespaciada. */
-.ed-col-cab small { font-family: var(--titular); letter-spacing: 0; }
-
 @media (prefers-reduced-motion: reduce) {
-  .helm-tile, .helm-perfil, .helm-kcard, .ed-tarjeta, .helm .helm-btn { transition: none; }
-  .helm-tile:hover, .helm-perfil:hover, .helm-kcard:hover, .ed-tarjeta:hover { transform: none; }
+  .helm-tile, .helm-perfil, .helm-kcard, .helm .helm-btn { transition: none; }
+  .helm-tile:hover, .helm-perfil:hover, .helm-kcard:hover { transform: none; }
 }
 
 /* ════════════════════════════════════════════════════════════════════════

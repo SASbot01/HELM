@@ -148,6 +148,11 @@ export default async function handler(req, res) {
 
   // ── El resto exige sesión con permiso sobre el perfil ────────────────────
   const clientId = req.query.clientId || req.body?.clientId
+  // Un solo perfil por petición: el que se comprueba es el que se usa. Si
+  // vienen los dos (URL y cuerpo) y no coinciden, no se adivina cuál vale.
+  if (req.query?.clientId && req.body?.clientId && String(req.query.clientId) !== String(req.body.clientId)) {
+    return res.status(400).json({ error: 'El perfil de la URL y el del cuerpo no coinciden' })
+  }
   if (!clientId) return res.status(400).json({ error: 'clientId requerido' })
   try {
     await requireProfileAccess(req, clientId)
@@ -366,6 +371,12 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && action === 'drive-import') {
       const { fileId, contactId } = req.body || {}
       if (!fileId) return res.status(400).json({ error: 'fileId requerido' })
+      // La ficha a la que se cuelga tiene que ser de este perfil.
+      if (contactId) {
+        const { data: ficha } = await supabase.from('crm_contacts').select('id')
+          .eq('id', contactId).eq('client_id', clientId).maybeSingle()
+        if (!ficha) return res.status(404).json({ error: 'Ese contacto no es de este perfil' })
+      }
 
       const { token } = await getAccessToken(supabase, clientId)
       const file = await getDriveFile(token, fileId)

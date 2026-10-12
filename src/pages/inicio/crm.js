@@ -5,11 +5,10 @@
 // de inicio", con su etapa y sus UTM. Misma decisión que las otras páginas
 // públicas (el formulario de valor, el diagnóstico) y por el mismo motivo: una
 // lista de emails aparte es una lista que nadie vuelve a mirar.
-import { supabase } from '../../utils/supabase'
-
-export const PERFIL_SLUG = 'silvestre'
-export const PIPELINE = 'Página de inicio'
-export const ETAPA_ENTRADA = 'lead_nuevo'
+//
+// La escritura la hace el servidor (api/leads.js · masterclass): aquí solo se
+// recoge lo que hay en la página.
+import { pideLead } from '../leads.js'
 
 // De dónde vino: lo que traiga la URL, tal cual, para poder medir qué Reel
 // trae gente.
@@ -26,9 +25,10 @@ export function origenDeLaUrl() {
 /**
  * Da de alta el lead.
  *
- * Dos cosas que parecen detalles y no lo son:
+ * Dos cosas que parecen detalles y no lo son (las cumple el servidor):
  *
- *   · Si ese email YA existe en el perfil, se actualiza en vez de duplicar.
+ *   · Si ese email YA existe en el perfil, se actualiza en vez de duplicar, sin
+ *     moverle de etapa ni de embudo, y las notas se suman sin repetirse.
  *     Quien se apunta dos veces es la misma persona, y un CRM con la misma
  *     persona tres veces es un CRM que el comercial deja de creerse.
  *   · Si el pipeline todavía no está creado, el contacto entra igual sin
@@ -36,66 +36,8 @@ export function origenDeLaUrl() {
  *     peor intercambio posible.
  */
 export async function altaLead({ nombre, email, evento }) {
-  const correo = String(email || '').trim().toLowerCase()
-  if (!correo) throw new Error('Falta el email')
-
-  const { data: perfil, error: errPerfil } = await supabase
-    .from('clients').select('id').eq('slug', PERFIL_SLUG).maybeSingle()
-  if (errPerfil || !perfil) throw new Error('No he podido conectar con el CRM. Prueba en un minuto.')
-
-  const { data: pipeline } = await supabase
-    .from('crm_pipelines').select('id, stages')
-    .eq('client_id', perfil.id).eq('name', PIPELINE).maybeSingle()
-
-  const etapas = Array.isArray(pipeline?.stages) ? pipeline.stages : []
-  const etapa = etapas.find(s => s.key === ETAPA_ENTRADA)?.key || etapas[0]?.key || 'lead'
-  const origen = origenDeLaUrl()
-
-  const fila = {
-    client_id: perfil.id,
-    name: String(nombre || '').trim() || correo.split('@')[0],
-    email: correo,
-    source: 'Página de inicio',
-    // A qué sesión se apuntó. Va en las notas y no en `source` porque `source`
-    // responde a "de dónde vino" y no debe cambiar cada vez que hay directo
-    // nuevo: si lo pisáramos, la atribución de la página se partiría en cinco.
-    notes: evento ? `Se apuntó a: ${evento}` : null,
-    pipeline_id: pipeline?.id || null,
-    status: etapa,
-    utm_source: origen.utm_source,
-    utm_medium: origen.utm_medium,
-    utm_campaign: origen.utm_campaign,
-    utm_content: origen.utm_content,
-    last_activity_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }
-
-  const { data: existente } = await supabase
-    .from('crm_contacts').select('id, notes')
-    .eq('client_id', perfil.id).ilike('email', correo).limit(1)
-
-  if (existente?.length) {
-    // Ni la etapa ni el embudo se tocan al volver: si ya está en "Llamada
-    // agendada", que se apunte otra vez a la lista no lo devuelve a la casilla
-    // de salida.
-    const { pipeline_id: _pipelineId, status: _status, ...sinMover } = fila
-
-    // Las notas se SUMAN, no se pisan: quien se apuntó a una sesión anterior y
-    // vuelve para esta tiene las dos, que es justo lo que mira quien le va a
-    // llamar. Y si repite en la misma, no se duplica la línea.
-    const previas = String(existente[0].notes || '')
-    sinMover.notes = !fila.notes ? previas || null
-      : previas.includes(fila.notes) ? previas
-        : [previas, fila.notes].filter(Boolean).join('\n')
-
-    const { error } = await supabase.from('crm_contacts').update(sinMover).eq('id', existente[0].id)
-    if (error) throw new Error('No he podido guardarte. Prueba en un minuto.')
-    return { id: existente[0].id, repetido: true }
-  }
-
-  const { data, error } = await supabase.from('crm_contacts').insert(fila).select('id').single()
-  if (error) throw new Error('No he podido guardarte. Prueba en un minuto.')
-  return { id: data.id, repetido: false }
+  if (!String(email || '').trim()) throw new Error('Falta el email')
+  return pideLead('masterclass', { nombre, email, evento, origen: origenDeLaUrl() })
 }
 
 /**
@@ -107,12 +49,7 @@ export async function altaLead({ nombre, email, evento }) {
  */
 export async function contarApuntados(evento) {
   try {
-    const { data: perfil } = await supabase
-      .from('clients').select('id').eq('slug', PERFIL_SLUG).maybeSingle()
-    if (!perfil) return null
-    const { count } = await supabase
-      .from('crm_contacts').select('id', { count: 'exact', head: true })
-      .eq('client_id', perfil.id).ilike('notes', `%${evento}%`)
+    const { count } = await pideLead(`apuntados&evento=${encodeURIComponent(evento)}`)
     return typeof count === 'number' ? count : null
   } catch {
     return null   // decorativo: si falla, la sala se ve igual de bien sin el número
@@ -131,16 +68,8 @@ export async function contarApuntados(evento) {
  */
 export async function marcaComunidad(id) {
   if (!id) return
-  const NOTA = 'Entró en la comunidad de Discord'
   try {
-    const { data } = await supabase.from('crm_contacts').select('notes').eq('id', id).maybeSingle()
-    const previas = String(data?.notes || '')
-    if (previas.includes(NOTA)) return
-    await supabase.from('crm_contacts').update({
-      notes: [previas, NOTA].filter(Boolean).join('\n'),
-      last_activity_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }).eq('id', id)
+    await pideLead('nota', { id, texto: 'Entró en la comunidad de Discord' })
   } catch {
     // A propósito en silencio: ver el dato en el CRM es un lujo, entrar en el
     // Discord es el objetivo.

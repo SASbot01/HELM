@@ -15,11 +15,6 @@ export const fmtDate = (d) => {
 
 export const todayISO = () => new Date().toISOString().slice(0, 10)
 
-export function monthStartISO() {
-  const n = new Date()
-  return new Date(n.getFullYear(), n.getMonth(), 1).toISOString().slice(0, 10)
-}
-
 // Lista de clientes (perfiles). El primero activo es el seleccionado por defecto.
 export async function listClients() {
   const { data, error } = await supabase
@@ -37,12 +32,6 @@ export async function listClients() {
 }
 
 // ── Perfiles (clientes) ────────────────────────────────────────────────────
-
-// Un solo tipo de perfil: Growth. Los demás (consultoría, manufactura,
-// logística) eran de la plataforma antigua y ya no se usan.
-export const CLIENT_TYPES = [
-  { value: 'growth', label: 'Growth' },
-]
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])?$/
 
@@ -76,7 +65,13 @@ export async function createProfile({ name, slug, client_type = 'growth', primar
   const { data: client, error } = await supabase
     .from('clients').insert(row)
     .select('id, slug, name, client_type, primary_color').single()
-  if (error) { console.warn('[helm] createProfile', error.message); throw error }
+  if (error) {
+    console.warn('[helm] createProfile', error.message)
+    // La URL es única en toda la plataforma, pero la comprobación de arriba
+    // solo ve los perfiles de tu agencia: si la tiene otra, choca aquí.
+    if (error.code === '23505') throw new Error(`La URL "${cleanSlug}" ya está cogida. Prueba con otra.`)
+    throw error
+  }
 
   // 2) Pipeline por defecto (best-effort)
   try {
@@ -341,16 +336,6 @@ async function apiFetch(path, { method = 'GET', body } = {}) {
   return data
 }
 
-// Registro público (sin token): crea negocio + acceso pendientes de aprobación.
-export async function registerAccount(payload) {
-  const r = await fetch('/api/register?action=register', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-  })
-  const data = await r.json().catch(() => ({}))
-  if (!r.ok) throw new Error(data?.error || `Error ${r.status}`)
-  return data
-}
-
 // Panel de usuarios (superadmin) + marca de guía vista (usuario).
 export const usersApi = {
   list: () => apiFetch('/api/users?action=list'),
@@ -605,6 +590,18 @@ export const perfilesApi = {
   inactivos: () => apiFetch('/api/perfiles?action=inactivos'),
   activar: (clientId, activo) => apiFetch('/api/perfiles?action=activar', { method: 'POST', body: { clientId, activo } }),
   borrar: (clientId, confirma) => apiFetch('/api/perfiles?action=borrar', { method: 'POST', body: { clientId, confirma } }),
+}
+
+// ── Créditos de la agencia (api/creditos.js) ───────────────────────────────
+export const creditosApi = {
+  saldo: (agenciaId) => apiFetch(`/api/creditos?action=saldo${agenciaId ? `&agenciaId=${agenciaId}` : ''}`),
+  comprar: (pack) => apiFetch('/api/creditos?action=comprar', { method: 'POST', body: { pack } }),
+  confirmar: (sessionId) => apiFetch('/api/creditos?action=confirmar', { method: 'POST', body: { sessionId } }),
+  agencias: () => apiFetch('/api/creditos?action=agencias'),
+  ajuste: (agenciaId, euros, nota) => apiFetch('/api/creditos?action=ajuste', { method: 'POST', body: { agenciaId, euros, nota } }),
+  // El enlace del conector de Claude de la agencia entera (sin perfil).
+  enlaceMcp: () => apiFetch('/api/agents?action=mcp-enlace'),
+  nuevoEnlaceMcp: () => apiFetch('/api/agents?action=mcp-enlace', { method: 'POST', body: {} }),
 }
 
 // ── Mi día: los rituales diarios con la IA ─────────────────────────────────

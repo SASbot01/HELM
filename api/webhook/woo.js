@@ -30,6 +30,9 @@ import { registerWooOrder } from '../_lib/woo-ingest.js'
 export const config = { api: { bodyParser: false } }
 
 async function getRawBody(req) {
+  // scripts/api-server.mjs guarda los bytes tal cual llegaron: es lo único
+  // sobre lo que cuadra la firma (el JSON reescrito no es el mismo texto).
+  if (Buffer.isBuffer(req.rawBody)) return req.rawBody
   // El dev-server local ya deja el body parseado; en Vercel llega el stream.
   if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
     return Buffer.from(JSON.stringify(req.body))

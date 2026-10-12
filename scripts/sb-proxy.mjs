@@ -1,23 +1,25 @@
 // La pasarela /sb: lo único de la Supabase local que sale a internet.
 //
-// La web habla con la base por el mismo origen (/sb → localhost:54321). Detrás
-// de ese puerto está la Supabase entera: además de las tablas y los archivos,
-// la administración de Postgres (/pg, que ejecuta SQL), auth, GraphQL… Nada de
-// eso lo usa la web, y publicarlo era dejar la base abierta. Aquí se deja
-// pasar solo lo que la web necesita:
+// Detrás de localhost:54321 está la Supabase entera: tablas, archivos, la
+// administración de Postgres (/pg, que ejecuta SQL), auth, GraphQL… Desde la
+// reforma de agencias (migraciones 097 y 098) el navegador ya no habla con las
+// tablas por aquí: el panel va por /api/db con su sesión (api/_lib/pasarela.js)
+// y las páginas públicas por endpoints del servidor. Así que solo quedan dos
+// cosas, y ninguna necesita clave:
 //
-//   · /rest/v1/<tabla>          leer y escribir tablas
-//   · /storage/v1/object/…      subir, bajar y borrar archivos
+//   · GET /storage/v1/object/public/…        ver un archivo por su enlace
+//     (los enlaces viejos guardados en la base apuntan aquí)
+//   · PUT/POST /storage/v1/object/upload/sign/…?token=…
+//     subir a una URL que ha firmado el servidor para una ruta concreta (el
+//     portal de documentos, api/documentos.js); la autoriza el token firmado
 //
-// y solo con la clave pública (rol `anon`). Una petición con una clave de otro
-// rol —la de servicio, que se salta todas las reglas de la base— no pasa: el
-// servidor (api/, worker) habla con la base en local, nunca por aquí.
+// Si alguien manda además una clave, tiene que ser la pública: la de servicio
+// se salta todas las reglas y nunca viaja por aquí.
 //
 // Lo usa vite.config.js, igual en desarrollo que en el build publicado.
 
-const RUTAS = /^\/sb\/(rest\/v1\/[a-z0-9_]+|storage\/v1\/object\/[^?]+)(\?|$)/
-// Los enlaces públicos de archivos se abren sin clave (un <img>, un enlace).
-const SIN_CLAVE = /^\/sb\/storage\/v1\/object\/public\//
+const PUBLICO = /^\/sb\/storage\/v1\/object\/public\/[^?]+(\?|$)/
+const FIRMADA = /^\/sb\/storage\/v1\/object\/upload\/sign\/[^?]+\?(.*&)?token=/
 
 function rolDe(token) {
   try {
@@ -27,15 +29,16 @@ function rolDe(token) {
 
 /** Por qué no pasa una petición, o '' si pasa. */
 export function motivoBloqueo({ method = 'GET', url = '', headers = {} }) {
-  if (!RUTAS.test(url)) return 'ruta'
-  // El preflight no lleva clave: la llevará la petición de verdad.
-  if (method === 'OPTIONS') return ''
+  const m = String(method).toUpperCase()
+  const vale = PUBLICO.test(url) ? ['GET', 'HEAD', 'OPTIONS'].includes(m)
+    : FIRMADA.test(url) ? ['PUT', 'POST', 'OPTIONS'].includes(m)
+      : false
+  if (!vale) return 'ruta'
   const claves = [
     headers.apikey,
     /^Bearer\s+(.+)$/i.exec(headers.authorization || '')?.[1],
     new URL(url, 'http://local').searchParams.get('apikey'),
   ].filter(Boolean)
-  if (!claves.length) return SIN_CLAVE.test(url) ? '' : 'sin clave'
   return claves.every(c => rolDe(c) === 'anon') ? '' : 'rol'
 }
 

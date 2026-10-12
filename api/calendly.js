@@ -24,6 +24,11 @@ export default async function handler(req, res) {
   }
 
   const clientId = req.query.clientId || req.body?.clientId
+  // Un solo perfil por petición: el que se comprueba es el que se usa. Si
+  // vienen los dos (URL y cuerpo) y no coinciden, no se adivina cuál vale.
+  if (req.query?.clientId && req.body?.clientId && String(req.query.clientId) !== String(req.body.clientId)) {
+    return res.status(400).json({ error: 'El perfil de la URL y el del cuerpo no coinciden' })
+  }
   if (!clientId) return res.status(400).json({ error: 'clientId requerido' })
 
   try {

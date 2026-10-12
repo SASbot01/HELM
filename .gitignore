@@ -47,3 +47,6 @@ __pycache__/
 
 # Llave de la cuenta de servicio de Google Drive (helm-drive). Es una contraseña.
 .google-drive-sa.json
+
+# Estado local de la CLI de Supabase (host e id del proyecto): no va al repo.
+supabase/.temp/

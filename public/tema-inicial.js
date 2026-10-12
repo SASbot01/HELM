@@ -4,4 +4,4 @@ try {
   if (localStorage.getItem('blackwolf-theme') === 'light') {
     localStorage.removeItem('blackwolf-theme');
   }
-} catch (e) {}
+} catch { /* sin localStorage: tema por defecto */ }

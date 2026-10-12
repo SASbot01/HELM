@@ -1,0 +1,134 @@
+/* ============================================================================
+   HELM — la web pública del producto (Web.jsx).
+
+   Vive fuera de .helm, así que pinta con las variables de index.css y
+   styles/themes.css: la misma paleta que el login y el registro, sin un solo
+   color escrito a pelo. Una columna de lectura (720px) y tarjetas sobre el
+   fondo; en móvil, todo a una columna con 16px de margen.
+   ============================================================================ */
+
+.hw {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+}
+.hw main, .hw-cab, .hw-pie {
+  max-width: 960px;
+  margin: 0 auto;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+/* ── Cabecera ─────────────────────────────────────────────────────────── */
+.hw-cab {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-top: 20px; padding-bottom: 20px;
+}
+.hw-marca {
+  display: flex; align-items: center; gap: 10px;
+  color: var(--text); text-decoration: none;
+  font-weight: 700; letter-spacing: 4px;
+}
+.hw-marca img { width: 28px; height: 28px; }
+.hw-cab-acc { display: flex; gap: 8px; }
+
+/* ── Botones ──────────────────────────────────────────────────────────── */
+.hw-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--orange);
+  background: var(--orange);
+  color: var(--text-dark);
+  font-weight: 600; font-size: 0.9rem;
+  text-decoration: none; white-space: nowrap;
+  transition: opacity var(--transition-fast), border-color var(--transition-fast);
+}
+.hw-btn:hover { opacity: 0.88; }
+.hw-btn--sec { background: transparent; color: var(--text); border-color: var(--border-hover); }
+.hw-btn--sec:hover { opacity: 1; border-color: var(--orange); }
+.hw-btn--xl { padding: 13px 24px; font-size: 1rem; }
+
+/* ── Portada ──────────────────────────────────────────────────────────── */
+.hw-hero { padding: 72px 0 56px; max-width: 760px; }
+.hw-eti {
+  color: var(--orange);
+  font-size: 0.8rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  margin-bottom: 16px;
+}
+.hw-hero h1 {
+  font-size: clamp(2rem, 5vw, 3.1rem);
+  line-height: 1.1; letter-spacing: -0.03em; font-weight: 700;
+  margin-bottom: 20px;
+}
+.hw-lead { color: var(--text-secondary); font-size: 1.1rem; max-width: 640px; }
+.hw-ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.hw-nota { margin-top: 14px; color: var(--text-muted); font-size: 0.85rem; }
+
+/* ── Bloques ──────────────────────────────────────────────────────────── */
+.hw-bloque { padding: 48px 0; border-top: 1px solid var(--border); }
+.hw-bloque h2, .hw-final h2 {
+  font-size: clamp(1.5rem, 3.4vw, 2rem);
+  line-height: 1.2; letter-spacing: -0.02em; font-weight: 700;
+  margin-bottom: 12px;
+}
+.hw-sub { color: var(--text-secondary); max-width: 680px; margin-bottom: 24px; }
+
+.hw-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.hw-pasos {
+  list-style: none;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;
+  margin-top: 24px;
+}
+.hw-pasos li { padding: 24px; }
+.hw-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: var(--radius-pill);
+  border: 1px solid var(--orange); color: var(--orange);
+  font-size: 0.85rem; font-weight: 700;
+  margin-bottom: 14px;
+}
+.hw-pasos h3 { font-size: 1.1rem; margin-bottom: 6px; }
+.hw-pasos p { color: var(--text-secondary); font-size: 0.95rem; }
+
+.hw-secciones {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 32px;
+}
+.hw-secciones div { padding: 14px 0; border-bottom: 1px solid var(--border); }
+.hw-secciones dt { font-weight: 600; }
+.hw-secciones dd { color: var(--text-secondary); font-size: 0.92rem; }
+
+/* ── Precios ──────────────────────────────────────────────────────────── */
+.hw-claves { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 24px; color: var(--text-secondary); }
+.hw-claves b { color: var(--text); }
+.hw-packs {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;
+  margin-top: 24px;
+}
+.hw-pack { padding: 20px; display: flex; flex-direction: column; gap: 4px; }
+.hw-pack-eur { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; }
+.hw-pack-cr { color: var(--text-secondary); font-size: 0.9rem; }
+
+/* ── Cierre ───────────────────────────────────────────────────────────── */
+.hw-final { padding: 40px; margin: 24px 0 48px; }
+.hw-final p { color: var(--text-secondary); }
+.hw-pie { padding-top: 24px; padding-bottom: 40px; color: var(--text-muted); font-size: 0.85rem; border-top: 1px solid var(--border); }
+
+/* ── Móvil ────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .hw main, .hw-cab, .hw-pie { padding-left: 16px; padding-right: 16px; }
+  .hw-marca span { display: none; }
+  .hw-hero { padding: 40px 0 40px; }
+  .hw-lead { font-size: 1rem; }
+  .hw-pasos, .hw-secciones { grid-template-columns: 1fr; }
+  .hw-final { padding: 24px; }
+  .hw-ctas .hw-btn { flex: 1 1 100%; }
+}

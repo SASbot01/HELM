@@ -1,8 +1,13 @@
 // HELM — Agent OS. El taller del operador, detrás de /agents.
 //
-// Solo superadmin. No lleva clientId por ninguna parte: esto no es una sección
-// del panel de un cliente, es el espacio de trabajo de quien opera HELM — sus
-// identidades, su corpus de referencia y su memoria a largo plazo.
+// Solo superadmin. Es el espacio de trabajo de quien opera HELM — sus
+// identidades, su corpus de referencia y su memoria a largo plazo — y además
+// el equipo de agentes de cada perfil.
+//
+// Desde que hay agencias (ver migrations/097_helm_agencias.sql) se reparte así
+// (ver `alcance` más abajo): el corpus y la memoria global son de la
+// plataforma — cualquier agencia los consulta, solo la plataforma los cambia —
+// y todo lo que va con un perfil exige que el perfil sea de tu agencia.
 //
 // El recorrido de un reel:
 //   pegas el enlace  → POST ?action=reel-add
@@ -18,6 +23,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { supabase } from './lib/supabase.js'
 import { wrap } from './_lib/auth.js'
+import { puedeVerPerfil, perfilesVisibles } from './_lib/access.js'
 import { fichaDe } from './agentes-perfil.js'
 import { resumenDrive } from './_lib/ingesta.js'
 import { getIgConfig } from './_lib/instagram.js'
@@ -114,8 +120,49 @@ export async function anadeReels(urls, identityId = null, cuenta = '') {
   return { nuevos, repetidos }
 }
 
+// Lo que cambia el corpus o la memoria de la plataforma: solo ella.
+const SOLO_PLATAFORMA = new Set([
+  'identidad-guardar', 'identidad-borrar', 'reel-add', 'reel-metricas', 'reel-etiquetas',
+  'reel-borrar', 'reel-reintentar', 'memoria', 'memoria-guardar', 'memoria-borrar', 'estado',
+])
+
+// Filas que se tocan por su id: la acción vale si la fila es de un perfil tuyo.
+const FILA_DE = {
+  'equipo-guion': 'helm_content_calendar',
+  'equipo-tarea': 'agent_tareas',
+  'equipo-nota': 'agent_memory',
+}
+
+function prohibido(msg = 'No tienes acceso a esto') {
+  const e = new Error(msg)
+  e.statusCode = 403
+  return e
+}
+
+/** Comprueba que la sesión puede hacer esta acción. Lanza 403 si no. */
+async function alcance(auth, accion, req) {
+  if (auth.plataforma) return
+  if (SOLO_PLATAFORMA.has(accion)) throw prohibido('Esto solo lo cambia la plataforma')
+  const b = req.body || {}
+  // Los dos, el de la URL y el del cuerpo: hay acciones que leen uno y otras
+  // el otro, y con uno propio en la URL se colaría uno ajeno en el cuerpo.
+  for (const clientId of new Set([req.query?.clientId, b.clientId].filter(Boolean).map(String))) {
+    if (!(await puedeVerPerfil(auth, clientId))) throw prohibido('No tienes acceso a este perfil')
+  }
+  const tabla = FILA_DE[accion]
+  if (tabla && b.id) {
+    const { data } = await supabase.from(tabla).select('client_id').eq('id', b.id).maybeSingle()
+    if (data && !(await puedeVerPerfil(auth, data.client_id))) throw prohibido()
+  }
+}
+
 async function handler(req, res) {
   const accion = String(req.query?.action || req.query?.accion || '').trim()
+  const auth = req.ctx.auth
+  await alcance(auth, accion, req)
+  // Las listas que cruzan perfiles se recortan a los de la agencia.
+  const visibles = await perfilesVisibles(auth)
+  const ve = (id) => !visibles || visibles.includes(id)
 
   switch (accion) {
     // ── Identidades ───────────────────────────────────────────────────────
@@ -141,7 +188,7 @@ async function handler(req, res) {
         .from('agent_identities').select('id').eq('slug', slug).maybeSingle()
       if (error) throw error
       if (!identidad) return res.status(404).json({ error: 'Ese creador no existe' })
-      return res.status(200).json(await fichaDe(identidad.id))
+      return res.status(200).json(await fichaDe(identidad.id, ve))
     }
 
     case 'identidad-guardar': {
@@ -322,15 +369,21 @@ async function handler(req, res) {
       ])
       if (perfiles.error) throw perfiles.error
       if (asignados.error) throw asignados.error
-      return res.status(200).json({ perfiles: perfiles.data || [], clientIds: (asignados.data || []).map(r => r.client_id) })
+      return res.status(200).json({
+        perfiles: (perfiles.data || []).filter(p => ve(p.id)),
+        clientIds: (asignados.data || []).map(r => r.client_id).filter(ve),
+      })
     }
 
     case 'identidad-perfiles-guardar': {
       const b = req.body || {}
       if (!b.identityId) return res.status(400).json({ error: 'Falta el creador' })
-      const ids = [...new Set((Array.isArray(b.clientIds) ? b.clientIds : []).map(String))]
-      const { error: e1 } = await supabase
-        .from('agent_identity_clients').delete().eq('identity_id', b.identityId)
+      // Solo se tocan las asignaciones a perfiles tuyos: las de otras agencias
+      // a ese mismo creador se quedan como están.
+      const ids = [...new Set((Array.isArray(b.clientIds) ? b.clientIds : []).map(String))].filter(ve)
+      let borra = supabase.from('agent_identity_clients').delete().eq('identity_id', b.identityId)
+      if (visibles) borra = borra.in('client_id', visibles.length ? visibles : ['00000000-0000-0000-0000-000000000000'])
+      const { error: e1 } = await borra
       if (e1) throw e1
       if (ids.length) {
         const { error: e2 } = await supabase.from('agent_identity_clients')
@@ -349,27 +402,30 @@ async function handler(req, res) {
         .select('client_id, carpeta_nombre, activa, clients(slug, name)')
       if (error) throw error
       return res.status(200).json({
-        perfiles: (data || []).map(p => ({ id: p.client_id, slug: p.clients.slug, nombre: p.clients.name, carpeta: p.carpeta_nombre, activa: p.activa })),
+        perfiles: (data || []).filter(p => ve(p.client_id)).map(p => ({ id: p.client_id, slug: p.clients.slug, nombre: p.clients.name, carpeta: p.carpeta_nombre, activa: p.activa })),
       })
     }
 
     // ── El enlace del conector de Claude de un perfil ─────────────────────
     // Solo se guarda su hash; el enlace se enseña UNA vez, al generarlo.
     // Generar otro revoca el anterior (hay un índice único por perfil).
+    // Sin perfil, el enlace es el de la agencia entera (todos sus perfiles).
     case 'mcp-enlace': {
       const clientId = String(req.query?.clientId || req.body?.clientId || '')
-      if (!clientId) return res.status(400).json({ error: 'Falta el perfil' })
+      const agenciaId = clientId ? null : auth.agenciaId
+      if (!clientId && !agenciaId) return res.status(400).json({ error: 'Falta el perfil' })
+      const suyo = (q) => (clientId ? q.eq('client_id', clientId) : q.eq('agencia_id', agenciaId).is('client_id', null))
       if (req.method === 'GET') {
-        const { data, error } = await supabase.from('agent_mcp_tokens')
-          .select('created_at, ultimo_uso').eq('client_id', clientId).maybeSingle()
+        const { data, error } = await suyo(supabase.from('agent_mcp_tokens').select('created_at, ultimo_uso')).maybeSingle()
         if (error) throw error
         return res.status(200).json({ existe: Boolean(data), ...(data || {}) })
       }
       const token = randomBytes(24).toString('hex')
       const token_hash = createHash('sha256').update(token).digest('hex')
-      const { error: e1 } = await supabase.from('agent_mcp_tokens').delete().eq('client_id', clientId)
+      const { error: e1 } = await suyo(supabase.from('agent_mcp_tokens').delete())
       if (e1) throw e1
-      const { error: e2 } = await supabase.from('agent_mcp_tokens').insert({ token_hash, client_id: clientId })
+      const { error: e2 } = await supabase.from('agent_mcp_tokens')
+        .insert(clientId ? { token_hash, client_id: clientId } : { token_hash, agencia_id: agenciaId })
       if (e2) throw e2
       const base = process.env.HELM_PUBLIC_URL || 'https://helm.s4sf.net'
       return res.status(200).json({ url: `${base}/api/mcp/${token}` })
@@ -424,7 +480,7 @@ async function handler(req, res) {
       const { data: perfiles, error: e0 } = await supabase.from('agent_perfiles')
         .select('client_id, activo, guiones_dia, tope_tokens_dia, clients(slug, name)')
       if (e0) throw e0
-      const lista = (perfiles || []).map(p => ({
+      const lista = (perfiles || []).filter(p => ve(p.client_id)).map(p => ({
         id: p.client_id, slug: p.clients.slug, nombre: p.clients.name,
         activo: p.activo, guiones_dia: p.guiones_dia, tope_tokens_dia: p.tope_tokens_dia,
       }))

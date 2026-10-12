@@ -218,7 +218,6 @@ export default function Documentos({ clientId, client }) {
                   </thead>
                   <tbody>
                     {delTipo.map(d => {
-                      const est = ESTADOS[d.tipo].find(e => e.key === d.estado)
                       return (
                         <tr key={d.id}>
                           <td><b>{d.numero}</b></td>

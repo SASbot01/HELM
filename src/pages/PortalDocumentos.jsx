@@ -9,7 +9,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Upload, Check, FileText, Loader2, AlertTriangle } from 'lucide-react'
-import { supabase } from '../utils/supabase'
 import { useHelmTheme } from '../helm/theme'
 import { useMarcaEnLaPestana } from '../helm/marcaPestana'
 import { Marca } from '../helm/marcaPestana.jsx'
@@ -59,21 +58,30 @@ export default function PortalDocumentos() {
     for (const f of ficheros) {
       try {
         if (f.size > MB * 1024 * 1024) throw new Error(`${f.name} pesa más de ${MB} MB`)
-        // El fichero va del navegador al bucket directamente. La ruta lleva el
-        // id del contacto para que el servidor pueda comprobar que nadie sube
-        // a la carpeta de otro.
-        const limpio = f.name.replace(/[^\w.\-() ]+/g, '_').slice(-120)
-        const destino = `fiscal/${estado.ids.client}/${estado.ids.contacto}/${Date.now()}-${limpio}`
-        const { error: errUp } = await supabase.storage.from('helm').upload(destino, f, {
-          cacheControl: '3600', upsert: false,
+        // El fichero va del navegador al bucket directamente, a una URL que
+        // firma el servidor para la carpeta de este cliente y nada más: la
+        // ruta la decide él, y la vuelve a comprobar al registrar.
+        const rf = await fetch('/api/documentos?action=firmar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ t: token, nombre: f.name }),
         })
-        if (errUp) throw new Error(errUp.message)
+        const firma = await rf.json()
+        if (!rf.ok) throw new Error(firma.error || 'No se pudo preparar la subida')
+        const cuerpo = new FormData()
+        cuerpo.append('cacheControl', '3600')
+        cuerpo.append('', f)
+        const up = await fetch(firma.url, { method: 'PUT', headers: { 'x-upsert': 'false' }, body: cuerpo })
+        if (!up.ok) {
+          const e = await up.json().catch(() => ({}))
+          throw new Error(e.message || e.error || `No se pudo subir ${f.name}`)
+        }
 
         const r = await fetch('/api/documentos?action=subir', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            t: token, nombre: f.name, ruta: destino, tipo,
+            t: token, nombre: f.name, ruta: firma.ruta, tipo,
             obligacionId: obligacion || null,
           }),
         })

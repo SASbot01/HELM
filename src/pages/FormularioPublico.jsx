@@ -1,17 +1,19 @@
 // HELM — el formulario que rellena el cliente, sin entrar al panel.
 //
 // Página pública: se llega por el enlace que se copia desde el plugin de
-// Formularios. Lee el formulario por su id (único de forma global; el slug solo
-// lo es dentro de un perfil, así que no serviría en una URL abierta) y guarda
-// la respuesta en helm_form_responses.
+// Formularios. Pide el formulario por su id (único de forma global; el slug solo
+// lo es dentro de un perfil, así que no serviría en una URL abierta) y manda la
+// respuesta a api/formularios.js, el mismo sitio al que mandan las landings de
+// fuera: ahí se busca o se crea la ficha y se guarda todo. La página no toca la
+// base.
 //
 // Si el enlace trae ?c=<contact_id>, la respuesta queda pegada a esa ficha del
-// CRM. Sin ese parámetro se guarda igual, identificada por nombre y email, y en
-// el panel se puede asignar después: es preferible a perder la respuesta.
+// CRM. Sin ese parámetro se busca la ficha por el email (o se crea); y sin
+// email se guarda igual, con el nombre, y en el panel se puede asignar después:
+// es preferible a perder la respuesta.
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { Check } from 'lucide-react'
-import { supabase } from '../utils/supabase'
 import { CamposRespuesta } from '../helm/formularios/campos'
 import { validarRespuestas } from '../helm/formularios/tipos'
 import { Field, Input, FormNote } from '../helm/ui'
@@ -44,27 +46,14 @@ export default function FormularioPublico() {
 
   useEffect(() => {
     let vivo = true
-    supabase.from('helm_forms')
-      .select('id, client_id, title, description, fields, active')
-      .eq('id', formId).maybeSingle()
-      .then(({ data, error: e }) => {
+    fetch(`/api/formularios?id=${encodeURIComponent(formId)}`)
+      .then(r => (r.ok ? r.json() : null))
+      .catch(() => null)
+      .then(d => {
         if (!vivo) return
-        if (e || !data) { setForm(false); return }
-        setForm(data)
-        // La marca va en una segunda consulta y no en un join: si el perfil no
-        // se pudiera leer, el formulario tiene que salir igual — sin logo, pero
-        // funcionando.
-        supabase.from('clients')
-          .select('name, brand_name, brand_subtitle, logo_url')
-          .eq('id', data.client_id).maybeSingle()
-          .then(({ data: c }) => {
-            if (!vivo || !c) return
-            setMarca({
-              nombre: c.brand_name || c.name,
-              subtitulo: c.brand_subtitle || null,
-              logo: c.logo_url || null,
-            })
-          })
+        if (!d?.form) { setForm(false); return }
+        setForm(d.form)
+        setMarca(d.marca || null)
       })
     return () => { vivo = false }
   }, [formId])
@@ -91,16 +80,27 @@ export default function FormularioPublico() {
     setTouched(true); setError(null)
     if (!ok) return
     setEnviando(true)
-    const { error: err } = await supabase.from('helm_form_responses').insert({
-      client_id: form.client_id,
-      form_id: form.id,
-      contact_id: contactId || null,
-      respondent: [nombre.trim(), email.trim()].filter(Boolean).join(' · '),
-      answers,
-      // La prueba del consentimiento: qué casilla marcó, con qué texto y cuándo.
-      meta: { consentimiento: { aceptado: true, texto: textoConsentimiento, fecha: new Date().toISOString() } },
-    })
-    if (err) { setError('No se pudo enviar: ' + err.message); setEnviando(false); return }
+    try {
+      const r = await fetch('/api/formularios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          formId: form.id,
+          contactId: contactId || null,
+          nombre: nombre.trim(),
+          email: email.trim(),
+          respuestas: answers,
+          origen: 'Formulario HELM',
+          // La prueba del consentimiento: qué casilla marcó y con qué texto. La
+          // fecha la pone el servidor.
+          consentimiento: { aceptado: true, texto: textoConsentimiento },
+        }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.error || 'Error')
+    } catch (err) {
+      setError('No se pudo enviar: ' + err.message); setEnviando(false); return
+    }
     setEnviado(true)
   }
 

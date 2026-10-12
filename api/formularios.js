@@ -1,10 +1,10 @@
-// HELM — recepción de formularios alojados FUERA de HELM.
+// HELM — recepción de formularios: los de la web del cliente y el de HELM.
 //
-// La página pública de HELM (/f/<id>) escribe directa contra Supabase con la
-// anon key. Eso no vale cuando el formulario vive en la web del cliente
-// (detrasdecamara.org/valor): habría que publicar la anon key de HELM en un
-// dominio ajeno. Por eso esto es un endpoint de servidor: la landing manda un
-// POST y aquí dentro, con la service key, se hace lo que importa —
+// Lo usan dos tipos de página: las landings que viven en la web del cliente
+// (detrasdecamara.org/valor), que lo identifican por perfil y slug, y la
+// página pública de HELM (/f/<id>), que lo identifica por su id. Ninguna toca
+// la base: la página manda un POST y aquí dentro, con la service key, se hace
+// lo que importa —
 //
 //   1. Buscar (o crear) el contacto en el CRM del perfil.
 //   2. Guardar las respuestas pegadas a esa ficha.
@@ -22,6 +22,7 @@ import {
 import { notificar } from './_lib/notificar.js'
 
 const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i
+const RE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const txt = (v, max = 400) => String(v == null ? '' : v).trim().slice(0, max)
 
@@ -162,9 +163,42 @@ async function agendarLlamada(client, form, { nombre, email, telefono, respuesta
   return evento
 }
 
+// Lo que necesita /f/<id> para pintarse: el formulario y la marca de quien lo
+// manda. Solo lo que ya ve quien lo rellena; nada del CRM.
+async function formularioPublico(req, res) {
+  const ip = getClientIp(req)
+  const limite = rateLimit({ key: `formularios-ver:${ip || 'anon'}`, max: 60, windowMs: 60_000 })
+  if (!limite.ok) {
+    res.setHeader('Retry-After', String(limite.retryAfter || 60))
+    return res.status(429).json({ error: 'Demasiadas peticiones' })
+  }
+  const id = txt(req.query.id, 64)
+  if (!RE_UUID.test(id)) return res.status(404).json({ error: 'Formulario no encontrado' })
+
+  const { data: form } = await supabase
+    .from('helm_forms').select('id, client_id, title, description, fields, active')
+    .eq('id', id).maybeSingle()
+  if (!form) return res.status(404).json({ error: 'Formulario no encontrado' })
+  const { data: c } = await supabase
+    .from('clients').select('name, brand_name, brand_subtitle, logo_url, active')
+    .eq('id', form.client_id).maybeSingle()
+  if (!c || c.active === false) return res.status(404).json({ error: 'Formulario no encontrado' })
+
+  return res.status(200).json({
+    form: { id: form.id, title: form.title, description: form.description, fields: form.fields || [], active: form.active },
+    marca: { nombre: c.brand_name || c.name, subtitulo: c.brand_subtitle || null, logo: c.logo_url || null },
+  })
+}
+
 export default async function handler(req, res) {
   applyCors(req, res)
   if (req.method === 'OPTIONS') return res.status(204).end()
+  if (req.method === 'GET' && req.query?.id) {
+    try { return await formularioPublico(req, res) } catch (err) {
+      console.error('[formularios]', err)
+      return res.status(500).json({ error: 'Error' })
+    }
+  }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' })
 
   try {
@@ -178,18 +212,25 @@ export default async function handler(req, res) {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
     const slug = txt(body.slug, 80).toLowerCase()
     const formSlug = txt(body.form, 80).toLowerCase()
-    if (!slug || !formSlug) return res.status(400).json({ error: 'Faltan slug y form' })
+    // La página /f/<id> de HELM no sabe el slug: manda el id del formulario,
+    // que es único en toda la base.
+    const formId = RE_UUID.test(txt(body.formId, 64)) ? txt(body.formId, 64) : ''
+    if (!(slug && formSlug) && !formId) return res.status(400).json({ error: 'Faltan slug y form' })
 
     // ── El perfil y su formulario ──────────────────────────────────────────
-    const { data: client } = await supabase
-      .from('clients').select('id, active').eq('slug', slug).maybeSingle()
+    const COLS_FORM = 'id, client_id, title, fields, active, pipeline_id, stage_key, booked_stage_key'
+    let form, client
+    if (formId) {
+      form = (await supabase.from('helm_forms').select(COLS_FORM).eq('id', formId).maybeSingle()).data
+      client = form && (await supabase.from('clients').select('id, active').eq('id', form.client_id).maybeSingle()).data
+    } else {
+      client = (await supabase.from('clients').select('id, active').eq('slug', slug).maybeSingle()).data
+      form = client && (await supabase.from('helm_forms').select(COLS_FORM)
+        .eq('client_id', client.id).eq('slug', formSlug).maybeSingle()).data
+    }
     if (!client || client.active === false) {
       return res.status(404).json({ error: 'Perfil no encontrado' })
     }
-
-    const { data: form } = await supabase
-      .from('helm_forms').select('id, title, fields, active, pipeline_id, stage_key, booked_stage_key')
-      .eq('client_id', client.id).eq('slug', formSlug).maybeSingle()
     if (!form) return res.status(404).json({ error: 'Formulario no encontrado' })
     if (form.active === false) return res.status(410).json({ error: 'Este formulario ya no admite respuestas' })
 
@@ -315,7 +356,25 @@ export default async function handler(req, res) {
     const empresa = txt(body.empresa, 200)
     if (!nombre) return res.status(400).json({ error: 'Falta el nombre' })
     if (email && !RE_EMAIL.test(email)) return res.status(400).json({ error: 'Email no válido' })
-    if (!email && !telefono) return res.status(400).json({ error: 'Hace falta un email o un teléfono' })
+
+    // El enlace de /f/<id> puede traer la ficha a la que va (?c=<contact_id>),
+    // cuando el equipo se lo manda a alguien que ya está en el CRM. Se usa tal
+    // cual, sin tocarle nada, pero solo si es de este perfil: si no, se trata
+    // como un envío cualquiera.
+    let fichaDelEnlace = null
+    const contactIdEnlace = txt(body.contactId, 64)
+    if (formId && RE_UUID.test(contactIdEnlace)) {
+      const { data } = await supabase.from('crm_contacts').select('id')
+        .eq('id', contactIdEnlace).eq('client_id', client.id).maybeSingle()
+      fichaDelEnlace = data?.id || null
+    }
+
+    // En /f/<id> el email es opcional: sin email ni teléfono no hay ficha que
+    // buscar ni crear, y la respuesta se guarda suelta, con el nombre, para
+    // asignarla después desde el panel. Perderla sería peor. Las landings de
+    // fuera sí tienen que mandar con qué volver a llamar.
+    const suelta = !fichaDelEnlace && !email && !telefono
+    if (suelta && !formId) return res.status(400).json({ error: 'Hace falta un email o un teléfono' })
 
     // Quien vuelve a rellenar el formulario tiene que caer en su ficha de
     // siempre, no crear una nueva. Primero por email (comparación exacta, la
@@ -326,23 +385,25 @@ export default async function handler(req, res) {
     const telCola = cola(telefono)
     let contacto = null
 
-    if (email) {
+    if (email && !fichaDelEnlace) {
       const { data } = await supabase.from('crm_contacts')
         .select('id, email, phone, instagram, company')
         .eq('client_id', client.id).eq('email', email).limit(1)
       contacto = data?.[0] || null
     }
-    if (!contacto && telCola.length >= 9) {
+    if (!contacto && !fichaDelEnlace && telCola.length >= 9) {
       const { data } = await supabase.from('crm_contacts')
         .select('id, email, phone, instagram, company')
         .eq('client_id', client.id).not('phone', 'is', null).limit(5000)
       contacto = (data || []).find(c => cola(c.phone) === telCola) || null
     }
 
-    let contactId = contacto?.id || null
+    let contactId = fichaDelEnlace || contacto?.id || null
     let creado = false
 
-    if (contactId) {
+    if (fichaDelEnlace || suelta) {
+      // Ni se busca ni se crea ni se toca: ver arriba.
+    } else if (contactId) {
       // Solo se rellenan los huecos: si el equipo ya corrigió un dato a mano,
       // un formulario nuevo no debe machacárselo.
       const patch = { last_activity_at: new Date().toISOString() }
@@ -412,7 +473,7 @@ export default async function handler(req, res) {
     // la respuesta puede congelar la función y dejar el insert a medias. Si
     // falla no se aborta nada — la respuesta ya está guardada, que es lo que no
     // se puede perder.
-    const { error: errAct } = await supabase.from('crm_activities').insert({
+    const { error: errAct } = !contactId ? { error: null } : await supabase.from('crm_activities').insert({
       client_id: client.id,
       contact_id: contactId,
       type: 'note',

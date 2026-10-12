@@ -239,9 +239,3 @@ export function pipelineDe(contact, pipelines) {
   if (!contact?.pipeline_id) return porDefecto
   return pipelines.find(p => p.id === contact.pipeline_id) || porDefecto
 }
-
-// ¿Este contacto se ve en este pipeline? Cubre el caso de los contactos
-// antiguos sin pipeline_id, que pertenecen al por defecto.
-export function perteneceA(contact, pipeline, pipelines) {
-  return pipelineDe(contact, pipelines).id === pipeline.id
-}

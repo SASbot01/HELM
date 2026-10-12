@@ -2,8 +2,9 @@
 // recuadros, y él decide en cuál entra. Un cliente nunca llega aquí: entra
 // directo al suyo (ver HelmApp).
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Search, ArrowUpRight, LogOut, Users, MoreHorizontal, EyeOff, Trash2, RotateCcw } from 'lucide-react'
-import { brandOf, notificacionesApi, perfilesApi } from './lib'
+import { Plus, Search, ArrowUpRight, LogOut, Users, MoreHorizontal, EyeOff, Trash2, RotateCcw, Building2 } from 'lucide-react'
+import { brandOf, notificacionesApi, perfilesApi, creditosApi } from './lib'
+import Creditos, { BotonCreditos, Agencias } from './Creditos'
 import { Modal, Field, Input, FormNote } from './ui'
 import './perfiles.css'
 
@@ -14,6 +15,10 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
   const [menu, setMenu] = useState(null)            // id del perfil con el menú abierto
   const [borrando, setBorrando] = useState(null)    // perfil en el modal de borrado
   const [error, setError] = useState(null)
+  const [agencia, setAgencia] = useState(null)      // { nombre, plataforma }
+  const [verCreditos, setVerCreditos] = useState(false)
+  const [verAgencias, setVerAgencias] = useState(false)
+  const [recarga, setRecarga] = useState(0)         // para que el botón relea el saldo
   const caja = useRef(null)
 
   const lista = useMemo(() => {
@@ -27,6 +32,16 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
     if (!localStorage.getItem('bw_admin_jwt')) return
     notificacionesApi.resumen().then(r => setAvisos(r.porPerfil || {})).catch(() => {})
     cargarInactivos()
+    creditosApi.saldo().then(r => setAgencia({ nombre: r.agencia?.nombre, plataforma: r.plataforma })).catch(() => {})
+    // Vuelta de pagar en Stripe: se confirma el pago (el servidor se lo
+    // pregunta a Stripe) y se enseña el saldo nuevo.
+    const p = new URLSearchParams(window.location.search)
+    const sesion = p.get('session_id')
+    if (p.get('creditos')) {
+      window.history.replaceState(null, '', window.location.pathname)
+      const fin = () => { setRecarga(n => n + 1); setVerCreditos(true) }
+      if (sesion) creditosApi.confirmar(sesion).then(fin).catch(e => setError(e.message))
+    }
   }, [])
 
   useEffect(() => {
@@ -48,7 +63,7 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
     <div className="helm-perfiles" ref={caja}>
       <header className="helm-perfiles-cab">
         <div>
-          <h1>Perfiles de {producto}</h1>
+          <h1>Perfiles de {agencia?.nombre || producto}</h1>
           <p>{loading ? 'Cargando perfiles…' : clients.length ? 'Elige en cuál quieres entrar.' : 'Todavía no hay ninguno.'}</p>
         </div>
         <div className="helm-perfiles-acc">
@@ -58,12 +73,18 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
               <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar perfil" autoFocus />
             </label>
           )}
+          <BotonCreditos onAbrir={() => setVerCreditos(true)} recarga={recarga} />
+          {agencia?.plataforma && (
+            <button type="button" className="helm-btn" onClick={() => setVerAgencias(true)}><Building2 size={15} /> Agencias</button>
+          )}
           <button type="button" className="helm-btn" onClick={onUsers}><Users size={15} /> Usuarios</button>
           <button type="button" className="helm-btn" onClick={onLogout} title={email}><LogOut size={15} /> Salir</button>
         </div>
       </header>
 
       <FormNote>{error}</FormNote>
+      {verCreditos && <Creditos onClose={() => { setVerCreditos(false); setRecarga(n => n + 1) }} />}
+      {verAgencias && <Agencias onClose={() => setVerAgencias(false)} />}
 
       {!loading && (
         <div className="helm-perfiles-grid">

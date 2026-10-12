@@ -7,8 +7,8 @@ import {
 import { agentesApi } from '../../lib'
 import { Markdown } from '../../md'
 import { Drawer, Modal, Empty, FormNote, Textarea } from '../../ui'
-import { CARRIL_LABEL } from '../../views/contenido/estrategiasData'
 
+const CARRIL_LABEL = { dar: 'Dar', conectar: 'Conectar', vender: 'Vender' }
 const CARRIL_DOT = { dar: 'green', conectar: 'amber', vender: 'violet' }
 const hoyISO = () => new Date().toISOString().slice(0, 10)
 function fmtFecha(iso) {

@@ -89,7 +89,7 @@ export default function Gastos({ clientId }) {
   }
 
   async function guardar(f) {
-    const { avisos, ...fila } = f
+    const { avisos: _avisos, ...fila } = f
     const payload = {
       client_id: clientId,
       proveedor_nombre: fila.proveedor_nombre.trim(), proveedor_nif: fila.proveedor_nif.trim(),

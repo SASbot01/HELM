@@ -9,6 +9,7 @@
 // Sin clave configurada, el perfil sigue con el modelo local (Ollama). Ver
 // ./llm.js, que es quien decide cuál de los dos atiende cada petición.
 import Anthropic from '@anthropic-ai/sdk'
+import { exigirSaldo, cobrar, claveHelm } from './creditos.js'
 
 // Modelos que se ofrecen en Ajustes. `esfuerzo` marca los que aceptan
 // `output_config.effort`: en Haiku 4.5 ese parámetro da error, así que no se
@@ -169,6 +170,12 @@ export async function claudeTurno({ apiKey, model, system, messages, maxTokens =
     throw e
   }
 
+  // Con la clave de HELM, la agencia paga con créditos: sin saldo no se llama,
+  // y lo que cueste se le descuenta. Con la clave propia de un perfil, lo
+  // paga él directamente a Anthropic.
+  const deHelm = Boolean(apiKey) && apiKey === claveHelm()
+  if (deHelm) await exigirSaldo()
+
   let res
   try {
     res = await cliente(apiKey).messages.create({
@@ -186,6 +193,8 @@ export async function claudeTurno({ apiKey, model, system, messages, maxTokens =
   } catch (err) {
     throw traducirError(err)
   }
+
+  if (deHelm) await cobrar(modelo, res.usage)
 
   // Los clasificadores de seguridad pueden declinar la petición: llega un 200
   // con `stop_reason: "refusal"` y el contenido vacío. Hay que mirarlo antes de

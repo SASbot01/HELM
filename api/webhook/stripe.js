@@ -25,6 +25,9 @@ import { registerStripePayment, registerStripeInvoice } from '../_lib/stripe-ing
 export const config = { api: { bodyParser: false } }
 
 async function getRawBody(req) {
+  // scripts/api-server.mjs guarda los bytes tal cual llegaron: es lo único
+  // sobre lo que cuadra la firma (el JSON reescrito no es el mismo texto).
+  if (Buffer.isBuffer(req.rawBody)) return req.rawBody
   // El dev-server local ya deja el body parseado; en Vercel llega el stream.
   if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
     return Buffer.from(JSON.stringify(req.body))
@@ -99,6 +102,20 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Firma inválida' })
   }
 
+  // El mismo evento no se atiende dos veces: se apunta su id antes de
+  // procesarlo y la clave única hace que la segunda entrega choque (ver
+  // migrations/101_stripe_eventos.sql). Sin la tabla (migración sin aplicar)
+  // se sigue como antes: pagos.js ya descarta la venta repetida que encuentra.
+  const eventId = /^evt_[A-Za-z0-9_]+$/.test(String(event?.id || '')) ? event.id : null
+  let apuntado = false
+  if (eventId) {
+    const { error } = await supabase.from('helm_stripe_eventos')
+      .insert({ event_id: eventId, client_id: client.id, tipo: String(event.type || '').slice(0, 80) })
+    if (error?.code === '23505') return res.status(200).json({ received: true, outcome: 'duplicate' })
+    if (error) console.warn('[stripe webhook] no se pudo apuntar el evento:', error.message)
+    else apuntado = true
+  }
+
   try {
     if (event.type === 'checkout.session.completed' ||
         event.type === 'checkout.session.async_payment_succeeded') {
@@ -117,6 +134,9 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ received: true, outcome: `ignorado:${event.type}` })
   } catch (err) {
+    // Se suelta el apunte: si no, el reintento de Stripe se tomaría por
+    // repetido y el pago no se registraría nunca.
+    if (apuntado) await supabase.from('helm_stripe_eventos').delete().eq('event_id', eventId)
     await writeAudit({
       clientId: client.id, action: 'stripe.webhook.error', req,
       statusCode: 500, errorMessage: err.message, metadata: { eventType: event?.type },

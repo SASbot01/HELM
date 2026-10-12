@@ -1,6 +1,7 @@
 // HELM — el portal donde el cliente de una asesoría sube su documentación.
 //
 //   GET  ?action=estado&t=<token>   → qué le falta por entregar
+//   POST ?action=firmar             → una URL de un solo uso para subir un fichero
 //   POST ?action=subir              → registra un documento ya subido al bucket
 //
 // El dolor que resuelve: 25 personas persiguiendo facturas por WhatsApp, email
@@ -83,9 +84,6 @@ export default async function handler(req, res) {
         .order('subido_at', { ascending: false }).limit(30)
 
       return res.status(200).json({
-        // Los ids hacen falta en el navegador para componer la ruta del bucket,
-        // que el servidor vuelve a comprobar al registrar: no son un secreto.
-        ids: { client: contacto.client_id, contacto: contacto.id },
         cliente: { nombre: contacto.name, empresa: contacto.company || null },
         marca: cliente ? {
           nombre: cliente.brand_name || cliente.name,
@@ -97,10 +95,31 @@ export default async function handler(req, res) {
       })
     }
 
+    // ── Dónde subirlo ──────────────────────────────────────────────────────
+    // El fichero viaja del navegador al bucket directamente: pasar megas por
+    // esta función sería lento y caro sin ganar nada. Pero la clave pública ya
+    // no puede escribir en el bucket, así que aquí se firma una URL de subida
+    // para UNA ruta concreta, dentro de la carpeta de este contacto. La ruta la
+    // pone el servidor, no el navegador: así no hay forma de subir a la carpeta
+    // de otro.
+    if (req.method === 'POST' && action === 'firmar') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+      const contacto = await contactoDelToken(body.t)
+      const limpio = txt(body.nombre, 400).replace(/[^\w.\-() ]+/g, '_').slice(-120)
+      if (!limpio) return res.status(400).json({ error: 'Falta el nombre del fichero' })
+      const ruta = `fiscal/${contacto.client_id}/${contacto.id}/${Date.now()}-${limpio}`
+
+      const { data, error } = await supabase.storage.from('helm').createSignedUploadUrl(ruta)
+      if (error) return res.status(500).json({ error: 'No se pudo preparar la subida: ' + error.message })
+      // El servidor habla con Supabase en local; el navegador solo llega a ella
+      // por la pasarela /sb del mismo origen (scripts/sb-proxy.mjs), que deja
+      // pasar estas URLs porque las autoriza el token que llevan dentro.
+      const firmada = new URL(data.signedUrl)
+      return res.status(200).json({ ruta, url: `/sb${firmada.pathname}${firmada.search}` })
+    }
+
     // ── Registrar lo subido ────────────────────────────────────────────────
-    // El fichero viaja del navegador al bucket directamente (con la anon key,
-    // como el resto de HELM); aquí solo se anota que existe y se mueve el
-    // estado. Pasar megas por esta función sería lento y caro sin ganar nada.
+    // Aquí solo se anota que el fichero existe y se mueve el estado.
     if (req.method === 'POST' && action === 'subir') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
       const contacto = await contactoDelToken(body.t)

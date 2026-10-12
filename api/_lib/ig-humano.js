@@ -143,7 +143,7 @@ function countMatches(text, src) {
   let re;
   try {
     re = new RegExp(source, flags);
-  } catch (e) {
+  } catch {
     return 0; // Python: except re.error -> se ignora la estructura
   }
   const found = text.match(re);

@@ -1,33 +1,24 @@
 import { StrictMode, Suspense, lazy, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { ToastProvider } from './components/Toast.jsx'
 import { ThemeProvider } from './contexts/ThemeContext.jsx'
 import SuperAdminLogin from './pages/admin/SuperAdminLogin.jsx'
 import Registro from './pages/Registro.jsx'
 import UsersAdmin from './pages/UsersAdmin.jsx'
 import HelmApp from './helm/HelmApp.jsx'
-import FormularioPublico from './pages/FormularioPublico.jsx'
-import PrimerMapa from './pages/PrimerMapa.jsx'
-import SilvestreValor from './pages/SilvestreValor.jsx'
-import PortalDocumentos from './pages/PortalDocumentos.jsx'
-import PaginaInicio from './pages/PaginaInicio.jsx'
-import PaginaInicioHugo from './pages/PaginaInicioHugo.jsx'
-import Clase from './pages/Clase.jsx'
-import SocioIA from './pages/inicio/socio/SocioIA.jsx'
 import { origen } from './pages/inicio/socio/origen.js'
-import Gracias from './pages/inicio/socio/Gracias.jsx'
-import Legal from './pages/inicio/socio/Legal.jsx'
-import AgentOS from './agents/AgentOS.jsx'
 import './index.css'
-// AI para todo va en su propio archivo: lleva la guía entera y las colecciones
-// de skills, y el panel no tiene por qué cargarlas.
+
+// Las páginas públicas y el Agent OS van cada una en su propio archivo: quien
+// entra a una landing no se descarga el panel, ni al revés. El panel, el login
+// y el registro siguen en el principal porque tema.css (abajo) tiene que
+// cargar después de sus estilos para mandar sobre ellos.
 //
-// Si su archivo no carga (un despliegue cambia los nombres de los archivos y
+// Si un archivo no carga (un despliegue cambia los nombres de los archivos y
 // la pestaña abierta pide uno que ya no existe, o se corta la red), se recarga
 // la página una vez para traer los nuevos. Sin esto, React desmonta todo y se
 // queda en blanco. La marca de tiempo evita un bucle si el fallo es otro.
-const AIParaTodo = lazy(() => import('./pages/aiparatodo/AIParaTodo.jsx').catch((e) => {
+const perezoso = (cargar) => lazy(() => cargar().catch((e) => {
   try {
     const ultima = Number(sessionStorage.getItem('aip.recarga')) || 0
     if (Date.now() - ultima > 30_000) {
@@ -38,6 +29,19 @@ const AIParaTodo = lazy(() => import('./pages/aiparatodo/AIParaTodo.jsx').catch(
   } catch { /* sin sessionStorage: que salga el error */ }
   throw e
 }))
+const AIParaTodo = perezoso(() => import('./pages/aiparatodo/AIParaTodo.jsx'))
+const FormularioPublico = perezoso(() => import('./pages/FormularioPublico.jsx'))
+const PrimerMapa = perezoso(() => import('./pages/PrimerMapa.jsx'))
+const SilvestreValor = perezoso(() => import('./pages/SilvestreValor.jsx'))
+const PortalDocumentos = perezoso(() => import('./pages/PortalDocumentos.jsx'))
+const PaginaInicio = perezoso(() => import('./pages/PaginaInicio.jsx'))
+const PaginaInicioHugo = perezoso(() => import('./pages/PaginaInicioHugo.jsx'))
+const Clase = perezoso(() => import('./pages/Clase.jsx'))
+const SocioIA = perezoso(() => import('./pages/inicio/socio/SocioIA.jsx'))
+const Gracias = perezoso(() => import('./pages/inicio/socio/Gracias.jsx'))
+const Legal = perezoso(() => import('./pages/inicio/socio/Legal.jsx'))
+const AgentOS = perezoso(() => import('./agents/AgentOS.jsx'))
+const WebHelm = perezoso(() => import('./pages/helm/Web.jsx'))
 // El tema de HELM va después de theme.css (que carga HelmApp) para mandar sobre él.
 import './helm/tema.css'
 
@@ -81,11 +85,12 @@ function NoNegociables() {
   return <Navigate to={`/aiparatodo/guia/no-negociables/mis-8-no-negociables-con-claude${search}`} replace />
 }
 
-// Qué hay en `/`: la portada de la marca si entras por su dominio, y el panel
-// si entras por helm. o consultoria. (o en local, donde se trabaja el producto).
+// Qué hay en `/`: la portada de la marca si entras por su dominio; por el del
+// panel (o en local), el panel si hay sesión y la web de HELM si no.
 function Raiz() {
   const Portada = PORTADAS_POR_DOMINIO[window.location.hostname]
-  return Portada ? <Portada /> : <Navigate to="/admin" replace />
+  if (Portada) return <Portada />
+  return localStorage.getItem('bw_admin_jwt') ? <Navigate to="/admin" replace /> : <WebHelm />
 }
 
 // La misma ruta /paginainicio sirve la portada de quien la pida, mirando por
@@ -117,10 +122,11 @@ createRoot(document.getElementById('root')).render(
     <ThemeProvider>
       <BrowserRouter>
         <ScrollToTop />
+        <Suspense fallback={null}>
         <Routes>
           <Route path="/" element={<Raiz />} />
           <Route path="/login" element={<SoloEnElPanel><SuperAdminLogin /></SoloEnElPanel>} />
-          {/* Registro público (crea negocio + acceso pendientes de aprobación). */}
+          {/* Registro público: crea la agencia y entra directo, sin aprobación. */}
           <Route path="/registro" element={<SoloEnElPanel><Registro /></SoloEnElPanel>} />
           {/* Panel de usuarios — solo superadmins (la propia página lo comprueba). */}
           <Route path="/usersadmin" element={<SoloEnElPanel><UsersAdmin /></SoloEnElPanel>} />
@@ -154,7 +160,7 @@ createRoot(document.getElementById('root')).render(
           <Route path="/clase" element={<Clase />} />
           <Route path="/empresas" element={<SocioIA />} />
           {/* AI para todo: la comunidad gratis de la bio, con sus rutas dentro. */}
-          <Route path="/aiparatodo/*" element={<Suspense fallback={null}><AIParaTodo /></Suspense>} />
+          <Route path="/aiparatodo/*" element={<AIParaTodo />} />
           {/* La guía en PDF de los no negociables: pública, sin sesión, y con
               el alta en el CRM (embudo «Lead magnet»). Vive dentro de AI para
               todo; esto es el enlace corto. */}
@@ -174,7 +180,7 @@ createRoot(document.getElementById('root')).render(
           {/* Cualquier otra ruta vuelve al login. */}
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
-        <ToastProvider />
+        </Suspense>
       </BrowserRouter>
     </ThemeProvider>
   </StrictMode>

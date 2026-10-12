@@ -25,7 +25,7 @@ const HASHTAG_RE = /(?:^|\s)(#[A-Za-z0-9_]+)/g;
 const MENTION_RE = /(?:^|\s)(@[A-Za-z0-9_.]+)/g;
 const LINK_RE = /https?:\/\/\S+|\bwww\.\S+|\b[a-z0-9-]+\.(?:com|co|io|net|org|ai|app)\/\S*/gi;
 // [\U0001F300-\U0001FAFF  ☀(2600)-➿(27BF)  ←(2190)-⇿(21FF)  ️(FE0F)]
-const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{FE0F}]/gu;
+const EMOJI_RE = /(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}]|\u{FE0F})/gu;
 // \$\s?\d | \b\d[\d,.]*\b | (?<!^)\b[A-Z][a-z]{2,}\b   (re.MULTILINE)
 const CONCRETE_RE = /\$\s?\d|\b\d[\d,.]*\b|(?<!^)\b[A-Z][a-z]{2,}\b/gm;
 

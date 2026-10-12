@@ -22,7 +22,7 @@
 // edita ni los borra, porque son del perfil que los envió.
 import { supabase } from './lib/supabase.js'
 import { applyCors } from './_lib/auth.js'
-import { requireProfileAccess } from './_lib/access.js'
+import { requireProfileAccess, agenciaDe } from './_lib/access.js'
 import { calendario, carpetasDe } from './_lib/ingesta.js'
 
 const TABLAS = {
@@ -62,12 +62,16 @@ async function recibido(id, clientId) {
 // Propio o recibido: para lo que puede hacer el editor (estado, hoja, visto).
 const pedidoAccesible = (id, clientId) => propia('pedido', id, clientId).catch(() => recibido(id, clientId))
 
-// Las mesas de edición activas, con el nombre que se enseña al enviar.
-async function mesas() {
+// Las mesas de edición activas de la agencia de este perfil, con el nombre que
+// se enseña al enviar. Las de otras agencias ni se ven ni reciben encargos.
+async function mesas(clientId) {
+  const agencia = await agenciaDe(clientId)
+  if (!agencia) return []
   const { data, error } = await supabase.from('helm_edicion_editores')
-    .select('client_id, nombre, clients(name)').eq('activo', true)
+    .select('client_id, nombre, clients(name, agencia_id)').eq('activo', true)
   if (error) throw error
-  return (data || []).map(m => ({ id: m.client_id, nombre: m.nombre || m.clients?.name || 'Editor' }))
+  return (data || []).filter(m => m.clients?.agencia_id === agencia)
+    .map(m => ({ id: m.client_id, nombre: m.nombre || m.clients?.name || 'Editor' }))
 }
 
 // Los encargos que tiene esta mesa, con el perfil de origen y su guion (con la
@@ -132,7 +136,7 @@ export default async function handler(req, res) {
     const b = req.body || {}
 
     if (accion === 'resumen') {
-      const todas = await mesas()
+      const todas = await mesas(clientId)
       const soyMesa = todas.some(m => m.id === clientId)
       const [cl, pe, co, guiones, carpetas, recibidos] = await Promise.all([
         supabase.from(TABLAS.cliente).select('*').eq('client_id', clientId).order('nombre'),
@@ -184,7 +188,7 @@ export default async function handler(req, res) {
       // salirle como nuevo al editor.
       const editor = b.editor_client_id || null
       if (editor !== (antes?.editor_client_id || null)) {
-        if (editor && (editor === clientId || !(await mesas()).some(m => m.id === editor))) throw falla('Ese editor no recibe encargos')
+        if (editor && (editor === clientId || !(await mesas(clientId)).some(m => m.id === editor))) throw falla('Ese editor no recibe encargos')
         Object.assign(fila, { editor_client_id: editor, enviado_at: editor ? ahora() : null, visto_at: null })
       }
       return res.status(200).json({ pedido: await guarda('pedido', clientId, b.id, fila) })
@@ -228,7 +232,7 @@ export default async function handler(req, res) {
       const c = await propia('cobro', b.id, clientId)
       let nombre = ''
       if (c.cliente_id) {
-        const { data } = await supabase.from(TABLAS.cliente).select('nombre').eq('id', c.cliente_id).maybeSingle()
+        const { data } = await supabase.from(TABLAS.cliente).select('nombre').eq('id', c.cliente_id).eq('client_id', clientId).maybeSingle()
         nombre = data?.nombre || ''
       }
       const importe = Number(c.importe).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })

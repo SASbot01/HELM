@@ -229,7 +229,7 @@ function recortaFormaJuridica(valor) {
     // Los avisos legales encadenan aclaraciones: "Juan Pablo Martínez González
     // (en adelante «el titular»)". El nombre acaba donde empieza el paréntesis
     // o la comilla; lo de después es la coletilla del abogado.
-    .replace(/\s*[(\[«"“'].*$/, '')
+    .replace(/\s*[([«"“'].*$/, '')
     .replace(/[\s,;:\-–]+$/, '')
     // El punto final sobra salvo que cierre una abreviatura: en "S.L." va
     // pegado a una sola letra, en "Juan Pérez Gómez." cierra la frase.

@@ -14,7 +14,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { visibles, textoDe, ramaCorta } from './silvestreai/preguntas'
 import { PAISES, PAIS_DEFECTO, telefonoValido } from './silvestreai/paises'
-import { getClientId, crearLead, guardarRespuestas, origenDeLaUrl } from './silvestreai/guardar'
+import { crearLead, guardarRespuestas, origenDeLaUrl } from './silvestreai/guardar'
 import './silvestreai/valor.css'
 
 const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i
@@ -27,7 +27,7 @@ export default function SilvestreValor() {
   const [A, setA] = useState({})
   const [cursor, setCursor] = useState(0)
   const [historia, setHistoria] = useState([])
-  const [lead, setLead] = useState(null)       // { clientId, contactId, ...datos }
+  const [lead, setLead] = useState(null)       // { contactId, ...datos } — contactId es la ficha firmada del servidor
   const [error, setError] = useState(null)
 
   const vis = useMemo(() => visibles(A), [A])
@@ -53,7 +53,7 @@ export default function SilvestreValor() {
   useEffect(() => {
     if (!terminado || !lead || guardando.current) return
     guardando.current = true
-    guardarRespuestas(lead.clientId, lead.contactId, { A, datos: { ...lead, leadMagnet } })
+    guardarRespuestas(lead.contactId, { A, datos: { ...lead, leadMagnet } })
       .then(() => setFase('fin'))
       .catch(() => {
         guardando.current = false
@@ -212,8 +212,6 @@ function Puerta({ onEntrar }) {
     if (!ok) return
     setEnviando(true)
     try {
-      const clientId = await getClientId()
-      if (!clientId) throw new Error('No se pudo conectar. Inténtalo en un momento.')
       const datos = {
         nombre: f.nombre,
         empresa: f.empresa,
@@ -225,8 +223,8 @@ function Puerta({ onEntrar }) {
         // terminar, la URL ya no tiene por qué conservar los parámetros.
         origen: origenDeLaUrl(),
       }
-      const contactId = await crearLead(clientId, datos)
-      onEntrar({ clientId, contactId, ...datos })
+      const contactId = await crearLead(datos)
+      onEntrar({ contactId, ...datos })
     } catch (err) {
       setError(err.message || 'No se pudo enviar. Inténtalo de nuevo.')
       setEnviando(false)

@@ -25,10 +25,6 @@ export const CAL_URL = String(env.VITE_CAL_URL || '').trim()
 // cada reserva en el correo de confirmación; este es el genérico.
 export const CAL_REPROGRAMAR_URL = String(env.VITE_CAL_REPROGRAMAR_URL || '').trim()
 
-// La foto del hero. [PENDIENTE: foto trabajando / grabando / con un cliente]
-// Ruta dentro de public/ en WebP o AVIF, p. ej. /socio/alex-trabajando.webp
-export const FOTO_HERO = String(env.VITE_FOTO_HERO || '').trim()
-
 // El vídeo de antes de la llamada en /gracias. [PENDIENTE]
 // URL de inserción (YouTube /embed/…, Vimeo player…).
 export const VIDEO_GRACIAS = String(env.VITE_VIDEO_GRACIAS || '').trim()

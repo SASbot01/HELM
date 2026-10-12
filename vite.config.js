@@ -4,13 +4,7 @@ import path from 'path'
 import { sbProxy } from './scripts/sb-proxy.mjs'
 import { cabecerasSeguridad } from './scripts/cabeceras.mjs'
 
-// Tauri detección — añade flags óptimos para el build desktop sin afectar
-// el flujo Vercel actual. Cuando se hace `tauri dev`, las env vars TAURI_ENV_*
-// se setean automáticamente. Para deploys Vercel todo sigue funcionando igual.
-//
 // https://vite.dev/config/
-const isTauri = !!process.env.TAURI_ENV_PLATFORM
-
 export default defineConfig({
   plugins: [react(), cabecerasSeguridad()],
   resolve: {
@@ -19,12 +13,9 @@ export default defineConfig({
     },
   },
 
-  // Vite limpia logs en cada update — Tauri necesita verlos para debug
-  clearScreen: !isTauri,
-
-  // Servidor dev — fija puerto, escucha en LAN para que Tauri devUrl conecte
+  // Servidor dev — fija puerto y escucha en LAN.
   server: {
-    host: isTauri ? false : true,
+    host: true,
     port: 5173,
     strictPort: true,
     // Permite abrir el dev-server tras un túnel Cloudflare (URL provisional)
@@ -43,11 +34,6 @@ export default defineConfig({
       // Solo tablas y archivos, y solo con la clave pública: scripts/sb-proxy.mjs.
       '/sb': sbProxy(),
     },
-    // Tauri WebView2 (Win) y WKWebView (Mac) necesitan HMR via WS específico
-    hmr: isTauri
-      ? { protocol: 'ws', host: 'localhost', port: 5174 }
-      : undefined,
-    watch: isTauri ? { ignored: ['**/src-tauri/**'] } : undefined,
   },
 
   // `vite preview` — sirve el build de dist/ con los mismos proxies. Es lo que
@@ -102,15 +88,7 @@ export default defineConfig({
     },
   },
 
-  // Build target alineado con Tauri (Chromium ≥104, Safari ≥13)
   build: {
     target: 'esnext',
-    minify: !process.env.TAURI_ENV_DEBUG ? 'esbuild' : false,
-    sourcemap: !!process.env.TAURI_ENV_DEBUG,
-  },
-
-  // Define global para que el frontend pueda detectar entorno
-  define: {
-    __IS_TAURI__: JSON.stringify(isTauri),
   },
 })

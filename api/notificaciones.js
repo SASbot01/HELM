@@ -9,7 +9,7 @@
 // solo se leen y se marcan.
 import { supabase } from './lib/supabase.js'
 import { applyCors, requireSuperAdmin } from './_lib/auth.js'
-import { requireProfileAccess } from './_lib/access.js'
+import { requireProfileAccess, perfilesVisibles } from './_lib/access.js'
 
 export default async function handler(req, res) {
   applyCors(req, res)
@@ -18,9 +18,12 @@ export default async function handler(req, res) {
     const accion = String(req.query?.action || '')
 
     if (accion === 'resumen') {
-      await requireSuperAdmin(req)
-      const { data, error } = await supabase.from('helm_notificaciones')
+      const auth = await requireSuperAdmin(req)
+      const ids = await perfilesVisibles(auth)
+      let q = supabase.from('helm_notificaciones')
         .select('client_id, nivel').is('leida_at', null).limit(5000)
+      if (ids) q = q.in('client_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000'])
+      const { data, error } = await q
       if (error) throw error
       const porPerfil = {}
       for (const n of data || []) {

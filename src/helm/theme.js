@@ -21,10 +21,6 @@ import { useCallback, useEffect } from 'react'
 // una franja de otro color al hacer scroll. Es el mismo --bg de theme.css.
 const BG = '#070708'
 
-// Ya no hay temas que elegir. Se exporta vacío para que la sección de Ajustes
-// que los pintaba no se rompa mientras se retira.
-export const TEMAS_ELEGIBLES = []
-
 const HEX = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i
 
 // Normaliza "#abc", "abc", "#AABBCC" → "#aabbcc". Null si no es un color.

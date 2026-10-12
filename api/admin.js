@@ -53,7 +53,7 @@ export default async function handler(req, res) {
     if (!row || !verifyPassword(password, row)) {
       const { data: teamData, error: teamErr } = await supabase
         .from('team')
-        .select('id, client_id, name, email, role, password, password_hash, active, guide_seen')
+        .select('id, client_id, name, email, role, password_hash, active, guide_seen')
         .eq('email', String(email).trim().toLowerCase())
         .eq('active', true)
         .limit(2)
@@ -97,8 +97,15 @@ export default async function handler(req, res) {
     }
 
     const isSuperadmin = source === 'superadmins'
+    // El administrador de una agencia entra con ella: el panel enseña su
+    // nombre y su saldo de créditos.
+    let agencia = null
+    if (isSuperadmin && row.agencia_id) {
+      const { data } = await supabase.from('agencias').select('id, nombre, slug').eq('id', row.agencia_id).maybeSingle()
+      agencia = data || null
+    }
     const user = isSuperadmin
-      ? toAppFormat(row, 'superadmins')
+      ? { ...toAppFormat(row, 'superadmins'), agencia, plataforma: row.plataforma === true }
       : {
           id: row.id, email: row.email, name: row.name, role: 'client',
           clientId: clientInfo.id, clientName: clientInfo.name, clientSlug: clientInfo.slug,
@@ -124,6 +131,8 @@ export default async function handler(req, res) {
         superadmin: isSuperadmin,
         clientId: isSuperadmin ? null : clientInfo.id,
         clientSlug: isSuperadmin ? null : clientInfo.slug,
+        agenciaId: isSuperadmin ? (row.agencia_id || null) : null,
+        plataforma: isSuperadmin && row.plataforma === true,
         via: source,
       }, { expiresIn: 60 * 60 * 12 }) // 12h
     } catch (err) {

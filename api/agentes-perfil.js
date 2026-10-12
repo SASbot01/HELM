@@ -10,7 +10,7 @@
 //   GET ?action=drive     &clientId=          → calendario de guiones y vídeos de Entrada
 import { supabase } from './lib/supabase.js'
 import { applyCors } from './_lib/auth.js'
-import { requireProfileAccess } from './_lib/access.js'
+import { requireProfileAccess, agenciaDe } from './_lib/access.js'
 import { resumenDrive, enEntrada } from './_lib/ingesta.js'
 
 async function creadoresDe(clientId) {
@@ -52,7 +52,9 @@ export default async function handler(req, res) {
       // Solo los creadores de ESTE perfil: el resto del corpus no es suyo.
       const ident = (await creadoresDe(clientId)).find(i => i.slug === slug)
       if (!ident) return res.status(404).json({ error: 'Ese creador no está en este perfil' })
-      return res.status(200).json(await fichaDe(ident.id))
+      // De los perfiles que usan este creador, solo los de su misma agencia.
+      const agencia = await agenciaDe(clientId)
+      return res.status(200).json(await fichaDe(ident.id, (_, a) => Boolean(agencia) && a === agencia))
     }
 
     // El calendario de guiones y lo que ha pasado por su Entrada de Drive.
@@ -115,7 +117,9 @@ export default async function handler(req, res) {
 
 // La ficha completa de un creador. La usan este endpoint y api/agents.js
 // (la del superadmin), así que las dos pantallas enseñan lo mismo.
-export async function fichaDe(identityId) {
+// Un creador lo pueden usar perfiles de varias agencias: `visible(clientId,
+// agenciaId)` decide cuáles de ellos se enseñan.
+export async function fichaDe(identityId, visible = () => true) {
   const [ident, reels, memoria, perfiles] = await Promise.all([
     supabase.from('agent_identities').select('*').eq('id', identityId).single(),
     supabase.from('agent_reels')
@@ -123,7 +127,7 @@ export async function fichaDe(identityId) {
       .eq('identity_id', identityId).limit(500),
     supabase.from('agent_memory').select('id, contenido, updated_at')
       .eq('identity_id', identityId).order('updated_at', { ascending: false }),
-    supabase.from('agent_identity_clients').select('clients(slug, name)').eq('identity_id', identityId),
+    supabase.from('agent_identity_clients').select('client_id, clients(slug, name, agencia_id)').eq('identity_id', identityId),
   ])
   for (const r of [ident, reels, memoria, perfiles]) if (r.error) throw r.error
 
@@ -132,6 +136,7 @@ export async function fichaDe(identityId) {
     identidad: ident.data,
     reels: (reels.data || []).sort((a, b) => vistas(b) - vistas(a)),
     memoria: memoria.data || [],
-    perfiles: (perfiles.data || []).map(p => p.clients),
+    perfiles: (perfiles.data || []).filter(p => p.clients && visible(p.client_id, p.clients.agencia_id))
+      .map(({ clients: { slug, name } }) => ({ slug, name })),
   }
 }

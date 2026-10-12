@@ -84,6 +84,16 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Esa persona no está en el equipo de este perfil' })
     }
     persona = data
+    // Y su acceso, si lo tiene, también tiene que ser de este perfil: la ficha
+    // de la persona se edita desde el panel, y un login_id apuntando al acceso
+    // de otro perfil permitiría cambiarle el email y la contraseña (o
+    // desactivarlo) a alguien de otro negocio.
+    if (persona.login_id) {
+      const { data: acceso } = await supabase.from('team').select('client_id').eq('id', persona.login_id).maybeSingle()
+      if (acceso && acceso.client_id !== clientId) {
+        return res.status(409).json({ error: 'El acceso de esta persona es de otro perfil' })
+      }
+    }
   }
 
   if (!esPropietario) {
@@ -132,8 +142,6 @@ export default async function handler(req, res) {
     }
     if (cambiaPassword) {
       fila.password_hash = hashPassword(String(password))
-      // Si esta fila venía de la época del texto plano, se limpia al tocarla.
-      fila.password = null
     }
 
     let loginId = persona?.login_id || null

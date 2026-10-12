@@ -1009,7 +1009,9 @@ export default async function handler(req, res) {
   if (req.query.clientId && req.body?.clientId && req.query.clientId !== req.body.clientId) {
     return res.status(400).json({ error: 'El perfil de la URL y el del cuerpo no coinciden' })
   }
-  const isPublicAction = action === 'health' || action === 'commands'
+  // `health` con perfil mira la IA de ESE perfil (y prueba su clave): eso ya
+  // es del perfil, y exige permiso sobre él.
+  const isPublicAction = action === 'commands' || (action === 'health' && !reqClientId)
   try {
     if (isPublicAction) await validateAuth(req, { required: true })
     else await requireProfileAccess(req, reqClientId)
@@ -1021,7 +1023,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     if (action === 'health') return res.status(200).json(await llmHealth(reqClientId))
     if (action === 'commands') return res.status(200).json({ commands: COMMANDS })
-    const clientId = req.query.clientId
+    const clientId = reqClientId
     if (!clientId) return res.status(400).json({ error: 'clientId requerido' })
     if (action === 'history') return res.status(200).json({ messages: await getHistory(clientId, 200) })
     if (action === 'knowledge') return res.status(200).json({ knowledge: await getKnowledge(clientId) })
@@ -1039,7 +1041,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true })
     }
     if (action === 'history') {
-      const clientId = req.query.clientId || req.body?.clientId
+      const clientId = reqClientId
       if (!clientId) return res.status(400).json({ error: 'clientId requerido' })
       const { error } = await supabase.from('helm_chat_messages').delete().eq('client_id', clientId)
       if (error) return res.status(500).json({ error: error.message })
@@ -1056,7 +1058,9 @@ export default async function handler(req, res) {
       return res.status(429).json({ error: 'Demasiadas peticiones seguidas.', retryAfter: gate.retryAfter })
     }
 
-    const { clientId, message } = req.body || {}
+    // El perfil es el que se ha comprobado arriba, venga de la URL o del cuerpo.
+    const clientId = reqClientId
+    const { message } = req.body || {}
     if (!clientId || !message?.trim()) {
       return res.status(400).json({ error: 'clientId y message son obligatorios' })
     }

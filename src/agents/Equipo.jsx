@@ -27,6 +27,9 @@ const AGENTES = {
   guionista:    { nombre: 'Guionista',    hace: 'Escribe los guiones del día y los deja en el calendario como borrador.' },
   programador:  { nombre: 'Programador',  hace: 'Los lunes (o a mano) prepara el contenido de la semana por tipo —viral, autoridad, valor, venta—; no repite un tipo ya montado.' },
   virales:      { nombre: 'Virales',      hace: 'Los lunes rastrea los reels recientes de los creadores de referencia, elige los que mejor encajan y los mete en el corpus.' },
+  // No es de la oficina: es Claude desde claude.ai, por el conector (MCP). Sale
+  // en el registro lo que escribe y lo que le falla.
+  conector:     { nombre: 'Claude (conector)', hace: 'Lo que Claude escribe desde claude.ai por el conector: guiones, memoria, vídeos ordenados.' },
 }
 const ETAPAS = [
   { k: 'borrador',   nombre: 'Borrador',   sub: 'espera tu visto bueno' },
@@ -36,7 +39,7 @@ const ETAPAS = [
   { k: 'publicado',  nombre: 'Publicado' },
 ]
 const PRIORIDAD = { high: 'Prioridad alta', medium: '', low: 'Prioridad baja' }
-const ORIGEN = { horario: 'Horario de las 6:00', director: 'Encargo del director', manual: 'Lanzado a mano' }
+const ORIGEN = { horario: 'Horario de las 6:00', director: 'Encargo del director', manual: 'Lanzado a mano', mcp: 'Claude desde claude.ai (conector)' }
 const ESTADO = {
   corriendo: { label: 'Trabajando', tono: 'vivo' },
   hecho:     { label: 'Hecho',      tono: 'ok' },
@@ -50,6 +53,7 @@ const TIPOS = { viralidad: 'Viralidad', conversion: 'Conversión', autoridad: 'A
 const COLOR = {
   director: '#d9b66b', investigador: '#7aa5f8', analista: '#4ade80', productor: '#e0894a',
   comercial: '#e86fa6', informe: '#b08bdd', guionista: '#d9b66b', programador: '#7aa5f8', virales: '#4ade80',
+  conector: '#c9c9ce',
 }
 // El estado que se le pinta en la oficina, con su etiqueta.
 const EST_OFI = {
@@ -369,7 +373,7 @@ function Registro({ ejecuciones, ahora }) {
 
       {!lista.length && (
         <p className="ag-vacio">
-          {filtro ? `El ${AGENTES[filtro].nombre.toLowerCase()} no ha corrido todavía.` : 'Aquí quedará cada vez que corra un agente: qué hizo, paso a paso, y cuántos tokens gastó.'}
+          {filtro === 'conector' ? 'Claude todavía no ha escrito nada en este perfil por el conector.' : filtro ? `El ${AGENTES[filtro].nombre.toLowerCase()} no ha corrido todavía.` : 'Aquí quedará cada vez que corra un agente: qué hizo, paso a paso, y cuántos tokens gastó.'}
         </p>
       )}
 
@@ -397,7 +401,7 @@ function Registro({ ejecuciones, ahora }) {
                     <div className="eq-run-detalle">
                       <dl>
                         <div><dt>Origen</dt><dd>{ORIGEN[e.origen] || e.origen}</dd></div>
-                        <div><dt>Modelo</dt><dd>{e.tokens_in + e.tokens_out > 0 ? e.modelo : 'No se llamó al modelo'}</dd></div>
+                        <div><dt>Modelo</dt><dd>{e.tokens_in + e.tokens_out > 0 ? e.modelo : e.agente === 'conector' ? 'Claude, en claude.ai (no gasta tokens de HELM)' : 'No se llamó al modelo'}</dd></div>
                         <div><dt>Tokens</dt><dd>{nf.format(e.tokens_in)} de entrada · {nf.format(e.tokens_out)} de salida</dd></div>
                       </dl>
                       {e.encargo && <p className="eq-encargo"><em>Encargo</em>{e.encargo}</p>}

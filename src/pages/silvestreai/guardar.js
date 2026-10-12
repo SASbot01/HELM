@@ -8,72 +8,26 @@
 //   1. Al pasar el bloque 1 (nombre, empresa, email, teléfono, web) → el lead
 //      existe aunque abandone en la pregunta 4. Es la mitad del valor.
 //   2. Al terminar → se completan las respuestas de su rama y la calificación.
-import { supabase } from '../../utils/supabase'
+//
+// Las dos escrituras las hace el servidor (api/leads.js · puerta y completar,
+// landing `silvestreai`), que es quien sabe a qué perfil va. Aquí se califica y
+// se redacta; el servidor acota y guarda.
+import { pideLead } from '../leads.js'
 import { Q, etiquetaDe, textoDe, valorDe, ramaCorta, visibles } from './preguntas'
-
-// El perfil al que van los leads de esta página.
-export const PERFIL_SLUG = 'silvestre'
-
-export async function getClientId(slug = PERFIL_SLUG) {
-  const { data, error } = await supabase
-    .from('clients').select('id, name').eq('slug', slug).maybeSingle()
-  if (error || !data) {
-    console.warn('[silvestreai] perfil no encontrado', slug, error?.message)
-    return null
-  }
-  return data.id
-}
 
 /**
  * Crea (o recupera) el contacto al pasar el bloque 1. Si ese email ya existe en
  * el perfil se reutiliza en vez de duplicar: quien repite el formulario es la
- * misma persona, no un lead nuevo.
+ * misma persona, no un lead nuevo. (La P5, "Instagram o web", la reparte el
+ * servidor en su columna.)
+ *
+ * Devuelve la ficha firmada del lead, para completarlo al terminar.
  */
-export async function crearLead(clientId, { nombre, empresa, email, telefono, web, pais, origen }) {
-  const correo = email.trim().toLowerCase()
-  // La P5 pide "Instagram o web" en un solo campo, pero el CRM tiene columna
-  // para cada cosa: adivinar cuál es evita que el comercial tenga que abrir la
-  // nota para saber si ese texto es un perfil o un dominio.
-  const dato = (web || '').trim()
-  const esInstagram = dato.startsWith('@') || /instagram\.com/i.test(dato)
-  const base = {
-    name: nombre.trim(),
-    company: empresa.trim(),
-    phone: telefono.trim(),
-    whatsapp: telefono.trim(),
-    country: pais || null,
-    website: esInstagram ? '' : dato,
-    instagram: esInstagram ? dato : '',
-    // El CRM tiene columnas propias para las UTM y la vista de Ventas filtra
-    // por ellas: dejarlas solo dentro del jsonb las escondería.
-    utm_source: origen?.utm_source || null,
-    utm_medium: origen?.utm_medium || null,
-    utm_campaign: origen?.utm_campaign || null,
-    utm_content: origen?.utm_content || null,
-    updated_at: new Date().toISOString(),
-  }
-
-  const { data: existente } = await supabase
-    .from('crm_contacts').select('id')
-    .eq('client_id', clientId).ilike('email', correo).limit(1)
-
-  if (existente?.length) {
-    await supabase.from('crm_contacts').update(base).eq('id', existente[0].id)
-    return existente[0].id
-  }
-
-  const { data, error } = await supabase.from('crm_contacts').insert({
-    ...base,
-    client_id: clientId,
-    email: correo,
-    source: 'Formulario de valor · Silvestre IA',
-    status: 'lead',
-    tags: ['silvestreai-valor'],
-    notes: 'Empezó el formulario de valor. Aún sin terminar.',
-  }).select('id').single()
-
-  if (error) { console.warn('[silvestreai] crearLead', error.message); throw error }
-  return data.id
+export async function crearLead({ nombre, empresa, email, telefono, web, pais, origen }) {
+  const { id } = await pideLead('puerta', {
+    landing: 'silvestreai', nombre, empresa, email, telefono, web, pais, origen,
+  })
+  return id
 }
 
 /**
@@ -147,36 +101,55 @@ export function informeTexto(A, datos, calif) {
   return L.join('\n')
 }
 
-/**
- * La respuesta en el plugin Formularios, que es donde el comercial la lee: la
- * pestaña del formulario en la ficha del contacto, con pregunta y respuesta una
- * debajo de otra, igual que las de Detrás de Cámara.
- *
- * Hay un formulario por rama (migrations/helm_formulario_valor_silvestre.sql).
- * Si la migración no está puesta no se encuentra y no se guarda aquí, pero el
- * lead y sus notas sí: esto no puede tumbar el envío.
- */
-async function guardarEnFormularios(clientId, contactId, { A, datos, calif }) {
-  const { data: form } = await supabase
-    .from('helm_forms').select('id')
-    .eq('client_id', clientId).eq('slug', `valor-${A.tipo}`).maybeSingle()
-  if (!form) { console.warn('[silvestreai] falta el formulario valor-' + A.tipo); return }
-
-  // Las etiquetas, no los códigos: la ficha se lee sola, sin traducir nada.
-  // El orden lo da preguntas.js, que es el mismo de los campos del formulario.
+// Las etiquetas, no los códigos: la respuesta del plugin Formularios se lee
+// sola, sin traducir nada. El orden lo da preguntas.js, que es el mismo de los
+// campos del formulario.
+function respuestasLegibles(A) {
   const answers = {}
   for (const q of visibles(A)) {
     if (q.id === 'tipo') continue         // la P6 la dice ya el título del formulario
     const t = etiquetaDe(A, q.id)
     if (t) answers[q.id] = t
   }
+  return answers
+}
 
-  const { error } = await supabase.from('helm_form_responses').insert({
-    client_id: clientId,
-    form_id: form.id,
-    contact_id: contactId,
+/**
+ * Completa el lead al terminar: notas legibles, datos estructurados en
+ * custom_fields, la respuesta en el plugin Formularios (la pestaña del
+ * formulario en la ficha, igual que las de Detrás de Cámara) y una actividad en
+ * su timeline.
+ *
+ * Hay un formulario por rama (migrations/helm_formulario_valor_silvestre.sql).
+ * Si la migración no está puesta no se guarda ahí, pero el lead y sus notas sí:
+ * esto no puede tumbar el envío.
+ */
+export async function guardarRespuestas(contactId, { A, datos }) {
+  const calif = calificar(A)
+  const rama = ramaCorta(A.tipo)
+
+  await pideLead('completar', {
+    landing: 'silvestreai',
+    id: contactId,
+    contacto: {
+      notes: informeTexto(A, datos, calif),
+      // El valor del trato es lo que factura al año: es el tamaño real de la
+      // oportunidad y hace que el pipeline se ordene solo.
+      deal_value: calif.factura ? Math.round(calif.factura * 12) : null,
+      status: calif.caliente ? 'contactado' : 'lead',
+      tags: ['silvestreai-valor', rama, ...(calif.caliente ? ['caliente'] : [])],
+    },
+    ficha: {
+      rama: A.tipo,
+      rama_label: rama,
+      respuestas: A,
+      calificacion: calif,
+      lead_magnet: Boolean(datos.leadMagnet),
+      completado: new Date().toISOString(),
+    },
+    form: `valor-${A.tipo}`,
     respondent: `${datos.nombre} · ${datos.empresa}`.trim(),
-    answers,
+    respuestas: respuestasLegibles(A),
     meta: {
       ...(datos.origen || {}),
       lead_tier: calif.tier,
@@ -184,57 +157,15 @@ async function guardarEnFormularios(clientId, contactId, { A, datos, calif }) {
       lead_magnet: Boolean(datos.leadMagnet),
       rama: A.tipo,
     },
-  })
-  if (error) console.warn('[silvestreai] guardarEnFormularios', error.message)
-}
-
-/**
- * Completa el lead al terminar: la respuesta en Formularios, notas legibles,
- * datos estructurados en custom_fields y una actividad en su timeline.
- */
-export async function guardarRespuestas(clientId, contactId, { A, datos }) {
-  const calif = calificar(A)
-  const rama = ramaCorta(A.tipo)
-
-  const { error } = await supabase.from('crm_contacts').update({
-    notes: informeTexto(A, datos, calif),
-    // El valor del trato es lo que factura al año: es el tamaño real de la
-    // oportunidad y hace que el pipeline se ordene solo.
-    deal_value: calif.factura ? Math.round(calif.factura * 12) : null,
-    status: calif.caliente ? 'contactado' : 'lead',
-    tags: ['silvestreai-valor', rama, ...(calif.caliente ? ['caliente'] : [])],
-    custom_fields: {
-      silvestreai_valor: {
-        rama: A.tipo,
-        rama_label: rama,
-        respuestas: A,
-        calificacion: calif,
-        lead_magnet: Boolean(datos.leadMagnet),
-        completado: new Date().toISOString(),
-      },
+    // La actividad es lo que hace que el lead aparezca en el timeline del
+    // plugin Actividad y no solo en su ficha.
+    actividad: {
+      title: `Formulario de valor completado · ${rama}`,
+      description: [
+        calif.caliente ? `LEAD CALIENTE: ${calif.motivos.join('; ')}.` : '',
+        etiquetaDe(A, `${A.tipo}_dolor`) ? `Dolor: ${etiquetaDe(A, `${A.tipo}_dolor`)}.` : '',
+        etiquetaDe(A, `${A.tipo}_objetivo`) ? `Objetivo a 6 meses: ${etiquetaDe(A, `${A.tipo}_objetivo`)}.` : '',
+      ].filter(Boolean).join(' '),
     },
-    updated_at: new Date().toISOString(),
-    last_activity_at: new Date().toISOString(),
-  }).eq('id', contactId)
-
-  if (error) { console.warn('[silvestreai] guardarRespuestas', error.message); throw error }
-
-  await guardarEnFormularios(clientId, contactId, { A, datos, calif })
-
-  // La actividad es lo que hace que el lead aparezca en el timeline del plugin
-  // Actividad y no solo en su ficha. Que falle no puede tirar abajo el guardado.
-  const { error: e2 } = await supabase.from('crm_activities').insert({
-    client_id: clientId,
-    contact_id: contactId,
-    type: 'note',
-    title: `Formulario de valor completado · ${rama}`,
-    description: [
-      calif.caliente ? `LEAD CALIENTE: ${calif.motivos.join('; ')}.` : '',
-      etiquetaDe(A, `${A.tipo}_dolor`) ? `Dolor: ${etiquetaDe(A, `${A.tipo}_dolor`)}.` : '',
-      etiquetaDe(A, `${A.tipo}_objetivo`) ? `Objetivo a 6 meses: ${etiquetaDe(A, `${A.tipo}_objetivo`)}.` : '',
-    ].filter(Boolean).join(' '),
-    performed_by: 'Formulario de valor · Silvestre IA',
-    performed_at: new Date().toISOString(),
   })
-  if (e2) console.warn('[silvestreai] actividad', e2.message)
 }

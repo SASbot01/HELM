@@ -18,6 +18,7 @@ import path from 'node:path'
 import os from 'node:os'
 import { supabase } from './lib/supabase.js'
 import { applyCors, requireSuperAdmin, writeAudit } from './_lib/auth.js'
+import { puedeVerPerfil } from './_lib/access.js'
 
 // Fuera del repo: una copia no puede acabar en un commit ni en el build.
 const DIR_COPIAS = process.env.HELM_BACKUP_DIR || path.join(os.homedir(), 'helm-copias')
@@ -94,8 +95,17 @@ async function borrarPerfil(client, auth, req) {
   }
 
   const rutas = await archivosDe(client.id)
+  // El logo puede vivir fuera de su carpeta (el que se sube al registrarse),
+  // pero la URL la escribe quien edita la marca: si apunta a la carpeta de
+  // OTRO perfil, o es un archivo que usa otro perfil, borrar este se llevaría
+  // por delante algo ajeno. Entonces se deja donde está.
   const logo = rutaEnBucket(client.logo_url)
-  if (logo && !rutas.includes(logo)) rutas.push(logo)
+  if (logo && !rutas.includes(logo) && !logo.includes('..')
+    && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\//i.test(logo)) {
+    const { data: otros } = await supabase.from('clients').select('id')
+      .eq('logo_url', client.logo_url).neq('id', client.id).limit(1)
+    if (!otros?.length) rutas.push(logo)
+  }
   for (const ruta of rutas) {
     const { data, error } = await supabase.storage.from(BUCKET).download(ruta)
     if (error) throw falla(`No se pudo copiar el archivo ${ruta}: ${error.message}. No se ha borrado nada.`, 500)
@@ -146,16 +156,19 @@ export default async function handler(req, res) {
     const b = req.body || {}
 
     if (accion === 'inactivos') {
-      const { data, error } = await supabase.from('clients')
+      let q = supabase.from('clients')
         .select('id, slug, name, client_type, logo_url, brand_name, brand_subtitle, primary_color')
         .eq('active', false).order('name')
+      // Cada agencia, los suyos.
+      if (!auth.plataforma) q = q.eq('agencia_id', auth.agenciaId || '00000000-0000-0000-0000-000000000000')
+      const { data, error } = await q
       if (error) throw error
       return res.status(200).json({ perfiles: data || [] })
     }
 
     if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' })
     const { data: client } = await supabase.from('clients').select('*').eq('id', String(b.clientId || '')).maybeSingle()
-    if (!client) throw falla('Ese perfil no existe', 404)
+    if (!client || !(await puedeVerPerfil(auth, client.id))) throw falla('Ese perfil no existe', 404)
 
     if (accion === 'activar') {
       const activo = b.activo !== false
