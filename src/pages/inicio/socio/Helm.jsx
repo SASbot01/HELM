@@ -64,7 +64,7 @@ export function SeccionEquipo({ Eyebrow }) {
   return (
     <section className="so-sec ancho so-equipo-sec">
       <div data-reveal>
-        <Eyebrow n="02">Tu equipo</Eyebrow>
+        <Eyebrow n="03">Tu equipo</Eyebrow>
         <h2>{TOTAL} empleados. <em>Uno para cada parte.</em></h2>
         <p className="so-intro">
           Cada fase de tu negocio tiene a alguien encargado. Trabajan todos en el mismo
@@ -129,8 +129,8 @@ export function SeccionHelm({ Eyebrow }) {
   return (
     <section className="so-sec ancho so-helm-sec">
       <div data-reveal>
-        <Eyebrow n="03">Dónde trabajan</Eyebrow>
-        <h2>Tu negocio entero, <em>en un panel.</em></h2>
+        <Eyebrow n="02">La solución</Eyebrow>
+        <h2>Tu negocio entero, <em>en un panel: HELM.</em></h2>
         <p className="so-intro">
           Se llama <b>HELM</b>. Ahí trabaja el equipo y ahí lo ves todo tú, cuando quieras:
           nada de pedir informes ni de preguntar cómo va.

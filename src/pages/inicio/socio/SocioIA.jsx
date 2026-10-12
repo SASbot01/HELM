@@ -125,15 +125,15 @@ export default function SocioIA() {
       <header className="so-hero" id="so-hero">
         <div className="so-hero-glow" aria-hidden="true" />
         <div className="so-hero-txt">
-          <p className="so-tag"><span className="so-hex" aria-hidden="true" /> TU EQUIPO DIGITAL · {PLAZAS_TOTALES} plazas</p>
+          <p className="so-tag"><span className="so-hex" aria-hidden="true" /> HELM · EL PUESTO DE MANDO DE TU NEGOCIO</p>
           <h1>{linea1} <em>{linea2}</em></h1>
           <p className="so-sub">
-            Un equipo para cada parte de tu negocio —contenido, captación, venta y entrega—
-            <b>trabajando en 30 días</b>.
-            Cobro <b className="oro">1.000&nbsp;€</b> por montarlo y después voy a porcentaje de lo que crezcas.
+            <b>HELM</b> reúne tu contenido, tus clientes, tus ventas y tus finanzas en un solo panel,
+            con un <b>equipo de IA trabajando dentro</b>. Y te lo monto y lo llevo yo:
+            <b className="oro">1.000&nbsp;€</b> por ponerlo en marcha y después, porcentaje de lo que crezcas.
           </p>
           <BotonAuditoria donde="hero" />
-          <p className="so-nota">Solo para negocios online con productos de 1.000&nbsp;€ o más.</p>
+          <p className="so-nota">Para negocios digitales con productos de 1.000&nbsp;€ o más. {PLAZAS_TOTALES} plazas.</p>
           {PLAZAS_OCUPADAS != null && (
             <Plazas ocupadas={Math.min(PLAZAS_OCUPADAS, PLAZAS_TOTALES)} total={PLAZAS_TOTALES} />
           )}
@@ -170,11 +170,11 @@ export default function SocioIA() {
           </p>
         </section>
 
-        {/* ── 3. El equipo: un empleado por cada parte del proceso ─────── */}
-        <SeccionEquipo Eyebrow={Eyebrow} />
-
-        {/* ── 4. Dónde trabajan: HELM ──────────────────────────────────── */}
+        {/* ── El sistema: HELM, el puesto de mando que resuelve lo de arriba ── */}
         <SeccionHelm Eyebrow={Eyebrow} />
+
+        {/* ── Y un equipo de IA que trabaja dentro de HELM ─────────────── */}
+        <SeccionEquipo Eyebrow={Eyebrow} />
 
         {/* ── 5. Cómo trabajamos ──────────────────────────────────────── */}
         <section className="so-sec ancho">
