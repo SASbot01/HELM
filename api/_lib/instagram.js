@@ -265,6 +265,160 @@ export async function getToken(supabase, clientId) {
   return { token: cfg.token, config: cfg, row }
 }
 
+// ── Informe ────────────────────────────────────────────────────────────────
+// Lo que se enseña de las métricas guardadas: la lista de piezas, un resumen
+// y un estudio de qué tienen las que funcionan. Es un cálculo, no una opinión:
+// lo usan la sección «Informe de contenido» del panel y la herramienta
+// "metricas" del conector de Claude, y las dos tienen que decir lo mismo.
+
+const DIAS_SEMANA = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
+// El día de la semana en Madrid: un reel subido a las 00:30 de un martes es
+// lunes en UTC, y la cuenta publica para gente de aquí.
+const diaMadridDe = (iso) => {
+  const corto = new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: 'Europe/Madrid' }).format(new Date(iso))
+  return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(corto)
+}
+
+const mediana = (xs) => {
+  const o = xs.filter(x => x != null).sort((a, b) => a - b)
+  if (!o.length) return null
+  const m = Math.floor(o.length / 2)
+  return o.length % 2 ? o[m] : Math.round(((o[m - 1] + o[m]) / 2) * 10) / 10
+}
+// Por mil visitas: es lo que deja comparar un reel de 8.000 con uno de 800.
+const porMil = (v, visitas) => (visitas > 0 ? Math.round((v / visitas) * 10_000) / 10 : null)
+// La primera línea del texto es lo más parecido a un título que tiene un reel.
+const tituloDe = (caption) => String(caption || '').split('\n')[0].trim().slice(0, 140) || '(sin texto)'
+
+function estudioDe(lista, medianaVisitas) {
+  const corta = (p) => ({
+    url: p.url, fecha: p.fecha, titulo: p.titulo, visitas: p.visitas,
+    retencion_media_s: p.retencion_media_s, guardados_por_mil: p.guardados_por_mil,
+  })
+  const porVisitas = [...lista].sort((a, b) => b.visitas - a.visitas)
+  const mejores = porVisitas.slice(0, 5).map(corta)
+  // La cuenta resube piezas: el mismo título dos veces en una propuesta no dice nada.
+  const temas = [...new Set(mejores.map(p => p.titulo))].slice(0, 3)
+  const peores = porVisitas.slice(-5).reverse().map(corta)
+
+  // Las que más se guardan, solo entre las que ha visto gente suficiente: con
+  // 16 visitas, un guardado son 62 por mil y no significa nada.
+  const mas_guardadas = lista
+    .filter(p => p.guardados_por_mil != null && p.visitas >= (medianaVisitas || 0))
+    .sort((a, b) => b.guardados_por_mil - a.guardados_por_mil).slice(0, 3).map(corta)
+
+  const dias = DIAS_SEMANA.map((dia, i) => {
+    const suyas = lista.filter(p => p.dia_semana === i)
+    return { dia, publicaciones: suyas.length, mediana_visitas: mediana(suyas.map(p => p.visitas)) }
+  })
+
+  // ¿Las más vistas retienen más? El tercio de arriba contra el de abajo.
+  const conRet = porVisitas.filter(p => p.retencion_media_s != null)
+  const tercio = Math.floor(conRet.length / 3)
+  const retencion = tercio >= 3 ? {
+    tercio_mas_visto_s: mediana(conRet.slice(0, tercio).map(p => p.retencion_media_s)),
+    tercio_menos_visto_s: mediana(conRet.slice(-tercio).map(p => p.retencion_media_s)),
+    piezas_por_tercio: tercio,
+  } : null
+
+  // Las conclusiones solo dicen lo que los números aguantan: con menos de
+  // tres piezas en un día, ese día no se compara.
+  const conclusiones = []
+  const proxima_semana = []
+  // `always`: en español 7308 sale sin punto por defecto, y al lado de 12.400 parece otro tipo de número.
+  const n = (v) => Math.round(v).toLocaleString('es-ES', { useGrouping: 'always' })
+  if (mejores.length && medianaVisitas) {
+    const veces = Math.round((mejores[0].visitas / medianaVisitas) * 10) / 10
+    conclusiones.push(`La pieza más vista («${mejores[0].titulo.slice(0, 70)}») tiene ${n(mejores[0].visitas)} visitas, ${String(veces).replace('.', ',')} veces la mediana de la cuenta (${n(medianaVisitas)}).`)
+    proxima_semana.push(`Volver sobre los temas de las más vistas con otro ángulo: ${temas.map(t => `«${t.slice(0, 60)}»`).join(', ')}.`)
+  }
+  const diasFiables = dias.filter(d => d.publicaciones >= 3 && d.mediana_visitas != null)
+  if (diasFiables.length >= 2) {
+    const orden = [...diasFiables].sort((a, b) => b.mediana_visitas - a.mediana_visitas)
+    const mejor = orden[0], peor = orden.at(-1)
+    if (mejor.mediana_visitas > peor.mediana_visitas * 1.25) {
+      conclusiones.push(`Por día de publicación, ${mejor.dia} es el que mejor mediana tiene (${n(mejor.mediana_visitas)} visitas en ${mejor.publicaciones} piezas) y ${peor.dia} el que peor (${n(peor.mediana_visitas)} en ${peor.publicaciones}).`)
+      proxima_semana.push(`Guardar las piezas más fuertes para ${orden.slice(0, 2).map(d => d.dia).join(' y ')}.`)
+    } else {
+      conclusiones.push('El día de publicación apenas cambia las visitas: no hay un día claramente mejor que otro.')
+    }
+  }
+  if (retencion && retencion.tercio_mas_visto_s != null && retencion.tercio_menos_visto_s != null) {
+    const a = retencion.tercio_mas_visto_s, b = retencion.tercio_menos_visto_s
+    const s1 = (v) => String(Math.round(v * 10) / 10).replace('.', ',')
+    if (a > b * 1.1) {
+      conclusiones.push(`Las más vistas retienen más: ${s1(a)} s de media de visionado en el tercio de arriba frente a ${s1(b)} s en el de abajo.`)
+      proxima_semana.push(`Cuidar los primeros segundos: las piezas que pasan de ${s1(a)} s de retención son las que llegan lejos.`)
+    } else {
+      conclusiones.push(`La retención no separa a las más vistas de las menos vistas (${s1(a)} s frente a ${s1(b)} s): lo que cambia el resultado es otra cosa, probablemente el tema o el gancho.`)
+    }
+  }
+  if (mas_guardadas.length) {
+    proxima_semana.push(`Hacer una pieza del tipo que más se guarda: «${mas_guardadas[0].titulo.slice(0, 60)}» (${String(mas_guardadas[0].guardados_por_mil).replace('.', ',')} guardados por mil visitas).`)
+  }
+
+  return { mejores, peores, mas_guardadas, por_dia_semana: dias, retencion, conclusiones, proxima_semana }
+}
+
+/**
+ * El informe de un perfil con lo último sincronizado. No llama a Meta.
+ *
+ * @param {object} o
+ * @param {number} [o.limite] cuántas piezas como mucho, de la más reciente atrás
+ * @param {number} [o.dias]   solo las publicadas en los últimos N días
+ * @returns {Promise<{conectado:boolean, cuenta?:object, resumen?:object, estudio?:object, publicaciones:object[]}>}
+ */
+export async function informeIg(supabase, clientId, { limite = 60, dias } = {}) {
+  const cfg = (await getIgConfig(supabase, clientId))?.config || {}
+  if (!cfg.token) return { conectado: false, publicaciones: [] }
+  const cuenta = { usuario: cfg.username || null, seguidores: cfg.followers ?? null, sincronizado: cfg.lastSyncAt || null }
+
+  let q = supabase.from('helm_ig_media')
+    .select('permalink, caption, producto, tipo, thumb_url, publicado_en, visitas, alcance, likes, comentarios, guardados, compartidos, interacciones, retencion_media, visitas_perfil, seguidores_ganados')
+    .eq('client_id', clientId).order('publicado_en', { ascending: false })
+    .limit(Math.min(Math.max(Number(limite) || 60, 1), 200))
+  const d = Number(dias)
+  if (d > 0) q = q.gte('publicado_en', new Date(Date.now() - d * 86_400_000).toISOString())
+  const { data, error } = await q
+  if (error) throw error
+
+  const lista = (data || []).map(p => ({
+    url: p.permalink,
+    fecha: p.publicado_en ? p.publicado_en.slice(0, 10) : null,
+    dia_semana: p.publicado_en ? diaMadridDe(p.publicado_en) : null,
+    formato: p.producto === 'REELS' ? 'reel' : p.tipo === 'CAROUSEL_ALBUM' ? 'carrusel' : p.tipo === 'VIDEO' ? 'vídeo' : 'foto',
+    titulo: tituloDe(p.caption),
+    texto: p.caption,
+    visitas: p.visitas,
+    alcance: p.alcance,
+    likes: p.likes,
+    comentarios: p.comentarios,
+    guardados: p.guardados,
+    compartidos: p.compartidos,
+    interacciones: p.interacciones,
+    retencion_media_s: p.retencion_media == null ? null : Number(p.retencion_media),
+    visitas_perfil: p.visitas_perfil,
+    seguidores_ganados: p.seguidores_ganados,
+    guardados_por_mil: porMil(p.guardados, p.visitas),
+    compartidos_por_mil: porMil(p.compartidos, p.visitas),
+    interacciones_por_mil: porMil(p.interacciones, p.visitas),
+  }))
+  if (!lista.length) return { conectado: true, cuenta, publicaciones: [] }
+
+  const resumen = {
+    publicaciones: lista.length,
+    desde: lista.at(-1).fecha,
+    hasta: lista[0].fecha,
+    visitas_totales: lista.reduce((t, p) => t + p.visitas, 0),
+    mediana_visitas: mediana(lista.map(p => p.visitas)),
+    mediana_retencion_s: mediana(lista.map(p => p.retencion_media_s)),
+    mediana_guardados_por_mil: mediana(lista.map(p => p.guardados_por_mil)),
+    mediana_compartidos_por_mil: mediana(lista.map(p => p.compartidos_por_mil)),
+    mediana_interacciones_por_mil: mediana(lista.map(p => p.interacciones_por_mil)),
+  }
+  return { conectado: true, cuenta, resumen, estudio: estudioDe(lista, resumen.mediana_visitas), publicaciones: lista }
+}
+
 // Un token no se enseña entero jamás, ni al dueño de la cuenta: los pega en
 // sitios donde no debe (chats, capturas) y sirve para leer su Instagram.
 export const maskToken = (t) => {

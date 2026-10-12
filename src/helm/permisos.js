@@ -68,6 +68,7 @@ export const SECCIONES = [
   { key: 'contenido', label: 'Agentes', desc: 'Agentes de IA y creadores de referencia' },
   { key: 'roadmap', label: 'Roadmap', desc: 'Plan del negocio a seis meses, mes a mes y semana a semana' },
   { key: 'ads', label: 'Ads', desc: 'Anuncios y su test de 5 días por conversiones' },
+  { key: 'metricas', label: 'Informe de contenido', desc: 'Las métricas de Instagram del perfil y el estudio de qué funciona' },
   { key: 'llamadas', label: 'Llamadas', desc: 'Agenda de llamadas' },
   { key: 'enlaces', label: 'Enlaces', desc: 'URLs del negocio' },
   { key: 'plugins', label: 'Plugins', desc: 'Catálogo de módulos' },
@@ -210,6 +211,7 @@ export const SECCIONES_FIJAS = ['ajustes', 'secciones']
 //     infoproducto vería una sección con modelos del 303 que no abrirá jamás.
 //     Las noticias de IA y ciberseguridad son de quien hace contenido de eso,
 //     y encenderlas pone además a trabajar a su agente cada mañana.
+//     El informe de contenido solo dice algo con Instagram conectado.
 //   · MÓDULOS — lo que antes era el catálogo de "Plugins". Se fusionó aquí
 //     porque tener dos pantallas para lo mismo (qué usa este negocio) confundía,
 //     y porque los plugins se guardaban en el localStorage del navegador: quien
@@ -217,7 +219,7 @@ export const SECCIONES_FIJAS = ['ajustes', 'secciones']
 //     aparecían. Ahora van en la base, como el resto.
 //
 // Las normales se apagan si molestan; estas se encienden si hacen falta.
-export const SECCIONES_SECTOR = ['fiscal', 'noticias']
+export const SECCIONES_SECTOR = ['fiscal', 'noticias', 'metricas']
 export const SECCIONES_MODULO = ['tareas', 'actividad', 'biblioteca', 'formularios', 'prospeccion', 'equipos-ia']
 const OPT_IN = new Set([...SECCIONES_SECTOR, ...SECCIONES_MODULO])
 

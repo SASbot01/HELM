@@ -447,6 +447,8 @@ export const instagramApi = {
   unlink: (clientId) => apiFetch(`/api/instagram?action=unlink&clientId=${clientId}`, { method: 'DELETE' }),
   sync: (clientId, limite = 60) =>
     apiFetch('/api/instagram?action=sync', { method: 'POST', body: { clientId, limite } }),
+  informe: (clientId, dias) =>
+    apiFetch(`/api/instagram?action=informe&clientId=${clientId}${dias ? `&dias=${dias}` : ''}`),
 }
 
 // Google (Calendar + Drive) por perfil. El refresh token se queda en el

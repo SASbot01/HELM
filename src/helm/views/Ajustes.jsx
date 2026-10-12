@@ -1607,8 +1607,7 @@ export default function Ajustes({ clientId, client, onClientUpdate }) {
       {tab === 'integraciones' ? (
         <div className="helm-grid" style={{ gap: 20 }}>
           <GoogleCard clientId={clientId} />
-          {/* Instagram se deja para más adelante: la tarjeta (InstagramCard) está
-              escrita y probada de aspecto, pero no se enseña todavía. */}
+          <InstagramCard clientId={clientId} />
           <CalendlyCard clientId={clientId} />
           <TelegramCard clientId={clientId} />
           <DriveCard clientId={clientId} />

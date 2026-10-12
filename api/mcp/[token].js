@@ -21,6 +21,8 @@ import { rateLimit, getClientIp } from '../_lib/auth.js'
 import { anadeReels, hashUrl } from '../agents.js'
 import { calendario, ordenar, TIPOS, FASES } from '../_lib/ingesta.js'
 import { archivo as archivoDrive } from '../_lib/drive-helm.js'
+import { sincronizar as sincronizarIg } from '../instagram.js'
+import { informeIg } from '../_lib/instagram.js'
 
 const VERSIONES = ['2025-06-18', '2025-03-26', '2024-11-05']
 
@@ -162,6 +164,20 @@ const TOOLS = [
         tipo: { type: 'string', enum: Object.keys(TIPOS) },
       },
       required: ['perfil', 'video_id'],
+    },
+  },
+  {
+    name: 'metricas',
+    description: 'Las métricas reales de Instagram de un perfil de HELM: cada publicación suya con sus visitas, alcance, likes, comentarios, guardados, compartidos, retención media (reels) y seguidores ganados, más un resumen de la cuenta (medianas) y un estudio ya calculado: las más y menos vistas, las más guardadas, la mediana por día de la semana, si las más vistas retienen más, conclusiones y propuestas para la próxima semana. Úsalo para estudiar qué funciona en la cuenta: cruza el texto y la fecha de cada pieza con "calendario" y con el "corpus" para ver qué ganchos, temas y formatos rinden, y guarda las conclusiones con "guardar_memoria". Los datos son los de la última sincronización (viene la fecha); con actualizar=true se vuelven a traer de Instagram antes de responder, que tarda unos segundos.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        perfil: { type: 'string', description: 'Slug o nombre del perfil, p. ej. "detras-de-camra".' },
+        limite: { type: 'number', description: 'Cuántas publicaciones, de la más reciente hacia atrás. Por defecto 60, máximo 200.' },
+        dias: { type: 'number', description: 'Solo las publicadas en los últimos N días, p. ej. 15.' },
+        actualizar: { type: 'boolean', description: 'true para sincronizar con Instagram antes de leer.' },
+      },
+      required: ['perfil'],
     },
   },
   {
@@ -470,6 +486,28 @@ const HERRAMIENTAS = {
     return { video: v.nombre, movido_a: r.destino }
   },
 
+  async metricas({ perfil, limite, dias, actualizar }) {
+    const c = await perfilDe(perfil)
+    // Si la sincronización falla (cuota de Meta, token caducado) se responde
+    // con lo último guardado y se dice: un análisis con datos de ayer vale más
+    // que ninguno.
+    let aviso = null
+    if (actualizar) {
+      try {
+        await sincronizarIg(c.id, 60)
+      } catch (e) {
+        aviso = `No se ha podido sincronizar con Instagram (${String(e?.message || e).slice(0, 160)}). Van los datos de la última vez.`
+      }
+    }
+    const inf = await informeIg(supabase, c.id, { limite, dias })
+    if (!inf.conectado) throw new Error(`${c.name} no tiene Instagram conectado. Se conecta en HELM → Ajustes → Integraciones → Instagram.`)
+    if (!inf.publicaciones.length) {
+      aviso ||= dias ? `No hay publicaciones en los últimos ${dias} días.` : 'Todavía no hay métricas guardadas. Vuelve a llamar con actualizar=true.'
+    }
+    const { conectado: _c, ...resto } = inf
+    return { perfil: c.slug, ...(aviso ? { aviso } : {}), ...resto }
+  },
+
   async guardar_memoria({ contenido, identidad }) {
     const texto = String(contenido || '').trim()
     if (!texto) throw new Error('La nota está vacía')
@@ -507,7 +545,7 @@ async function alcanceDe(dado) {
 // Leer y usar SU parte: sus creadores, su calendario, sus vídeos. Lo que toca
 // el corpus de todos (añadir reels, reetiquetar, asignar creadores) es del
 // operador y ni siquiera aparece.
-const DEL_CLIENTE = ['identidades', 'perfiles', 'corpus', 'calendario', 'programar_guiones', 'ordenar_video', 'guardar_memoria']
+const DEL_CLIENTE = ['identidades', 'perfiles', 'corpus', 'calendario', 'programar_guiones', 'ordenar_video', 'metricas', 'guardar_memoria']
 
 async function asignadosDe(clientId) {
   const { data, error } = await supabase.from('agent_identity_clients')
@@ -563,8 +601,8 @@ async function responde(msg, alcance) {
         capabilities: { tools: {} },
         serverInfo: { name: 'helm-agent-os', version: '1.0.0' },
         instructions: alcance.operador
-          ? 'Corpus de reels de referencia del Agent OS de HELM. Para analizar a un creador o escribir guiones con su estilo: "identidades" y luego "corpus" de esa identidad. Para escribir para una marca de HELM: "perfiles" y luego "corpus" con ese perfil. Los guiones se guardan con "programar_guiones" (con su tipo) y se consultan con "calendario"; al grabarlos y subirlos a "0 · Entrada" de su Drive, HELM los mueve solos a su carpeta. Las conclusiones que merezca la pena conservar, con "guardar_memoria". El etiquetado del "modelo local" es poco fiable: al analizar, corrige con "etiquetar_reels" las etiquetas que no encajen con el guion. Si piden un guion "en B-roll" o de un formato de montaje concreto, sigue la guía de formatos que viene en memoria_global.'
-          : `Conector de contenido de ${alcance.nombre} en HELM (perfil "${alcance.slug}"). Sus creadores de referencia y su propio historial están en "corpus"; su calendario de guiones, en "calendario". Para escribir guiones: lee "corpus" (la memoria_global trae la guía de formatos de montaje, como el B-roll), escribe con la voz del creador "Propio" sin repetir temas que ya haya tratado, y guárdalos con "programar_guiones" (con su tipo). Al grabarlos y subirlos a "0 · Entrada" de su Drive, HELM los ordena solos.`,
+          ? 'Corpus de reels de referencia del Agent OS de HELM. Para analizar a un creador o escribir guiones con su estilo: "identidades" y luego "corpus" de esa identidad. Para escribir para una marca de HELM: "perfiles" y luego "corpus" con ese perfil. Los guiones se guardan con "programar_guiones" (con su tipo) y se consultan con "calendario"; al grabarlos y subirlos a "0 · Entrada" de su Drive, HELM los mueve solos a su carpeta. Para estudiar qué le funciona a un perfil en su propia cuenta de Instagram: "metricas". Las conclusiones que merezca la pena conservar, con "guardar_memoria". El etiquetado del "modelo local" es poco fiable: al analizar, corrige con "etiquetar_reels" las etiquetas que no encajen con el guion. Si piden un guion "en B-roll" o de un formato de montaje concreto, sigue la guía de formatos que viene en memoria_global.'
+          : `Conector de contenido de ${alcance.nombre} en HELM (perfil "${alcance.slug}"). Sus creadores de referencia y su propio historial están en "corpus"; su calendario de guiones, en "calendario". Las visitas, guardados y retención de lo que ya ha publicado, en "metricas". Para escribir guiones: lee "corpus" (la memoria_global trae la guía de formatos de montaje, como el B-roll), escribe con la voz del creador "Propio" sin repetir temas que ya haya tratado, y guárdalos con "programar_guiones" (con su tipo). Al grabarlos y subirlos a "0 · Entrada" de su Drive, HELM los ordena solos.`,
       })
     }
     case 'ping':

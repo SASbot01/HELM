@@ -16,6 +16,7 @@
 //   GET    /api/instagram/callback?code=&state=     → vuelta de Meta (pública;
 //                                                     ruta propia porque Meta no
 //                                                     admite `?` en el redirect)
+//   GET    ?action=informe  &clientId=&dias=        → métricas guardadas y su estudio
 //   POST   ?action=link     { clientId, token }     → token de larga duración a mano
 //   POST   ?action=sync     { clientId, limite }    → refresca perfil y métricas
 //   DELETE ?action=unlink   &clientId=
@@ -24,7 +25,7 @@ import { applyCors, rateLimit, getClientIp, writeAudit, signJwt, verifyJwt } fro
 import { requireProfileAccess } from './_lib/access.js'
 import {
   igAuthUrl, igRedirectUri, igCredsMissing, exchangeCode, exchangeLongLived,
-  getPerfil, listMedia, getInsights, getIgConfig, saveIgConfig, getToken, maskToken,
+  getPerfil, listMedia, getInsights, getIgConfig, saveIgConfig, getToken, maskToken, informeIg,
 } from './_lib/instagram.js'
 
 const TABLA = 'helm_ig_media'
@@ -215,6 +216,12 @@ export default async function handler(req, res) {
         expiresAt: cfg.expiresAt || null,
         lastSyncAt: cfg.lastSyncAt || null,
       })
+    }
+
+    // ── GET ?action=informe ────────────────────────────────────────────────
+    // Lee de la tabla, no de Meta: abrir la sección no gasta cuota.
+    if (req.method === 'GET' && action === 'informe') {
+      return res.status(200).json(await informeIg(supabase, clientId, { dias: req.query.dias, limite: 200 }))
     }
 
     // ── GET ?action=auth-url ───────────────────────────────────────────────
