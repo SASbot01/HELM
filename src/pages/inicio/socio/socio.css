@@ -769,3 +769,18 @@ body { margin: 0; }
 /* Oferta: una sola tarjeta centrada (fuera el gráfico falso) */
 .so-oferta { display: flex; justify-content: center; }
 .so-oferta-card { max-width: 440px; width: 100%; }
+
+/* Fuera el display condensado en MAYÚSCULAS de los bloques grandes: tech limpio */
+.so-remate, .so-garantia p {
+  font-family: var(--cuerpo) !important; font-weight: 700 !important;
+  text-transform: none !important; letter-spacing: -.02em !important; line-height: 1.12 !important;
+}
+.so-form-q {
+  font-family: var(--cuerpo) !important; font-weight: 700 !important;
+  text-transform: none !important; font-size: 22px !important; letter-spacing: -.01em !important;
+}
+.so-agente b {
+  font-family: var(--cuerpo) !important; font-weight: 700 !important;
+  text-transform: none !important; letter-spacing: -.01em !important;
+}
+.so-oferta-fila > b, .so-oferta-pct b { font-family: var(--cuerpo) !important; letter-spacing: -.02em !important; }
