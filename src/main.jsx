@@ -41,7 +41,7 @@ const SocioIA = perezoso(() => import('./pages/inicio/socio/SocioIA.jsx'))
 const Gracias = perezoso(() => import('./pages/inicio/socio/Gracias.jsx'))
 const Legal = perezoso(() => import('./pages/inicio/socio/Legal.jsx'))
 const AgentOS = perezoso(() => import('./agents/AgentOS.jsx'))
-const WebHelm = perezoso(() => import('./pages/helm/Web.jsx'))
+const WebHelm = perezoso(() => import('./pages/web/Web.jsx'))
 const Plataforma = perezoso(() => import('./helm/Plataforma.jsx'))
 // El tema de HELM va después de theme.css (que carga HelmApp) para mandar sobre él.
 import './helm/tema.css'
