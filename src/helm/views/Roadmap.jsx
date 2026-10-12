@@ -429,6 +429,10 @@ export default function Roadmap({ client, clientId }) {
                         {g.title}
                       </button>
                     ))}
+                    <button type="button" className="rm-dia-pdf" title="Descargar el PDF de este día"
+                      onClick={() => descargarPDFGuiones(gs, { perfil: client?.name, desde: f, hasta: f })}>
+                      <Download size={11} /> PDF del día
+                    </button>
                   </div>
                 )}
                 <div className="rm-dia-reels">
