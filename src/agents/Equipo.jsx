@@ -14,9 +14,8 @@ import { Play, ChevronRight, Check, X, Trash2, ArrowRight, Radio } from 'lucide-
 import { agentsApi } from './api'
 import { nf } from './ganchos'
 
-// La oficina 3D carga aparte (Three.js es pesado): así no entra en el bundle
-// principal y el resto del panel aparece al momento.
-const Office3D = lazy(() => import('./Office3D'))
+// La oficina (pixel-art, vista cenital) carga aparte para no pesar en el arranque.
+const Office2D = lazy(() => import('./Office2D'))
 
 const AGENTES = {
   director:     { nombre: 'Director',     hace: 'A las 6:00 mira el calendario, la agenda, las tareas y la memoria, deja el plan del día y reparte el trabajo.' },
@@ -197,7 +196,7 @@ export default function Equipo({ clientId: fijo }) {
             </div>
           </div>
           <Suspense fallback={<div className="eq-escena-carga">Montando la oficina…</div>}>
-            <Office3D estados={estadosOffice} onSelect={setAgenteSel} />
+            <Office2D estados={estadosOffice} onSelect={setAgenteSel} />
           </Suspense>
           <p className="eq-escena-pie">Arrastra para girar · pincha un agente para ver sus normas y tareas · lo manual se lanza por el MCP</p>
         </div>
