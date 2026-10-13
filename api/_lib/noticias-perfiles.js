@@ -211,7 +211,7 @@ export const DIARIOS = [
     // Una pieza al día: cada una gasta de 0,4 a 0,9 millones de tokens.
     perfil: 'detras-de-camra',
     nombre: 'Filmmaking para todo',
-    web: 'https://s4sf.net/filmmakingparatodo/news',
+    web: 'https://detrasdecamara.org/filmmakingparatodo/news',
     ediciones: [{ clave: 'manana', nombre: 'Edición de mañana', desde: 9 * 60 }],
     temas: TEMAS_FILMMAKING,
     fuentes: FUENTES_FILMMAKING,
@@ -221,3 +221,10 @@ export const DIARIOS = [
 
 /** El diario del perfil con ese slug, o null si no tiene. */
 export const diarioDe = (slug) => DIARIOS.find(d => d.perfil === slug) || null
+
+// El diario largo (Opus, una pieza al día) solo corre en los perfiles que dice
+// HELM_DIARIOS (por defecto, AI para todo). Encender Noticias en un perfil le
+// da sus breves; el diario, que gasta cientos de miles de tokens al día de la
+// clave de los agentes, se enciende a propósito: HELM_DIARIOS=silvestre,detras-de-camra.
+export const diarioActivo = (slug) =>
+  String(process.env.HELM_DIARIOS || 'silvestre').split(',').map(s => s.trim()).filter(Boolean).includes(slug)

@@ -85,13 +85,6 @@
 .aip.ddc .aip-foto-propia.equipo { background: radial-gradient(circle at 30% 20%, rgba(74, 155, 217, .22), transparent 55%), linear-gradient(135deg, #12202e, #0A0A0D); }
 .aip.ddc .aip-foto-propia.filmmaking { background: radial-gradient(circle at 30% 20%, rgba(245, 246, 247, .14), transparent 55%), linear-gradient(135deg, #1F2128, #0A0A0D); }
 
-/* Un archivo para descargar dentro de un recurso. */
-.aip-descarga-bloque { display: grid; grid-template-columns: 22px 1fr auto; gap: 12px; align-items: center; margin: 6px 0 20px; padding: 16px 18px; border-radius: 14px; border: 1px solid var(--linea-2); background: var(--panel); }
-.aip-descarga-bloque > svg { color: var(--rosa); }
-.aip-descarga-bloque b { display: block; font-size: 15.5px; }
-.aip-descarga-bloque p { margin: 4px 0 0; font-size: 14.5px; line-height: 1.5; color: var(--papel-2); }
-@media (max-width: 520px) { .aip-descarga-bloque { grid-template-columns: 22px 1fr; } .aip-descarga-bloque > :last-child { grid-column: 2; justify-self: start; } }
-
 /* ── El fondo: lenguaje de cine ──────────────────────────────────────────────
    Grano de película, las esquinas del visor, las guías de 2.39:1 y la
    marca de grabación. Quieto y tenue: es un fondo, no un adorno. */

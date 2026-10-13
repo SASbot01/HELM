@@ -37,7 +37,7 @@ export const COMUNIDADES = {
   filmmakingparatodo: {
     perfil: 'detras-de-camra',
     nombre: 'Filmmaking para todo',
-    web: 'https://s4sf.net/filmmakingparatodo',
+    web: 'https://detrasdecamara.org/filmmakingparatodo',
     // TODO-ABEL: tramos propuestos; confirmar con Abel.
     ingresos: {
       menos_500: 'Menos de 500 €/mes',

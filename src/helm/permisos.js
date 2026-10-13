@@ -64,7 +64,7 @@ export const SECCIONES = [
   { key: 'diario', label: 'Diario', desc: 'Reportes diarios' },
   { key: 'finanzas', label: 'Finanzas', desc: 'Ingresos, gastos y comisiones' },
   { key: 'dia', label: 'Mi día', desc: 'Rituales diarios con la IA' },
-  { key: 'noticias', label: 'Noticias', desc: 'Las tres noticias del día de IA y ciberseguridad, cada mañana a las 6:00' },
+  { key: 'noticias', label: 'Noticias', desc: 'Las tres noticias del día de los temas del perfil, cada mañana a las 6:00' },
   { key: 'contenido', label: 'Agentes', desc: 'Agentes de IA y creadores de referencia' },
   { key: 'roadmap', label: 'Roadmap', desc: 'Plan del negocio a seis meses, mes a mes y semana a semana' },
   { key: 'ads', label: 'Ads', desc: 'Anuncios y su test de 5 días por conversiones' },

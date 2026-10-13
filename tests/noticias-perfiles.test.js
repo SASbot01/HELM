@@ -91,3 +91,19 @@ describe('cada perfil, con sus temas', () => {
     expect(args.messages[0].content).toContain('(ciberseguridad · BleepingComputer ·')
   })
 })
+
+describe('qué diarios largos corren', () => {
+  it('por defecto solo el de AI para todo; el resto, solo si se dice en HELM_DIARIOS', async () => {
+    const { diarioActivo } = await import('../api/_lib/noticias-perfiles.js')
+    const antes = process.env.HELM_DIARIOS
+    delete process.env.HELM_DIARIOS
+    expect(diarioActivo('silvestre')).toBe(true)
+    expect(diarioActivo('detras-de-camra')).toBe(false)
+    process.env.HELM_DIARIOS = 'silvestre, detras-de-camra'
+    expect(diarioActivo('detras-de-camra')).toBe(true)
+    process.env.HELM_DIARIOS = 'detras-de-camra'
+    expect(diarioActivo('silvestre')).toBe(false)
+    if (antes === undefined) delete process.env.HELM_DIARIOS
+    else process.env.HELM_DIARIOS = antes
+  })
+})

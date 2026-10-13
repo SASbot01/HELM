@@ -306,8 +306,27 @@ function comunidadDe(b) {
   return c
 }
 
+// La nota del alta la pone la propia página (por dónde entró, qué leyó, qué
+// guía pidió). Lo que no tenga esa forma no entra: esas notas las leen el
+// equipo y los agentes, y no son sitio para texto libre de internet.
+const NOTA_DE_ALTA = /^(entró por [a-z0-9-]+\/[a-z0-9-]+|leyó news\/[a-z0-9-]+|pidió la guía( [^\n]{1,60})?)$/
+
+// Un tope de altas por hora y comunidad, además del de cada IP: frena que
+// alguien rotando IPs llene el CRM de un cliente. En memoria, por proceso.
+const ALTAS_POR_HORA = Number(process.env.HELM_ALTAS_COMUNIDAD_HORA || 200)
+const altasRecientes = new Map()   // clave de la comunidad → [instantes]
+function cuentaAlta(clave) {
+  const ahoraMs = Date.now()
+  const lista = (altasRecientes.get(clave) || []).filter(t => ahoraMs - t < 3_600_000)
+  if (lista.length >= ALTAS_POR_HORA) throw fallo(429, 'Ahora mismo hay muchas altas. Prueba en un rato.')
+  lista.push(ahoraMs)
+  altasRecientes.set(clave, lista)
+}
+
 async function miembro(b) {
   const c = comunidadDe(b)
+  // El campo trampa: oculto en la página, solo lo rellena un bot.
+  if (txt(b.website, 200)) throw fallo(400, 'No se ha podido enviar')
   const correo = correoDe(b.email)
   const ingresos = txt(b.ingresos, 40)
   if (!Object.hasOwn(c.ingresos, ingresos)) throw fallo(400, 'Elige tus ingresos')
@@ -320,10 +339,14 @@ async function miembro(b) {
   const pipeline = await embudo(clientId, nombreEmbudo)
   const etapa = pipeline.etapas.find(s => s.key === ETAPA_ENTRADA)?.key || pipeline.etapas[0]?.key || ETAPA_ENTRADA
 
+  cuentaAlta(c.clave)
   const o = origenDe(b.origen)
-  const nota = txt(b.nota, 120)
-  const datos = { profesion: oficio, ingresos, entrada: nota, enviado: ahora() }
-  const linea = `${c.nombre} · ${nota} · profesión: ${oficio || '—'} · ingresos: ${c.ingresos[ingresos]}`
+  const nota = NOTA_DE_ALTA.test(txt(b.nota, 120)) ? txt(b.nota, 120) : ''
+  // Las UTM de ESTA entrada quedan también aquí: si la persona ya estaba en el
+  // CRM, sus columnas de UTM no se tocan (son las de su primera llegada).
+  const utm = Object.fromEntries(['utm_source', 'utm_medium', 'utm_campaign', 'utm_content'].filter(k => o[k]).map(k => [k, o[k]]))
+  const datos = { profesion: oficio, ingresos, entrada: nota, enviado: ahora(), ...(Object.keys(utm).length ? { utm } : {}) }
+  const linea = [c.nombre, nota, `profesión: ${oficio || '—'}`, `ingresos: ${c.ingresos[ingresos]}`].filter(Boolean).join(' · ')
 
   const fila = {
     client_id: clientId,
@@ -342,11 +365,21 @@ async function miembro(b) {
     updated_at: ahora(),
   }
 
-  const previo = await buscar(clientId, correo, 'id, notes, custom_fields')
+  const previo = await buscar(clientId, correo, 'id, name, notes, custom_fields, utm_source, utm_medium, utm_campaign, utm_content')
   if (previo) {
-    const { pipeline_id: _e, status: _s, source: _src, ...cambios } = fila
-    cambios.notes = sumaNota(previo.notes, linea)
-    cambios.custom_fields = { ...(previo.custom_fields || {}), [c.clave]: datos }
+    // Quien ya estaba (un lead del lanzamiento, un formulario…) no pierde nada:
+    // como en formularios.js, solo se rellenan los huecos. Su nombre y sus UTM
+    // son los de su primera llegada, y de esas UTM cuelga la atribución de los
+    // anuncios (api/_lib/ads.js).
+    const cambios = {
+      notes: sumaNota(previo.notes, linea),
+      custom_fields: { ...(previo.custom_fields || {}), [c.clave]: datos },
+      last_activity_at: ahora(), updated_at: ahora(),
+    }
+    if (!previo.name) cambios.name = fila.name
+    for (const k of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content']) {
+      if (!previo[k] && fila[k]) cambios[k] = fila[k]
+    }
     await actualizar(previo.id, cambios)
     return { id: await ficha(clientId, previo.id) }
   }

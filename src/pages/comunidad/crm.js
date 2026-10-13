@@ -17,12 +17,12 @@ import { origen } from '../inicio/socio/origen.js'
  * el correo ya existe en el perfil, el servidor lo actualiza sin cambiarle de
  * embudo ni de etapa.
  */
-export async function altaMiembro(cfg, { nombre, email, profesion, ingresos, pipeline, nota }) {
+export async function altaMiembro(cfg, { nombre, email, profesion, ingresos, pipeline, nota, website = '' }) {
   const correo = String(email || '').trim().toLowerCase()
   if (!correo) throw new Error('Falta el correo')
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) throw new Error('Revisa el correo')
   if (!cfg.puerta.datos.ingresos[ingresos]) throw new Error('Elige tus ingresos')
-  return pideLead('miembro', { comunidad: cfg.clave, nombre, email: correo, profesion, ingresos, pipeline, nota, origen: origen() }, cfg.apiBase)
+  return pideLead('miembro', { comunidad: cfg.clave, nombre, email: correo, profesion, ingresos, pipeline, nota, website, origen: origen() }, cfg.apiBase)
 }
 
 /**

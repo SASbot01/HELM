@@ -10,7 +10,9 @@
 //     y después el muro, con el correo ya puesto en Stripe.
 //
 // El acceso se guarda en el navegador con la llave de cada comunidad
-// (cfg.llave): pagar o dejar los datos en una no abre la otra.
+// (cfg.llave): pagar o dejar los datos en una no abre la otra. Solo lo que hace
+// falta: la ficha, el nombre para saludar y, si hay muro, el correo para
+// rellenarlo en Stripe. Ni la profesión ni los ingresos se quedan ahí.
 import { useState } from 'react'
 import { ArrowRight, Lock } from 'lucide-react'
 import { track } from '../inicio/socio/track.js'
@@ -71,7 +73,7 @@ function Muro({ titulo, correo }) {
 function Datos({ listo, pipeline, nota, titulo, texto, boton }) {
   const cfg = useComunidad()
   const d = cfg.puerta.datos
-  const [f, setF] = useState({ nombre: '', email: '', profesion: '', ingresos: '' })
+  const [f, setF] = useState({ nombre: '', email: '', profesion: '', ingresos: '', website: '' })
   const [estado, setEstado] = useState(null)
   const [error, setError] = useState(null)
   const pon = (campo) => (e) => setF(s => ({ ...s, [campo]: e.target.value }))
@@ -84,12 +86,11 @@ function Datos({ listo, pipeline, nota, titulo, texto, boton }) {
     setEstado('enviando'); setError(null)
     try {
       const nombre = f.nombre.trim(), email = f.email.trim(), profesion = f.profesion.trim()
-      const lead = await altaMiembro(cfg, { nombre, email, profesion, ingresos: f.ingresos, pipeline, nota })
-      track('lead', { donde: cfg.clave, embudo: pipeline, ingresos: f.ingresos })
-      listo({
-        id: lead?.id || null, nombre, email, profesion: d.profesiones?.[profesion] || profesion,
-        ingresos: f.ingresos, at: new Date().toISOString(),
-      })
+      const lead = await altaMiembro(cfg, { nombre, email, profesion, ingresos: f.ingresos, pipeline, nota, website: f.website })
+      // A las analíticas (y al píxel, en la versión suelta) solo va que hubo un
+      // alta y por dónde: nunca los datos de la persona.
+      track('lead', { donde: cfg.clave, embudo: pipeline })
+      listo({ id: lead?.id || null, nombre, ...(cfg.cobro ? { email } : {}), at: new Date().toISOString() })
     } catch (err) {
       setError(err.message); setEstado(null)
     }
@@ -103,6 +104,8 @@ function Datos({ listo, pipeline, nota, titulo, texto, boton }) {
       <div className="aip-campos cuatro">
         <input aria-label="Nombre" placeholder="Tu nombre" required value={f.nombre} maxLength={80} autoComplete="given-name" onChange={pon('nombre')} />
         <input aria-label="Correo" type="email" placeholder="Tu correo" required value={f.email} maxLength={160} autoComplete="email" inputMode="email" onChange={pon('email')} />
+        {/* La trampa: fuera de la vista y del teclado; solo la rellena un bot. */}
+        <input className="aip-trampa" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" value={f.website} onChange={pon('website')} />
         {profesiones ? (
           <fieldset className="aip-ingresos">
             <legend>A qué te dedicas</legend>

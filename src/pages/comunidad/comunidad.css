@@ -523,3 +523,15 @@ a.aip-hilo:hover .aip-candado { color: var(--rosa); }
 .aip-portada .aip-zona.operaciones { grid-column: span 2; }
 @media (max-width: 980px) { .aip-portada .aip-zonas { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 560px) { .aip-portada .aip-zonas { grid-template-columns: 1fr; } .aip-portada .aip-zona.operaciones { grid-column: auto; } }
+
+/* Un archivo para descargar dentro de un recurso (bloque «descarga» del motor
+   común, bloques.jsx): vale para cualquier comunidad. */
+.aip-descarga-bloque { display: grid; grid-template-columns: 22px 1fr auto; gap: 12px; align-items: center; margin: 6px 0 20px; padding: 16px 18px; border-radius: 14px; border: 1px solid var(--linea-2); background: var(--panel); }
+.aip-descarga-bloque > svg { color: var(--rosa); }
+.aip-descarga-bloque b { display: block; font-size: 15.5px; }
+.aip-descarga-bloque p { margin: 4px 0 0; font-size: 14.5px; line-height: 1.5; color: var(--papel-2); }
+@media (max-width: 520px) { .aip-descarga-bloque { grid-template-columns: 22px 1fr; } .aip-descarga-bloque > :last-child { grid-column: 2; justify-self: start; } }
+
+/* El campo trampa de la puerta de datos (Puerta.jsx): fuera de la vista, del
+   lector de pantalla y del tabulador. */
+.aip-trampa { position: absolute !important; left: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
