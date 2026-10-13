@@ -31,6 +31,7 @@ import {
 } from './datos.js'
 import { IndiceCapitulo, CuerpoCapitulo } from './bloques.jsx'
 import Puerta from './Puerta.jsx'
+import { IndicePdf, CuerpoPdf } from './GuiaPdf.jsx'
 import '../../fonts/inter-tight.css'
 import '../../fonts/jetbrains-mono.css'
 import './comunidad.css'
@@ -254,8 +255,9 @@ function Hilo({ acceso, setAcceso }) {
   const titular = post ? post.gancho : texto ? texto.gancho : pdf ? pdf.gancho : h.titulo
   const sub = post ? post.resumen : capitulo ? capitulo.resumen : texto ? texto.resumen : pdf ? pdf.hilo.resumen : null
   const CuerpoPost = cfg.posts?.Cuerpo
-  const PdfIndice = pdf?.Indice
-  const PdfCuerpo = pdf?.Cuerpo
+  // Una guía en PDF sin piezas propias usa las genéricas (GuiaPdf.jsx).
+  const PdfIndice = pdf ? pdf.Indice || IndicePdf : null
+  const PdfCuerpo = pdf ? pdf.Cuerpo || CuerpoPdf : null
   const { TrasHilo } = cfg
 
   return (
@@ -278,13 +280,13 @@ function Hilo({ acceso, setAcceso }) {
 
       {/* Lo que se ve antes de entrar: el índice, para saber qué hay dentro. */}
       {!acceso && texto && <IndiceCapitulo c={texto} />}
-      {!acceso && PdfIndice && <PdfIndice />}
+      {!acceso && PdfIndice && <PdfIndice pdf={pdf} />}
 
       {!acceso ? puerta
         : post ? <CuerpoPost p={post} />
           : texto ? <CuerpoCapitulo c={texto} />
             : noticia ? <CuerpoNoticia n={noticia} />
-              : PdfCuerpo ? <PdfCuerpo acceso={acceso} />
+              : PdfCuerpo ? <PdfCuerpo acceso={acceso} pdf={pdf} />
                 : (
                   <section className="aip-card aip-pronto-card">
                     <p>Este {sk === 'guia' ? 'capítulo' : 'hilo'} se publica pronto. Te avisamos al correo que dejaste.</p>

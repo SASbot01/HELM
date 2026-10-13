@@ -1,6 +1,6 @@
 import { StrictMode, Suspense, lazy, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 import { ThemeProvider } from './contexts/ThemeContext.jsx'
 import SuperAdminLogin from './pages/admin/SuperAdminLogin.jsx'
 import Registro from './pages/Registro.jsx'
@@ -30,6 +30,7 @@ const perezoso = (cargar) => lazy(() => cargar().catch((e) => {
   throw e
 }))
 const AIParaTodo = perezoso(() => import('./pages/aiparatodo/AIParaTodo.jsx'))
+const FilmmakingParaTodo = perezoso(() => import('./pages/filmmakingparatodo/FilmmakingParaTodo.jsx'))
 const FormularioPublico = perezoso(() => import('./pages/FormularioPublico.jsx'))
 const PrimerMapa = perezoso(() => import('./pages/PrimerMapa.jsx'))
 const SilvestreValor = perezoso(() => import('./pages/SilvestreValor.jsx'))
@@ -80,6 +81,14 @@ function SoloEnElPanel({ children }) {
 
 // /nonegociables: la guía en PDF, que vive en AI para todo. Se conservan las
 // UTM del enlace para que el alta sepa de qué Reel vino.
+// /filmakingparatodo (como se escribió al pedirla) y /detrasdecamara llevan a
+// Filmmaking para todo, con lo que haya detrás de la ruta y la query (UTM).
+function AFilmmakingParaTodo() {
+  const { '*': resto = '' } = useParams()
+  const { search, hash } = useLocation()
+  return <Navigate to={`/filmmakingparatodo${resto ? `/${resto}` : ''}${search}${hash}`} replace />
+}
+
 function NoNegociables() {
   const { search } = useLocation()
   origen()   // guarda las UTM antes de redirigir (ver src/pages/inicio/socio/origen.js)
@@ -165,6 +174,11 @@ createRoot(document.getElementById('root')).render(
           <Route path="/empresas" element={<SocioIA />} />
           {/* AI para todo: la comunidad gratis de la bio, con sus rutas dentro. */}
           <Route path="/aiparatodo/*" element={<AIParaTodo />} />
+          {/* Filmmaking para todo: la comunidad de Detrás de Cámara (Abel), con
+              el mismo motor que AI para todo. */}
+          <Route path="/filmmakingparatodo/*" element={<FilmmakingParaTodo />} />
+          <Route path="/filmakingparatodo/*" element={<AFilmmakingParaTodo />} />
+          <Route path="/detrasdecamara/*" element={<AFilmmakingParaTodo />} />
           {/* La guía en PDF de los no negociables: pública, sin sesión, y con
               el alta en el CRM (embudo «Lead magnet»). Vive dentro de AI para
               todo; esto es el enlace corto. */}
