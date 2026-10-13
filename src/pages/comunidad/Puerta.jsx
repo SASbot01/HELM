@@ -1,0 +1,136 @@
+// Las comunidades — la puerta de un hilo. Cada comunidad elige con su
+// configuración qué pide para leer:
+//
+//   · solo datos (cfg.puerta.datos, sin cfg.cobro) — nombre, correo,
+//     profesión e ingresos, una vez; entran en el CRM de su perfil y se abre
+//     todo. Es la de Filmmaking para todo mientras sea gratis.
+//   · solo pago (cfg.cobro, sin datos) — el muro del Payment Link de Stripe,
+//     que vuelve con ?pago=ok. Es la de AI para todo.
+//   · las dos — primero los datos (el alta en el CRM no depende de que pague)
+//     y después el muro, con el correo ya puesto en Stripe.
+//
+// El acceso se guarda en el navegador con la llave de cada comunidad
+// (cfg.llave): pagar o dejar los datos en una no abre la otra.
+import { useState } from 'react'
+import { ArrowRight, Lock } from 'lucide-react'
+import { track } from '../inicio/socio/track.js'
+import { accesoGuardado, useComunidad } from './datos.js'
+import { altaMiembro } from './crm.js'
+
+export default function Puerta({ setAcceso, pipeline, nota, titulo, texto, boton }) {
+  const cfg = useComunidad()
+  const [lead, setLead] = useState(() => (cfg.cobro && cfg.puerta?.datos ? accesoGuardado(`${cfg.llave}.datos`) : null))
+  if (!cfg.puerta?.datos) return <Muro titulo={titulo} />
+  if (!cfg.cobro) {
+    return (
+      <Datos
+        pipeline={pipeline} nota={nota} titulo={titulo} texto={texto} boton={boton}
+        listo={(acc) => {
+          try { localStorage.setItem(cfg.llave, JSON.stringify(acc)) } catch { /* modo incógnito */ }
+          setAcceso(acc)
+        }}
+      />
+    )
+  }
+  if (lead) return <Muro titulo={titulo} correo={lead.email} />
+  return (
+    <Datos
+      pipeline={pipeline} nota={nota} titulo={titulo} texto={texto} boton={boton}
+      listo={(acc) => {
+        try { localStorage.setItem(`${cfg.llave}.datos`, JSON.stringify(acc)) } catch { /* modo incógnito */ }
+        setLead(acc)
+      }}
+    />
+  )
+}
+
+// ── El muro de pago ─────────────────────────────────────────────────────────
+function Muro({ titulo, correo }) {
+  const { cobro, privacidad } = useComunidad()
+  const enlace = correo ? `${cobro.link}?prefilled_email=${encodeURIComponent(correo)}` : cobro.link
+  return (
+    <div className="aip-card aip-puerta aip-muro">
+      <p className="aip-kicker"><Lock size={13} /> contenido para miembros</p>
+      <h2>{titulo || cobro.titulo}</h2>
+      <p>{cobro.incluye}</p>
+      <div className="aip-precio">
+        <span className="aip-precio-ahora">{cobro.precio.ahora}<small>{cobro.precio.periodo}</small></span>
+        {cobro.precio.antes && <span className="aip-precio-antes">{cobro.precio.antes}</span>}
+        {cobro.precio.nota && <span className="aip-precio-vida">{cobro.precio.nota}</span>}
+      </div>
+      {cobro.urgencia && <p className="aip-urgencia">{cobro.urgencia}</p>}
+      <a className="aip-btn grande" href={enlace}>{`${cobro.boton} `}<ArrowRight size={18} /></a>
+      <p className="aip-legal">{`${cobro.legal} `}<a href={privacidad}>Privacidad</a></p>
+    </div>
+  )
+}
+
+// ── Los cuatro datos ────────────────────────────────────────────────────────
+// Los ingresos (y la profesión, si la comunidad da opciones) son botones: una
+// pulsación, sin desplegables que en el móvil se abren a pantalla completa.
+function Datos({ listo, pipeline, nota, titulo, texto, boton }) {
+  const cfg = useComunidad()
+  const d = cfg.puerta.datos
+  const [f, setF] = useState({ nombre: '', email: '', profesion: '', ingresos: '' })
+  const [estado, setEstado] = useState(null)
+  const [error, setError] = useState(null)
+  const pon = (campo) => (e) => setF(s => ({ ...s, [campo]: e.target.value }))
+  const completo = f.nombre.trim() && f.email.trim() && f.profesion.trim() && f.ingresos
+  const profesiones = d.profesiones ? Object.entries(d.profesiones) : null
+
+  async function entrar(e) {
+    e.preventDefault()
+    if (!completo) return
+    setEstado('enviando'); setError(null)
+    try {
+      const nombre = f.nombre.trim(), email = f.email.trim(), profesion = f.profesion.trim()
+      const lead = await altaMiembro(cfg, { nombre, email, profesion, ingresos: f.ingresos, pipeline, nota })
+      track('lead', { donde: cfg.clave, embudo: pipeline, ingresos: f.ingresos })
+      listo({
+        id: lead?.id || null, nombre, email, profesion: d.profesiones?.[profesion] || profesion,
+        ingresos: f.ingresos, at: new Date().toISOString(),
+      })
+    } catch (err) {
+      setError(err.message); setEstado(null)
+    }
+  }
+
+  return (
+    <form className="aip-card aip-puerta" onSubmit={entrar}>
+      <p className="aip-kicker"><Lock size={13} /> contenido para miembros</p>
+      <h2>{titulo || d.titulo}</h2>
+      <p>{texto || d.texto}</p>
+      <div className="aip-campos cuatro">
+        <input aria-label="Nombre" placeholder="Tu nombre" required value={f.nombre} maxLength={80} autoComplete="given-name" onChange={pon('nombre')} />
+        <input aria-label="Correo" type="email" placeholder="Tu correo" required value={f.email} maxLength={160} autoComplete="email" inputMode="email" onChange={pon('email')} />
+        {profesiones ? (
+          <fieldset className="aip-ingresos">
+            <legend>A qué te dedicas</legend>
+            {profesiones.map(([valor, etiqueta], i) => (
+              <label key={valor} className={[f.profesion === valor && 'on', profesiones.length % 2 && i === profesiones.length - 1 && 'ancho'].filter(Boolean).join(' ')}>
+                <input type="radio" name="profesion" value={valor} aria-label={etiqueta} required checked={f.profesion === valor} onChange={pon('profesion')} />
+                <span>{etiqueta}</span>
+              </label>
+            ))}
+          </fieldset>
+        ) : (
+          <input className="ancho" aria-label="Profesión" placeholder={d.placeholderProfesion} required value={f.profesion} maxLength={120} autoComplete="organization-title" onChange={pon('profesion')} />
+        )}
+        <fieldset className="aip-ingresos">
+          <legend>Tus ingresos al mes</legend>
+          {Object.entries(d.ingresos).map(([valor, etiqueta]) => (
+            <label key={valor} className={f.ingresos === valor ? 'on' : ''}>
+              <input type="radio" name="ingresos" value={valor} aria-label={etiqueta} required checked={f.ingresos === valor} onChange={pon('ingresos')} />
+              <span>{etiqueta.replace('/mes', '')}</span>
+            </label>
+          ))}
+        </fieldset>
+        <button className="aip-btn" disabled={estado === 'enviando' || !completo}>
+          {estado === 'enviando' ? 'Abriendo…' : <>{boton || d.boton} <ArrowRight size={18} /></>}
+        </button>
+      </div>
+      {error && <p className="aip-error" role="alert">{error}</p>}
+      <p className="aip-legal">{d.legal}</p>
+    </form>
+  )
+}
