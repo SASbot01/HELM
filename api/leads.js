@@ -3,7 +3,7 @@
 //   POST ?action=masterclass   apuntarse a la masterclass de la página de inicio
 //   GET  ?action=apuntados     cuántos hay apuntados a una sesión (solo el número)
 //   POST ?action=socio         el formulario de cualificación de Socio IA
-//   POST ?action=miembro       el alta de AI para todo
+//   POST ?action=miembro       el alta de una comunidad (AI para todo, Filmmaking…)
 //   POST ?action=puerta        primer paso del diagnóstico / formulario de valor
 //   POST ?action=completar     último paso del diagnóstico / formulario de valor
 //   POST ?action=nota          una línea fija en la ficha («entró en el Discord»…)
@@ -17,6 +17,9 @@
 // que solo se puede hacer lo que hacían esas páginas y nada más:
 //
 //   · Un único perfil, fijo aquí: las landings propias solo escriben en él.
+//     Las comunidades (miembro, nota) escriben en el suyo, que sale de la
+//     lista cerrada de api/_lib/comunidades.js: el navegador dice de qué
+//     comunidad viene, nunca qué perfil.
 //   · Los campos se eligen aquí, uno a uno y con tope de tamaño. Nada de lo que
 //     manda el navegador llega a la base tal cual.
 //   · Nunca se devuelve nada de un contacto. Lo que recibe el navegador como
@@ -27,6 +30,7 @@
 //   · Límite por IP.
 import { supabase } from './lib/supabase.js'
 import { applyCors, rateLimit, getClientIp, signJwt, verifyJwt } from './_lib/auth.js'
+import { comunidadPorClave } from './_lib/comunidades.js'
 
 // El perfil de todas las landings propias (silvestre). Si mañana hay otra
 // landing de otro perfil, se añade a mano: que el slug venga del navegador
@@ -65,11 +69,6 @@ const DOS_PASOS = {
     por: 'Formulario de valor · Silvestre IA',
     estados: ['lead', 'contactado'],
   },
-}
-
-const INGRESOS = {
-  menos_1000: 'Menos de 1.000 €/mes',
-  mas_1000: 'Más de 1.000 €/mes',
 }
 
 // Las etapas de Socio IA (ver src/pages/inicio/socio/crm.js para el porqué).
@@ -120,9 +119,9 @@ function jsonAcotado(v, max = 60_000) {
   return JSON.parse(s)
 }
 
-async function perfil() {
+async function perfil(slug = PERFIL_SLUG) {
   const { data } = await supabase
-    .from('clients').select('id, active').eq('slug', PERFIL_SLUG).maybeSingle()
+    .from('clients').select('id, active').eq('slug', slug).maybeSingle()
   if (!data || data.active === false) throw fallo(503, 'No he podido conectar con el CRM. Prueba en un minuto.')
   return data.id
 }
@@ -296,38 +295,49 @@ async function socio(b) {
   return { id: await ficha(clientId, await crear(fila)) }
 }
 
-// ── AI para todo ─────────────────────────────────────────────────────────────
-// Quien entra por la guía en PDF va al embudo «Lead magnet»; el resto, a
-// «Página de inicio». Al volver NUNCA se le cambia de embudo ni de etapa.
+// ── Las comunidades (AI para todo, Filmmaking para todo…) ──────────────────
+// Cada una escribe en su perfil, de la lista cerrada (api/_lib/comunidades.js);
+// sin `comunidad`, AI para todo, como siempre. Quien entra por una guía en PDF
+// va al embudo «Lead magnet»; el resto, a «Página de inicio». Al volver NUNCA
+// se le cambia de embudo ni de etapa.
+function comunidadDe(b) {
+  const c = comunidadPorClave(b.comunidad ?? 'aiparatodo')
+  if (!c) throw fallo(400, 'Comunidad desconocida')
+  return c
+}
+
 async function miembro(b) {
+  const c = comunidadDe(b)
   const correo = correoDe(b.email)
   const ingresos = txt(b.ingresos, 40)
-  if (!INGRESOS[ingresos]) throw fallo(400, 'Elige tus ingresos')
+  if (!Object.hasOwn(c.ingresos, ingresos)) throw fallo(400, 'Elige tus ingresos')
+  // La profesión: texto libre, o una de las opciones de la comunidad si las da.
+  const oficio = c.profesiones ? c.profesiones[Object.hasOwn(c.profesiones, String(b.profesion)) ? b.profesion : ''] : txt(b.profesion, 120)
+  if (c.profesiones && !oficio) throw fallo(400, 'Elige a qué te dedicas')
   const nombreEmbudo = b.pipeline === PIPELINE_LEAD_MAGNET ? PIPELINE_LEAD_MAGNET : PIPELINE_INICIO
 
-  const clientId = await perfil()
+  const clientId = await perfil(c.perfil)
   const pipeline = await embudo(clientId, nombreEmbudo)
   const etapa = pipeline.etapas.find(s => s.key === ETAPA_ENTRADA)?.key || pipeline.etapas[0]?.key || ETAPA_ENTRADA
 
   const o = origenDe(b.origen)
-  const oficio = txt(b.profesion, 120)
   const nota = txt(b.nota, 120)
   const datos = { profesion: oficio, ingresos, entrada: nota, enviado: ahora() }
-  const linea = `AI para todo · ${nota} · profesión: ${oficio || '—'} · ingresos: ${INGRESOS[ingresos]}`
+  const linea = `${c.nombre} · ${nota} · profesión: ${oficio || '—'} · ingresos: ${c.ingresos[ingresos]}`
 
   const fila = {
     client_id: clientId,
     name: txt(b.nombre, 80) || correo.split('@')[0],
     email: correo,
-    source: 'AI para todo',
+    source: c.nombre,
     notes: linea,
     pipeline_id: pipeline.id,
     status: etapa,
-    utm_source: o.utm_source || 'aiparatodo',
+    utm_source: o.utm_source || c.clave,
     utm_medium: o.utm_medium || 'comunidad',
     utm_campaign: o.utm_campaign || null,
     utm_content: o.utm_content || null,
-    custom_fields: { aiparatodo: datos },
+    custom_fields: { [c.clave]: datos },
     last_activity_at: ahora(),
     updated_at: ahora(),
   }
@@ -336,7 +346,7 @@ async function miembro(b) {
   if (previo) {
     const { pipeline_id: _e, status: _s, source: _src, ...cambios } = fila
     cambios.notes = sumaNota(previo.notes, linea)
-    cambios.custom_fields = { ...(previo.custom_fields || {}), aiparatodo: datos }
+    cambios.custom_fields = { ...(previo.custom_fields || {}), [c.clave]: datos }
     await actualizar(previo.id, cambios)
     return { id: await ficha(clientId, previo.id) }
   }
@@ -479,9 +489,13 @@ async function completar(b) {
 // ── Una línea fija en la ficha ───────────────────────────────────────────────
 async function nota(b) {
   const linea = txt(b.texto, 200)
-  const cfg = NOTAS[linea]
+  // Las líneas de las landings de silvestre (sin `comunidad`, o desde AI para
+  // todo), o las de la comunidad que la pide, en su perfil.
+  const c = b.comunidad == null ? null : comunidadDe(b)
+  const enSilvestre = !c || c.perfil === PERFIL_SLUG
+  const cfg = enSilvestre ? (Object.hasOwn(NOTAS, linea) ? NOTAS[linea] : null) : (c.notas.includes(linea) ? {} : null)
   if (!cfg) throw fallo(400, 'Nota no permitida')
-  const clientId = await perfil()
+  const clientId = await perfil(enSilvestre ? PERFIL_SLUG : c.perfil)
   const contacto = await contactoDeLaFicha(b.id, clientId, 'id, notes')
   const notas = sumaNota(contacto.notes, linea)
   if (notas === contacto.notes && !cfg.status) return { ok: true }

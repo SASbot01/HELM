@@ -95,3 +95,21 @@ describe('/api/comunidad y /api/aiparatodo', () => {
     expect(r.statusCode).toBe(405)
   })
 })
+
+describe('la puerta del navegador y la del servidor piden lo mismo', () => {
+  it('ingresos y profesiones de cada comunidad, iguales en los dos lados', async () => {
+    const configs = {
+      aiparatodo: (await import('../src/pages/aiparatodo/config.jsx')).default,
+      filmmakingparatodo: (await import('../src/pages/filmmakingparatodo/config.jsx')).default,
+    }
+    expect(Object.keys(configs).sort()).toEqual(Object.keys(COMUNIDADES).sort())
+    for (const [clave, cfg] of Object.entries(configs)) {
+      expect(cfg.clave).toBe(clave)
+      const servidor = COMUNIDADES[clave]
+      // AI para todo hoy es solo de pago: su puerta no pide datos.
+      if (!cfg.puerta.datos) continue
+      expect(cfg.puerta.datos.ingresos).toEqual(servidor.ingresos)
+      expect(cfg.puerta.datos.profesiones ?? null).toEqual(servidor.profesiones)
+    }
+  })
+})

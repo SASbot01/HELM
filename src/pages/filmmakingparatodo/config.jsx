@@ -13,7 +13,9 @@
 // Para pasar a pago: COBRO_ACTIVO = true. El muro sale después de los datos,
 // con el correo ya puesto en Stripe. OJO con el enlace: el Payment Link de AI
 // para todo vuelve a /aiparatodo?pago=ok, así que con ese mismo enlace quien
-// pague abriría AI para todo y no esta. Esta comunidad necesita un Payment
+// pague abriría AI para todo y no esta, y además el producto es «Acceso AI
+// para todo» (comprobado el 13/10/2026 en Stripe, modo test, cuenta «taller»).
+// Esta comunidad necesita su producto «Acceso Detrás de Cámara» y un Payment
 // Link que vuelva a /filmmakingparatodo?pago=ok (VITE_FMPT_PAGO_LINK).
 import { BookOpen, Users, Newspaper, FolderOpen, Camera, Aperture, Clapperboard, Film, Workflow } from 'lucide-react'
 import {
@@ -106,7 +108,7 @@ export default {
     iconos: { sony: Camera, equipo: Aperture, filmmaking: Clapperboard, postproduccion: Film },
   },
 
-  // Los embudos los crea migrations/103_ddc_embudos_comunidad.sql en el perfil
+  // Los embudos los crea migrations/103_detrasdecamara_embudos_comunidad.sql en el perfil
   // detras-de-camra. Las listas de la puerta tienen que ser las mismas que las
   // de la comunidad en el servidor (api/_lib/comunidades.js).
   crm: { embudoComunidad: 'Página de inicio' },
