@@ -727,8 +727,8 @@ const { ejecutaAgente, miraAgenda, miraProgramador, miraVirales, cierraHuerfanas
 // Las tres noticias del día (api/_lib/noticias.js): desde las 5:30 de Madrid,
 // para los perfiles que tienen encendida la sección Noticias.
 const { generaNoticias, miraNoticias } = await import('../api/_lib/noticias.js')
-// El diario de AI para todo (api/_lib/redaccion.js): dos artículos al día, a
-// las 8:00 y a las 17:00 de Madrid, con la misma sección Noticias encendida.
+// El diario de cada comunidad (api/_lib/redaccion.js y noticias-perfiles.js), en
+// las ediciones de cada una, con la misma sección Noticias encendida.
 const { generaArticulo, miraRedaccion } = await import('../api/_lib/redaccion.js')
 // El estudio de clientes (api/_lib/avatar.js): a petición, no por horario.
 const { generaAvatar } = await import('../api/_lib/avatar.js')

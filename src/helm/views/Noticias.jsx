@@ -1,4 +1,5 @@
-// HELM — Noticias: las tres noticias del día de IA y ciberseguridad.
+// HELM — Noticias: las tres noticias del día del perfil (IA y ciberseguridad,
+// o los temas propios del perfil: ver api/_lib/noticias-perfiles.js).
 //
 // Las deja cada mañana, antes de las 6:00, el agente de noticias
 // (api/_lib/noticias.js). Arriba las de hoy, enteras; debajo las de los días
@@ -10,7 +11,10 @@ import { noticiasApi } from '../lib'
 import { Empty, FormNote } from '../ui'
 import './noticias.css'
 
-const TEMA = { ia: 'IA', ciberseguridad: 'Ciberseguridad' }
+const TEMA = {
+  ia: 'IA', ciberseguridad: 'Ciberseguridad',
+  sony: 'Sony', equipo: 'Equipo', filmmaking: 'Filmmaking', postproduccion: 'Posproducción',
+}
 const fechaLarga = (f) => new Date(`${f}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
 
 function Noticia({ n, entera }) {
