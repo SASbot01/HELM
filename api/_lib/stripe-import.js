@@ -22,7 +22,7 @@ const money = (n, cur = 'EUR') =>
     .format(Number(n) || 0)
 
 // ── Finanzas ───────────────────────────────────────────────────────────────
-async function addFinanceEntry(supabase, clientId, { date, category, description, amount, ref }) {
+export async function addFinanceEntry(supabase, clientId, { date, category, description, amount, ref }) {
   const { data: dup } = await supabase
     .from('ceo_finance_entries').select('id')
     .eq('client_id', clientId).eq('notes', ref).limit(1)
@@ -38,7 +38,7 @@ async function addFinanceEntry(supabase, clientId, { date, category, description
 // ── CRM ────────────────────────────────────────────────────────────────────
 // Un lead no pisa nunca a un contacto que ya existe: si ya está en el CRM se
 // respeta su etapa (puede estar más avanzado que lo que dice Stripe).
-async function upsertLead(supabase, clientId, { email, name, phone, status, note }) {
+export async function upsertLead(supabase, clientId, { email, name, phone, status, note }) {
   if (!email) return 'skipped'
   const { data: existing } = await supabase
     .from('crm_contacts').select('id, status')

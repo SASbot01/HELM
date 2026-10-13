@@ -55,7 +55,7 @@ async function yaImportado(supabase, clientId, source) {
 
 // El contacto se busca por email sin distinguir mayúsculas: la misma persona
 // comprando dos veces no puede acabar como dos leads.
-async function buscarOCrearContacto(supabase, clientId, { email, name, phone, provider }) {
+export async function buscarOCrearContacto(supabase, clientId, { email, name, phone, provider }) {
   if (!email) return null
   const { data: existente } = await supabase
     .from('crm_contacts').select('id, name, email')
@@ -75,7 +75,8 @@ async function buscarOCrearContacto(supabase, clientId, { email, name, phone, pr
   return creado
 }
 
-async function registrarActividad(supabase, clientId, contactId, { title, description, actor }) {
+// `fecha`: cuándo pasó, si no es ahora (al importar un histórico).
+export async function registrarActividad(supabase, clientId, contactId, { title, description, actor, fecha }) {
   if (!contactId) return
   await supabase.from('crm_activities').insert({
     client_id: clientId,
@@ -84,11 +85,11 @@ async function registrarActividad(supabase, clientId, contactId, { title, descri
     title,
     description,
     performed_by: actor || '',
-    performed_at: new Date().toISOString(),
+    performed_at: fecha ? new Date(fecha).toISOString() : new Date().toISOString(),
   })
 }
 
-async function asegurarProducto(supabase, clientId, name, price) {
+export async function asegurarProducto(supabase, clientId, name, price) {
   if (!name) return
   const { data } = await supabase
     .from('products').select('id').eq('client_id', clientId).eq('name', name).limit(1)
