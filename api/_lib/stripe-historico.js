@@ -10,6 +10,12 @@
 //   enlace de plan fraccionado → UNA venta «Fraccionado» por cliente, con sus
 //                                cuotas cobradas, el importe de cada una y el
 //                                inicio y fin del plan (como las de Ventas)
+//   enlaces de mensualidad     → UNA venta «Suscripción» por cliente con todo
+//                                lo que lleva pagado, venga de la suscripción o
+//                                del enlace suelto con el que paga cada mes
+//                                (para el negocio es lo mismo). Si ese cliente
+//                                tiene un plan fraccionado abierto, sus pagos
+//                                sueltos son cuotas de ese plan.
 //
 // Cada cobro deja además su apunte en Finanzas y su actividad en el CRM, con la
 // fecha en que pasó. Si alguien ya había metido a mano la venta de un plan
@@ -18,6 +24,7 @@
 //
 // Todo es idempotente (sales.source = stripe:<id>): se puede repetir para
 // ponerse al día. Con `prueba: true` no escribe nada y devuelve lo que haría.
+import crypto from 'node:crypto'
 import { stripeRequest } from './stripe.js'
 import { registrarPago, buscarOCrearContacto, registrarActividad, asegurarProducto } from './pagos.js'
 import { addFinanceEntry, upsertLead } from './stripe-import.js'
@@ -54,18 +61,23 @@ async function todas(apiKey, ruta, params = {}) {
  * @param {Object}   o
  * @param {string}   o.clientId
  * @param {string}   o.apiKey      la clave de la cuenta de Stripe donde cobra
- * @param {Array<{id: string, cuotas?: number, total?: number}>} o.enlaces
+ * @param {Array<{id: string, cuotas?: number, total?: number, mensual?: boolean}>} o.enlaces
  *        sus enlaces de pago; `cuotas` (y opcionalmente `total`) marca los de
- *        un plan fraccionado de N cuotas
+ *        un plan fraccionado de N cuotas y `mensual` los de la mensualidad
+ * @param {string}   [o.mensualidad] nombre del producto de la mensualidad
  * @param {boolean}  [o.leads]     los checkouts sin pagar con email, al CRM
  * @param {boolean}  [o.prueba]    no escribe nada
  */
-export async function historicoPorEnlaces({ supabase, clientId, apiKey, enlaces, leads = false, prueba = false }) {
+export async function historicoPorEnlaces({ supabase, clientId, apiKey, enlaces, mensualidad = null, leads = false, prueba = false }) {
   const r = {
     prueba, enlaces: [], ventas: { nuevas: 0, yaEstaban: 0, vinculadas: 0, actualizadas: 0 },
     finanzas: 0, leads: 0, enlacesGuardados: 0, cobrado: 0, ops: [], errores: [],
   }
   const op = (texto) => r.ops.push(texto)
+  // Los pagos de la mensualidad se juntan por cliente y se escriben al final:
+  // los de un mismo cliente pueden venir de dos enlaces distintos.
+  const mensuales = new Map()
+  let nombreMensualidad = mensualidad
 
   for (const e of enlaces) {
     const link = await stripeRequest(apiKey, `/payment_links/${e.id}`)
@@ -74,7 +86,8 @@ export async function historicoPorEnlaces({ supabase, clientId, apiKey, enlaces,
     const producto = items.data?.map(i => i.description).join(' + ') || 'Pago Stripe'
     const recurrente = Boolean(li?.price?.recurring)
     const cuotas = Number(e.cuotas) || 0
-    const tipo = cuotas >= 2 ? 'fraccionado' : (recurrente ? 'suscripcion' : 'unico')
+    const tipo = e.mensual ? 'mensual' : cuotas >= 2 ? 'fraccionado' : (recurrente ? 'suscripcion' : 'unico')
+    if (tipo === 'mensual' && !nombreMensualidad) nombreMensualidad = `${producto} · mensualidad`
     const sesiones = await todas(apiKey, '/checkout/sessions', { payment_link: e.id })
     const pagadas = sesiones.filter(s => s.payment_status === 'paid')
     r.enlaces.push({ id: e.id, producto, tipo, url: link.url, activo: link.active, sesiones: sesiones.length, pagadas: pagadas.length })
@@ -87,7 +100,7 @@ export async function historicoPorEnlaces({ supabase, clientId, apiKey, enlaces,
         if (!prueba) {
           const { error } = await supabase.from('helm_links').insert({
             client_id: clientId, title: `Pago · ${producto}`, url: link.url, category: 'Ventas',
-            notes: `Enlace de pago de Stripe (${e.id})${tipo === 'fraccionado' ? ` · plan de ${cuotas} cuotas` : ''}`,
+            notes: `Enlace de pago de Stripe (${e.id})${tipo === 'fraccionado' ? ` · plan de ${cuotas} cuotas` : tipo === 'mensual' ? ' · mensualidad' : ''}`,
           })
           if (error) r.errores.push(`Enlace ${e.id}: ${error.message}`)
           else r.enlacesGuardados++
@@ -100,7 +113,19 @@ export async function historicoPorEnlaces({ supabase, clientId, apiKey, enlaces,
       const nombre = s.customer_details?.name || ''
       const telefono = s.customer_details?.phone || ''
       try {
-        if (s.mode === 'subscription' && s.subscription) {
+        if (tipo === 'mensual') {
+          const clave = email ? email.toLowerCase() : `nombre:${pila(nombre)}`
+          const g = mensuales.get(clave) || { email, nombre, telefono, pagos: [], subs: [] }
+          if (s.mode === 'subscription' && s.subscription) {
+            const sub = await stripeRequest(apiKey, `/subscriptions/${s.subscription}`)
+            const facturas = (await todas(apiKey, '/invoices', { subscription: sub.id })).filter(i => i.status === 'paid' && i.amount_paid > 0)
+            for (const f of facturas) g.pagos.push({ ref: `inv_${f.id}`, fecha: dia(f.status_transitions?.paid_at || f.created), importe: f.amount_paid / 100, suelto: false })
+            g.subs.push({ id: sub.id, estado: sub.status, ultimo: facturas.length ? Math.max(...facturas.map(f => f.status_transitions?.paid_at || f.created)) : null })
+          } else {
+            g.pagos.push({ ref: s.id, fecha: dia(s.created), importe: (s.amount_total || 0) / 100, suelto: true })
+          }
+          mensuales.set(clave, g)
+        } else if (s.mode === 'subscription' && s.subscription) {
           const sub = await stripeRequest(apiKey, `/subscriptions/${s.subscription}`)
           const facturas = (await todas(apiKey, '/invoices', { subscription: sub.id }))
             .filter(i => i.status === 'paid' && i.amount_paid > 0)
@@ -132,6 +157,11 @@ export async function historicoPorEnlaces({ supabase, clientId, apiKey, enlaces,
       }
     }
   }
+
+  for (const g of mensuales.values()) {
+    try { await mensualidadDe({ supabase, clientId, r, op, prueba, producto: nombreMensualidad, g }) }
+    catch (err) { r.errores.push(`Mensualidad de ${tapa(g.email) || g.nombre}: ${err.message}`) }
+  }
   r.cobrado = redondea(r.cobrado)
   return r
 }
@@ -144,13 +174,16 @@ async function yaCompro(supabase, clientId, email) {
   return Boolean(data?.length)
 }
 
+// Devuelve si el apunte es nuevo (o lo sería, en prueba).
 async function finanzas({ supabase, clientId, r, prueba }, { fecha, descripcion, importe, ref }) {
   if (prueba) {
     const { data } = await supabase.from('ceo_finance_entries').select('id').eq('client_id', clientId).eq('notes', ref).limit(1)
-    if (!data?.length) r.finanzas++
-    return
+    if (!data?.length) { r.finanzas++; return true }
+    return false
   }
-  if (await addFinanceEntry(supabase, clientId, { date: fecha, category: 'Ventas Stripe', description: descripcion, amount: importe, ref })) r.finanzas++
+  const nuevo = await addFinanceEntry(supabase, clientId, { date: fecha, category: 'Ventas Stripe', description: descripcion, amount: importe, ref })
+  if (nuevo) r.finanzas++
+  return nuevo
 }
 
 async function pagoUnico(c) {
@@ -291,4 +324,114 @@ async function planFraccionado(c) {
       descripcion: `${producto} · cuota · ${nombre || email}`, importe, ref: `stripe:inv_${f.id}`,
     })
   }
+}
+
+const ddmm = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+const ESTADO = { past_due: 'impagada', unpaid: 'impagada', canceled: 'cancelada', incomplete_expired: 'caducada' }
+
+// El plan fraccionado abierto de un cliente: mismo email o, si se apuntó sin
+// email, el mismo nombre de pila.
+async function planAbiertoDe(supabase, clientId, g) {
+  const { data } = await supabase.from('sales')
+    .select('id, notes, client_email, client_name, installments_total, installments_paid, cash_collected')
+    .eq('client_id', clientId).eq('payment_type', 'Fraccionado')
+  return (data || []).find(p => Number(p.installments_paid) < Number(p.installments_total) && (
+    p.client_email ? (g.email && p.client_email.toLowerCase() === g.email.toLowerCase()) : (pila(p.client_name) && pila(p.client_name) === pila(g.nombre))
+  )) || null
+}
+
+// Un pago suelto que es la cuota de un plan: suma una cuota cobrada. La
+// referencia de Stripe queda en la nota, y es lo que evita sumarla dos veces.
+async function cuotaDePlan(c, plan, p, producto) {
+  const { supabase, op, prueba, g } = c
+  if ((plan.notes || '').includes(p.ref)) return
+  plan.installments_paid = Number(plan.installments_paid) + 1
+  plan.cash_collected = redondea(Number(plan.cash_collected) + p.importe)
+  plan.notes = [plan.notes, `Cuota de ${p.importe} € cobrada el ${ddmm(p.fecha)} con el enlace de pago (Stripe ${p.ref}).`].filter(Boolean).join('\n')
+  op(`Cuota de plan ${p.fecha}: ${g.nombre || tapa(g.email)} · ${p.importe} € → ${plan.installments_paid}/${plan.installments_total} cuotas`)
+  if (!prueba) {
+    const { error } = await supabase.from('sales').update({
+      installments_paid: plan.installments_paid, cash_collected: plan.cash_collected, notes: plan.notes,
+      client_email: plan.client_email || g.email || '',
+    }).eq('id', plan.id)
+    if (error) throw error
+  }
+  await finanzas(c, { fecha: p.fecha, descripcion: `${producto} · cuota · ${g.nombre || g.email}`, importe: p.importe, ref: `stripe:${p.ref}` })
+}
+
+async function mensualidadDe(c) {
+  const { supabase, clientId, r, op, prueba, producto, g } = c
+  g.pagos.sort((a, b) => a.fecha.localeCompare(b.fecha))
+  for (const p of g.pagos) r.cobrado += p.importe
+
+  // Quien está pagando un plan fraccionado con el enlace suelto: esos pagos
+  // son cuotas del plan, no mensualidades.
+  let pagos = g.pagos
+  const plan = await planAbiertoDe(supabase, clientId, g)
+  if (plan) {
+    for (const p of pagos.filter(x => x.suelto)) await cuotaDePlan(c, plan, p, producto)
+    pagos = pagos.filter(x => !x.suelto)
+  }
+  if (!pagos.length) return
+
+  const huella = crypto.createHash('sha256').update(g.email ? g.email.toLowerCase() : `nombre:${pila(g.nombre)}`).digest('hex').slice(0, 16)
+  const source = `stripe:mensual:${huella}`
+  const cobrado = redondea(pagos.reduce((a, p) => a + p.importe, 0))
+  const cuota = pagos.at(-1).importe
+  const avisos = g.subs.filter(s => ESTADO[s.estado]).map(s => {
+    const sueltos = pagos.some(p => p.suelto) ? ' Desde entonces paga con el enlace suelto, que cuenta aquí igual.' : ''
+    return `La suscripción ${s.id} está ${ESTADO[s.estado]}${s.ultimo ? ` (último cobro el ${ddmm(dia(s.ultimo))})` : ''}.${sueltos}`
+  })
+  const nota = [
+    `Mensualidad de ${cuota} €: ${pagos.length} ${pagos.length === 1 ? 'cuota cobrada' : 'cuotas cobradas'} (${pagos.map(p => ddmm(p.fecha)).join(', ')}).`,
+    ...avisos,
+  ].join(' ')
+  const datos = {
+    date: pagos[0].fecha, client_name: g.nombre || g.email, client_email: g.email || '', client_phone: g.telefono || '',
+    product: producto, payment_type: 'Suscripción', payment_method: 'Stripe',
+    revenue: cobrado, cash_collected: cobrado,
+    installments_total: null, installments_paid: pagos.length, installment_amount: cuota,
+    plan_start: pagos[0].fecha, plan_end: null, status: 'won', source, notes: nota,
+  }
+
+  // La venta de la mensualidad (si ya está) y las sueltas que dejó una
+  // importación anterior de estos mismos pagos, que pasan a ser esta.
+  const { data: ya } = await supabase.from('sales').select('id, cash_collected, installments_paid').eq('client_id', clientId).eq('source', source).limit(1)
+  const { data: sueltas } = await supabase.from('sales').select('id').eq('client_id', clientId).in('source', pagos.map(p => `stripe:${p.ref}`))
+  const quien = g.nombre || tapa(g.email)
+  if (ya?.length) {
+    if (Number(ya[0].cash_collected) !== cobrado || Number(ya[0].installments_paid) !== pagos.length || sueltas?.length) {
+      op(`Mensualidad al día: ${quien} · ${pagos.length} cuotas, ${cobrado} €`)
+      if (!prueba) {
+        const { error } = await supabase.from('sales').update(datos).eq('id', ya[0].id)
+        if (error) throw error
+      }
+      r.ventas.actualizadas++
+    } else r.ventas.yaEstaban++
+  } else {
+    op(`Mensualidad: ${quien} · ${pagos.length} ${pagos.length === 1 ? 'cuota' : 'cuotas'} de ${cuota} €, ${cobrado} €${sueltas?.length ? ` (junta ${sueltas.length} ${sueltas.length === 1 ? 'venta suelta' : 'ventas sueltas'})` : ''}`)
+    if (!prueba) {
+      const { error } = await supabase.from('sales').insert({ client_id: clientId, ...datos })
+      if (error) throw error
+    }
+    r.ventas.nuevas++
+  }
+  if (sueltas?.length && !prueba) {
+    const { error } = await supabase.from('sales').delete().in('id', sueltas.map(x => x.id))
+    if (error) throw error
+  }
+
+  const contacto = prueba ? null : await buscarOCrearContacto(supabase, clientId, { email: g.email, name: g.nombre, phone: g.telefono, provider: 'stripe' })
+  if (contacto) await supabase.from('crm_contacts').update({ status: 'won', updated_at: new Date().toISOString() }).eq('id', contacto.id)
+  for (const p of pagos) {
+    const nuevo = await finanzas(c, { fecha: p.fecha, descripcion: `${producto} · cuota · ${g.nombre || g.email}`, importe: p.importe, ref: `stripe:${p.ref}` })
+    if (nuevo && contacto) {
+      await registrarActividad(supabase, clientId, contacto.id, {
+        title: `Cuota cobrada: ${producto}`,
+        description: `Cuota de ${p.importe} € cobrada el ${ddmm(p.fecha)} (${p.suelto ? 'enlace de pago suelto' : 'suscripción'}, Stripe ${p.ref}).`,
+        actor: 'Stripe', fecha: p.fecha,
+      })
+    }
+  }
+  if (!prueba) await asegurarProducto(supabase, clientId, producto, cuota)
 }
