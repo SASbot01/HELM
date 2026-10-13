@@ -342,12 +342,28 @@ async function planAbiertoDe(supabase, clientId, g) {
 
 // Un pago suelto que es la cuota de un plan: suma una cuota cobrada. La
 // referencia de Stripe queda en la nota, y es lo que evita sumarla dos veces.
+// Cada cuota lleva en la nota la marca «[cuota AAAA-MM]»: si la tarea diaria
+// ya la apuntó como pago seguro (api/_lib/automatico.js), el cobro de Stripe de
+// ese mes la confirma en vez de sumar otra.
 async function cuotaDePlan(c, plan, p, producto) {
   const { supabase, op, prueba, g } = c
   if ((plan.notes || '').includes(p.ref)) return
+  const marca = `[cuota ${p.fecha.slice(0, 7)}]`
+  const lineas = (plan.notes || '').split('\n')
+  const prevista = lineas.findIndex(l => l.startsWith(marca) && l.includes('automáticamente') && !l.includes('Stripe'))
+  if (prevista >= 0) {
+    lineas[prevista] += ` Confirmada en Stripe el ${ddmm(p.fecha)} (${p.ref}).`
+    plan.notes = lineas.join('\n')
+    op(`Cuota confirmada ${p.fecha}: ${g.nombre || tapa(g.email)} · ${p.importe} € (ya estaba apuntada)`)
+    if (!prueba) {
+      const { error } = await supabase.from('sales').update({ notes: plan.notes, client_email: plan.client_email || g.email || '' }).eq('id', plan.id)
+      if (error) throw error
+    }
+    return
+  }
   plan.installments_paid = Number(plan.installments_paid) + 1
   plan.cash_collected = redondea(Number(plan.cash_collected) + p.importe)
-  plan.notes = [plan.notes, `Cuota de ${p.importe} € cobrada el ${ddmm(p.fecha)} con el enlace de pago (Stripe ${p.ref}).`].filter(Boolean).join('\n')
+  plan.notes = [plan.notes, `${marca} Cuota de ${p.importe} € cobrada el ${ddmm(p.fecha)} con el enlace de pago (Stripe ${p.ref}).`].filter(Boolean).join('\n')
   op(`Cuota de plan ${p.fecha}: ${g.nombre || tapa(g.email)} · ${p.importe} € → ${plan.installments_paid}/${plan.installments_total} cuotas`)
   if (!prueba) {
     const { error } = await supabase.from('sales').update({
