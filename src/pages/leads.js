@@ -4,8 +4,11 @@
 // Ahora ninguna toca la base: le piden al servidor una acción concreta y este
 // decide qué se guarda. Lo que vuelve como `id` es una ficha firmada por el
 // servidor: solo sirve para devolvérsela en el paso siguiente.
-export async function pideLead(action, body) {
-  const r = await fetch(`/api/leads?action=${action}`, {
+//
+// `base` es para las páginas que no viven en este servidor (la comunidad de
+// Detrás de Cámara en detrasdecamara.org/map): la URL de HELM delante.
+export async function pideLead(action, body, base = '') {
+  const r = await fetch(`${base}/api/leads?action=${action}`, {
     method: body ? 'POST' : 'GET',
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,

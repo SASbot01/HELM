@@ -29,7 +29,7 @@ export default defineConfig([
   // El backend (funciones de api/ y scripts) corre en Node, no en el navegador:
   // `process`, `Buffer` y compañía son globales legítimos ahí.
   {
-    files: ['api/**/*.js', 'scripts/**/*.{js,mjs}', 'vite.config.js'],
+    files: ['api/**/*.js', 'scripts/**/*.{js,mjs}', 'vite.config.js', 'vite.suelta.config.js'],
     languageOptions: { globals: globals.node },
     rules: {
       'react-refresh/only-export-components': 'off',

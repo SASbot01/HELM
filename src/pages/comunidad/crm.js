@@ -22,7 +22,7 @@ export async function altaMiembro(cfg, { nombre, email, profesion, ingresos, pip
   if (!correo) throw new Error('Falta el correo')
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) throw new Error('Revisa el correo')
   if (!cfg.puerta.datos.ingresos[ingresos]) throw new Error('Elige tus ingresos')
-  return pideLead('miembro', { comunidad: cfg.clave, nombre, email: correo, profesion, ingresos, pipeline, nota, origen: origen() })
+  return pideLead('miembro', { comunidad: cfg.clave, nombre, email: correo, profesion, ingresos, pipeline, nota, origen: origen() }, cfg.apiBase)
 }
 
 /**
@@ -33,7 +33,7 @@ export async function altaMiembro(cfg, { nombre, email, profesion, ingresos, pip
 export async function anota(cfg, id, texto) {
   if (!id || !texto) return
   try {
-    await pideLead('nota', { comunidad: cfg.clave, id, texto })
+    await pideLead('nota', { comunidad: cfg.clave, id, texto }, cfg.apiBase)
   } catch {
     // A propósito en silencio.
   }

@@ -50,3 +50,4 @@ __pycache__/
 
 # Estado local de la CLI de Supabase (host e id del proyecto): no va al repo.
 supabase/.temp/
+dist-suelta
