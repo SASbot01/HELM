@@ -60,7 +60,7 @@ export const SECCIONES = [
     ],
   },
   {
-    key: 'guia', titulo: 'Guía completa de Claude', desc: 'De cero a dirigir Claude: los Mods, proyectos, skills, conectores, MCP y Claude Code. En PDF.',
+    key: 'guia', titulo: 'Guía completa de Claude', desc: 'De cero a dirigir Claude: los Mods, los 7 tipos de agentes, proyectos, skills, conectores, MCP y Claude Code.',
     temas: [
       { key: 'modos', nombre: 'Modos de Claude', desc: 'Los Mods: 3 usos de los que nadie habla, en PDF' },
       { key: 'capitulos', nombre: 'Capítulos', desc: 'La guía, en orden' },
@@ -80,6 +80,7 @@ export const CAPITULOS = [
   { slug: 'conectores', titulo: 'Conectores: Claude con tus herramientas' },
   { slug: 'mcp', titulo: 'MCP: el enchufe universal entre Claude y todo lo demás' },
   { slug: 'claude-code', titulo: 'Claude Code y agentes: que trabaje solo' },
+  { slug: 'agentes', titulo: 'Los 7 tipos de agentes con Claude' },
 ].map((c, i) => {
   const texto = TEXTOS_GUIA.find(t => t.slug === c.slug)
   return {
@@ -94,7 +95,7 @@ export const capituloPorSlug = (slug) => CAPITULOS.find(c => c.slug === slug)
 // negociables. Para publicar uno, se añade su slug aquí: aparece en la lista
 // con el mismo estilo de tarjeta. (El archivo y la URL del capítulo existen
 // aunque no esté en la lista.)
-export const CAPITULOS_PUBLICADOS = []
+export const CAPITULOS_PUBLICADOS = ['agentes']
 const capituloVisible = (c) => CAPITULOS_PUBLICADOS.includes(c.slug)
 
 const REPO_SKILLS = 'https://github.com/anthropics/skills'

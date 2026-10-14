@@ -242,6 +242,10 @@ export function CuerpoPost({ p }) {
           <p className="aip-historia">{s.historia}</p>
           <h3>Qué puedes hacer</h3>
           <ul className="aip-puedes">{s.puedes.map(x => <li key={x}>{x}</li>)}</ul>
+          {/* Cuando la herramienta ya tiene un hilo propio, el enlace a ese hilo. */}
+          {s.hilo && (
+            <Link className="aip-btn sec pequeno aip-a-hilo" to={s.hilo.ruta}>{s.hilo.texto} <ArrowRight size={14} /></Link>
+          )}
 
           {s.github && (
             <div className="aip-repo">

@@ -353,7 +353,8 @@ a.aip-hilo:hover .aip-candado { color: var(--rosa); }
 .aip-cap-pasos p { margin: 0; font-size: 15.5px; line-height: 1.6; color: var(--papel-2); }
 .aip-aviso { display: grid; grid-template-columns: 22px 1fr; gap: 12px; margin: 6px 0 20px; padding: 16px 18px; border-radius: 14px; border: 1px solid var(--linea-2); background: rgba(var(--granate-rgb), 0.16); }
 .aip-aviso > svg { margin-top: 2px; color: var(--rosa); }
-.aip-aviso b { display: block; margin-bottom: 4px; font-size: 15.5px; }
+/* Solo el título del aviso va en su línea: la negrita del texto sigue en la frase. */
+.aip-aviso > div > b { display: block; margin-bottom: 4px; font-size: 15.5px; }
 .aip-aviso p { margin: 0; font-size: 15.5px; line-height: 1.6; color: var(--papel-2); }
 .aip-aviso.truco { border-color: rgba(74, 222, 128, 0.35); background: rgba(74, 222, 128, 0.06); }
 .aip-aviso.truco > svg { color: var(--verde); }
@@ -534,3 +535,6 @@ a.aip-hilo:hover .aip-candado { color: var(--rosa); }
 /* El campo trampa de la puerta de datos (Puerta.jsx): fuera de la vista, del
    lector de pantalla y del tabulador. */
 .aip-trampa { position: absolute !important; left: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+/* El enlace de una tarjeta de skill a su hilo propio (piezas.jsx). */
+.aip-a-hilo { margin: 4px 0 18px; }
