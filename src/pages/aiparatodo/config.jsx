@@ -2,7 +2,7 @@
 // como configuración del motor de las comunidades (src/pages/comunidad/).
 //
 // El contenido sigue en sus archivos (contenido.js, guia/, skills/,
-// operaciones.js, noNegociables.js, guiaModos.js); aquí se dice cómo se pinta:
+// noNegociables.js, guiaModos.js); aquí se dice cómo se pinta:
 // marca, textos, puerta, cobro, API y nombres de las métricas.
 //
 // Puerta: solo pago. Desde octubre de 2026 el acceso es un muro de pago (1,97
@@ -10,7 +10,7 @@
 // /aiparatodo?pago=ok, y eso desbloquea el acceso. Es un desbloqueo simple:
 // para verificarlo de verdad haría falta un webhook de Stripe.
 import {
-  Sparkles, Newspaper, BookOpen, Users, Blocks, Workflow, BrainCircuit, Cpu, ShieldAlert,
+  Sparkles, Newspaper, BookOpen, Users, Blocks, BrainCircuit, Cpu, ShieldAlert,
 } from 'lucide-react'
 import {
   FUNDADOR, SECCIONES, hilosDe, postPorSlug, CAPITULOS, capituloPorSlug, NN_HILO,
@@ -19,7 +19,7 @@ import { NN_PORTADA_3D, NN_PUNTOS } from './noNegociables.js'
 import { MODOS_HILO, MODOS_PORTADA_3D, MODOS_GANCHO, MODOS_INDICE } from './guiaModos.js'
 import { PIPELINE_COMUNIDAD, PIPELINE_LEAD_MAGNET } from './crm.js'
 import {
-  Fondo, BannerModos, BloqueHelm, TrasHilo, IndiceNN, CuerpoNoNegociables, IndiceModos, CuerpoGuiaModos, CuerpoPost,
+  Fondo, BloqueHelm, TrasHilo, IndiceNN, CuerpoNoNegociables, IndiceModos, CuerpoGuiaModos, CuerpoPost,
 } from './piezas.jsx'
 
 export default {
@@ -35,7 +35,7 @@ export default {
   privacidad: '/privacidad',
   cabecera: {
     titulo: 'AI para todo — la comunidad de IA de Alex Silvestre',
-    descripcion: 'Cómo opera Silvestre AI a sus clientes con HELM, para que lo hagas con los tuyos. Y skills para Claude, noticias de cada día, comunidad y la guía completa de Claude. En español, para miembros.',
+    descripcion: 'Skills para Claude, noticias de cada día, comunidad y la guía completa de Claude, con los 7 tipos de agentes. En español, para miembros.',
     imagen: '/inicio/og.jpg', colorBarra: '#050203',
   },
   Fondo,
@@ -43,8 +43,8 @@ export default {
   fundador: FUNDADOR,
 
   secciones: SECCIONES,
-  iconos: { operaciones: Workflow, skills: Sparkles, news: Newspaper, comunidad: Users, guia: BookOpen },
-  portadasHilo: { operaciones: Workflow, skills: Sparkles, mcp: Blocks, guia: BookOpen, comunidad: Users },
+  iconos: { skills: Sparkles, news: Newspaper, comunidad: Users, guia: BookOpen },
+  portadasHilo: { skills: Sparkles, mcp: Blocks, guia: BookOpen, comunidad: Users },
   iconosTipo: { mcp: Blocks },
   hilosDe,
   capitulos: CAPITULOS,
@@ -81,15 +81,12 @@ export default {
 
   portada: {
     titulo: 'IA sin humo.',
-    // Lo primero que se ve: la guía principal gratuita en PDF.
-    antes: <BannerModos donde="portada" />,
     boton: 'Sigue a nuestro creador',
     sub: (
       <>
-        Cómo operamos a nuestros clientes con HELM, para que lo hagas igual con los tuyos. Y skills para
-        Claude, las noticias del día que importan, una comunidad para preguntar y enseñar lo que montas, y la
-        guía completa de Claude. En español. Hazte miembro por <b>1,97 €/mes</b> y se te abre todo: hilos,
-        capítulos y noticias.
+        Skills para Claude, las noticias del día que importan, una comunidad para preguntar y enseñar lo que
+        montas, y la guía completa de Claude, con los 7 tipos de agentes. En español. Hazte miembro por
+        <b> 1,97 €/mes</b> y se te abre todo: hilos, capítulos y noticias.
       </>
     ),
     despues: <BloqueHelm donde="portada" />,

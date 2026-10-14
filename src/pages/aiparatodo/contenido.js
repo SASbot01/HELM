@@ -5,8 +5,6 @@
 //   · Guía: cada capítulo es un archivo de ./guia/ (NN-slug.js). Mientras un
 //     capítulo del índice no tenga archivo, se enseña como «pronto».
 //   · No negociables: la guía en PDF, en ./noNegociables.js.
-//   · Operaciones: cómo opera Silvestre AI a sus clientes con HELM, en
-//     ./operaciones.js (hilos con los mismos bloques que un capítulo).
 //   · News: no está aquí. Es el diario que escribe la redacción automática de
 //     HELM (dos artículos al día) más las breves del agente de noticias, y se
 //     piden a /api/aiparatodo.
@@ -17,7 +15,6 @@
 // ~/.claude/skills. Comprobado contra los repos el 29/09/2026.
 
 import { MODOS_HILO } from './guiaModos.js'
-import OPERACIONES from './operaciones.js'
 
 export const FUNDADOR = {
   nombre: 'Alex Silvestre',
@@ -29,19 +26,8 @@ export const FUNDADOR = {
 }
 
 // Las secciones. Todas se recorren sin dejar nada: se ven los temas y los
-// hilos, como un foro. Lo que pide el pago es LEER un hilo. Operaciones va la
-// primera: es el enfoque de Silvestre AI (operar clientes con HELM).
+// hilos, como un foro. Lo que pide el pago es LEER un hilo.
 export const SECCIONES = [
-  {
-    key: 'operaciones', titulo: 'Operaciones', desc: 'Cómo opera Silvestre AI a sus clientes con HELM, su propio sistema, para que lo hagas igual con los tuyos.',
-    temas: [
-      { key: 'clientes', nombre: 'Alta de clientes', desc: 'Perfil, onboarding y quién del equipo ve qué' },
-      { key: 'contenido', nombre: 'Contenido automático', desc: 'De los creadores de referencia al Drive' },
-      { key: 'claude', nombre: 'HELM en Claude', desc: 'El conector: tus clientes dentro de tu chat' },
-      { key: 'ventas', nombre: 'CRM y formularios', desc: 'Cada lead, en su sitio y con su historia' },
-      { key: 'creditos', nombre: 'Cómo se paga', desc: 'Créditos por uso, sin suscripción' },
-    ],
-  },
   {
     key: 'skills', titulo: 'Skills y repos', desc: 'Habilidades que se le instalan a Claude para que haga un trabajo concreto, y repos de código abierto que amplían lo que pueden hacer tus agentes.',
     temas: [
@@ -243,5 +229,5 @@ export const NN_RUTA = `/aiparatodo/${NN_HILO.seccion}/${NN_HILO.tema}/${NN_HILO
 
 // Los hilos de una sección (y de un tema). News no está aquí: viene de la API.
 // Los capítulos solo se listan si están en CAPITULOS_PUBLICADOS.
-export const hilosDe = (seccion, tema) => [MODOS_HILO, ...OPERACIONES, ...POSTS, ...CAPITULOS.filter(capituloVisible), NN_HILO]
+export const hilosDe = (seccion, tema) => [MODOS_HILO, ...POSTS, ...CAPITULOS.filter(capituloVisible), NN_HILO]
   .filter(h => h.seccion === seccion && (!tema || h.tema === tema))

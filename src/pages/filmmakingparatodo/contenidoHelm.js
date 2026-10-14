@@ -3,9 +3,10 @@
 // contenido automático de HELM encendido), para que quien lee lo use con sus
 // clientes.
 //
-// Los mismos bloques que un capítulo. Lo que se cuenta de HELM sale del hilo
-// de contenido de AI para todo (src/pages/aiparatodo/operaciones.js),
-// comprobado contra el código el 12/10/2026: si cambia allí, se cambia aquí.
+// Los mismos bloques que un capítulo. Lo que se cuenta de HELM salió del hilo
+// de contenido que tuvo la sección Operaciones de AI para todo (retirada el
+// 14/10/2026; está en git: src/pages/aiparatodo/operaciones.js en 774b77e),
+// comprobado contra el código el 12/10/2026.
 // TODO-ABEL: revisar el texto y contarlo con su experiencia.
 
 export const HELM_REGISTRO = 'https://helm.s4sf.net/registro'

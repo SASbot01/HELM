@@ -11,7 +11,9 @@ import { Rico, Bloque, IndiceCapitulo, Codigo, Prompt } from '../comunidad/bloqu
 import mascara from '../inicio/mascara.txt?raw'
 import aiArte from '../inicio/ai.txt?raw'
 import { NN_RUTA } from './contenido.js'
-import { HELM_REGISTRO, HELM_WEB } from './operaciones.js'
+// HELM: su web (qué es y cómo funciona) y el registro.
+const HELM_WEB = 'https://helm.s4sf.net/web'
+const HELM_REGISTRO = 'https://helm.s4sf.net/registro'
 import { NN_PDF, NN_PORTADA_3D, NN_INTRO, NN_PUNTOS, NN_ORDEN } from './noNegociables.js'
 import {
   MODOS_RUTA, MODOS_PDF, MODOS_PORTADA_3D, MODOS_INTRO, MODOS_INDICE, MODOS_BLOQUES, MODOS_CLAVES,
@@ -45,11 +47,11 @@ export function BloqueHelm({ donde }) {
         Claude. Sin suscripción: pagas por uso, con créditos de regalo al empezar.
       </p>
       <div className="aip-helm-btns">
-        <a className="aip-btn pequeno" href={HELM_REGISTRO} onClick={() => track('clic_cta', { donde: `aip-helm-registro-${donde}` })}>
-          Crea tu cuenta <ArrowRight size={14} />
-        </a>
-        <a className="aip-btn sec pequeno" href={HELM_WEB} target="_blank" rel="noopener noreferrer" onClick={() => track('clic_cta', { donde: `aip-helm-web-${donde}` })}>
+        <a className="aip-btn pequeno" href={HELM_WEB} target="_blank" rel="noopener noreferrer" onClick={() => track('clic_cta', { donde: `aip-helm-web-${donde}` })}>
           Ver HELM <ExternalLink size={14} />
+        </a>
+        <a className="aip-btn sec pequeno" href={HELM_REGISTRO} target="_blank" rel="noopener noreferrer" onClick={() => track('clic_cta', { donde: `aip-helm-registro-${donde}` })}>
+          Crea tu cuenta <ArrowRight size={14} />
         </a>
       </div>
     </aside>
@@ -71,30 +73,10 @@ export function BannerNoNegociables({ donde }) {
   )
 }
 
-// La guía principal en PDF: los Mods de Claude (el lead magnet del último Reel).
-export function BannerModos({ donde }) {
-  return (
-    <Link className="aip-nn-banner" to={MODOS_RUTA} onClick={() => track('clic_cta', { donde: `aip-modos-${donde}` })}>
-      <img src={MODOS_PORTADA_3D} alt="" width="900" height="900" loading="lazy" />
-      <div>
-        <p className="aip-kicker"><FileText size={13} /> Guía en PDF · miembros</p>
-        <h3>Los <em>Mods</em> de Claude</h3>
-        <p>3 usos de los que nadie habla, los prompts para que Claude te los construya solo, y cómo no meterte un troyano. Todo comprobado contra la documentación oficial.</p>
-        <span className="aip-btn pequeno">Descárgala <ArrowRight size={14} /></span>
-      </div>
-    </Link>
-  )
-}
-
-/** Lo que va al pie de un hilo, antes de «Volver»: HELM en Operaciones, y la
- *  guía de los no negociables donde se lee de Claude (capítulos y skills). */
-export function TrasHilo({ sk, slug, acceso, capitulo, post }) {
-  return (
-    <>
-      {sk === 'operaciones' && <BloqueHelm donde={`hilo-${slug}`} />}
-      {acceso && (capitulo || post) && <BannerNoNegociables donde={capitulo ? 'capitulo' : 'skills'} />}
-    </>
-  )
+/** Lo que va al pie de un hilo, antes de «Volver»: la guía de los no
+ *  negociables donde se lee de Claude (capítulos y skills). */
+export function TrasHilo({ acceso, capitulo, post }) {
+  return acceso && (capitulo || post) ? <BannerNoNegociables donde={capitulo ? 'capitulo' : 'skills'} /> : null
 }
 
 // ── La guía en PDF: los no negociables ──────────────────────────────────────
