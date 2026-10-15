@@ -29,6 +29,8 @@
 //   --max-por-ciudad  tope por ciudad y tipo, para repartir por España (3)
 //   --ciudades        lista propia separada por comas (por defecto, ~60)
 //   --fichero         dónde se guarda (~/helm-logs/prospeccion-<perfil>-<pipeline>.json)
+//   --todas           también los que tienen una web al día (sin cadenas igual):
+//                     para cuando lo que importa es el contacto, no vender la web
 //
 // PROTECCIÓN DE DATOS: son datos de contacto profesionales que publica el propio
 // negocio, para prospección B2B (interés legítimo, RGPD 6.1.f). En el primer
@@ -148,6 +150,16 @@ const ESTADO_WEB = {
   caida: { etiqueta: 'Web caída', peso: 3 },
   antigua: { etiqueta: 'Web anticuada', peso: 2 },
 }
+// Con --todas entran también estas (después, a igualdad de email).
+const ESTADO_WEB_TODAS = {
+  ...ESTADO_WEB,
+  actual: { etiqueta: 'Web al día', peso: 1 },
+  desconocido: { etiqueta: 'Web sin revisar', peso: 0.5 },
+}
+const TODAS = tiene('--todas')
+const ESTADOS = TODAS ? ESTADO_WEB_TODAS : ESTADO_WEB
+// Las que tienen web que carga: de ahí sale el email.
+const conWebQueCarga = (d) => d.estado === 'antigua' || d.estado === 'actual'
 
 async function perfilPorSlug(slug) {
   const { data, error } = await supabase.from('clients').select('id, slug, name').eq('slug', slug).maybeSingle()
@@ -281,13 +293,13 @@ async function preparar() {
       guardaCache()
       filtrados.forEach((n, i) => {
         const d = diagnosticos[i]
-        if (!ESTADO_WEB[d.estado]) return
+        if (!ESTADOS[d.estado]) return
         if (d.cadena) return
         candidatos.push({ ...n, tipo, ciudad, web_diag: d })
         validos++
-        if (d.estado === 'antigua') conWeb++
+        if (conWebQueCarga(d)) conWeb++
       })
-      process.stdout.write(`  ${tipo} · ${ciudad}: ${negocios.length} en Google, ${filtrados.length} pasan el filtro, ${validos} candidatos (${conWeb} con web anticuada)\n`)
+      process.stdout.write(`  ${tipo} · ${ciudad}: ${negocios.length} en Google, ${filtrados.length} pasan el filtro, ${validos} candidatos (${conWeb} con web que carga)\n`)
     }
 
     // Limpieza de cadenas por repetición entre ciudades.
@@ -315,7 +327,7 @@ async function preparar() {
   }
 
   const prioridad = (c) =>
-    ESTADO_WEB[c.web_diag.estado].peso +
+    ESTADOS[c.web_diag.estado].peso +
     (c.web_diag.estado === 'antigua' ? Math.min(c.web_diag.puntos, 8) / 4 : 0) +
     Math.log10((c.resenas || 0) + 1) +
     // El email manda: lo pidió así quien encarga la lista. Los que no tienen
@@ -341,7 +353,7 @@ async function preparar() {
   for (const tipo of tipos) {
     const pool = unicos.filter(c => c.tipo === tipo)
     // El email solo sale de webs que cargan: se leen todas las anticuadas.
-    const aLeer = pool.filter(c => c.web_diag.estado === 'antigua' && c.web)
+    const aLeer = pool.filter(c => conWebQueCarga(c.web_diag) && c.web)
     await enTandas(aLeer, 4, async (c) => {
       const ke = c.web_diag.url || c.web
       const d = fresco(cache.emails[ke]?.en, 14) ? cache.emails[ke].d : await enriquecerDesdeWeb(ke)
@@ -376,7 +388,7 @@ async function preparar() {
   const csv = [['tipo', 'ciudad', 'nombre', 'telefono', 'email', 'google_maps', 'web', 'estado_web', 'motivos', 'resenas', 'rating']]
   for (const c of final) {
     csv.push([c.tipo, c.ciudad, c.nombre, c.telefono, c.email || '', c.maps_url, c.web_diag.url || c.web || '',
-      ESTADO_WEB[c.web_diag.estado].etiqueta, c.web_diag.motivos.join(' · '), c.resenas ?? '', c.rating ?? ''])
+      ESTADOS[c.web_diag.estado].etiqueta, c.web_diag.motivos.join(' · '), c.resenas ?? '', c.rating ?? ''])
   }
   const rutaCsv = FICHERO.replace(/\.json$/, '.csv')
   fs.writeFileSync(rutaCsv, csv.map(f => f.map(x => `"${String(x).replace(/"/g, '""')}"`).join(',')).join('\n'))
@@ -384,7 +396,7 @@ async function preparar() {
   const cuenta = (f) => final.filter(f).length
   console.log(`\nPool: ${unicos.length} candidatos · elegidos: ${final.length} (objetivo ${cuantos})`)
   for (const tipo of tipos) console.log(`  ${tipo}: ${cuenta(c => c.tipo === tipo)}`)
-  console.log(`  sin web: ${cuenta(c => c.web_diag.estado === 'sin_web')} · web caída: ${cuenta(c => c.web_diag.estado === 'caida')} · anticuada: ${cuenta(c => c.web_diag.estado === 'antigua')}`)
+  console.log(`  sin web: ${cuenta(c => c.web_diag.estado === 'sin_web')} · web caída: ${cuenta(c => c.web_diag.estado === 'caida')} · anticuada: ${cuenta(c => c.web_diag.estado === 'antigua')} · al día: ${cuenta(c => c.web_diag.estado === 'actual')} · sin revisar: ${cuenta(c => c.web_diag.estado === 'desconocido')}`)
   console.log(`  con email: ${cuenta(c => c.email)} · con teléfono: ${cuenta(c => c.telefono)} · ciudades: ${new Set(final.map(c => c.ciudad)).size}`)
   console.log(`  peticiones a Google: ${peticiones} (se facturan a la clave de «${duenoClave.slug}»)`)
   if (topeGoogle) console.log('  OJO: Google cortó por su tope de búsquedas. Vuelve a lanzar --preparar cuando se renueve: sigue donde lo dejó.')
@@ -497,7 +509,9 @@ async function escribir() {
     const ya = porPlace.get(c.place_id) || porTel.get(cola(c.telefono))
     if (ya) { enlazados.push({ c, id: ya }); continue }
     const d = c.web_diag
-    const porque = d.estado === 'antigua' ? `Web anticuada: ${d.motivos.join(' · ')}` : `${ESTADO_WEB[d.estado].etiqueta}: ${d.motivos.join(' · ')}`
+    // Al escribir valen todos los estados: el fichero manda, no la opción.
+    const etiqueta = ESTADO_WEB_TODAS[d.estado]?.etiqueta || 'Web'
+    const porque = d.motivos.length ? `${etiqueta}: ${d.motivos.join(' · ')}` : etiqueta
     nuevos.push({
       c,
       fila: {
@@ -513,7 +527,7 @@ async function escribir() {
         source: 'Google Maps',
         status: etapa,
         pipeline_id: pipeline.id,
-        tags: [c.tipo, ESTADO_WEB[d.estado].etiqueta],
+        tags: [c.tipo, etiqueta],
         // Lo primero que mira quien va a llamar, en ese orden: por qué se le
         // llama, cuánta gente le conoce, y dónde verlo.
         notes: [
