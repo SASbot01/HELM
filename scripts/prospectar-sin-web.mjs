@@ -108,7 +108,7 @@ const CADENAS = new RegExp([
   'viceroy', 'cash converters', 'quickgold', 'oro vivo', 'bijou brigitte', "claire'?s", 'singularu',
   'pdpaola', 'luxenter', 'time road', 'swatch', 'cartier', 'bvlgari', 'bulgari', 'tiffany', 'rolex',
   'chopard', 'louis vuitton', 'omega boutique', 'tag heuer', 'marina garc[ií]a', 'ale-?hop', 'mr\\.? ?wonderful',
-  'el corte ingl[eé]s', 'hipercor', 'carrefour', 'grassy', 'bagu[eé]s', 'yanes',
+  'el corte ingl[eé]s', 'hipercor', 'carrefour', 'grassy', 'superefectivo', 'compro ?oro', '\\bgrupo\\b', 'bagu[eé]s', 'yanes',
   // asesorías y fincas: redes, franquicias y grandes firmas
   'deloitte', 'kpmg', '\\bpwc\\b', 'pricewaterhouse', '\\bey\\b', 'ernst ?& ?young', '\\bbdo\\b', 'grant thornton',
   'mazars', 'forvis', 'baker tilly', '\\brsm\\b', '\\bcrowe\\b', '\\betl\\b', 'ayuda ?t ?pymes', '\\bgesem\\b',
@@ -166,7 +166,7 @@ async function preparar() {
   const minResenas = Math.max(0, Number(valor('--min-resenas', '10')) || 0)
   const maxPorCiudad = Math.max(1, Number(valor('--max-por-ciudad', '3')) || 3)
   const ciudades = lista(valor('--ciudades')).length ? lista(valor('--ciudades')) : CIUDADES
-  const limitePorBusqueda = Math.min(60, Math.max(20, Number(valor('--por-busqueda', '40')) || 40))
+  const limitePorBusqueda = Math.min(60, Math.max(20, Number(valor('--por-busqueda', '60')) || 60))
 
   const perfil = await perfilPorSlug(PERFIL)
   const duenoClave = await perfilPorSlug(valor('--clave-de', PERFIL))
@@ -195,10 +195,11 @@ async function preparar() {
   for (const tipo of tipos) {
     const reglas = reglasTipo(tipo)
     let validos = 0
+    let conWeb = 0      // anticuadas: las únicas de las que sale un email
     const vistosEnTipo = new Map()   // host → ciudades, nombre base → ciudades
 
     for (const ciudad of ciudades) {
-      if (validos >= objetivoPool) break
+      if (validos >= objetivoPool && conWeb >= Math.ceil(porTipo * 1.5)) break
 
       const { consulta, negocios } = await buscarNegocios(clave, { tipo, zona: ciudad, limite: limitePorBusqueda })
       peticiones += Math.ceil(Math.max(negocios.length, 1) / 20)
@@ -216,7 +217,7 @@ async function preparar() {
         if (CADENAS.test(n.nombre) || CADENAS.test(hostDe(n.web))) return false
         // La web de Maps apuntando a la ficha de una tienda dentro de la web
         // de la marca: /tiendas/valencia-centro es una cadena.
-        if (/\/(tiendas|tienda|stores?|oficinas|delegaciones|centros|sucursales|locations?|store-locator|puntos-de-venta)\//i.test(n.web || '')) return false
+        if (/\/(tiendas|tienda|stores?|oficinas|delegaciones|centros|sucursales|locations?|store-locator|puntos-de-venta)\/|compro-oro/i.test(n.web || '')) return false
         return true
       })
       busqueda.nuevos = filtrados.length
@@ -243,8 +244,9 @@ async function preparar() {
         if (d.cadena) return
         candidatos.push({ ...n, tipo, ciudad, web_diag: d })
         validos++
+        if (d.estado === 'antigua') conWeb++
       })
-      process.stdout.write(`  ${tipo} · ${ciudad}: ${negocios.length} en Google, ${filtrados.length} pasan el filtro, ${validos} candidatos en total\n`)
+      process.stdout.write(`  ${tipo} · ${ciudad}: ${negocios.length} en Google, ${filtrados.length} pasan el filtro, ${validos} candidatos (${conWeb} con web anticuada)\n`)
     }
 
     // Limpieza de cadenas por repetición entre ciudades.
@@ -275,7 +277,9 @@ async function preparar() {
     ESTADO_WEB[c.web_diag.estado].peso +
     (c.web_diag.estado === 'antigua' ? Math.min(c.web_diag.puntos, 8) / 4 : 0) +
     Math.log10((c.resenas || 0) + 1) +
-    (c.email ? 1.5 : 0)
+    // El email manda: lo pidió así quien encarga la lista. Los que no tienen
+    // web casi nunca lo publican, así que entran después, con teléfono.
+    (c.email ? 4 : 0)
 
   // Se elige por tipo, con tope por ciudad, y se lee la web solo de los que
   // tienen posibilidades de entrar (no de todo el pool).
@@ -295,8 +299,8 @@ async function preparar() {
   const seleccion = []
   for (const tipo of tipos) {
     const pool = unicos.filter(c => c.tipo === tipo)
-    // El email solo sale de webs que cargan: se leen las de los mejor colocados.
-    const aLeer = elegir(pool, Math.ceil(porTipo * 1.6)).filter(c => c.web_diag.estado === 'antigua' && c.web)
+    // El email solo sale de webs que cargan: se leen todas las anticuadas.
+    const aLeer = pool.filter(c => c.web_diag.estado === 'antigua' && c.web)
     await enTandas(aLeer, 4, async (c) => {
       const d = await enriquecerDesdeWeb(c.web_diag.url || c.web)
       c.email = d.email || ''

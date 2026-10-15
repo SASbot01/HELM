@@ -41,6 +41,8 @@ const NO_ES_WEB = [
   [/(^|\.)business\.site$/i, 'la web gratuita de Google (ya cerrada)'],
   [/(^|\.)(etsy\.com|wallapop\.com|milanuncios\.com)$/i, 'una tienda en un marketplace'],
   [/(^|\.)(google\.com|goo\.gl|g\.page|maps\.app\.goo\.gl)$/i, 'su ficha de Google'],
+  // Directorios: una ficha suya en una guía de empresas no es su web.
+  [/(^|\.)(paginasamarillas\.es|cylex\.es|infoisinfo\.es|qdq\.com|vulka\.es|empresite\.eleconomista\.es|einforma\.com|axesor\.es|guiaempresas\.universia\.es|habitissimo\.es|tripadvisor\.(es|com)|yelp\.(es|com)|misterwhat\.es|joyerias\.eu|joyerias\.com|comerciosevilla\.es|abctienda\.es|tuugo\.es|hotfrog\.es|top-rated\.online|doctoralia\.es|cronoshare\.com|starofservice\.es)$/i, 'una ficha en un directorio de empresas'],
 ]
 
 // Dominios aparcados, hostings sin web y cuentas suspendidas. Se mira el texto
