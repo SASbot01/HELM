@@ -4,11 +4,39 @@
 // del panel lee de ahí) y, si el perfil tiene Telegram vinculado, la manda
 // también por ahí: una reserva que solo se ve entrando al panel llega tarde.
 //
+// Lo importante (avisos, errores, leads, reservas y ventas) llega además por
+// el bot de HELM para agencias a los administradores de la agencia del perfil
+// que lo tienen vinculado, con el nombre del perfil delante: con varias marcas
+// en un mismo chat, hay que saber de cuál es.
+//
 // Nunca lanza. Quien avisa está en mitad de otra cosa —guardar una reserva,
 // contestar a una landing— y un fallo al notificar no puede tumbar eso.
-import { getTelegramConfig, enviarMensaje } from './telegram.js'
+import { getTelegramConfig, enviarMensaje, tokenAgencia, agenciaPermitida } from './telegram.js'
+import { agenciaDe } from './access.js'
 
 const ICONO = { info: '🔔', aviso: '⚠️', error: '🔴' }
+const A_LA_AGENCIA = new Set(['lead', 'reserva', 'venta'])
+
+// Por el bot de agencia, a quien lo tenga vinculado y siga siendo de esa
+// agencia. Sin HELM_TELEGRAM_TOKEN, nada.
+async function avisarAgencia(supabase, clientId, { nivel, titulo, cuerpo }) {
+  const token = tokenAgencia()
+  if (!token) return
+  const agenciaId = await agenciaDe(clientId)
+  if (!agenciaId || !(await agenciaPermitida(supabase, agenciaId))) return
+  const { data: vinculos, error } = await supabase.from('helm_telegram_vinculos')
+    .select('tg_chat_id, superadmins(active, agencia_id)')
+    .eq('agencia_id', agenciaId).not('tg_chat_id', 'is', null)
+  if (error) throw error
+  const chats = (vinculos || [])
+    .filter(v => v.tg_chat_id && v.superadmins?.active !== false && v.superadmins?.agencia_id === agenciaId)
+    .map(v => v.tg_chat_id)
+  if (!chats.length) return
+  const { data: perfil } = await supabase.from('clients').select('name, slug').eq('id', clientId).maybeSingle()
+  // El corchete va escapado: en el Markdown de Telegram abre un enlace.
+  const texto = `${ICONO[nivel] || ICONO.info} \\[${perfil?.name || perfil?.slug || 'Perfil'}] *${titulo}*${cuerpo ? `\n${cuerpo}` : ''}`
+  await Promise.all(chats.map(id => enviarMensaje(token, id, texto).catch(() => null)))
+}
 
 /**
  * @param {object} supabase cliente con la clave de servicio
@@ -55,6 +83,13 @@ export async function notificar(supabase, clientId, {
       }
     } catch (err) {
       console.warn('[notificar] telegram', err.message)
+    }
+    if (nivel === 'aviso' || nivel === 'error' || A_LA_AGENCIA.has(tipo)) {
+      try {
+        await avisarAgencia(supabase, clientId, { nivel, titulo, cuerpo })
+      } catch (err) {
+        console.warn('[notificar] telegram de la agencia', err.message)
+      }
     }
     return data.id
   } catch (err) {

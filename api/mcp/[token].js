@@ -18,7 +18,7 @@
 import { timingSafeEqual, createHash } from 'node:crypto'
 import { supabase } from '../lib/supabase.js'
 import { rateLimit, getClientIp } from '../_lib/auth.js'
-import { anotar } from '../_lib/contexto.js'
+import { anotar, contexto, enContexto } from '../_lib/contexto.js'
 import { agenciaDe } from '../_lib/access.js'
 import { anadeReels, hashUrl, esEnlace } from '../agents.js'
 import { calendario, ordenar, TIPOS, FASES } from '../_lib/ingesta.js'
@@ -243,7 +243,7 @@ const TOOLS = [
 ]
 
 // Las que escriben: aceptan prueba y quedan en el registro del perfil.
-const ESCRIBEN = ['anadir_reels', 'asignar_creadores', 'etiquetar_reels', 'programar_guiones', 'ordenar_video', 'guardar_memoria']
+export const ESCRIBEN = ['anadir_reels', 'asignar_creadores', 'etiquetar_reels', 'programar_guiones', 'ordenar_video', 'guardar_memoria']
 
 // El nombre o el slug, sin distinguir mayúsculas: Claude escribe "Samzia" tan
 // a menudo como "samzia".
@@ -823,7 +823,7 @@ async function llamaComoAgencia(nombre, args, a) {
 // Leer y usar SU parte: sus creadores, su calendario, sus vídeos. Lo que toca
 // el corpus de todos (añadir reels, reetiquetar, asignar creadores) es del
 // operador y ni siquiera aparece.
-const DEL_CLIENTE = ['identidades', 'perfiles', 'corpus', 'calendario', 'programar_guiones', 'ordenar_video', 'metricas', 'guardar_memoria']
+export const DEL_CLIENTE = ['identidades', 'perfiles', 'corpus', 'calendario', 'programar_guiones', 'ordenar_video', 'metricas', 'guardar_memoria']
 
 async function asignadosDe(clientId) {
   const { data, error } = await supabase.from('agent_identity_clients')
@@ -893,12 +893,12 @@ async function registra(alcance, { herramienta, args, r, err, empezado }) {
   try {
     const clientId = await perfilDelRegistro(alcance, args)
     if (!clientId) return
-    const quien = alcance.operador ? 'enlace del operador' : alcance.agenciaId ? `enlace de la agencia ${alcance.nombre}` : 'enlace del perfil'
+    const quien = alcance.quien || (alcance.operador ? 'enlace del operador' : alcance.agenciaId ? `enlace de la agencia ${alcance.nombre}` : 'enlace del perfil')
     const texto = err ? `${herramienta}: ${String(err.message || err)}` : `${herramienta}: ${r?.hecho || 'hecho'}`
     await supabase.from('agent_ejecuciones').insert({
       client_id: clientId,
       agente: 'conector',
-      origen: 'mcp',
+      origen: alcance.origen || 'mcp',
       estado: err ? 'error' : 'hecho',
       encargo: `${herramienta} (${quien})${Object.keys(args || {}).length ? ` · ${resumeArgs(args)}` : ''}`.slice(0, 600),
       resumen: err ? '' : String(r?.hecho || '').slice(0, 1000),
@@ -911,6 +911,81 @@ async function registra(alcance, { herramienta, args, r, err, empezado }) {
     // El registro no puede tumbar la llamada: se avisa en el log y se sigue.
     console.error('[mcp] no se pudo apuntar en el registro:', e?.message || e)
   }
+}
+
+// ── El motor, reutilizable fuera del MCP ────────────────────────────────────
+// Lo que ve y lo que puede hacer un alcance, sin el envoltorio JSON-RPC: lo usa
+// tanto este endpoint como el bot de Telegram (api/_lib/bot-herramientas.js),
+// para que una misma llamada se comporte igual venga de donde venga.
+
+// Las herramientas visibles para este alcance: todas con el enlace del
+// operador, solo las del cliente con el de un perfil o una agencia.
+export function herramientasDe(alcance) {
+  return alcance.operador ? TOOLS : TOOLS.filter(t => DEL_CLIENTE.includes(t.name))
+}
+
+// Ejecuta una herramienta y devuelve el resultado en crudo (el cuerpo de
+// tools/call sin JSON-RPC). Mismos permisos, misma validación, mismo registro
+// que por el MCP; el origen del registro lo pone el alcance (por defecto 'mcp').
+// Un fallo de la herramienta no se lanza: viene en { ok:false, texto }, para
+// que quien llame lo enseñe o se lo devuelva a Claude y pueda corregir.
+export async function ejecutaHerramienta(nombre, argumentos, alcance) {
+  const tool = TOOLS.find(t => t.name === nombre)
+  if (!tool || !HERRAMIENTAS[nombre]) {
+    const hay = herramientasDe(alcance).map(t => t.name)
+    return { ok: false, desconocida: true, ensayo: false, args: {}, resultado: undefined, texto: `Herramienta desconocida: ${nombre}. Las que hay: ${hay.join(', ')}.` }
+  }
+  const fn = alcance.operador
+    ? HERRAMIENTAS[nombre]
+    : alcance.agenciaId
+      ? (args) => llamaComoAgencia(nombre, args, alcance)
+      : (args) => llamaComoCliente(nombre, args, alcance)
+
+  // Con el enlace de un perfil el perfil es siempre el suyo; con el de una
+  // agencia que solo tiene uno, también. Igual que en el MCP.
+  const dados = { ...(argumentos || {}) }
+  const llevaPerfil = 'perfil' in (tool.inputSchema.properties || {})
+  if (alcance.clientId && llevaPerfil) dados.perfil = alcance.slug
+  if (alcance.agenciaId && llevaPerfil && !dados.perfil && alcance.perfiles.length === 1) dados.perfil = alcance.perfiles[0].slug
+  const empezado = Date.now()
+  const { args, errores, avisos } = validaArgs(tool.inputSchema, dados)
+
+  let r, err
+  if (errores.length) {
+    const pista = alcance.agenciaId && llevaPerfil ? `\nLos perfiles de ${alcance.nombre}: ${alcance.perfiles.map(x => x.slug).join(', ') || 'ninguno todavía'}.` : ''
+    err = new Error(explicaErrores(nombre, errores) + pista)
+  } else {
+    // La herramienta corre en una copia del contexto: el perfil que anote
+    // (llamaComoAgencia) no se queda pegado a lo que haga después quien llama,
+    // p. ej. los siguientes pasos de Claude del bot, que paga la agencia.
+    const c = contexto()
+    try { r = await (c ? enContexto({ ...c }, () => fn(args)) : fn(args)) } catch (e) { err = e }
+  }
+  // Un ensayo (prueba=true) no deja rastro, ni cuando falla.
+  const ensayo = args.prueba === true || dados.prueba === true || dados.prueba === 'true'
+  if (!ensayo && (err || ESCRIBEN.includes(nombre))) {
+    await registra(alcance, { herramienta: nombre, args, r, err, empezado })
+  }
+  if (err) return { ok: false, ensayo, args, resultado: undefined, texto: String(err?.message || err) }
+  const resultado = avisos.length && r && typeof r === 'object' && !Array.isArray(r) ? { ...r, avisos } : r
+  return { ok: true, ensayo, args, resultado, texto: JSON.stringify(resultado) }
+}
+
+// El alcance de una agencia sin pasar por un token: a partir de su agencia_id,
+// la misma forma que alcanceDe da para un token de agencia (nombre y perfiles
+// activos). Lo usa el bot, que resuelve la agencia desde el vínculo guardado,
+// nunca desde lo que diga el mensaje.
+export async function alcanceDesdeContexto({ agenciaId } = {}, { origen = 'telegram', quien } = {}) {
+  if (!agenciaId) return null
+  const { data: ag, error: e1 } = await supabase.from('agencias').select('nombre').eq('id', agenciaId).maybeSingle()
+  if (e1) throw e1
+  if (!ag) return null
+  const { data: perfiles, error } = await supabase.from('clients')
+    .select('id, slug, name').eq('agencia_id', agenciaId).eq('active', true).order('name')
+  if (error) throw error
+  // Lo que se gaste en IA por este alcance se cobra a la agencia.
+  anotar({ agenciaId, origen })
+  return { agenciaId, nombre: ag.nombre, perfiles: perfiles || [], origen, quien }
 }
 
 async function responde(msg, alcance) {
@@ -933,49 +1008,15 @@ async function responde(msg, alcance) {
     case 'ping':
       return ok(id, {})
     case 'tools/list':
-      return ok(id, { tools: alcance.operador ? TOOLS : TOOLS.filter(t => DEL_CLIENTE.includes(t.name)) })
+      return ok(id, { tools: herramientasDe(alcance) })
     case 'tools/call': {
-      const nombre = params?.name
-      const tool = TOOLS.find(t => t.name === nombre)
-      if (!tool || !HERRAMIENTAS[nombre]) {
-        const hay = (alcance.operador ? TOOLS : TOOLS.filter(t => DEL_CLIENTE.includes(t.name))).map(t => t.name)
-        return fallo(id, -32602, `Herramienta desconocida: ${nombre}. Las que hay: ${hay.join(', ')}.`)
-      }
-      const fn = alcance.operador
-        ? HERRAMIENTAS[nombre]
-        : alcance.agenciaId
-          ? (args) => llamaComoAgencia(nombre, args, alcance)
-          : (args) => llamaComoCliente(nombre, args, alcance)
-
-      // Con el enlace de un perfil, el perfil es siempre el suyo: no hace
-      // falta que Claude lo pase, y si pasa otro se ignora (como antes).
-      const dados = { ...(params?.arguments || {}) }
-      // Con el de una agencia que solo tiene uno, igual.
-      const llevaPerfil = 'perfil' in (tool.inputSchema.properties || {})
-      if (alcance.clientId && llevaPerfil) dados.perfil = alcance.slug
-      if (alcance.agenciaId && llevaPerfil && !dados.perfil && alcance.perfiles.length === 1) dados.perfil = alcance.perfiles[0].slug
-      const empezado = Date.now()
-      const { args, errores, avisos } = validaArgs(tool.inputSchema, dados)
-
       // Un fallo de la herramienta va como resultado con isError, no como
       // error JSON-RPC: así Claude lo lee y puede corregir (p. ej. el nombre
-      // de la identidad) en vez de dar la llamada por rota.
-      let r, err
-      if (errores.length) {
-        const pista = alcance.agenciaId && llevaPerfil ? `\nLos perfiles de ${alcance.nombre}: ${alcance.perfiles.map(x => x.slug).join(', ') || 'ninguno todavía'}.` : ''
-        err = new Error(explicaErrores(nombre, errores) + pista)
-      }
-      else {
-        try { r = await fn(args) } catch (e) { err = e }
-      }
-      // Un ensayo (prueba=true) no deja rastro, ni cuando falla.
-      const ensayo = args.prueba === true || dados.prueba === true || dados.prueba === 'true'
-      if (!ensayo && (err || ESCRIBEN.includes(nombre))) {
-        await registra(alcance, { herramienta: nombre, args, r, err, empezado })
-      }
-      return err
-        ? ok(id, { content: [{ type: 'text', text: String(err?.message || err) }], isError: true })
-        : ok(id, { content: [{ type: 'text', text: JSON.stringify(avisos.length && r && typeof r === 'object' && !Array.isArray(r) ? { ...r, avisos } : r) }] })
+      // de la identidad) en vez de dar la llamada por rota. Solo una
+      // herramienta desconocida es error de protocolo.
+      const x = await ejecutaHerramienta(params?.name, params?.arguments, alcance)
+      if (x.desconocida) return fallo(id, -32602, x.texto)
+      return ok(id, { content: [{ type: 'text', text: x.texto }], ...(x.ok ? {} : { isError: true }) })
     }
     default:
       return fallo(id, -32601, `Método no soportado: ${method}`)

@@ -610,6 +610,20 @@ export const creditosApi = {
   nuevoEnlaceMcp: () => apiFetch('/api/agents?action=mcp-enlace', { method: 'POST', body: {} }),
 }
 
+// ── El bot de Telegram de la agencia (api/telegram-agencia.js) ─────────────
+// Un solo bot para la agencia y todos sus perfiles. Cada superadmin vincula su
+// propio Telegram con un código de un solo uso; la plataforma registra el
+// webhook. El token del bot no llega nunca al navegador. `vinculo` es el estado
+// ligero (si estás vinculado y si tu agencia tiene el bot, sin preguntar a
+// Telegram): para el botón del tablero y para esperar al código.
+export const telegramAgenciaApi = {
+  estado: () => apiFetch('/api/telegram-agencia?action=estado'),
+  vinculo: () => apiFetch('/api/telegram-agencia?action=estado&solo=vinculo'),
+  codigo: () => apiFetch('/api/telegram-agencia?action=codigo', { method: 'POST', body: {} }),
+  desvincular: () => apiFetch('/api/telegram-agencia?action=vinculo', { method: 'DELETE' }),
+  registrar: () => apiFetch('/api/telegram-agencia?action=registrar', { method: 'POST', body: {} }),
+}
+
 // ── Plataforma: las agencias de HELM (solo superadmins de plataforma) ──────
 export const plataformaApi = {
   resumen: () => apiFetch('/api/plataforma?action=resumen'),

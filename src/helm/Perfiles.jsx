@@ -3,9 +3,10 @@
 // directo al suyo (ver HelmApp).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, ArrowUpRight, LogOut, Users, MoreHorizontal, EyeOff, Trash2, RotateCcw, Building2 } from 'lucide-react'
-import { brandOf, notificacionesApi, perfilesApi, creditosApi } from './lib'
+import { Plus, Search, ArrowUpRight, LogOut, Users, MoreHorizontal, EyeOff, Trash2, RotateCcw, Building2, Send } from 'lucide-react'
+import { brandOf, notificacionesApi, perfilesApi, creditosApi, telegramAgenciaApi } from './lib'
 import Creditos, { BotonCreditos, Bienvenida } from './Creditos'
+import TelegramAgencia from './TelegramAgencia'
 import { Modal, Field, Input, FormNote } from './ui'
 import './perfiles.css'
 
@@ -18,6 +19,8 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
   const [error, setError] = useState(null)
   const [agencia, setAgencia] = useState(null)      // { id, nombre, plataforma }
   const [verCreditos, setVerCreditos] = useState(false)
+  const [verTelegram, setVerTelegram] = useState(false)
+  const [conTelegram, setConTelegram] = useState(false)  // el botón del bot: solo si la agencia lo tiene
   const [bienvenida, setBienvenida] = useState(null)  // { saldo, pagado }: la oferta de la agencia nueva
   const [recarga, setRecarga] = useState(0)         // para que el botón relea el saldo
   const caja = useRef(null)
@@ -49,6 +52,11 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
       : Promise.resolve(false)
     pago.then(pagado => creditosApi.saldo().then(r => {
       setAgencia({ id: r.agencia?.id, nombre: r.agencia?.nombre, plataforma: r.plataforma })
+      // El bot de Telegram solo lo tienen las agencias de HELM_TELEGRAM_AGENCIAS
+      // (y la plataforma, que lo activa). Quien quedó vinculado de antes lo
+      // sigue viendo para poder desvincularse.
+      if (r.plataforma) setConTelegram(true)
+      else telegramAgenciaApi.vinculo().then(e => setConTelegram(Boolean(e?.permitido || e?.vinculado))).catch(() => {})
       // Agencia recién llegada: primero la oferta de compra (o, si viene de
       // pagar, directamente el regalo de bienvenida).
       if (r.bienvenida?.pendiente) setBienvenida({ saldo: r, pagado })
@@ -86,6 +94,11 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
             </label>
           )}
           <BotonCreditos onAbrir={() => setVerCreditos(true)} recarga={recarga} />
+          {conTelegram && (
+            <button type="button" className="helm-btn" onClick={() => setVerTelegram(true)} title="El bot de Telegram de la agencia">
+              <Send size={15} /> Telegram
+            </button>
+          )}
           {agencia?.plataforma && (
             <button type="button" className="helm-btn" onClick={() => navigate('/plataforma')}><Building2 size={15} /> Agencias</button>
           )}
@@ -96,6 +109,11 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
 
       <FormNote>{error}</FormNote>
       {verCreditos && <Creditos onClose={() => { setVerCreditos(false); setRecarga(n => n + 1) }} />}
+      {verTelegram && (
+        <Modal title="Bot de Telegram" onClose={() => setVerTelegram(false)} wide>
+          <TelegramAgencia />
+        </Modal>
+      )}
       {bienvenida && (
         <Bienvenida
           saldo={bienvenida.saldo} pagado={bienvenida.pagado}

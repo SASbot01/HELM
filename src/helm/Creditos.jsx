@@ -1,9 +1,9 @@
 // HELM — créditos de la agencia.
 //
 // Se paga por uso: la agencia compra créditos y la IA de HELM los gasta al
-// trabajar para sus perfiles (en el panel, en el contenido automático y cuando
-// el conector de Claude le pide algo a HELM). Lo que Claude haga en la cuenta
-// del propio usuario no gasta créditos. Ver api/creditos.js.
+// trabajar para sus perfiles (en el panel, en el contenido automático, en el bot
+// de Telegram y cuando el conector de Claude le pide algo a HELM). Lo que Claude
+// haga en la cuenta del propio usuario no gasta créditos. Ver api/creditos.js.
 //
 // Aquí también vive el enlace del conector de Claude de la agencia entera: es
 // de la agencia, como el saldo, no de un perfil.
@@ -16,7 +16,7 @@ import './bienvenida.css'
 const fmt = (n) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0, useGrouping: 'always' }).format(Math.floor(Number(n) || 0))
 const fecha = (d) => new Date(d).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 const QUE = { recarga: 'Recarga', regalo: 'Regalo', ajuste: 'Ajuste', consumo: 'IA' }
-const DONDE = { panel: 'panel', mcp: 'conector de Claude', auto: 'contenido automático' }
+const DONDE = { panel: 'panel', mcp: 'conector de Claude', auto: 'contenido automático', telegram: 'Telegram' }
 
 /** El botón de la cabecera de Perfiles: el saldo a la vista. */
 export function BotonCreditos({ onAbrir, recarga }) {
@@ -59,9 +59,9 @@ export default function Creditos({ onClose, aviso }) {
                 <strong>{fmt(s.creditos)}</strong> <span>créditos</span>
               </div>
               <p className="helm-settings-lead">
-                Los gasta la IA de HELM cuando trabaja para tus perfiles: en el panel, en el contenido automático y
-                cuando el conector de Claude le pide algo a HELM. Lo que Claude hace en tu propia cuenta no gasta
-                créditos. 1 € = 100 créditos, sin cuota ni permanencia.
+                Los gasta la IA de HELM cuando trabaja para tus perfiles: en el panel, en el contenido automático, en
+                el bot de Telegram y cuando el conector de Claude le pide algo a HELM. Lo que Claude hace en tu propia
+                cuenta no gasta créditos. 1 € = 100 créditos, sin cuota ni permanencia.
               </p>
               {s.creditos <= 0 && <FormNote>Sin créditos la IA de tus perfiles está parada. Recarga para que siga trabajando.</FormNote>}
               <div className="helm-creditos-packs">

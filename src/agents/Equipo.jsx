@@ -39,7 +39,7 @@ const ETAPAS = [
   { k: 'publicado',  nombre: 'Publicado' },
 ]
 const PRIORIDAD = { high: 'Prioridad alta', medium: '', low: 'Prioridad baja' }
-const ORIGEN = { horario: 'Horario de las 6:00', director: 'Encargo del director', manual: 'Lanzado a mano', mcp: 'Claude desde claude.ai (conector)' }
+const ORIGEN = { horario: 'Horario de las 6:00', director: 'Encargo del director', manual: 'Lanzado a mano', mcp: 'Claude desde claude.ai (conector)', telegram: 'Desde Telegram' }
 const ESTADO = {
   corriendo: { label: 'Trabajando', tono: 'vivo' },
   hecho:     { label: 'Hecho',      tono: 'ok' },
