@@ -35,6 +35,7 @@ const FormularioPublico = perezoso(() => import('./pages/FormularioPublico.jsx')
 const PrimerMapa = perezoso(() => import('./pages/PrimerMapa.jsx'))
 const SilvestreValor = perezoso(() => import('./pages/SilvestreValor.jsx'))
 const PortalDocumentos = perezoso(() => import('./pages/PortalDocumentos.jsx'))
+const AltaHelm = perezoso(() => import('./pages/AltaHelm.jsx'))
 const PaginaInicio = perezoso(() => import('./pages/PaginaInicio.jsx'))
 const PaginaInicioHugo = perezoso(() => import('./pages/PaginaInicioHugo.jsx'))
 const Clase = perezoso(() => import('./pages/Clase.jsx'))
@@ -153,6 +154,11 @@ createRoot(document.getElementById('root')).render(
               El token del enlace es lo que autentica; va ANTES de /:slug/* como
               todas las publicas. */}
           <Route path="/d/:token" element={<PortalDocumentos />} />
+          {/* El alta en HELM que rellena el cliente nuevo desde el enlace que le
+              manda su agencia (Onboarding → Alta en HELM). El token del enlace
+              es lo que autentica. Solo en el dominio del panel, como /registro,
+              y ANTES de /:slug/*, que si no leería "alta" como slug de perfil. */}
+          <Route path="/alta/:token" element={<SoloEnElPanel><AltaHelm /></SoloEnElPanel>} />
           {/* Formulario de valor de Silvestre IA. Los leads entran al CRM del
               perfil indicado en silvestreai/guardar.js. También va ANTES de
               /:slug/*, que si no leería "silvestreai" como slug de perfil. */}

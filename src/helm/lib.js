@@ -529,23 +529,32 @@ export async function getOnboarding(clientId, form = 'contenido') {
   return data || null
 }
 
-// Guarda (o crea) el borrador. Upsert por (client_id, form).
-export async function saveOnboardingDraft(clientId, answers, form = 'contenido') {
-  const { data, error } = await supabase.from('helm_onboarding').upsert({
-    client_id: clientId, form, answers, status: 'draft', updated_at: new Date().toISOString(),
-  }, { onConflict: 'client_id,form' }).select().single()
+// Guarda (o crea) el borrador. Upsert por (client_id, form). Con
+// conservarEstado no toca el estado: una fila nueva nace en 'draft' (lo pone la
+// tabla) y una completada sigue completada. Lo usa el alta, que el cliente
+// también guarda desde su enlace sin tocar el estado (api/onboarding.js,
+// action=alta): retocarla aquí no puede devolverla a borrador.
+export async function saveOnboardingDraft(clientId, answers, form = 'contenido', { conservarEstado = false } = {}) {
+  const fila = { client_id: clientId, form, answers, updated_at: new Date().toISOString() }
+  if (!conservarEstado) fila.status = 'draft'
+  const { data, error } = await supabase.from('helm_onboarding')
+    .upsert(fila, { onConflict: 'client_id,form' }).select().single()
   if (error) { console.warn('[helm] saveOnboardingDraft', error.message); throw error }
   return data
 }
 
 // Generación y gestión de la Biblia (pasa por el servidor: el modelo local solo
 // escucha en el backend). El onboarding se marca completado al generar.
+// enlaceAlta firma el enlace público del alta (/alta/<token>, 30 días) para
+// mandárselo al cliente: { url, caduca }. La página del enlace no pasa por
+// aquí, que no tiene sesión (ver src/pages/AltaHelm.jsx).
 export const onboardingApi = {
   biblia: (clientId) => apiFetch(`/api/onboarding?action=biblia&clientId=${clientId}`),
   generate: (clientId, kind, dossier) =>
     apiFetch('/api/onboarding?action=generate', { method: 'POST', body: { clientId, kind, dossier } }),
   saveBiblia: (clientId, kind, content) =>
     apiFetch('/api/onboarding?action=save', { method: 'POST', body: { clientId, kind, content } }),
+  enlaceAlta: (clientId) => apiFetch('/api/onboarding?action=enlace', { method: 'POST', body: { clientId } }),
 }
 
 // Sección Agentes: los creadores de referencia de este perfil (api/agentes-perfil.js).
