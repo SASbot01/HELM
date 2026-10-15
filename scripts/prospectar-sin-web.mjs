@@ -185,6 +185,19 @@ async function preparar() {
   ])
   const yaTel = new Set((contactos || []).map(c => cola(c.phone)).filter(t => t.length === 9))
 
+  // Lo ya pagado y lo ya mirado, de ejecuciones anteriores: Google tiene un
+  // tope diario de búsquedas y mirar una web tarda. Si Google corta a medias,
+  // la siguiente ejecución sigue donde se quedó sin volver a pagar nada.
+  const rutaCache = path.join(path.dirname(FICHERO), `places-cache-${slugDe(PERFIL)}.json`)
+  let cache = { busquedas: {}, webs: {}, emails: {} }
+  try { cache = { ...cache, ...JSON.parse(fs.readFileSync(rutaCache, 'utf8')) } } catch { /* primera vez */ }
+  const guardaCache = () => {
+    fs.mkdirSync(path.dirname(rutaCache), { recursive: true })
+    fs.writeFileSync(rutaCache, JSON.stringify(cache))
+  }
+  const fresco = (iso, dias) => iso && Date.now() - Date.parse(iso) < dias * 24 * UNA_HORA
+  let topeGoogle = false
+
   const porTipo = Math.ceil(cuantos / tipos.length)
   // Para elegir bien hace falta donde elegir: el doble de lo que se va a meter.
   const objetivoPool = porTipo * 2
@@ -201,8 +214,29 @@ async function preparar() {
     for (const ciudad of ciudades) {
       if (validos >= objetivoPool && conWeb >= Math.ceil(porTipo * 1.5)) break
 
-      const { consulta, negocios } = await buscarNegocios(clave, { tipo, zona: ciudad, limite: limitePorBusqueda })
-      peticiones += Math.ceil(Math.max(negocios.length, 1) / 20)
+      const kb = `${slugDe(tipo)}|${slugDe(ciudad)}|${limitePorBusqueda}`
+      let consulta, negocios
+      if (fresco(cache.busquedas[kb]?.en, 14)) {
+        ({ consulta, negocios } = cache.busquedas[kb])
+      } else {
+        // Con el tope ya alcanzado solo se aprovecha lo que esté en la caché.
+        if (topeGoogle) continue
+        try {
+          ({ consulta, negocios } = await buscarNegocios(clave, { tipo, zona: ciudad, limite: limitePorBusqueda }))
+        } catch (e) {
+          // El tope diario (o por minuto) de Google: se para de buscar y se
+          // sigue con lo que hay. Lo buscado hasta aquí ya está en la caché.
+          if (e.statusCode === 429) {
+            topeGoogle = true
+            console.warn(`  Google ha llegado a su tope de búsquedas en ${tipo} · ${ciudad}: sigo con lo que hay.`)
+            continue
+          }
+          throw e
+        }
+        peticiones += Math.ceil(Math.max(negocios.length, 1) / 20)
+        cache.busquedas[kb] = { en: ahoraIso(), consulta, negocios }
+        guardaCache()
+      }
       const busqueda = { tipo, zona: ciudad, consulta, encontrados: negocios.length, nuevos: 0 }
       busquedas.push(busqueda)
 
@@ -237,7 +271,14 @@ async function preparar() {
         }
       }
 
-      const diagnosticos = await enTandas(filtrados, 6, n => diagnosticoWeb(n.web, { anioActual }))
+      const diagnosticos = await enTandas(filtrados, 6, async (n) => {
+        const kw = `${n.place_id}|${n.web || ''}`
+        if (fresco(cache.webs[kw]?.en, 7)) return cache.webs[kw].d
+        const d = await diagnosticoWeb(n.web, { anioActual })
+        cache.webs[kw] = { en: ahoraIso(), d }
+        return d
+      })
+      guardaCache()
       filtrados.forEach((n, i) => {
         const d = diagnosticos[i]
         if (!ESTADO_WEB[d.estado]) return
@@ -302,7 +343,9 @@ async function preparar() {
     // El email solo sale de webs que cargan: se leen todas las anticuadas.
     const aLeer = pool.filter(c => c.web_diag.estado === 'antigua' && c.web)
     await enTandas(aLeer, 4, async (c) => {
-      const d = await enriquecerDesdeWeb(c.web_diag.url || c.web)
+      const ke = c.web_diag.url || c.web
+      const d = fresco(cache.emails[ke]?.en, 14) ? cache.emails[ke].d : await enriquecerDesdeWeb(ke)
+      cache.emails[ke] = { en: cache.emails[ke]?.en && fresco(cache.emails[ke].en, 14) ? cache.emails[ke].en : ahoraIso(), d }
       c.email = d.email || ''
       c.instagram = d.instagram || ''
       c.facebook = d.facebook || ''
@@ -311,6 +354,7 @@ async function preparar() {
       c.titular = d.titular || ''
       c.enriquecido_en = ahoraIso()
     })
+    guardaCache()
     seleccion.push(...elegir(pool, porTipo))
   }
   const final = seleccion.slice(0, cuantos)
@@ -343,6 +387,7 @@ async function preparar() {
   console.log(`  sin web: ${cuenta(c => c.web_diag.estado === 'sin_web')} · web caída: ${cuenta(c => c.web_diag.estado === 'caida')} · anticuada: ${cuenta(c => c.web_diag.estado === 'antigua')}`)
   console.log(`  con email: ${cuenta(c => c.email)} · con teléfono: ${cuenta(c => c.telefono)} · ciudades: ${new Set(final.map(c => c.ciudad)).size}`)
   console.log(`  peticiones a Google: ${peticiones} (se facturan a la clave de «${duenoClave.slug}»)`)
+  if (topeGoogle) console.log('  OJO: Google cortó por su tope de búsquedas. Vuelve a lanzar --preparar cuando se renueve: sigue donde lo dejó.')
   console.log(`\nGuardado en ${FICHERO}\nRevisión en ${rutaCsv}`)
 }
 
