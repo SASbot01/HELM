@@ -388,7 +388,11 @@ export default async function handler(req, res) {
             // El email y el Instagram salen de la segunda pasada; si no se ha
             // hecho, quedan vacíos y el contacto entra igual con el teléfono.
             email: p.email || '',
-            instagram: p.instagram || '',
+            // El enriquecimiento guarda la URL entera del perfil; el CRM quiere
+            // solo el usuario (la ficha monta instagram.com/<usuario>).
+            instagram: (String(p.instagram || '').match(/instagram\.com\/([A-Za-z0-9_.]+)/i) || [])[1] || p.instagram || '',
+            website: p.web || '',
+            address: p.direccion || '',
             phone: p.telefono || (Array.isArray(p.telefonos_web) ? p.telefonos_web[0] : '') || '',
             whatsapp: p.telefono || '',
             company: p.nombre || '',
