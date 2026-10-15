@@ -159,6 +159,10 @@ createRoot(document.getElementById('root')).render(
               es lo que autentica. Solo en el dominio del panel, como /registro,
               y ANTES de /:slug/*, que si no leería "alta" como slug de perfil. */}
           <Route path="/alta/:token" element={<SoloEnElPanel><AltaHelm /></SoloEnElPanel>} />
+          {/* La misma alta sin enlace (helm.s4sf.net/alta): para el negocio que
+              aún no tiene perfil. Deja sus datos, responde, y le llega a la
+              agencia de ?a=<slug>, que le crea el perfil desde Perfiles → Altas. */}
+          <Route path="/alta" element={<SoloEnElPanel><AltaHelm publica /></SoloEnElPanel>} />
           {/* Formulario de valor de Silvestre IA. Los leads entran al CRM del
               perfil indicado en silvestreai/guardar.js. También va ANTES de
               /:slug/*, que si no leería "silvestreai" como slug de perfil. */}

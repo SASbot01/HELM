@@ -45,6 +45,17 @@ export async function puedeVerPerfil(auth, clientId) {
 }
 
 /**
+ * ¿Administra esta sesión esa agencia? Su administrador (superadmin de esa
+ * agencia) o la plataforma. Para lo que es de la agencia y no de un perfil
+ * (las altas públicas, por ejemplo). Un acceso de cliente, nunca.
+ */
+export function administraAgencia(auth, agenciaId) {
+  if (!agenciaId) return false
+  if (auth.plataforma) return true
+  return (auth.superadmin || auth.role === 'superadmin') && Boolean(auth.agenciaId) && auth.agenciaId === agenciaId
+}
+
+/**
  * Exige sesión válida con permiso sobre ese perfil.
  * @param {object} req
  * @param {string} clientId perfil al que se quiere acceder

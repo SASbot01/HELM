@@ -42,6 +42,8 @@ const SECRETAS = new Set([
   'superadmins', 'user_integrations', 'agent_mcp_tokens', 'agencias', 'agencia_movimientos',
   'audit_logs', 'portal_tokens',
   'helm_telegram_vinculos', 'helm_telegram_conversaciones', 'helm_telegram_aprobaciones',
+  // Las altas públicas: datos de contacto de quien aún no tiene perfil.
+  'helm_altas',
 ])
 
 // `team` guarda los accesos (con su contraseña). El panel solo lee nombres

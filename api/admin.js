@@ -162,6 +162,9 @@ export default async function handler(req, res) {
     try {
       const { verifyJwt } = await import('./_lib/auth.js')
       const payload = await verifyJwt(token)
+      // Como en validateAuth: un token con `kind` (un enlace de alta, la
+      // sesión de una comunidad…) está bien firmado, pero no es una sesión.
+      if (payload.kind) throw new Error(`este token es de tipo "${payload.kind}" y no sirve para el panel`)
       const isSuperAdmin = payload.superadmin === true || payload.role === 'superadmin'
       return res.status(200).json({
         ok: true,

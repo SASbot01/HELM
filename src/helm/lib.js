@@ -1,7 +1,7 @@
 // HELM — capa de datos. Lee/escribe directo a Supabase (RLS "allow all" + anon key).
 import { supabase } from '../utils/supabase'
 import { esDeEsteProducto, productoActual } from './producto'
-import { DEFAULT_STAGES, DEFAULT_SUBSTAGES } from './crm/pipeline'
+import { SLUG_RE, slugify, RUTAS_DE_LA_WEB, filaPerfilNuevo, pipelineInicial } from './perfilNuevo'
 
 export { supabase }
 
@@ -33,18 +33,10 @@ export async function listClients() {
 
 // ── Perfiles (clientes) ────────────────────────────────────────────────────
 
-const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])?$/
-
-
-export function slugify(text) {
-  return String(text || '')
-    .toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
-    .replace(/-+$/g, '')
-}
+// La URL, la fila y el pipeline de un perfil nuevo salen de perfilNuevo.js,
+// lo mismo que cuando lo crea el servidor (api/perfiles.js, al convertir un
+// alta pública).
+export { slugify }
 
 // Crea un perfil de negocio (fila en clients) + su pipeline por defecto y,
 // opcionalmente, un usuario de acceso (team admin). Todo scoped a Supabase
@@ -54,16 +46,15 @@ export async function createProfile({ name, slug, client_type = 'growth', primar
   if (!cleanName) throw new Error('El nombre del perfil es obligatorio')
   const cleanSlug = slugify(slug || cleanName)
   if (!SLUG_RE.test(cleanSlug)) throw new Error('URL inválida: usa a-z, 0-9 y guiones (3-40)')
+  if (RUTAS_DE_LA_WEB.has(cleanSlug)) throw new Error(`La URL "${cleanSlug}" es de la propia web: elige otra.`)
 
   // Unicidad de slug.
   const { data: dup } = await supabase.from('clients').select('id').eq('slug', cleanSlug).maybeSingle()
   if (dup) throw new Error(`Ya existe un perfil con la URL "${cleanSlug}"`)
 
   // 1) Cliente
-  const row = { slug: cleanSlug, name: cleanName, client_type, active: true, is_demo: false }
-  if (primary_color) row.primary_color = primary_color
   const { data: client, error } = await supabase
-    .from('clients').insert(row)
+    .from('clients').insert(filaPerfilNuevo({ slug: cleanSlug, name: cleanName, clientType: client_type, primaryColor: primary_color }))
     .select('id, slug, name, client_type, primary_color').single()
   if (error) {
     console.warn('[helm] createProfile', error.message)
@@ -78,10 +69,7 @@ export async function createProfile({ name, slug, client_type = 'growth', primar
     // Las mismas etapas que usa el CRM, no una copia aparte: cuando eran dos
     // listas distintas, los perfiles nuevos nacían con claves en inglés y sin
     // la etapa de seguimiento.
-    await supabase.from('crm_pipelines').insert({
-      client_id: client.id, name: 'Pipeline', is_default: true,
-      stages: DEFAULT_STAGES, substages: DEFAULT_SUBSTAGES,
-    })
+    await supabase.from('crm_pipelines').insert(pipelineInicial(client.id))
   } catch (e) { console.warn('[helm] createProfile pipeline', e?.message) }
 
   // 3) Usuario de acceso opcional (login del cliente)
@@ -555,6 +543,38 @@ export const onboardingApi = {
   saveBiblia: (clientId, kind, content) =>
     apiFetch('/api/onboarding?action=save', { method: 'POST', body: { clientId, kind, content } }),
   enlaceAlta: (clientId) => apiFetch('/api/onboarding?action=enlace', { method: 'POST', body: { clientId } }),
+}
+
+// ── Altas recibidas: el alta pública sin perfil (helm.s4sf.net/alta) ───────
+// Un negocio que aún no tiene perfil rellena las 40 preguntas en /alta (sin
+// sesión: src/pages/AltaHelm.jsx). Le llegan a la agencia de ?a=<slug> —sin
+// él, a la de la casa—, que las ve en el tablero de Perfiles y desde ahí le
+// crea el perfil con las respuestas ya dentro (api/onboarding.js).
+//   lista()           → { altas: [{ id, agencia: { id, nombre, slug }, nombre, email,
+//                         telefono, negocio, estado, enviado_at, created_at, client_id, answers }] }
+//   convertir(altaId) → { clientId, slug }: crea el perfil (si ya lo tenía, el mismo)
+//   descartar(altaId) → deja de salir en la bandeja
+export const altasApi = {
+  lista: () => apiFetch('/api/onboarding?action=altas'),
+  convertir: (altaId) => apiFetch('/api/onboarding?action=alta-convertir', { method: 'POST', body: { altaId } }),
+  descartar: (altaId) => apiFetch('/api/onboarding?action=alta-descartar', { method: 'POST', body: { altaId } }),
+}
+
+// El enlace público del alta de una agencia. Siempre con su slug: sin él, lo
+// que se rellene le llega a la agencia de la casa, no a la que lo mandó.
+const ALTA_PUBLICA = 'https://helm.s4sf.net/alta'
+export const enlaceAltaPublica = (agenciaSlug) =>
+  agenciaSlug ? `${ALTA_PUBLICA}?a=${encodeURIComponent(agenciaSlug)}` : ALTA_PUBLICA
+
+// El de la agencia a la que pertenece un perfil (para Onboarding). La
+// plataforma puede estar mirando un perfil de otra agencia: por eso se pregunta
+// por la del perfil y no por la de quien mira. null si no se sabe: un enlace
+// sin slug mandaría el alta a otra agencia.
+export async function enlaceAltaPublicaDelPerfil(clientId) {
+  const { data, error } = await supabase.from('clients').select('agencia_id').eq('id', clientId).maybeSingle()
+  if (error) throw error
+  const r = await creditosApi.saldo(data?.agencia_id || undefined)
+  return r?.agencia?.slug ? enlaceAltaPublica(r.agencia.slug) : null
 }
 
 // Sección Agentes: los creadores de referencia de este perfil (api/agentes-perfil.js).

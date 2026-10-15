@@ -67,7 +67,7 @@ ${tags.join('\n')}
 const RESERVADAS = new Set([
   'api', 'login', 'registro', 'admin', 'usersadmin', 'primermap', 'silvestreai',
   'agents', 'clase', 'gracias', 'privacidad', 'aviso-legal', 'paginainicio',
-  'f', 'd', 'assets', 'manifest.json', 'robots.txt', 'favicon.ico',
+  'f', 'd', 'alta', 'assets', 'manifest.json', 'robots.txt', 'favicon.ico',
 ])
 
 export default async function handler(req, res) {

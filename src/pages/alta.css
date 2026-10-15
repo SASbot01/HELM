@@ -1,4 +1,4 @@
-/* HELM — el alta pública (/alta/<token>, AltaHelm.jsx). Pinta con los tokens
+/* HELM — el alta pública (/alta/<token> y /alta, AltaHelm.jsx). Pinta con los tokens
    de .helm (tema.css): el mismo lienzo y las mismas piezas que el panel.
 
    Pensada primero para el móvil, que es donde la va a rellenar el cliente:
@@ -35,6 +35,48 @@
 }
 .alta-aviso svg { color: var(--green); flex-shrink: 0; margin-top: 2px; }
 .alta-aviso p { margin: 0; color: var(--text-dim); font-size: 14.5px; line-height: 1.55; }
+.alta-aviso p b { color: var(--text); font-weight: 600; }
+/* El ?a= del enlace no es de ninguna agencia: los datos irían a otra. */
+.alta-aviso-mal { border-color: color-mix(in srgb, var(--amber) 45%, transparent); }
+.alta-aviso-mal svg { color: var(--amber); }
+
+/* ── /alta: «Tus datos», el primer paso sin enlace ─────────────────────── */
+.alta-datos { display: flex; flex-direction: column; gap: 16px; }
+.alta-datos > * { min-width: 0; }
+.alta-check {
+  display: flex; align-items: flex-start; gap: 12px; padding: 20px 0 4px;
+  border-top: 1px solid var(--border);
+}
+.alta-check input {
+  flex-shrink: 0; width: 22px; height: 22px; margin: 1px 0 0;
+  accent-color: var(--oro); cursor: pointer;
+}
+.alta-check label { font-size: 14px; line-height: 1.55; color: var(--text-dim); cursor: pointer; }
+.alta-check.mal input { outline: 2px solid color-mix(in srgb, var(--red) 65%, transparent); outline-offset: 2px; }
+.alta-check + .alta-q-error { margin-top: 8px; }
+.alta-pie { margin: 0; text-align: center; font-size: 13px; line-height: 1.5; color: var(--text-mut); }
+/* El campo trampa: fuera de la vista, del tabulador y del lector de pantalla. */
+.alta-trampa {
+  position: absolute !important; left: -10000px; top: auto;
+  width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none;
+}
+
+/* Quién está rellenando y el «¿No eres tú?», discreto. */
+.alta-quien {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px;
+  margin: 4px 0 0; font-size: 14px; color: var(--text-dim);
+}
+/* Aspecto de enlace, pero con los 44 px de alto que pide el dedo. */
+.alta-enlace {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px;
+  border: 0; background: none; cursor: pointer;
+  font: inherit; font-size: 13px; color: var(--text-mut);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.alta-enlace:hover { color: var(--text); }
+.alta-enlace:focus-visible { outline: 2px solid var(--oro); outline-offset: 2px; border-radius: 4px; }
+.alta-enlace:disabled { cursor: default; opacity: .6; }
+.alta-borrar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0 6px; }
 
 /* ── La barra de progreso: un tramo por sección, que se llena según se
    responde. Cada tramo es también el atajo para saltar a esa sección. ───── */

@@ -9,6 +9,10 @@
 // que lo tienen vinculado, con el nombre del perfil delante: con varias marcas
 // en un mismo chat, hay que saber de cuál es.
 //
+// Lo que es de la agencia y aún no de un perfil (un alta pública de alguien
+// que todavía no es cliente) va por `notificarAgencia()`: solo el bot de
+// agencia, con el nombre de la agencia delante.
+//
 // Nunca lanza. Quien avisa está en mitad de otra cosa —guardar una reserva,
 // contestar a una landing— y un fallo al notificar no puede tumbar eso.
 import { getTelegramConfig, enviarMensaje, tokenAgencia, agenciaPermitida } from './telegram.js'
@@ -18,11 +22,11 @@ const ICONO = { info: '🔔', aviso: '⚠️', error: '🔴' }
 const A_LA_AGENCIA = new Set(['lead', 'reserva', 'venta'])
 
 // Por el bot de agencia, a quien lo tenga vinculado y siga siendo de esa
-// agencia. Sin HELM_TELEGRAM_TOKEN, nada.
-async function avisarAgencia(supabase, clientId, { nivel, titulo, cuerpo }) {
+// agencia. Sin HELM_TELEGRAM_TOKEN, nada. `etiqueta` dice de quién es el aviso
+// y solo se pide si hay a quién mandarlo (para un perfil, cuesta una consulta).
+async function aLaAgencia(supabase, agenciaId, { nivel, titulo, cuerpo }, etiqueta) {
   const token = tokenAgencia()
   if (!token) return
-  const agenciaId = await agenciaDe(clientId)
   if (!agenciaId || !(await agenciaPermitida(supabase, agenciaId))) return
   const { data: vinculos, error } = await supabase.from('helm_telegram_vinculos')
     .select('tg_chat_id, superadmins(active, agencia_id)')
@@ -32,10 +36,37 @@ async function avisarAgencia(supabase, clientId, { nivel, titulo, cuerpo }) {
     .filter(v => v.tg_chat_id && v.superadmins?.active !== false && v.superadmins?.agencia_id === agenciaId)
     .map(v => v.tg_chat_id)
   if (!chats.length) return
-  const { data: perfil } = await supabase.from('clients').select('name, slug').eq('id', clientId).maybeSingle()
   // El corchete va escapado: en el Markdown de Telegram abre un enlace.
-  const texto = `${ICONO[nivel] || ICONO.info} \\[${perfil?.name || perfil?.slug || 'Perfil'}] *${titulo}*${cuerpo ? `\n${cuerpo}` : ''}`
+  const texto = `${ICONO[nivel] || ICONO.info} \\[${await etiqueta()}] *${titulo}*${cuerpo ? `\n${cuerpo}` : ''}`
   await Promise.all(chats.map(id => enviarMensaje(token, id, texto).catch(() => null)))
+}
+
+async function avisarAgencia(supabase, clientId, aviso) {
+  if (!tokenAgencia()) return
+  await aLaAgencia(supabase, await agenciaDe(clientId), aviso, async () => {
+    const { data: perfil } = await supabase.from('clients').select('name, slug').eq('id', clientId).maybeSingle()
+    return perfil?.name || perfil?.slug || 'Perfil'
+  })
+}
+
+/**
+ * Un aviso de la agencia que aún no es de ningún perfil: solo por el bot de
+ * agencia, a sus administradores vinculados. Nunca lanza.
+ * @param {object} supabase cliente con la clave de servicio
+ * @param {string} agenciaId
+ * @param {object} n
+ * @param {'info'|'aviso'|'error'} [n.nivel]
+ * @param {string} n.titulo
+ * @param {string} [n.cuerpo]
+ * @param {string} [n.etiqueta] lo que va entre corchetes delante (el nombre de la agencia)
+ */
+export async function notificarAgencia(supabase, agenciaId, { nivel = 'info', titulo, cuerpo = '', etiqueta = 'HELM' }) {
+  try {
+    if (!agenciaId || !titulo) return
+    await aLaAgencia(supabase, agenciaId, { nivel, titulo, cuerpo }, async () => etiqueta)
+  } catch (err) {
+    console.warn('[notificar] telegram de la agencia', err.message)
+  }
 }
 
 /**

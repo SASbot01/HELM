@@ -13,12 +13,16 @@
 //   POST ?action=activar  { clientId, activo }     → activa o desactiva
 //   POST ?action=borrar   { clientId, confirma }   → `confirma` es el slug,
 //                                                    escrito por quien borra
+//
+// Y crearPerfil(), para cuando el perfil lo crea el servidor y no el panel
+// (al convertir un alta pública en api/onboarding.js).
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
 import { supabase } from './lib/supabase.js'
 import { applyCors, requireSuperAdmin, writeAudit } from './_lib/auth.js'
-import { puedeVerPerfil } from './_lib/access.js'
+import { puedeVerPerfil, olvidarPerfil } from './_lib/access.js'
+import { SLUG_RE, slugify, RUTAS_DE_LA_WEB, filaPerfilNuevo, pipelineInicial } from '../src/helm/perfilNuevo.js'
 
 // Fuera del repo: una copia no puede acabar en un commit ni en el build.
 export const DIR_COPIAS = process.env.HELM_BACKUP_DIR || path.join(os.homedir(), 'helm-copias')
@@ -30,10 +34,84 @@ function falla(msg, code = 400) {
   return e
 }
 
+// ── Crear un perfil desde el servidor ─────────────────────────────────────
+// El panel crea los perfiles desde el navegador: createProfile, en
+// src/helm/lib.js, escribe en `clients` por la pasarela, que le pone la agencia
+// de quien lo crea. Aquí, lo mismo para cuando lo crea el servidor, en la
+// agencia que se diga. La URL, la fila y el pipeline de arranque salen de
+// src/helm/perfilNuevo.js, el mismo módulo que usa el panel: no hay una
+// segunda copia que se desincronice.
+//
+// La URL no la escribe nadie: sale del nombre, como en el panel. Si está
+// cogida, o es una ruta de la web, con -2, -3…
+
+const libre = async (slug) => {
+  if (RUTAS_DE_LA_WEB.has(slug)) return false
+  const { data, error } = await supabase.from('clients').select('id').eq('slug', slug).maybeSingle()
+  if (error) throw error
+  return !data
+}
+
+/**
+ * Crea un perfil de negocio en una agencia, como el «Nuevo perfil» del panel:
+ * la misma fila y el mismo pipeline de arranque.
+ * @param {object} p
+ * @param {string} p.nombre    nombre del negocio
+ * @param {string} p.agenciaId agencia a la que pertenece
+ * @param {string} [p.clientType]
+ * @returns {Promise<{ id: string, slug: string, name: string }>}
+ */
+export async function crearPerfil({ nombre, agenciaId, clientType = 'growth' }) {
+  const name = String(nombre || '').trim().slice(0, 120)
+  if (!name) throw falla('El nombre del perfil es obligatorio')
+  if (!agenciaId) throw falla('El perfil necesita una agencia')
+
+  let base = slugify(name)
+  if (base.length < 3 || !SLUG_RE.test(base)) base = 'negocio'
+  for (let n = 1; n <= 50; n++) {
+    const sufijo = n === 1 ? '' : `-${n}`
+    const slug = `${base.slice(0, 40 - sufijo.length).replace(/-+$/g, '')}${sufijo}`
+    if (!(await libre(slug))) continue
+    const { data, error } = await supabase.from('clients')
+      .insert({ ...filaPerfilNuevo({ slug, name, clientType }), agencia_id: agenciaId })
+      .select('id, slug, name').single()
+    // Otro la ha cogido entre la comprobación y el insert: la siguiente.
+    if (error?.code === '23505') continue
+    if (error) throw error
+    olvidarPerfil(data.id)
+    // Como en el panel, sin que un fallo aquí tumbe el perfil: sin fila, el
+    // CRM enseña este mismo pipeline como virtual.
+    const { error: errPipeline } = await supabase.from('crm_pipelines').insert(pipelineInicial(data.id))
+    if (errPipeline) console.warn('[perfiles] crearPerfil, pipeline:', errPipeline.message)
+    return data
+  }
+  throw falla(`No he encontrado una URL libre para «${name}»`, 409)
+}
+
+/**
+ * Deshace un perfil que crearPerfil acaba de crear y nadie ha usado (lo que
+ * sobra cuando dos peticiones crean el mismo a la vez): su pipeline y su fila.
+ */
+export async function deshacerPerfilNuevo(id) {
+  await supabase.from('crm_pipelines').delete().eq('client_id', id)
+  const { error } = await supabase.from('clients').delete().eq('id', id)
+  if (error) console.warn('[perfiles] deshacerPerfilNuevo:', error.message)
+  olvidarPerfil(id)
+}
+
+// Tablas que apuntan a `clients` sin ser datos del perfil: `agencias` señala
+// su perfil de la casa (perfil_casa_id, migración 105). Borrar el perfil no
+// puede llevarse la agencia; su clave ajena es ON DELETE SET NULL y se vacía
+// sola al borrar la fila de `clients`.
+const NO_SON_DEL_PERFIL = new Set(['clients', 'agencias'])
+
 // Las tablas que apuntan a `clients`, y por qué columna. Se pregunta al propio
 // PostgREST en vez de llevar una lista a mano: una tabla nueva que se olvide
 // de apuntarse aquí dejaría datos huérfanos (o bloquearía el borrado).
-async function tablasDelPerfil() {
+//
+// Entra también helm_altas (por client_id): el alta pública de la que salió el
+// perfil se borra con él, y va en la copia como todo lo demás.
+export async function tablasDelPerfil() {
   const url = process.env.SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_KEY
   const r = await fetch(`${url}/rest/v1/`, { headers: { apikey: key, Authorization: `Bearer ${key}` } })
@@ -41,7 +119,7 @@ async function tablasDelPerfil() {
   const spec = await r.json()
   const tablas = []
   for (const [tabla, def] of Object.entries(spec.definitions || {})) {
-    if (tabla === 'clients') continue
+    if (NO_SON_DEL_PERFIL.has(tabla)) continue
     for (const [col, v] of Object.entries(def.properties || {})) {
       if (col === 'client_id' || /fk table='clients'/.test(v.description || '')) tablas.push([tabla, col])
     }

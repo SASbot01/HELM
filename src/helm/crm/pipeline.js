@@ -12,30 +12,15 @@
 // etiqueta) y sus subetapas en `crm_contacts.substages` (array de claves).
 // Por eso renombrar una etapa nunca mueve a nadie de sitio.
 //
-// Se importa el cliente directamente y no desde ../lib para no crear un ciclo:
-// lib.js necesita estas etapas al dar de alta un perfil.
+// Se importa el cliente directamente y no desde ../lib: así este módulo no
+// arrastra toda la capa de datos (ni un ciclo con ella).
 import { supabase } from '../../utils/supabase'
+import { DEFAULT_STAGES, DEFAULT_SUBSTAGES } from '../perfilNuevo'
 
-// El pipeline con el que arranca un perfil que no ha tocado nada.
-export const DEFAULT_STAGES = [
-  { key: 'lead', label: 'Lead', tone: '' },
-  { key: 'contactado', label: 'Contactado', tone: 'cyan' },
-  { key: 'cita', label: 'Cita agendada', tone: 'amber' },
-  { key: 'propuesta', label: 'Propuesta', tone: 'violet' },
-  { key: 'seguimiento', label: 'Seguimiento futuro', tone: 'amber' },
-  { key: 'ganado', label: 'Ganado', tone: 'green' },
-  { key: 'perdido', label: 'Perdido', tone: 'red' },
-]
-
-// Subetapas por defecto. Solo la de seguimiento trae contenido: es el caso que
-// pedía el informe (saber a cuánto vista es cada seguimiento).
-export const DEFAULT_SUBSTAGES = {
-  seguimiento: [
-    { key: '1m', label: '1 mes' },
-    { key: '3m', label: '3 meses' },
-    { key: '6m', label: '+6 meses' },
-  ],
-}
+// El pipeline con el que arranca un perfil que no ha tocado nada, y sus
+// subetapas. Viven en ../perfilNuevo.js, que también usa el servidor al crear
+// un perfil (api/perfiles.js): una sola lista para los dos caminos.
+export { DEFAULT_STAGES, DEFAULT_SUBSTAGES }
 
 // Etapas de arranque de un pipeline NUEVO: mínimas a propósito. Un pipeline de
 // partnerships o de soporte no tiene por qué parecerse al de ventas, y es más

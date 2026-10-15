@@ -17,7 +17,7 @@ import {
   CheckCircle2, Lock, BookOpen, RefreshCw, Pencil, Copy, Building2, PenLine, Plug,
   ClipboardList, UserPlus, Link2, MessageCircle,
 } from 'lucide-react'
-import { supabase, getOnboarding, saveOnboardingDraft, onboardingApi } from '../lib'
+import { supabase, getOnboarding, saveOnboardingDraft, onboardingApi, enlaceAltaPublicaDelPerfil } from '../lib'
 import { ONBOARDING_CONTENIDO, countAnswered, isAnswered, seVe } from '../onboarding/schema'
 import { ONBOARDING_OPERATIVO } from '../onboarding/operativo'
 import { ONBOARDING_ALTA } from '../onboarding/alta'
@@ -415,6 +415,20 @@ function EnlaceCliente({ clientId }) {
   const [error, setError] = useState(null)
   const [copiado, setCopiado] = useState(false)
   const campo = useRef(null)
+  // El enlace público de la agencia (helm.s4sf.net/alta?a=…), para el negocio
+  // que aún no tiene perfil. Solo lo ve la agencia: a un cliente dentro de su
+  // propio perfil no le dice nada. Si no se sabe la agencia, no sale: sin su
+  // slug, el alta le llegaría a otra.
+  const [publica, setPublica] = useState(null)
+  const [copiadoPublica, setCopiadoPublica] = useState(false)
+  const campoPublica = useRef(null)
+
+  useEffect(() => {
+    if (!localStorage.getItem('bw_superadmin')) return
+    let vivo = true
+    enlaceAltaPublicaDelPerfil(clientId).then(url => { if (vivo) setPublica(url) }).catch(() => {})
+    return () => { vivo = false }
+  }, [clientId])
 
   async function crear() {
     setBusy(true); setError(null)
@@ -433,16 +447,29 @@ function EnlaceCliente({ clientId }) {
       .catch(aMano)
   }
 
+  function copiarPublica() {
+    // Sin portapapeles, como arriba: queda seleccionado para copiarlo a mano.
+    const aMano = () => { if (campoPublica.current) window.getSelection()?.selectAllChildren(campoPublica.current) }
+    if (!navigator.clipboard) return aMano()
+    navigator.clipboard.writeText(publica)
+      .then(() => { setCopiadoPublica(true); setTimeout(() => setCopiadoPublica(false), 1500) })
+      .catch(aMano)
+  }
+
   return (
     <VistaEnlaceAlta
       enlace={enlace} busy={busy} error={error} copiado={copiado}
       campo={campo} onCrear={crear} onCopiar={copiar}
+      publica={publica} copiadoPublica={copiadoPublica} campoPublica={campoPublica} onCopiarPublica={copiarPublica}
     />
   )
 }
 
 // La parte que se ve, sin estado: así se puede comprobar sin navegador.
-export function VistaEnlaceAlta({ enlace, busy, error, copiado, campo, onCrear, onCopiar }) {
+export function VistaEnlaceAlta({
+  enlace, busy, error, copiado, campo, onCrear, onCopiar,
+  publica = null, copiadoPublica = false, campoPublica, onCopiarPublica,
+}) {
   return (
     <div className="helm-onb-intro-card">
       <Link2 size={18} />
@@ -485,6 +512,17 @@ export function VistaEnlaceAlta({ enlace, busy, error, copiado, campo, onCrear, 
         )}
 
         {error && <div className="helm-formerror" style={{ margin: '10px 0 0' }}>{error}</div>}
+
+        {/* El negocio que todavía no tiene perfil rellena la misma alta en el
+            enlace público; le llega a la agencia en Perfiles → Altas. */}
+        {publica && (
+          <p className="helm-settings-note" style={{ margin: '14px 0 0', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 8px' }}>
+            <span>¿Aún no tiene perfil? Mándale <b ref={campoPublica} style={{ overflowWrap: 'anywhere' }}>{publica.replace(/^https?:\/\//, '')}</b></span>
+            <button type="button" className="helm-btn sm" onClick={onCopiarPublica}>
+              {copiadoPublica ? <Check size={13} /> : <Copy size={13} />} {copiadoPublica ? 'Copiado' : 'Copiar'}
+            </button>
+          </p>
+        )}
       </div>
     </div>
   )
