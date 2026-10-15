@@ -2,11 +2,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Rocket, ArrowRight, X } from 'lucide-react'
 import { Evolucion, PorPrograma } from './informe/Graficas'
-import { supabase, money, fmtDate, getOnboarding, isSaleCancelled, cuotasPendientes } from '../lib'
+import { supabase, money, fmtDate, getOnboarding, onboardingApi, isSaleCancelled, cuotasPendientes } from '../lib'
 import { Kpi, Panel, Empty } from '../ui'
 import { seccionDelProducto } from '../producto'
 
-// Banner de arranque: empuja al onboarding de contenido mientras no esté hecho.
+// Banner de arranque: empuja al onboarding (el alta; o el de contenido en los
+// perfiles que lo hicieron antes) mientras no esté hecho.
 //
 // Una vez completado desaparece. Antes se quedaba fijo arriba diciendo
 // "Onboarding de contenido completado" para siempre, robando la primera franja
@@ -17,14 +18,25 @@ import { seccionDelProducto } from '../producto'
 // También se puede cerrar a mano mientras está pendiente (la X), y en ese caso
 // no vuelve a salir en toda la sesión.
 function OnboardingBanner({ clientId, onNavigate }) {
-  const [status, setStatus] = useState('loading') // 'loading' | undefined | 'draft' | 'completed'
+  const [status, setStatus] = useState('loading') // 'loading' | undefined | 'draft' | 'sin_biblia' | 'completed'
   const [cerrado, setCerrado] = useState(false)
 
   // No hace falta reiniciar `cerrado` al cambiar de perfil: el shell remonta la
   // vista entera con key={clientId + view}, así que este estado ya nace limpio.
   useEffect(() => {
     let alive = true
-    getOnboarding(clientId, 'contenido').then(d => alive && setStatus(d?.status)).catch(() => alive && setStatus(undefined))
+    // Hecho = hay Biblia, que es lo que de verdad usan el chat y los agentes.
+    // Un alta enviada por el cliente desde su enlace está completada pero aún
+    // no ha pasado por la IA: ahí el aviso sigue, y dice qué falta. El estado
+    // del formulario de contenido ya no cuenta (no se ofrece): un perfil que lo
+    // hizo tiene Biblia y por eso no ve el aviso.
+    Promise.all([getOnboarding(clientId, 'alta'), onboardingApi.biblia(clientId)])
+      .then(([alta, b]) => {
+        if (!alive) return
+        const hayBiblia = Object.keys(b?.biblia || {}).length > 0
+        setStatus(hayBiblia ? 'completed' : alta?.status === 'completed' ? 'sin_biblia' : alta?.status)
+      })
+      .catch(() => alive && setStatus(undefined))
     return () => { alive = false }
   }, [clientId])
 
@@ -38,15 +50,17 @@ function OnboardingBanner({ clientId, onNavigate }) {
     <div className="helm-onb-banner" onClick={() => onNavigate('onboarding')}>
       <div className="helm-onb-banner-ico"><Rocket size={20} /></div>
       <div className="helm-onb-banner-txt">
-        <b>{status === 'draft' ? 'Termina tu onboarding' : 'Inicia tu onboarding'}</b>
+        <b>{status === 'sin_biblia' ? 'Falta generar tu Biblia' : status === 'draft' ? 'Termina tu onboarding' : 'Inicia tu onboarding'}</b>
         <span>
-          {status === 'draft'
-            ? 'Tienes un borrador a medias. Termínalo para que la IA aprenda tu marca y escriba tu contenido.'
-            : 'Rellena el formulario de marca y negocio para que la IA aprenda cómo hablas y escriba tu contenido como tú.'}
+          {status === 'sin_biblia'
+            ? 'El alta ya está respondida. Ábrela y pulsa «Completar y generar la Biblia» para que la IA escriba con tu marca.'
+            : status === 'draft'
+              ? 'Tienes el alta a medias. Termínala para que la IA aprenda tu marca y escriba tu contenido.'
+              : 'Rellena el Alta en HELM (40 preguntas) para que la IA aprenda cómo es tu negocio y escriba tu contenido como tú.'}
         </span>
       </div>
       <button className="helm-btn primary">
-        {status === 'draft' ? 'Continuar' : 'Empezar'} <ArrowRight size={15} />
+        {status === 'sin_biblia' ? 'Generar' : status === 'draft' ? 'Continuar' : 'Empezar'} <ArrowRight size={15} />
       </button>
       <button
         className="helm-onb-banner-x"

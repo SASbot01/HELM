@@ -150,7 +150,7 @@ export default async function handler(req, res) {
 
     const biblias = await getBiblias(clientId)
     if (!biblias.empresa || !biblias.contenido) {
-      return res.status(400).json({ error: 'Faltan las Biblias de este perfil. Completa el onboarding de Empresa y de Contenido antes de generar la base.' })
+      return res.status(400).json({ error: 'Faltan las Biblias de este perfil. Completa el Alta en HELM (Onboarding) para que la IA escriba las Biblias antes de generar la base.' })
     }
 
     const user = `# BIBLIA DE EMPRESA\n\n${biblias.empresa}\n\n---\n\n# BIBLIA DE CONTENIDO\n\n${biblias.contenido}\n\n---\n\n${ESTRATEGIA_CONTENIDO}`

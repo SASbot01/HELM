@@ -1017,7 +1017,7 @@ export default async function handler(req, res) {
       return res.status(429).json({ error: 'Demasiadas generaciones seguidas.', retryAfter: gate.retryAfter })
     }
 
-    const { kind, dossier } = req.body || {}
+    const { kind, dossier, form } = req.body || {}
     if (!SPECS[kind]) return res.status(400).json({ error: 'kind inválido (empresa | contenido)' })
     if (!dossier?.trim()) return res.status(400).json({ error: 'El onboarding está vacío: no hay nada que sintetizar.' })
 
@@ -1029,6 +1029,15 @@ export default async function handler(req, res) {
       return res.status(err.statusCode || 502).json({ error: err.message || 'Error generando la Biblia' })
     }
 
+    // Una Biblia retocada a mano no se pierde al volver a generarla: antes de
+    // sustituirla se archiva tal cual en Archivos (archivarBiblia solo guarda
+    // las generadas, y «save» no archiva).
+    const { data: previa } = await supabase.from('helm_biblia')
+      .select('content, status').eq('client_id', clientId).eq('kind', kind).maybeSingle()
+    if (previa?.status === 'edited' && previa.content) {
+      await archivarBiblia(clientId, kind, `${SPECS[kind].title} (editada a mano)`, previa.content)
+    }
+
     const { data, error } = await supabase.from('helm_biblia').upsert({
       client_id: clientId, kind, title: SPECS[kind].title, content, status: 'generated',
       updated_at: new Date().toISOString(),
@@ -1036,7 +1045,10 @@ export default async function handler(req, res) {
     if (error) return res.status(500).json({ error: error.message })
 
     await archivarBiblia(clientId, kind, SPECS[kind].title, content)
-    await markCompleted(clientId)
+    // Solo cuando la Biblia sale del formulario de contenido (o de un panel de
+    // antes, que no dice de cuál): el alta se marca sola desde el panel y una
+    // regeneración desde la carpeta Biblia no completa nada.
+    if ((form || 'contenido') === 'contenido') await markCompleted(clientId)
     return res.status(200).json({ biblia: data })
   }
 

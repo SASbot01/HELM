@@ -538,8 +538,10 @@ export async function saveOnboardingDraft(clientId, answers, form = 'contenido',
 // aquí, que no tiene sesión (ver src/pages/AltaHelm.jsx).
 export const onboardingApi = {
   biblia: (clientId) => apiFetch(`/api/onboarding?action=biblia&clientId=${clientId}`),
-  generate: (clientId, kind, dossier) =>
-    apiFetch('/api/onboarding?action=generate', { method: 'POST', body: { clientId, kind, dossier } }),
+  // `form`: de qué formulario sale el dossier. Solo el de contenido (o sin
+  // decir, como antes) lo da por completado el servidor.
+  generate: (clientId, kind, dossier, { form } = {}) =>
+    apiFetch('/api/onboarding?action=generate', { method: 'POST', body: { clientId, kind, dossier, ...(form ? { form } : {}) } }),
   saveBiblia: (clientId, kind, content) =>
     apiFetch('/api/onboarding?action=save', { method: 'POST', body: { clientId, kind, content } }),
   enlaceAlta: (clientId) => apiFetch('/api/onboarding?action=enlace', { method: 'POST', body: { clientId } }),

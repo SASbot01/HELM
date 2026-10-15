@@ -1,25 +1,27 @@
-// HELM — Onboarding. Hub con los onboardings del perfil, el formulario de
-// contenido y la carpeta "Biblia".
+// HELM — Onboarding. Un solo formulario, el alta, y la carpeta "Biblia".
 //
-//   0) Alta       → las 40 preguntas de entrada (onboarding/alta.js). Las puede
-//                   rellenar el propio cliente desde un enlace sin cuenta
-//                   (/alta/<token>, pages/AltaHelm.jsx). No genera nada.
-//   1) Contenido  → formulario largo (F1 + F2). Al completarlo, la IA sintetiza
-//                   las respuestas en dos Biblias (empresa + contenido).
-//   2) Migración  → preparado, aún no disponible.
-//   3) Tercero    → futuro.
+//   Alta        → las 40 preguntas de entrada (onboarding/alta.js). Las puede
+//                 rellenar el propio cliente desde un enlace sin cuenta
+//                 (/alta/<token> y /alta, pages/AltaHelm.jsx). Al completarla,
+//                 la IA sintetiza las respuestas en dos Biblias (empresa +
+//                 contenido).
+//   Conexiones  → Stripe y lo que venga; no es un formulario.
+//
+// Los formularios de contenido (F1 + F2) y operativo ya no se ofrecen: el
+// usuario dejó el alta como único onboarding (2026-10-15). Sus respuestas
+// siguen en helm_onboarding y, si un perfil las tiene, la Biblia se regenera
+// con ellas además de con el alta (ver BibliaFolder).
 //
 // Las Biblias son lo que el chat inyecta en su system prompt. Las respuestas
 // crudas se quedan como fuente de verdad en helm_onboarding (autoguardado).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Sparkles, Database, Rocket, ArrowLeft, Check, Loader2,
+  Sparkles, ArrowLeft, Check, Loader2,
   CheckCircle2, Lock, BookOpen, RefreshCw, Pencil, Copy, Building2, PenLine, Plug,
-  ClipboardList, UserPlus, Link2, MessageCircle,
+  UserPlus, Link2, MessageCircle,
 } from 'lucide-react'
 import { supabase, getOnboarding, saveOnboardingDraft, onboardingApi, enlaceAltaPublicaDelPerfil } from '../lib'
 import { ONBOARDING_CONTENIDO, countAnswered, isAnswered, seVe } from '../onboarding/schema'
-import { ONBOARDING_OPERATIVO } from '../onboarding/operativo'
 import { ONBOARDING_ALTA } from '../onboarding/alta'
 import { buildDossier } from '../onboarding/knowledge'
 import { FieldInput } from '../onboarding/Campos'
@@ -27,9 +29,10 @@ import { StripeCard } from './Ajustes'
 import { Markdown } from '../md'
 import { Tabs, Empty } from '../ui'
 
-// Marca un formulario como completado. Solo para los que no generan Biblia
-// (operativo, alta): los que sí, los marca el servidor al generarla (ver
-// markCompleted en api/onboarding.js). En el alta no se pone completed_at:
+// Marca un formulario como completado. El de contenido lo marcaba el servidor
+// al generar la Biblia (markCompleted en api/onboarding.js); el alta se marca
+// aquí, después de generarla. Devuelve el updated_at que ha escrito. En el
+// alta no se pone completed_at:
 // ahí es la fecha en que la ENVIÓ el cliente desde su enlace (su página la
 // enseña como «Ya lo enviaste el…» y el servidor avisa a la agencia solo si no
 // la había), y darla por completada desde aquí no es que él la haya enviado.
@@ -41,6 +44,7 @@ async function marcarCompletado(clientId, form) {
     .update(cambios)
     .eq('client_id', clientId).eq('form', form)
   if (error) throw error
+  return now
 }
 
 // Cuándo se guardó por última vez un formulario (null si aún no existe). Lo
@@ -55,29 +59,33 @@ async function ultimoGuardado(clientId, form) {
 
 const PISADO = 'Mientras tenías esto abierto se han guardado cambios en esta alta desde otro sitio (el enlace del cliente u otra pestaña). Para no pisarlos, lo de esta pantalla ya no se guarda: vuelve y ábrela otra vez para ver lo último.'
 
-// ── Formulario de contenido ─────────────────────────────────────────────────
-// Formulario genérico de onboarding. Sirve para cualquier esquema: el de
-// contenido (que al terminar genera la Biblia), el operativo y el alta (que no
-// generan nada, solo guardan). Lo que cambia lo dicen `schema` y `genera`;
-// `antes` se pinta encima de las preguntas y `cierre` es el texto del final
-// cuando no se genera nada. `limites` va a los campos (ver Campos.jsx).
+// El dossier con todo lo respondido: el alta y, en los perfiles que lo
+// rellenaron antes, el formulario de contenido. De aquí salen las Biblias,
+// tanto al completar el alta como al regenerar desde la carpeta: solo con el
+// alta, una Biblia hecha con las 79 preguntas de contenido se cambiaría por
+// otra más pobre.
+function dossierDeTodo({ alta = {}, contenido = {} } = {}) {
+  return [
+    countAnswered(ONBOARDING_ALTA, alta).done ? buildDossier(ONBOARDING_ALTA, alta) : '',
+    countAnswered(ONBOARDING_CONTENIDO, contenido).done ? buildDossier(ONBOARDING_CONTENIDO, contenido) : '',
+  ].filter(Boolean).join('\n\n')
+}
+
+// ── Formulario del alta ─────────────────────────────────────────────────────
+// Las preguntas del alta y, al final, «Completar y generar la Biblia». `antes`
+// se pinta encima de las preguntas; `limites` va a los campos (ver Campos.jsx).
 //
-// `compartido` es para el alta, que el cliente rellena a la vez desde su
-// enlace. Cada guardado manda el documento entero, así que guardar una copia
-// vieja borraría lo que él ha escrito después. Antes de cada guardado se mira
-// si la fila ha cambiado desde la última vez que la vimos y, si es así, se deja
-// de guardar y se avisa.
-const CIERRE_OPERATIVO = 'Se guarda tal cual. Estas respuestas son el material de la auditoría: con ellas se decide qué eliminar, qué rediseñar, qué automatizar y qué delegar.'
+// `compartido`: el cliente la rellena a la vez desde su enlace. Cada guardado
+// manda el documento entero, así que guardar una copia vieja borraría lo que
+// él ha escrito después. Antes de cada guardado se mira si la fila ha cambiado
+// desde la última vez que la vimos y, si es así, se deja de guardar y se avisa.
 
 function ContentForm({
-  clientId, schema = ONBOARDING_CONTENIDO, formKey = 'contenido', genera = true,
-  initial, onBack, onGenerated, antes = null, cierre = CIERRE_OPERATIVO,
-  limites, compartido = false,
+  clientId, schema, formKey, initial, onBack, onGenerated, antes = null, limites, compartido = false,
 }) {
   const [answers, setAnswers] = useState(initial?.answers || {})
   const [savedAt, setSavedAt] = useState(initial ? 'idle' : null)
   const [gen, setGen] = useState(null)          // null | 'empresa' | 'contenido'
-  const [cerrando, setCerrando] = useState(false)
   const [error, setError] = useState(null)
   const [pisado, setPisado] = useState(false)
   const saveTimer = useRef(null)
@@ -141,22 +149,31 @@ function ContentForm({
     pendiente.current = false
     try {
       await guardarBorrador(answers)     // asegura el último trazo
-      // El operativo y el alta no generan Biblia: el operativo es material de
-      // auditoría y el alta, la ficha de entrada. Se guardan, se marcan como
-      // completados y se acabó.
-      if (!genera) {
-        setCerrando(true)
-        await marcarCompletado(clientId, formKey)
-        return onGenerated()
-      }
-      const dossier = buildDossier(schema, answers)
-      setGen('empresa'); await onboardingApi.generate(clientId, 'empresa', dossier)
-      setGen('contenido'); await onboardingApi.generate(clientId, 'contenido', dossier)
+      const contenido = await getOnboarding(clientId, 'contenido').catch(() => null)
+      const dossier = dossierDeTodo({ alta: answers, contenido: contenido?.answers || {} })
+      if (!dossier.trim()) throw new Error('Responde al menos una pregunta antes de generar la Biblia.')
+
+      // Una Biblia retocada a mano no se sustituye sin preguntar (y el
+      // servidor archiva en Archivos la versión editada antes de pisarla).
+      const { biblia } = await onboardingApi.biblia(clientId)
+      const editadas = Object.values(biblia || {}).filter(b => b?.status === 'edited').map(b => b.title || b.kind)
+      if (editadas.length && !window.confirm(
+        `${editadas.join(' y ')} ${editadas.length > 1 ? 'están editadas' : 'está editada'} a mano. ` +
+        'Si sigues, la IA la vuelve a escribir con estas respuestas; la versión editada queda guardada en Archivos. ¿Seguir?',
+      )) return
+
+      setGen('empresa'); await onboardingApi.generate(clientId, 'empresa', dossier, { form: formKey })
+      setGen('contenido'); await onboardingApi.generate(clientId, 'contenido', dossier, { form: formKey })
+      // Completado solo cuando ya hay Biblia: si la IA falla (sin saldo, caída)
+      // el alta sigue abierta y se puede reintentar desde aquí. Lo que escribe
+      // pasa a ser la versión conocida; si no, el siguiente guardado creería
+      // que la ha cambiado otro y se bloquearía.
+      const escrito = await marcarCompletado(clientId, formKey)
+      if (compartido) conocida.current = await ultimoGuardado(clientId, formKey).catch(() => escrito)
       onGenerated()
     } catch (err) {
-      setError(err.message || (genera ? 'No se pudo generar la Biblia' : 'No se pudo guardar'))
+      setError(err.message || 'No se pudo generar la Biblia')
       setGen(null)
-      setCerrando(false)
     }
   }
 
@@ -197,7 +214,7 @@ function ContentForm({
       </div>
 
       {/* Las secciones y campos que no aplican a este negocio no se pintan:
-          es la ramificación del formulario operativo. */}
+          es la ramificación de los formularios que la tengan. */}
       {schema.sections.filter(sec => seVe(sec, answers)).map(section => (
         <section key={section.key} className="helm-onb-section">
           <div className="helm-onb-section-head">
@@ -225,15 +242,11 @@ function ContentForm({
       <div className="helm-onb-submit">
         <div>
           <b>¿Listo?</b>
-          <p>{genera
-            ? 'Al completar, la IA sintetiza tus respuestas en tu Biblia de Empresa y tu Biblia de Contenido, y las usará en cada guion, email y respuesta. Podrás editarlas y regenerarlas.'
-            : cierre}</p>
+          <p>Al completar, la IA sintetiza tus respuestas en tu Biblia de Empresa y tu Biblia de Contenido, y las usará en cada guion, email y respuesta. Podrás editarlas y regenerarlas.</p>
         </div>
-        <button className="helm-btn primary" onClick={submit} disabled={!!gen || cerrando || pisado}>
+        <button className="helm-btn primary" onClick={submit} disabled={!!gen || pisado}>
           {gen ? <><Loader2 size={15} className="helm-spin" /> Generando…</>
-            : cerrando ? <><Loader2 size={15} className="helm-spin" /> Guardando…</>
-            : genera ? <><Sparkles size={15} /> Completar y generar la Biblia</>
-            : <><Check size={15} /> Marcar como completado</>}
+            : <><Sparkles size={15} /> Completar y generar la Biblia</>}
         </button>
       </div>
     </div>
@@ -256,9 +269,19 @@ function BibliaFolder({ clientId, onBack }) {
   const [error, setError] = useState(null)
   const [copied, setCopied] = useState(false)
 
+  // El alta es el onboarding de ahora; el de contenido, el de los perfiles que
+  // lo rellenaron antes. Si hay de los dos, la Biblia sale de los dos juntos:
+  // regenerar solo con uno tiraría lo que dice el otro.
   useEffect(() => {
-    Promise.all([onboardingApi.biblia(clientId), getOnboarding(clientId, 'contenido')])
-      .then(([b, o]) => { setBibs(b.biblia || {}); setAnswers(o?.answers || {}) })
+    Promise.all([
+      onboardingApi.biblia(clientId),
+      getOnboarding(clientId, 'alta'),
+      getOnboarding(clientId, 'contenido'),
+    ])
+      .then(([b, alta, contenido]) => {
+        setBibs(b.biblia || {})
+        setAnswers({ alta: alta?.answers || {}, contenido: contenido?.answers || {} })
+      })
       .catch(err => { setBibs({}); setError(err.message) })
   }, [clientId])
 
@@ -268,8 +291,9 @@ function BibliaFolder({ clientId, onBack }) {
     if (!answers) return
     setBusy('regen'); setError(null)
     try {
-      const dossier = buildDossier(ONBOARDING_CONTENIDO, answers)
-      const { biblia } = await onboardingApi.generate(clientId, tab, dossier)
+      const dossier = dossierDeTodo(answers)
+      if (!dossier.trim()) throw new Error('El alta está vacía: no hay nada que sintetizar.')
+      const { biblia } = await onboardingApi.generate(clientId, tab, dossier, { form: 'biblia' })
       setBibs(b => ({ ...b, [tab]: biblia })); setEditing(false)
     } catch (err) { setError(err.message) }
     setBusy(null)
@@ -534,53 +558,33 @@ export function VistaEnlaceAlta({
 // nada desde su enlace hasta que lo recortara.
 const LIMITES_ALTA = { text: 300, long: 5000, filas: 20 }
 
-const CIERRE_ALTA = 'Se guarda tal cual: es la ficha de entrada del negocio, lo primero que lee el equipo antes de empezar. Para ir más a fondo están Contenido (que genera la Biblia) y el Operativo profundo.'
 
 // ── Hub ─────────────────────────────────────────────────────────────────────
 const CARDS = [
   {
-    key: 'alta', icon: UserPlus, available: true,
+    key: 'alta', icon: UserPlus,
     title: 'Alta en HELM', tagline: ONBOARDING_ALTA.tagline,
-    desc: 'El formulario de entrada: 40 preguntas sobre el negocio, el cliente ideal, la oferta, los números, las redes y los referentes. Lo puede rellenar el propio cliente desde un enlace, sin cuenta.',
+    desc: 'El onboarding del negocio: 40 preguntas sobre el negocio, el cliente ideal, la oferta, los números, las redes y los referentes. Lo puede rellenar el propio cliente desde un enlace, sin cuenta. Con las respuestas dentro, «Completar y generar la Biblia» hace que la IA escriba tu Biblia, la que usa en cada guion, email y respuesta.',
   },
   {
-    key: 'contenido', icon: Sparkles, available: true,
-    title: 'Contenido', tagline: ONBOARDING_CONTENIDO.tagline,
-    desc: 'El formulario de marca y negocio. Cuéntale a la IA quién eres, tu tono, tu oferta, tu cliente y tu mina de contenido. Al terminar, sintetiza tu Biblia.',
-  },
-  {
-    key: 'operativo', icon: ClipboardList, available: true,
-    title: 'Operativo profundo', tagline: ONBOARDING_OPERATIVO.tagline,
-    desc: 'La radiografía de tu operativa: captación, venta, entrega, cobros, soporte, datos y equipo. Unas 100 preguntas — el resto se descartan solas según lo que vendas. Es el material con el que se decide qué automatizar.',
-  },
-  {
-    key: 'conexiones', icon: Plug, available: true,
+    key: 'conexiones', icon: Plug,
     title: 'Conexiones', tagline: 'Enlaza tus herramientas',
     desc: 'Conecta Stripe (y pronto Meta Ads, Calendar, WhatsApp…) para que los pagos, leads y métricas entren solos en HELM.',
-  },
-  {
-    key: 'migracion', icon: Database, available: false,
-    title: 'Migración de tu sistema', tagline: 'Trae tu sistema antiguo',
-    desc: 'Importa tus bases de datos al CRM, tus informes y tu facturación, para empezar con todo tu histórico dentro de HELM. (Próximamente.)',
-  },
-  {
-    key: 'tercero', icon: Rocket, available: false,
-    title: 'Próximo onboarding', tagline: 'En camino',
-    desc: 'Un tercer onboarding que añadiremos más adelante.',
   },
 ]
 
 export default function Onboarding({ clientId }) {
-  const [active, setActive] = useState(null)     // null (hub) | 'alta' | 'contenido' | 'operativo' | 'biblia'
-  const [doc, setDoc] = useState(undefined)      // onboarding de contenido
-  const [docOp, setDocOp] = useState(undefined)  // onboarding operativo
+  const [active, setActive] = useState(null)     // null (hub) | 'alta' | 'biblia' | 'conexiones'
   const [docAlta, setDocAlta] = useState(undefined)  // alta en HELM
+  const [hayBiblia, setHayBiblia] = useState(null)   // null mientras se mira
   const [justDone, setJustDone] = useState(false)
 
+  // La Biblia se enseña si existe, venga del alta o del contenido de antes.
   const load = () => {
-    getOnboarding(clientId, 'contenido').then(setDoc).catch(() => setDoc(null))
-    getOnboarding(clientId, 'operativo').then(setDocOp).catch(() => setDocOp(null))
     getOnboarding(clientId, 'alta').then(setDocAlta).catch(() => setDocAlta(null))
+    onboardingApi.biblia(clientId)
+      .then(b => setHayBiblia(Object.keys(b?.biblia || {}).length > 0))
+      .catch(() => setHayBiblia(false))
   }
   useEffect(() => { load() }, [clientId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -592,48 +596,18 @@ export default function Onboarding({ clientId }) {
     getOnboarding(clientId, 'alta').then(setDocAlta, () => {}).finally(() => setActive('alta'))
   }
 
-  // El alta no genera Biblia (genera=false). La generación del servidor marca
-  // como completado el formulario de contenido, no el que la pide, y la carpeta
-  // Biblia regenera siempre desde las respuestas de contenido: generar desde
-  // las 40 preguntas del alta pisaría una Biblia más rica y dejaría el
-  // contenido como hecho sin estarlo.
   if (active === 'alta') {
     return (
       <ContentForm
         clientId={clientId}
         schema={ONBOARDING_ALTA}
         formKey="alta"
-        genera={false}
         initial={docAlta || null}
         antes={<EnlaceCliente clientId={clientId} />}
-        cierre={CIERRE_ALTA}
         limites={LIMITES_ALTA}
         compartido
         onBack={() => { setActive(null); load() }}
-        onGenerated={() => { setActive(null); load() }}
-      />
-    )
-  }
-  if (active === 'contenido') {
-    return (
-      <ContentForm
-        clientId={clientId}
-        initial={doc || null}
-        onBack={() => { setActive(null); load() }}
         onGenerated={() => { setJustDone(true); load(); setActive('biblia') }}
-      />
-    )
-  }
-  if (active === 'operativo') {
-    return (
-      <ContentForm
-        clientId={clientId}
-        schema={ONBOARDING_OPERATIVO}
-        formKey="operativo"
-        genera={false}
-        initial={docOp || null}
-        onBack={() => { setActive(null); load() }}
-        onGenerated={() => { setActive(null); load() }}
       />
     )
   }
@@ -644,12 +618,8 @@ export default function Onboarding({ clientId }) {
     return <ConexionesFolder clientId={clientId} onBack={() => setActive(null)} />
   }
 
-  const status = doc?.status
-  const completed = status === 'completed'
-  // Cada tarjeta con formulario enseña su propio estado; las demás, ninguno.
-  const estadoDe = (key) => (
-    key === 'contenido' ? status : key === 'operativo' ? docOp?.status : key === 'alta' ? docAlta?.status : null
-  )
+  // Solo el alta tiene estado; Conexiones, ninguno.
+  const estadoDe = (key) => (key === 'alta' ? docAlta?.status : null)
   // La etiqueta del pie. El alta dice si el cliente ya la envió desde su
   // enlace (completed_at, ver marcarCompletado), si la dio por completada el
   // equipo desde aquí y, si no, cuántas lleva: es lo que hace falta saber para
@@ -681,7 +651,7 @@ export default function Onboarding({ clientId }) {
         </div>
       )}
 
-      {completed && (
+      {hayBiblia && (
         <div className="helm-onb-biblia-cta" onClick={() => setActive('biblia')}>
           <div className="helm-onb-banner-ico"><BookOpen size={20} /></div>
           <div className="helm-onb-banner-txt">
@@ -692,25 +662,35 @@ export default function Onboarding({ clientId }) {
         </div>
       )}
 
+      {/* Un alta que el cliente envió desde su enlace (o que llegó por la
+          bandeja de altas) está respondida pero no ha pasado por la IA: sin
+          esto nada dice que el chat y los agentes siguen sin Biblia. */}
+      {hayBiblia === false && docAlta?.status === 'completed' && (
+        <div className="helm-onb-biblia-cta" onClick={() => abrir('alta')}>
+          <div className="helm-onb-banner-ico"><Sparkles size={20} /></div>
+          <div className="helm-onb-banner-txt">
+            <b>Falta generar la Biblia</b>
+            <span>El alta ya está respondida. Ábrela, repásala y pulsa «Completar y generar la Biblia» para que la IA escriba con tu marca.</span>
+          </div>
+          <button className="helm-btn primary">Generar la Biblia</button>
+        </div>
+      )}
+
       <div className="helm-onb-cards">
         {CARDS.map(card => {
           const Icon = card.icon
           const chip = chipDe(card.key)
           return (
-            <div key={card.key} className={'helm-onb-card' + (card.available ? '' : ' soon')}>
+            <div key={card.key} className="helm-onb-card">
               <div className="helm-onb-card-ico"><Icon size={20} /></div>
               <div className="helm-onb-card-tag">{card.tagline}</div>
               <h3>{card.title}</h3>
               <p>{card.desc}</p>
               <div className="helm-onb-card-foot">
                 {chip && <span className={'helm-chip ' + chip.tono}>{chip.txt}</span>}
-                {card.available ? (
-                  <button className="helm-btn primary" onClick={() => abrir(card.key)}>
-                    {ctaDe(card.key)}
-                  </button>
-                ) : (
-                  <span className="helm-onb-soon"><Lock size={13} /> Próximamente</span>
-                )}
+                <button className="helm-btn primary" onClick={() => abrir(card.key)}>
+                  {ctaDe(card.key)}
+                </button>
               </div>
             </div>
           )

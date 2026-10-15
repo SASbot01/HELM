@@ -4,8 +4,10 @@
 // empezar: sirve igual a un negocio de servicios, a una marca personal, a una
 // tienda o a quien vende formación. Con esto la agencia y los agentes ya saben
 // qué vende, a quién, cuánto factura, dónde está en redes y cuánto puede grabar.
-// Para ir más a fondo están el onboarding de contenido (schema.js) y el
-// operativo (operativo.js).
+// Desde 2026-10-15 es el ÚNICO onboarding que se ofrece en el panel, y al
+// completarlo se generan las Biblias. El de contenido (schema.js) y el
+// operativo (operativo.js) siguen en el código por los perfiles que ya los
+// rellenaron.
 //
 // Lo rellena el propio cliente desde un enlace sin cuenta (/alta/<token>, ver
 // api/onboarding.js) o el equipo desde Onboarding en el panel. Mismos tipos de
