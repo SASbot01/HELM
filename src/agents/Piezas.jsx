@@ -3,13 +3,13 @@
 // cambia quién puede editar, no cómo se lee.
 import { Link } from 'react-router-dom'
 import {
-  ScatterChart, PenLine, FolderSync, FileBarChart, UserSquare, Brain, Clapperboard, Workflow, ArrowRight, Scissors } from 'lucide-react'
+  ScatterChart, PenLine, FolderSync, FileBarChart, UserSquare, Brain, Clapperboard, Workflow, ArrowRight, Scissors, Image as ImagenIcono } from 'lucide-react'
 import { ESTADOS as ESTADOS_AGENTE } from './agentes'
 import { ROLES, rol, compacto } from './ganchos'
 
 const ICONOS = {
   grafica: ScatterChart, pluma: PenLine, carpeta: FolderSync, informe: FileBarChart,
-  persona: UserSquare, memoria: Brain, contenido: Clapperboard, equipo: Workflow, editor: Scissors,
+  persona: UserSquare, memoria: Brain, contenido: Clapperboard, equipo: Workflow, editor: Scissors, portadas: ImagenIcono,
 }
 
 // ── El menú de agentes: una casilla por agente ──────────────────────────────

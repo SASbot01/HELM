@@ -1,0 +1,81 @@
+/* HELM — Portadas de reels (vista del agente). Tokens del Agent OS; neutro
+   (rgba) donde hace falta para claro y oscuro. En móvil, una columna. */
+.por-root { --por-borde: rgba(128,128,128,.22); }
+.por-ayuda { color: var(--text-secondary); font-size: 13px; line-height: 1.5; margin: 6px 0; display: block; }
+.por-gira { animation: por-gira 1s linear infinite; vertical-align: -2px; }
+@keyframes por-gira { to { transform: rotate(360deg); } }
+.por-acciones { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+
+/* Kit de la serie */
+.por-kit { border: 1px solid var(--por-borde); border-radius: 12px; margin: 8px 0 4px; overflow: hidden; }
+.por-kit-cab { width: 100%; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px;
+  background: transparent; border: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; min-height: 44px; }
+.por-kit-cab b { font-weight: 700; font-size: 14px; }
+.por-kit-cab small { color: var(--text-secondary); font-size: 12.5px; flex: 1 1 200px; }
+.por-kit-mas { color: var(--orange); font-size: 13px; font-weight: 600; }
+.por-muestra { width: 18px; height: 18px; border-radius: 5px; border: 1px solid var(--por-borde); flex: 0 0 auto; }
+.por-kit-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 16px;
+  padding: 4px 14px 14px; border-top: 1px solid var(--por-borde); }
+.por-kit-form .por-ayuda { grid-column: 1 / -1; }
+.por-kit-pie { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; }
+.por-root label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--text-secondary); }
+.por-root label.por-check { flex-direction: row; align-items: center; gap: 8px; }
+.por-root input:not([type]), .por-root input[type="text"], .por-root select {
+  font: inherit; font-size: 14px; color: var(--text); background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px); padding: 9px 10px; min-height: 40px; width: 100%; box-sizing: border-box; }
+.por-root input[type="color"] { width: 100%; height: 40px; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); }
+.por-root input[type="range"] { width: 100%; }
+
+/* La lista de reels */
+.por-reels { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.por-reel { border: 1px solid var(--por-borde); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; background: var(--bg-card); }
+.por-reel > .ag-btn { margin: 0 12px 12px; justify-content: center; min-height: 40px; }
+.por-mini { aspect-ratio: 3 / 4; background: rgba(128,128,128,.12); display: grid; place-items: center; overflow: hidden; }
+.por-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.por-mini span { color: var(--text-muted); font-size: 12px; padding: 10px; text-align: center; }
+.por-reel-txt { padding: 10px 12px; flex: 1; }
+.por-reel-txt small { color: var(--text-muted); font-size: 11.5px; }
+.por-reel-txt p { margin: 4px 0 0; font-size: 13px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* El taller */
+.por-taller { display: grid; grid-template-columns: minmax(240px, 380px) 1fr; gap: 22px; align-items: start; margin-top: 10px; }
+.por-lienzo-col { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.por-lienzo { width: 100%; height: auto; aspect-ratio: 9 / 16; border-radius: 14px; border: 1px solid var(--por-borde); background: #0A0A0C; display: block; }
+.por-descargas { display: flex; gap: 8px; }
+.por-descargas .ag-btn { flex: 1; justify-content: center; min-height: 44px; }
+.por-controles { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.por-controles section { border: 1px solid var(--por-borde); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.por-controles h3 { margin: 0; font-size: 14px; font-weight: 700; }
+.por-pestanas { display: flex; gap: 6px; flex-wrap: wrap; }
+.por-pestanas button, .por-plantillas button {
+  font: inherit; font-size: 13px; color: inherit; background: transparent; border: 1px solid var(--border);
+  border-radius: 999px; padding: 8px 12px; min-height: 40px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.por-pestanas button.on, .por-plantillas button.on { border-color: var(--orange); color: var(--orange); background: rgba(245,158,11,.08); }
+.por-plantillas { display: flex; flex-wrap: wrap; gap: 6px; }
+.por-video video { width: 100%; max-height: 260px; border-radius: 10px; background: #000; object-fit: contain; }
+.por-subir { flex-direction: row !important; align-items: center; gap: 8px; cursor: pointer; border: 1px dashed var(--border);
+  border-radius: 10px; padding: 12px; min-height: 44px; color: var(--text) !important; }
+.por-subir input { display: none; }
+
+.por-opciones { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.por-opciones button { width: 100%; text-align: left; font: inherit; color: inherit; background: transparent; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.por-opciones button.on { border-color: var(--orange); }
+.por-opciones small { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.por-opciones b { font-size: 15px; }
+.por-opciones span { color: var(--text-secondary); font-size: 12.5px; line-height: 1.4; }
+
+/* La cuadrícula del perfil: la portada nueva entre las de siempre. */
+.por-cuadricula { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; max-width: 330px; }
+.por-cuadricula img, .por-cuadricula span { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; display: block; background: rgba(128,128,128,.14); }
+.por-cuadricula img.nueva { outline: 2px solid var(--orange); outline-offset: -2px; }
+.por-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 13px; }
+.por-checks li { display: flex; gap: 7px; align-items: flex-start; line-height: 1.4; }
+.por-checks li svg { flex: 0 0 auto; margin-top: 2px; }
+.por-checks li.ok svg { color: var(--success, #22c55e); }
+.por-checks li.mal { color: var(--danger, #ef4444); }
+
+@media (max-width: 760px) {
+  .por-taller { grid-template-columns: 1fr; }
+  .por-lienzo-col { position: static; max-width: 340px; margin: 0 auto; width: 100%; }
+}

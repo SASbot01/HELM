@@ -684,3 +684,25 @@ export const radarApi = {
   lista: (clientId) => apiFetch(`/api/radar?action=lista&clientId=${clientId}`),
   ahora: (clientId) => apiFetch(`/api/radar?action=ahora&clientId=${clientId}`, { method: 'POST' }),
 }
+
+// Portadas de reels (api/portadas.js). El vídeo y la portada llegan como
+// archivo, no como JSON: van por apiBlob, con la misma sesión que apiFetch.
+async function apiBlob(path) {
+  const token = localStorage.getItem('bw_admin_jwt')
+  const r = await fetch(path, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  if (!r.ok) {
+    const d = await r.json().catch(() => ({}))
+    throw new Error(d?.error || `Error ${r.status}`)
+  }
+  return r.blob()
+}
+
+export const portadasApi = {
+  marca: (clientId) => apiFetch(`/api/portadas?action=marca&clientId=${clientId}`),
+  guardarMarca: (clientId, marca) =>
+    apiFetch('/api/portadas?action=marca', { method: 'POST', body: { clientId, marca } }),
+  textos: (clientId, mediaId) =>
+    apiFetch('/api/portadas?action=textos', { method: 'POST', body: { clientId, mediaId } }),
+  video: (clientId, mediaId) => apiBlob(`/api/portadas?action=video&clientId=${clientId}&mediaId=${encodeURIComponent(mediaId)}`),
+  imagen: (clientId, mediaId) => apiBlob(`/api/portadas?action=imagen&clientId=${clientId}&mediaId=${encodeURIComponent(mediaId)}`),
+}

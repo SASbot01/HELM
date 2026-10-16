@@ -159,6 +159,23 @@ export async function listMedia(token, limite = 60) {
   return salida.slice(0, limite)
 }
 
+/**
+ * Las direcciones frescas del vídeo y la portada de UNA publicación.
+ *
+ * Las que guarda la sincronización (thumb_url) son del CDN de Meta y llevan
+ * firma con caducidad: a los pocos días dan 403. Para componer una portada
+ * hace falta la de ahora, así que se pide a la Graph API en el momento.
+ */
+export async function getMediaUrls(token, mediaId) {
+  if (!/^\d{5,30}$/.test(String(mediaId || ''))) throw new IgError('Publicación no válida', 400)
+  const d = await pedir(`${API}/${VERSION}/${mediaId}?${q({ fields: 'media_type,media_url,thumbnail_url', access_token: token })}`)
+  return {
+    tipo: d.media_type || '',
+    video: d.media_type === 'VIDEO' ? d.media_url || '' : '',
+    imagen: d.thumbnail_url || (d.media_type === 'IMAGE' ? d.media_url : '') || '',
+  }
+}
+
 // Qué métricas tiene cada tipo de pieza. No son intercambiables: pedirle
 // `ig_reels_avg_watch_time` a una foto es un 400, y pedirle `views` a un
 // carrusel antiguo también. Por eso hay lista por tipo y, si aun así falla,

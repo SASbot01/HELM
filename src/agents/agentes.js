@@ -59,6 +59,15 @@ export const AGENTES = [
     icono: 'editor',
     soloAdmin: true,
   },
+  {
+    key: 'portadas',
+    ruta: 'portadas',
+    nombre: 'Portadas',
+    resumen: 'Tus reels con su portada y, en cada uno, una nueva: el fotograma real, el texto y la serie.',
+    detalle: 'Propone tres textos para la portada de cada reel, la compone en 1080×1920 con el kit de tu serie y te enseña cómo queda en la cuadrícula del perfil antes de descargarla en JPG o PNG.',
+    estado: 'activo',
+    icono: 'portadas',
+  },
 ]
 
 // Las partes del agente de contenido, en el orden en que se enseñan.

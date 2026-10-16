@@ -18,6 +18,7 @@ import PanelDrive from '../../agents/Drive'
 import Equipo from '../../agents/Equipo'
 import EstudioInstagram from './EstudioInstagram'
 import EditorReel from '../../agents/EditorReel'
+import Portadas from '../../agents/Portadas'
 import '../../agents/agentos.css'
 import './estudioIg.css'
 
@@ -67,6 +68,10 @@ export default function Agentes({ clientId, client }) {
 
   if (vista === 'editor') {
     return <EditorReel clientId={clientId} client={client} onVolver={() => setVista('menu')} />
+  }
+
+  if (vista === 'portadas') {
+    return <Portadas clientId={clientId} client={client} onVolver={() => setVista('menu')} />
   }
 
   if (vista === 'equipo') {
