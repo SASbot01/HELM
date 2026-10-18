@@ -108,7 +108,13 @@ async function main() {
       const dur = Number(j.format.duration)
       const etiquetas = [
         ...Object.keys(j.format.tags || {}).filter(k => !['major_brand', 'minor_version', 'compatible_brands'].includes(k)),
-        ...j.streams.flatMap(x => Object.keys(x.tags || {}).filter(k => ['encoder', 'title', 'comment', 'creation_time', 'location'].includes(k))),
+        // ffmpeg 6.1 (el del servidor) escribe siempre «Lavc libx264» en el
+        // vídeo aunque se le pida vacío. Sin versión es genérico (lo pone
+        // cualquier programa con ffmpeg) y no dice nada: solo falla si queda
+        // algo de la fuente o la marca con versión del codificador.
+        ...j.streams.flatMap(x => Object.entries(x.tags || {})
+          .filter(([k, val]) => ['title', 'comment', 'creation_time', 'location'].includes(k) || (k === 'encoder' && /\d/.test(val)))
+          .map(([k]) => k)),
       ]
       const checks = {
         '1080×1920': v.width === 1080 && v.height === 1920,

@@ -168,7 +168,8 @@ export function argumentosFfmpeg({ entrada, salida, gancho = null, ajustes, info
   if (audio) args.push('-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2')
   else args.push('-an')
   // Sin metadatos: ni los de la fuente (título, fecha, móvil, GPS) ni la marca
-  // del codificador (bitexact y la etiqueta «encoder» vacía, que la borra).
+  // del codificador (bitexact y la etiqueta «encoder» vacía, que la borra; el
+  // ffmpeg 6.1 del servidor deja «Lavc libx264», sin versión, y no hay manera).
   args.push(
     '-map_metadata', '-1', '-map_chapters', '-1', '-fflags', '+bitexact', '-metadata:s:v:0', 'encoder=',
     '-movflags', '+faststart', '-f', 'mp4', salida,
