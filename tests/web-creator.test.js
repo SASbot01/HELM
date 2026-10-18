@@ -38,6 +38,10 @@ describe('Web Creator · piezas del estudio', () => {
     expect(esRuido('https://www.instagram.com/bella')).toBe(true)
     expect(esRuido('https://www.paginasamarillas.es/x')).toBe(true)
     expect(esRuido('https://clinicabella.es/')).toBe(false)
+    expect(esRuido('https://peluqueriamaster.com/clasificacion/lorca/', 'Las mejores peluquerías de Lorca según reseñas Google')).toBe(true)
+    expect(esRuido('https://www.citasgo.com/directorio/lorca/peluquerias/', 'Peluquerías en Lorca — 99 Negocios')).toBe(true)
+    expect(esRuido('https://otra.es/', 'Peluquería: top 40 de España')).toBe(true)
+    expect(esRuido('https://davidsanchezpeluquero.com/', 'David Sánchez | Peluquería y Hair Spa')).toBe(false)
     expect(dominioDe('https://www.ClinicaBella.es/tratamientos?x=1')).toBe('clinicabella.es')
   })
 

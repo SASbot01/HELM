@@ -49,9 +49,15 @@ const RUIDO = [
   'cylex', 'infobel', 'einforma', 'axesor', 'habitissimo', 'cronoshare', 'top-rated', 'elcorteingles', 'amazon',
   'tuugo', 'guiaempresa', 'empresite', 'qdq', 'pinterest', 'eltenedor', 'thefork', 'justeat', 'glovo', 'ubereats',
 ]
-export const esRuido = (url) => {
+// Rankings, directorios y artículos de «los mejores…»: Google los pone arriba,
+// pero son listas sobre negocios, no la web de uno.
+const RUIDO_EXTRA = ['citasgo', 'directoralia', 'peluqueriamaster', 'vibeofbeauty', 'misterwhat', 'cybo', 'paginasblancas', 'hotfrog', 'yably', 'firmania', 'infoisinfo', 'abctelefonos']
+const TITULO_LISTA = /\b(mejores|top\s*\d+|ranking|directorio|\d+\s+(negocios|peluquer[ií]as|sitios|lugares)|clasificaci[oó]n|los\s+\d+|gu[ií]a de)\b/i
+const RUTA_LISTA = /\/(directorio|clasificacion|ranking|top-\d+|mejores-)/i
+export const esRuido = (url, titulo = '') => {
   const d = dominioDe(url)
-  return !d || RUIDO.some(r => d.includes(r))
+  if (!d || RUIDO.some(r => d.includes(r)) || RUIDO_EXTRA.some(r => d.includes(r))) return true
+  return RUTA_LISTA.test(String(url)) || TITULO_LISTA.test(String(titulo))
 }
 
 /** La ciudad de una dirección de Google Maps («C. Mayor, 12, 30800 Lorca, Murcia, España» → «Lorca»). */
@@ -235,7 +241,7 @@ export function construyePrompt({ id, cliente, sector, ciudad, competidores, pat
     : cliente.whatsapp || cliente.telefono ? 'llamadas y mensajes de WhatsApp' : 'contactos por el formulario'
   const seo = ia?.seo || {
     title: `${nombre} | ${sector ? sector[0].toUpperCase() + sector.slice(1) : 'Negocio'}${ciudad ? ` en ${ciudad}` : ''}`,
-    description: `${sector || 'Negocio'}${ciudad ? ` en ${ciudad}` : ''}. ${cliente.rating ? `${String(cliente.rating).replace('.', ',')}★ en Google. ` : ''}Pide información o reserva por WhatsApp.`,
+    description: `${sector ? sector[0].toUpperCase() + sector.slice(1) : 'Negocio'}${ciudad ? ` en ${ciudad}` : ''}. ${cliente.rating ? `${String(cliente.rating).replace('.', ',')}★ en Google. ` : ''}Pide información o reserva por WhatsApp.`,
     keywords: [sector && ciudad ? `${sector} en ${ciudad}` : null, sector && ciudad ? `${sector} ${ciudad}` : null, sector ? `mejor ${sector}${ciudad ? ` ${ciudad}` : ''}` : null].filter(Boolean),
   }
   const secciones = ia?.secciones?.length
@@ -442,7 +448,7 @@ async function buscaCompetidores({ clientId, sector, ciudad, dominioPropio }) {
         const res = await buscarWeb(consulta, { max: 10 })
         let pos = 0
         for (const r of res) {
-          if (esRuido(r.url)) continue
+          if (esRuido(r.url, r.title)) continue
           pos += 1
           anade({ nombre: r.title, url: r.url, consulta, posicion_google: pos })
           if (pos >= 4) break
