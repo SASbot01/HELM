@@ -37,6 +37,13 @@ function resolveHandlerFile(pathname) {
 
 const MAX_CUERPO = 30 * 1024 * 1024
 
+// La subida del Editor de reels (api/editor.js?action=subir) es un vídeo en
+// crudo de cientos de MB: no se lee aquí (ni cabe en MAX_CUERPO ni en
+// memoria); el handler recibe la petición sin tocar y la escribe a disco según
+// llega, con su propio tope.
+const subidaEnCrudo = (pathname, query) =>
+  pathname.replace(/\/+$/, '') === '/api/editor' && query.action === 'subir'
+
 function readBody(req) {
   return new Promise((resolve) => {
     const chunks = []
@@ -91,7 +98,7 @@ async function atiende(req, res) {
     const query = Object.fromEntries(u.searchParams)
     if (typeof resolved === 'object' && resolved.param) query[resolved.param] = resolved.value
     req.query = query
-    req.body = await readBody(req)
+    req.body = subidaEnCrudo(u.pathname, query) ? undefined : await readBody(req)
     const mod = await import(pathToFileURL(file).href)
     const handler = mod.default || mod.handler
     if (typeof handler !== 'function') { res.status(500).json({ error: `Handler in ${path.basename(file)} is not a function` }); return }
