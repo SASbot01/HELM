@@ -706,3 +706,37 @@ export const portadasApi = {
   video: (clientId, mediaId) => apiBlob(`/api/portadas?action=video&clientId=${clientId}&mediaId=${encodeURIComponent(mediaId)}`),
   imagen: (clientId, mediaId) => apiBlob(`/api/portadas?action=imagen&clientId=${clientId}&mediaId=${encodeURIComponent(mediaId)}`),
 }
+
+// Trial reels (api/trial-reels.js): variantes editadas de un reel propio para
+// probarlas como «Reel de prueba». El MP4 llega como archivo, por apiBlob.
+export const trialReelsApi = {
+  lista: (clientId) => apiFetch(`/api/trial-reels?action=lista&clientId=${clientId}`),
+  ganchos: (clientId, mediaId) =>
+    apiFetch('/api/trial-reels?action=ganchos', { method: 'POST', body: { clientId, mediaId } }),
+  crear: (clientId, mediaId, variantes) =>
+    apiFetch('/api/trial-reels?action=crear', { method: 'POST', body: { clientId, mediaId, variantes } }),
+  estado: (clientId, id) => apiFetch(`/api/trial-reels?action=estado&clientId=${clientId}&id=${encodeURIComponent(id)}`),
+  descarga: (clientId, id) => apiBlob(`/api/trial-reels?action=descarga&clientId=${clientId}&id=${encodeURIComponent(id)}`),
+  borrar: (clientId, id) => apiFetch('/api/trial-reels?action=borrar', { method: 'POST', body: { clientId, id } }),
+}
+
+// El setter de Instagram (api/setter-ig.js).
+export const setterIgApi = {
+  estado: (clientId) => apiFetch(`/api/setter-ig?action=estado&clientId=${clientId}`),
+  guardar: (clientId, config) => apiFetch('/api/setter-ig?action=config', { method: 'POST', body: { clientId, config } }),
+  conectar: (clientId) => apiFetch(`/api/setter-ig?action=conectar&clientId=${clientId}`),
+  conversaciones: (clientId) => apiFetch(`/api/setter-ig?action=conversaciones&clientId=${clientId}`),
+  hilo: (clientId, id) => apiFetch(`/api/setter-ig?action=hilo&clientId=${clientId}&id=${encodeURIComponent(id)}`),
+  aprobar: (clientId, conversacionId, textos) =>
+    apiFetch('/api/setter-ig?action=aprobar', { method: 'POST', body: { clientId, conversacionId, textos } }),
+  descartar: (clientId, conversacionId) =>
+    apiFetch('/api/setter-ig?action=descartar', { method: 'POST', body: { clientId, conversacionId } }),
+  enviar: (clientId, conversacionId, texto) =>
+    apiFetch('/api/setter-ig?action=enviar', { method: 'POST', body: { clientId, conversacionId, texto } }),
+  control: (clientId, conversacionId, estado) =>
+    apiFetch('/api/setter-ig?action=control', { method: 'POST', body: { clientId, conversacionId, estado } }),
+  responder: (clientId, conversacionId) =>
+    apiFetch('/api/setter-ig?action=responder', { method: 'POST', body: { clientId, conversacionId } }),
+  probar: (clientId, mensajes, config) =>
+    apiFetch('/api/setter-ig?action=probar', { method: 'POST', body: { clientId, mensajes, config } }),
+}

@@ -19,6 +19,8 @@ import Equipo from '../../agents/Equipo'
 import EstudioInstagram from './EstudioInstagram'
 import EditorReel from '../../agents/EditorReel'
 import Portadas from '../../agents/Portadas'
+import SetterIG from '../../agents/SetterIG'
+import TrialReels from '../../agents/TrialReels'
 import '../../agents/agentos.css'
 import './estudioIg.css'
 
@@ -72,6 +74,14 @@ export default function Agentes({ clientId, client }) {
 
   if (vista === 'portadas') {
     return <Portadas clientId={clientId} client={client} onVolver={() => setVista('menu')} />
+  }
+
+  if (vista === 'setter-ig') {
+    return <SetterIG clientId={clientId} client={client} onVolver={() => setVista('menu')} />
+  }
+
+  if (vista === 'trial-reels') {
+    return <TrialReels clientId={clientId} client={client} onVolver={() => setVista('menu')} />
   }
 
   if (vista === 'equipo') {

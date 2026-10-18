@@ -44,6 +44,10 @@ const SECRETAS = new Set([
   'helm_telegram_vinculos', 'helm_telegram_conversaciones', 'helm_telegram_aprobaciones',
   // Las altas públicas: datos de contacto de quien aún no tiene perfil.
   'helm_altas',
+  // El setter de Instagram: DM privados de terceros (api/setter-ig.js).
+  'helm_setter_ig', 'helm_ig_conversaciones', 'helm_ig_mensajes',
+  // Trial reels: los trabajos de vídeo, solo por api/trial-reels.js.
+  'helm_trial_reels',
 ])
 
 // `team` guarda los accesos (con su contraseña). El panel solo lee nombres

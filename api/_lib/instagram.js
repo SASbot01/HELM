@@ -27,6 +27,10 @@ const TIMEOUT_MS = 20_000
 // Lo mínimo para leer el perfil y las métricas de sus publicaciones. Nada de
 // publicar ni de leer mensajes: esta sección solo mira.
 export const IG_SCOPES = ['instagram_business_basic', 'instagram_business_manage_insights']
+// El setter de Instagram (api/_lib/setter-ig.js) necesita además leer y
+// contestar los DM. Solo se pide al encender el setter, no al conectar para
+// métricas: es el permiso que más mira Meta en la revisión de la app.
+export const IG_SCOPES_MENSAJES = [...IG_SCOPES, 'instagram_business_manage_messages']
 
 export const igCredsMissing = () => !process.env.IG_APP_ID || !process.env.IG_APP_SECRET
 
@@ -58,11 +62,11 @@ export function igRedirectUri(req) {
   return `${req?.headers?.['x-forwarded-proto'] || 'http'}://${req?.headers?.host || 'localhost:5173'}${path}`
 }
 
-export function igAuthUrl({ state, redirectUri }) {
+export function igAuthUrl({ state, redirectUri, mensajes = false }) {
   const q = new URLSearchParams({
     client_id: process.env.IG_APP_ID || '',
     redirect_uri: redirectUri,
-    scope: IG_SCOPES.join(','),
+    scope: (mensajes ? IG_SCOPES_MENSAJES : IG_SCOPES).join(','),
     response_type: 'code',
     state,
   })
@@ -280,6 +284,41 @@ export async function getToken(supabase, clientId) {
     }
   }
   return { token: cfg.token, config: cfg, row }
+}
+
+// ── Mensajes directos (setter) ─────────────────────────────────────────────
+// Con la «Instagram API with Instagram Login» los DM van por graph.instagram.com
+// con el mismo token de la cuenta. Dos reglas de Meta que no se negocian:
+//   · solo se contesta a quien ha escrito antes (no hay mensajes en frío), y
+//   · solo hasta 24 h después de su último mensaje.
+
+/** Suscribe la cuenta al webhook de la app para que lleguen sus DM. */
+export async function suscribirMensajes(token) {
+  return pedir(`${API}/${VERSION}/me/subscribed_apps?${q({ subscribed_fields: 'messages', access_token: token })}`, { method: 'POST' })
+}
+
+/** Manda un DM de texto. Devuelve { recipient_id, message_id }. */
+export async function enviarDm(token, igUsuarioId, texto) {
+  if (!/^\d{5,40}$/.test(String(igUsuarioId || ''))) throw new IgError('Destinatario no válido', 400)
+  const t = String(texto || '').slice(0, 1000)
+  if (!t.trim()) throw new IgError('El mensaje está vacío', 400)
+  return pedir(`${API}/${VERSION}/me/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ recipient: { id: String(igUsuarioId) }, message: { text: t } }),
+  })
+}
+
+/**
+ * Nombre y usuario de quien escribe. Meta solo lo da si esa persona ha escrito
+ * a la cuenta; si no lo da, el hilo sigue igual, con su id.
+ */
+export async function perfilDeRemitente(token, igUsuarioId) {
+  try {
+    return await pedir(`${API}/${VERSION}/${igUsuarioId}?${q({ fields: 'name,username', access_token: token })}`)
+  } catch {
+    return {}
+  }
 }
 
 // ── Informe ────────────────────────────────────────────────────────────────

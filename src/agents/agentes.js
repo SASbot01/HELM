@@ -68,6 +68,24 @@ export const AGENTES = [
     estado: 'activo',
     icono: 'portadas',
   },
+  {
+    key: 'setter-ig',
+    ruta: 'setter-ig',
+    nombre: 'Setter de Instagram',
+    resumen: 'Contesta tus DM, cualifica a cada lead y lo lleva a la llamada. Cada uno entra en el CRM.',
+    detalle: 'Lee cada mensaje directo, pregunta lo justo para saber si encaja y, cuando encaja, le pasa tu formulario de reserva. Empieza dejando borradores para que los apruebes; cuando te fíes, contesta solo. Si alguien del equipo escribe en un hilo, se aparta.',
+    estado: 'activo',
+    icono: 'setter',
+  },
+  {
+    key: 'trial-reels',
+    ruta: 'trial-reels',
+    nombre: 'Trial reels',
+    resumen: 'Vuelve a probar tus reels: 2–3 variantes con otro arranque, otro gancho y otro encuadre.',
+    detalle: 'Coge un reel que ya publicaste, propone ganchos y monta las variantes en MP4 1080×1920 con tu kit de Portadas. Las descargas y las subes en Instagram como «Reel de prueba»: HELM no publica.',
+    estado: 'activo',
+    icono: 'trial',
+  },
 ]
 
 // Las partes del agente de contenido, en el orden en que se enseñan.
