@@ -15,9 +15,33 @@ export const ESTADOS = {
   construido: { label: 'En construcción', tono: 'espera' },
 }
 
+// Los departamentos: cada agente trabaja en uno. En el menú se entra por
+// departamento, como a una oficina; el Equipo de agentes los enseña todos.
+export const DEPARTAMENTOS = [
+  {
+    key: 'contenido',
+    nombre: 'Departamento de contenido',
+    resumen: 'Estudia a tus referentes, planifica los guiones, edita los reels y prepara portadas y pruebas.',
+    icono: 'contenido',
+  },
+  {
+    key: 'ventas',
+    nombre: 'Departamento de ventas',
+    resumen: 'Atiende a quien te escribe, lo cualifica y lo lleva a la llamada.',
+    icono: 'setter',
+  },
+  {
+    key: 'webs',
+    nombre: 'Departamento de webs',
+    resumen: 'Estudia el sector de cada cliente y prepara su web.',
+    icono: 'web',
+  },
+]
+
 export const AGENTES = [
   {
     key: 'contenido',
+    departamento: 'contenido',
     ruta: 'contenido',
     nombre: 'Agente de contenido',
     resumen: 'Los creadores de referencia, sus reels analizados y lo aprendido de ellos.',
@@ -30,6 +54,7 @@ export const AGENTES = [
   },
   {
     key: 'drive',
+    departamento: 'contenido',
     ruta: 'drive',
     nombre: 'Calendario de guiones',
     resumen: 'Tus guiones día a día, y lo que grabas se ordena solo en Drive.',
@@ -50,6 +75,7 @@ export const AGENTES = [
   },
   {
     key: 'editor',
+    departamento: 'contenido',
     ruta: 'editor',
     nombre: 'Editor de reels',
     resumen: 'Monta tus reels en bruto según tu manual: formato, cortes, capturas reales y subtítulos.',
@@ -60,7 +86,18 @@ export const AGENTES = [
     soloAdmin: true,
   },
   {
+    key: 'estudio',
+    departamento: 'contenido',
+    ruta: 'estudio',
+    nombre: 'Estudio de Instagram',
+    resumen: 'Puntúa el gancho, revisa la caption, audita el perfil y quita el olor a IA.',
+    detalle: 'Pegas un guion, una caption o tu perfil y te dice qué falla y cómo arreglarlo antes de publicar. No publica nada.',
+    estado: 'activo',
+    icono: 'informe',
+  },
+  {
     key: 'portadas',
+    departamento: 'contenido',
     ruta: 'portadas',
     nombre: 'Portadas',
     resumen: 'Tus reels con su portada y, en cada uno, una nueva: el fotograma real, el texto y la serie.',
@@ -70,6 +107,7 @@ export const AGENTES = [
   },
   {
     key: 'setter-ig',
+    departamento: 'ventas',
     ruta: 'setter-ig',
     nombre: 'Setter de Instagram',
     resumen: 'Contesta tus DM, cualifica a cada lead y lo lleva a la llamada. Cada uno entra en el CRM.',
@@ -79,6 +117,7 @@ export const AGENTES = [
   },
   {
     key: 'trial-reels',
+    departamento: 'contenido',
     ruta: 'trial-reels',
     nombre: 'Trial reels',
     resumen: 'Vuelve a probar tus reels: 2–3 variantes con otro arranque, otro gancho y otro encuadre.',
@@ -88,6 +127,7 @@ export const AGENTES = [
   },
   {
     key: 'web-creator',
+    departamento: 'webs',
     ruta: 'web-creator',
     nombre: 'Web Creator',
     resumen: 'Los clientes en «En fabricación»: su estudio de las webs mejor posicionadas y el prompt para construir la suya.',

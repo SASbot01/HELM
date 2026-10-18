@@ -25,6 +25,34 @@ export function MenuAgentes({ agentes, metricaDe = () => null, onAbrir }) {
   )
 }
 
+// ── Los departamentos: una carpeta por oficina, con sus agentes dentro ──────
+export function MenuDepartamentos({ departamentos, onAbrir }) {
+  return (
+    <div className="ag-rejilla ag-deps">
+      {departamentos.map(d => {
+        const Icono = ICONOS[d.icono] || ScatterChart
+        return (
+          <button key={d.key} type="button" className="ag-casilla ag-dep" onClick={() => onAbrir(d.key)}>
+            <span className="ag-cas-ico"><Icono size={20} strokeWidth={1.8} aria-hidden="true" /></span>
+            <h3>{d.nombre}</h3>
+            <p>{d.resumen}</p>
+            <ul className="ag-dep-agentes">
+              {d.agentes.map(a => {
+                const I = ICONOS[a.icono] || ScatterChart
+                return <li key={a.key}><I size={13} strokeWidth={1.9} aria-hidden="true" /> {a.nombre}</li>
+              })}
+            </ul>
+            <footer>
+              <span className="ag-cas-num"><b>{d.agentes.length}</b> {d.agentes.length === 1 ? 'agente' : 'agentes'}</span>
+              <ArrowRight size={15} strokeWidth={2} className="ag-cas-flecha" aria-hidden="true" />
+            </footer>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function Casilla({ a, metrica, onAbrir }) {
   const Icono = ICONOS[a.icono] || ScatterChart
   const est = ESTADOS_AGENTE[a.estado] || ESTADOS_AGENTE.construido
