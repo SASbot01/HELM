@@ -18,6 +18,26 @@ const SENALES = {
   mapa: 'Mapa', formulario: 'Formulario', instagram: 'Instagram', blog: 'Blog', galeria: 'Galería', faq: 'FAQ',
 }
 
+// Lo que tiene que estar listo para que el protocolo del prompt funcione.
+function AntesDePublicar() {
+  return (
+    <section className="wc-caja wc-aviso">
+      <h3><AlertTriangle size={14} /> Antes de publicar</h3>
+      <ul>
+        <li>
+          <b>GitHub:</b> en el Mac, <code>gh</code> con el token de SASbot01. Claude Code crea el repositorio, sube la web a la rama
+          <code>primera-version</code> y abre un PR. Si <code>gh auth status</code> da error, para y pide el token.
+        </li>
+        <li><b>Tú revisas el PR y haces el merge.</b> Nada llega a la web publicada sin pasar por ti.</li>
+        <li>
+          <b>Vercel:</b> la primera vez, importa el repositorio en Vercel (Add New → Project → web-…). Desde entonces, cada merge a
+          <code>main</code> la publica sola. Luego apunta la URL aquí, en Publicación.
+        </li>
+      </ul>
+    </section>
+  )
+}
+
 export default function WebCreator({ clientId, client, onVolver }) {
   const [webs, setWebs] = useState(null)
   const [abierta, setAbierta] = useState(null)
@@ -51,6 +71,7 @@ export default function WebCreator({ clientId, client, onVolver }) {
         </div>
       </header>
       {error && <p className="ag-error">{error}</p>}
+      <AntesDePublicar />
       {webs == null ? <p className="wc-ayuda"><Loader2 size={14} className="wc-gira" /> Cargando…</p>
         : !webs.length ? (
           <p className="wc-ayuda">Todavía no hay ninguna. Mueve un contacto a «En fabricación» en el CRM y aparece aquí en un momento con su estudio.</p>
@@ -145,7 +166,7 @@ function Ficha({ clientId, id, onVolver }) {
             <h3>Prompt para Claude Code</h3>
             <button type="button" className="ag-btn primario sm" onClick={copiar}>{copiado ? <><Check size={13} /> Copiado</> : <><Copy size={13} /> Copiar prompt</>}</button>
           </div>
-          <p className="wc-ayuda">Pégalo en Claude Code: construye la web, crea el repositorio en GitHub, la publica en Vercel y la apunta aquí.</p>
+          <p className="wc-ayuda">Pégalo en Claude Code: construye la web, la sube a GitHub en una rama y abre un PR para que hagas el merge. Vercel la publica al hacer el merge.</p>
           <pre className="wc-prompt">{w.prompt}</pre>
         </section>
       )}

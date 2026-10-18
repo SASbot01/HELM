@@ -5,7 +5,8 @@
 //   node scripts/web-creator.mjs lista [slug-del-perfil]
 //   node scripts/web-creator.mjs prompt <id>
 //   node scripts/web-creator.mjs estudiar <id>
-//   node scripts/web-creator.mjs publicada <id> --repo <url> --web <url>
+//   node scripts/web-creator.mjs subida <id> --repo <url> --pr <url>   (en GitHub, esperando el merge)
+//   node scripts/web-creator.mjs publicada <id> [--repo <url>] --web <url>
 //   node scripts/web-creator.mjs ensayo <contactId>   (el estudio en seco: no guarda nada)
 //
 // Con el entorno del servidor cargado:
@@ -44,6 +45,19 @@ if (orden === 'lista') {
   await supabase.from('helm_web_fabricacion').update({ estado: 'pendiente', error: null }).eq('id', f.id)
   await encolaEstudio(f.client_id, f.id)
   console.log('Estudio encolado: el worker lo hace en un momento.')
+} else if (orden === 'subida') {
+  const f = await fila(resto[0])
+  const repo = opcion('repo')
+  const pr = opcion('pr')
+  for (const [n, u] of [['repo', repo], ['pr', pr]]) {
+    if (!u || !/^https:\/\/\S+$/i.test(u)) fallo(`--${n} tiene que ser una dirección https://`)
+  }
+  const notas = [f.notas, `PR para revisar y hacer merge: ${pr}`].filter(Boolean).join('\n')
+  const { error } = await supabase.from('helm_web_fabricacion').update({
+    fase: 'construyendo', repo_url: repo, notas, updated_at: new Date().toISOString(),
+  }).eq('id', f.id)
+  if (error) fallo(error.message)
+  console.log(`Apuntada como subida a GitHub: ${f.datos?.nombre || f.id} → ${pr}`)
 } else if (orden === 'publicada') {
   const f = await fila(resto[0])
   const repo = opcion('repo')
@@ -66,6 +80,6 @@ if (orden === 'lista') {
   console.log(JSON.stringify(resumen, null, 1))
   console.log('\n========== PROMPT ==========\n' + prompt)
 } else {
-  fallo('Uso: lista [perfil] · prompt <id> · estudiar <id> · publicada <id> --repo <url> --web <url>')
+  fallo('Uso: lista [perfil] · prompt <id> · estudiar <id> · subida <id> --repo <url> --pr <url> · publicada <id> --web <url> · ensayo <contactId>')
 }
 process.exit(0)

@@ -56,6 +56,12 @@
 .wc-datos dt { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
 .wc-datos dd { margin: 0; font-size: 13.5px; word-break: break-word; }
 
+/* Antes de publicar */
+.wc-aviso { border-color: var(--orange); }
+.wc-aviso h3 { display: flex; gap: 6px; align-items: center; }
+.wc-aviso ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+.wc-aviso code { font-size: 12px; background: var(--wc-suave); padding: 1px 5px; border-radius: 5px; }
+
 @media (max-width: 640px) {
   .wc-lista button { flex-wrap: wrap; }
   .wc-meta { max-width: 100%; justify-content: flex-start; padding-left: 50px; }

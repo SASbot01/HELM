@@ -101,9 +101,10 @@ describe('Web Creator · piezas del estudio', () => {
     expect(prompt).toContain('1º en Google para «clínica estética Lorca»')
     expect(prompt).toContain('[PENDIENTE')
     expect(prompt).toContain('logo, fotos propias')
-    expect(prompt).toContain('gh repo create SASbot01/web-estetica-rosa-lorca --private --source . --push')
-    expect(prompt).toContain('vercel --prod')
-    expect(prompt).toContain('scripts/web-creator.mjs publicada 11111111-2222-4333-8444-555555555555')
+    expect(prompt).toContain('gh repo create SASbot01/web-estetica-rosa-lorca --private --source . --remote origin')
+    expect(prompt).toContain('gh pr create --base main --head primera-version')
+    expect(prompt).toContain('scripts/web-creator.mjs subida 11111111-2222-4333-8444-555555555555')
+    expect(prompt).not.toContain('vercel login')
     expect(prompt).not.toMatch(/undefined|null|NaN/)
   })
 

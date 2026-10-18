@@ -235,14 +235,17 @@ ${secciones.map(s => `  ${s}`).join('\n')}
 Sitio estático y rápido, sin backend: Astro (o HTML/CSS/JS con Vite si es una sola página). El contacto, por WhatsApp, teléfono o mailto; si hace falta formulario, uno sin servidor (Formspree o similar, [PENDIENTE: clave]).
 
 ## 5. Protocolo de publicación (Claude Code, en el Mac)
+Requisito: \`gh\` con la sesión de SASbot01 (token ya configurado). Si \`gh auth status\` falla, para y pide el token.
 1. Carpeta \`~/code/webs/${slug}\`.
 2. Construir y revisar en el navegador a 375 px y en escritorio: sin errores en consola, enlaces y botones que funcionan, Lighthouse.
-3. \`git init\` y primer commit.
-4. GitHub: \`gh repo create SASbot01/web-${slug} --private --source . --push\`.
-5. Vercel: \`vercel link --yes --project web-${slug}\`, \`vercel git connect\` y \`vercel --prod\`.
-6. Comprobar que la URL de Vercel carga y se ve bien en el móvil.
-7. Apuntarlo en HELM: \`ssh minipc "cd /home/s4sf/helm && set -a && . ./.env.server && set +a && node scripts/web-creator.mjs publicada ${id} --repo <url-del-repo> --web <url-de-vercel>"\`
-8. Informe final: qué funciona, qué falta (todo lo [PENDIENTE]) y qué hay que pedirle al cliente.
+3. Git: rama \`main\` solo con un README de una línea (primer commit) y la web entera en la rama \`primera-version\`.
+4. GitHub:
+   - \`gh repo create SASbot01/web-${slug} --private --source . --remote origin\`
+   - \`git push -u origin main\` y \`git push -u origin primera-version\`
+   - \`gh pr create --base main --head primera-version --title "Primera versión de la web" --body "<el informe del paso 6>"\`
+5. Apuntarlo en HELM: \`ssh minipc "cd /home/s4sf/helm && set -a && . ./.env.server && set +a && node scripts/web-creator.mjs subida ${id} --repo <url-del-repo> --pr <url-del-pr>"\`
+6. Informe final (también en el PR): qué funciona, qué falta (todo lo [PENDIENTE]) y qué hay que pedirle al cliente.
+7. Alex revisa el PR y hace el merge. Vercel publica cada merge a \`main\` si el repositorio está importado en Vercel (una vez por web: Add New → Project → web-${slug}). Con la URL de Vercel, se apunta en la ficha (Publicación) o con \`scripts/web-creator.mjs publicada ${id} --web <url>\`.
 `
 }
 
