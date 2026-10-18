@@ -51,7 +51,7 @@ const RUIDO = [
 ]
 // Rankings, directorios y artículos de «los mejores…»: Google los pone arriba,
 // pero son listas sobre negocios, no la web de uno.
-const RUIDO_EXTRA = ['citasgo', 'directoralia', 'peluqueriamaster', 'vibeofbeauty', 'misterwhat', 'cybo', 'paginasblancas', 'hotfrog', 'yably', 'firmania', 'infoisinfo', 'abctelefonos']
+const RUIDO_EXTRA = ['citasgo', 'directoralia', 'peluqueriamaster', 'vibeofbeauty', 'mejor.es', 'negocioscerca', 'mispelus', 'misterwhat', 'cybo', 'paginasblancas', 'hotfrog', 'yably', 'firmania', 'infoisinfo', 'abctelefonos']
 const TITULO_LISTA = /\b(mejores|top\s*\d+|ranking|directorio|\d+\s+(negocios|peluquer[ií]as|sitios|lugares)|clasificaci[oó]n|los\s+\d+|gu[ií]a de)\b/i
 const RUTA_LISTA = /\/(directorio|clasificacion|ranking|top-\d+|mejores-)/i
 export const esRuido = (url, titulo = '') => {
@@ -114,8 +114,14 @@ export function deNotas(notas) {
     email: n.match(/[\w.+-]+@[\w-]+\.[\w.]+/)?.[0] || null,
     instagram: ig ? `@${ig.replace(/\/$/, '')}` : null,
     horario: horas.length ? horas.join('; ') : null,
+    // Protocolo de web-seller: las fotos del cliente se suben a una carpeta de
+    // Drive y el enlace va en sus notas.
+    fotosDrive: n.match(/https:\/\/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/([A-Za-z0-9_-]{10,})/)?.[0] || null,
   }
 }
+
+/** El id de la carpeta de Drive de un enlace https://drive.google.com/drive/folders/<id>. */
+export const idCarpetaDrive = (url) => String(url || '').match(/folders\/([A-Za-z0-9_-]{10,})/)?.[1] || null
 
 /** Lo que mejor posiciona en Maps: buena nota con muchas reseñas. */
 export const puntuaMaps = (n) => (Number(n?.rating) || 0) * Math.log10(1 + (Number(n?.resenas) || 0))
@@ -265,7 +271,7 @@ Construye la web de este cliente de web-seller siguiendo este encargo y, cuando 
 
 ## 1. El cliente
 ${datos.join('\n')}
-${cliente.contexto ? `\nLo que sabemos por el CRM (notas, llamadas, formularios):\n${cliente.contexto}\n` : ''}
+${cliente.fotos_drive ? `\n### Fotos del cliente\nEstán en su carpeta de Drive: ${cliente.fotos_drive}\nBájalas con \`ssh minipc "cd /home/s4sf/helm && set -a && . ./.env.server && set +a && node scripts/web-creator.mjs fotos ${id}"\` (las deja en /home/s4sf/helm-ops/tmp/fotos-${id}/) y tráelas con scp. Míralas todas y decide dónde va cada una (portada, servicio estrella, galería, el local, logo). Si son capturas del móvil, recorta la interfaz. Pásalas a WebP (el ffmpeg del servidor tiene libwebp). Si la de portada no luce, recorta a la persona con rembg (venv de helm-agents) sobre un fondo con los colores de la marca. Nada de imágenes generadas con IA haciéndolas pasar por trabajos del cliente.\n` : ''}${cliente.contexto ? `\nLo que sabemos por el CRM (notas, llamadas, formularios):\n${cliente.contexto}\n` : ''}
 Lo que falta y NO se inventa (se deja como [PENDIENTE: …] visible en el código y se apunta en el informe): ${faltan.length ? faltan.join(', ') : 'nada importante'}.
 
 ${aprendido ? `## Lo aprendido en las webs anteriores (Web Creator)\nAplícalo salvo que este cliente pida otra cosa:\n\n${recorta(aprendido, 5000)}\n\n` : ''}## 2. Estudio de las webs mejor posicionadas
@@ -348,6 +354,7 @@ async function recogeDatos(clientId, contactId) {
     categoria: p?.categoria || null,
     titular: p?.titular || null,
     cif: p?.cif || null,
+    fotos_drive: n.fotosDrive,
     contexto: recorta(contexto, 6000),
   }
   const sector = (p?.categoria || c.custom_fields?.sector || c.producto_interes || '').toString().trim().toLowerCase()
@@ -356,8 +363,9 @@ async function recogeDatos(clientId, contactId) {
   const ciudad = ciudadConCp(cliente.direccion) || c.custom_fields?.ciudad || n.ubicacion?.split(',')[0]?.trim()
     || (etiquetaCiudad ? nombrePropio(etiquetaCiudad) : null) || ciudadDe(cliente.direccion) || null
   const faltan = [
-    !cliente.direccion && 'dirección', !cliente.telefono && 'teléfono', !cliente.horario && 'horario', 'logo',
-    'fotos propias', !cliente.titular && 'titular legal (para el aviso legal)', 'precios (si quiere enseñarlos)',
+    !cliente.direccion && 'dirección', !cliente.telefono && 'teléfono', !cliente.horario && 'horario',
+    !cliente.fotos_drive && 'logo', !cliente.fotos_drive && 'fotos propias (súbelas a una carpeta de Drive y pon el enlace en sus notas)',
+    !cliente.titular && 'titular legal (para el aviso legal)', 'precios (si quiere enseñarlos)',
   ].filter(Boolean)
   return { cliente, sector, ciudad, faltan, contactoNombre: c.name }
 }

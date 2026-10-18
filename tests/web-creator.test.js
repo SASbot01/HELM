@@ -53,7 +53,7 @@ describe('Web Creator · piezas del estudio', () => {
   })
 
   it('saca los datos de unas notas escritas como resumen (Isabel Lozano)', () => {
-    const notas = `https://drive.google.com/drive/folders/abc
+    const notas = `https://drive.google.com/drive/folders/1l8P4BUu96LyrGzRpEdnss0fMZZJCBpVi?usp=sharing
 
 # Resumen informativo completo — Isabel Lozano Estilista
 
@@ -74,6 +74,7 @@ Nombre comercial: Isabel Lozano Estilista Actividad: Peluquería y estilismo cap
     expect(n.direccion).toBe('Calle Navarra, 1, edificio Los Almendros, Lorca, Murcia')
     expect(n.telefono).toBe('+34 667 71 40 42')
     expect(n.instagram).toBe('@isabellozanoestilista')
+    expect(n.fotosDrive).toBe('https://drive.google.com/drive/folders/1l8P4BUu96LyrGzRpEdnss0fMZZJCBpVi')
     expect(n.horario).toBe('Lunes: 10:00–13:30; Viernes: 10:00–19:00; Sábado: Cerrado. Solo se atiende con cita previa para eventos.')
     expect(sectorDeTexto('isabel lozano estilista')).toBe('peluquería')
     expect(sectorDeTexto('micropigmentación de cejas')).toBe('micropigmentación')
