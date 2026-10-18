@@ -20,7 +20,9 @@
 // apruebe en el panel (Agentes → Setter de Instagram). En modo «auto» la manda.
 import { supabase } from '../lib/supabase.js'
 import { enContexto } from './contexto.js'
-import { llmChatConHerramientas } from './llm.js'
+import { llmChatConHerramientas, proveedorDe } from './llm.js'
+import { claudeTurno } from './anthropic.js'
+import { claveHelm } from './creditos.js'
 import { notificar } from './notificar.js'
 import { pipelinesDe, pipelineDeContacto, resolverEtapa, normalizaEtapa } from './bot/comun.js'
 import { getToken, enviarDm, perfilDeRemitente } from './instagram.js'
@@ -28,6 +30,10 @@ import { getToken, enviarDm, perfilDeRemitente } from './instagram.js'
 const VENTANA_MS = 24 * 3600_000
 const MAX_HISTORIAL = 40
 const BARRIDO_MS = 10_000
+// El setter escribe a leads de verdad: con un modelo local pequeño no. Si el
+// perfil va con el local (la agencia de la casa), contesta Claude con la clave
+// de HELM; quien paga con créditos o tiene su clave usa su propio modelo.
+const MODELO_SETTER = process.env.HELM_SETTER_MODELO || 'claude-sonnet-5'
 
 export const AVISO_POR_DEFECTO = (marca) => `¡Hola! Te escribe el asistente de ${marca} 🙂 Si en algún momento prefieres hablar con una persona del equipo, dímelo y te paso.`
 
@@ -411,14 +417,18 @@ export async function pensar({ clientId, cfg, mensajes, datos = {}, contactId = 
   const enlace = enlaceDe(cfg, contactId)
   const turnos = turnosDe(mensajes).slice(-MAX_HISTORIAL)
   if (!turnos.length) throw Object.assign(new Error('No hay ningún mensaje del lead que contestar'), { statusCode: 400 })
-  const r = await llmChatConHerramientas({
+  const peticion = {
     clientId,
     system: sistema({ marca, biblia, cfg, enlace, datos, avisoPendiente }),
     messages: turnos,
     tools: [HERRAMIENTA],
     maxTokens: 1200,
     temperature: 0.6,
-  })
+  }
+  const prov = await proveedorDe(clientId)
+  const r = prov.tipo === 'local' && claveHelm()
+    ? await claudeTurno({ ...peticion, apiKey: claveHelm(), model: MODELO_SETTER, esfuerzo: 'medium' })
+    : await llmChatConHerramientas(peticion)
   const args = r.toolCalls?.find(t => t.name === 'responder_dm')?.args
   // Si el modelo contesta en texto en vez de con la herramienta, se aprovecha
   // el texto como un único mensaje y se sigue.
