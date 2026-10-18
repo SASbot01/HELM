@@ -50,6 +50,8 @@ const SECRETAS = new Set([
   'helm_trial_reels',
   // Web Creator: estudio y prompt de cada web, solo por api/web-creator.js.
   'helm_web_creator', 'helm_web_fabricacion',
+  // Editor de reels: los vídeos y los estilos, solo por api/editor.js.
+  'helm_ediciones', 'helm_estilos_edicion',
 ])
 
 // `team` guarda los accesos (con su contraseña). El panel solo lee nombres
