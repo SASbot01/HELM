@@ -1110,44 +1110,22 @@ ${REGLAS_COMUNES}`,
 }
 
 // ── Editor de reels ─────────────────────────────────────────────────────────
-// Sigue el manual de edición que Alex guardó en la memoria (agent_memory,
-// ambito 'editor'). El motor de render (ffmpeg/composición) está en
-// construcción; por ahora el agente ENSEÑA el proceso paso a paso, para verlo
-// en vivo. Se dispara a mano, por el conector de Claude (MCP) o por Drive: las
-// tres vías encolan este mismo trabajo y el proceso se ve igual en el Registro.
-const dormir = (ms) => new Promise(r => setTimeout(r, ms))
-const PASOS_EDITOR = [
-  ['Inspeccionar', 'ffprobe: duración, resolución, fps, rotación y audio; hoja de fotogramas cada 3 s.'],
-  ['Transcribir', 'audio a 16 kHz mono; STT con tiempos por palabra (sherpa-onnx).'],
-  ['Limpiar', 'detectar trabas, repeticiones y silencios de más de 0,6 s; cortar vídeo y audio en el mismo valle.'],
-  ['Leer el contexto', 'una frase de qué defiende el vídeo; marcar palabras ancla: herramientas, cifras, pasos y la llamada a la acción.'],
-  ['Elegir el formato', 'puntuar las frases visualizables: ≥60% → A (pantalla partida), ≤40% → B (b-roll).'],
-  ['Plan de escenas', 'escenas de 2–4 s, una idea cada una; cada animación 0,05–0,15 s antes de su palabra ancla.'],
-  ['Capturar lo real', 'las webs y repos que se nombran, con el navegador y a resolución nativa, en la tarjeta de navegador.'],
-  ['Animar y componer', 'el estilo de la casa (#0A0A0C / rojo #E4362B / dorado #E8B93A); fotogramas con Pillow.'],
-  ['Subtítulos y sonido', 'palabra a palabra en Inter ExtraBold; efectos por código 20 dB por debajo de la voz.'],
-  ['Control de calidad', 'cada animación sobre su palabra (±0,15 s), zonas seguras de Instagram, voz ≈ -18 dB.'],
-]
-
+// El editor de verdad no es un agente de Claude: el vídeo se sube en Agentes →
+// Editor de reels (api/editor.js) y lo edita el worker con Whisper y ffmpeg
+// (trabajo `editor-render`, api/_lib/editor/). Si alguien lo lanza como agente
+// (a mano, por el bot o por el conector), no se finge ningún proceso: se dice
+// dónde está y cómo van los vídeos de este perfil.
 async function editor(ctx) {
-  const video = ctx.encargo && /drive|https?:|\.mp4|\.mov|v[ií]deo|reel/i.test(ctx.encargo) ? ctx.encargo : null
-  const { data: manual } = await supabase.from('agent_memory').select('contenido')
-    .eq('ambito', 'editor').eq('clave', 'editor-reels').is('client_id', null).maybeSingle()
-  await ctx.log(manual?.contenido
-    ? `Manual de edición cargado de la memoria de HELM (${manual.contenido.length} caracteres).`
-    : 'No encontré el manual de edición en la memoria. Guárdalo para que lo siga.')
-  await ctx.log(video
-    ? `Vídeo recibido: ${String(video).slice(0, 200)}.`
-    : 'Prueba en seco: todavía sin vídeo. Te enseño el proceso que seguiré cuando entre uno (por el conector de Claude o por la carpeta de Drive).')
-  for (const [titulo, que] of PASOS_EDITOR) {
-    await dormir(650)
-    await ctx.log(`${titulo} — ${que}`)
-  }
-  await dormir(400)
-  await ctx.log('Motor de render (ffmpeg + composición): EN CONSTRUCCIÓN. El plan y las decisiones salen; el montaje final llega por fases.')
-  return video
-    ? 'Proceso recorrido sobre el vídeo recibido. El render se monta por fases (motor en construcción).'
-    : 'Demostración del proceso, sin vídeo. Motor de render en construcción.'
+  const { data } = await supabase.from('helm_ediciones').select('estado, created_at')
+    .eq('client_id', ctx.clientId).gte('created_at', new Date(Date.now() - 7 * 86_400_000).toISOString())
+  const filas = data || []
+  const cuenta = (estados) => filas.filter(f => estados.includes(f.estado)).length
+  const listos = cuenta(['listo'])
+  const enMarcha = cuenta(['subiendo', 'en_cola', 'transcribiendo', 'montando'])
+  const errores = cuenta(['error'])
+  await ctx.log('El Editor de reels está en Agentes → Editor de reels: subes el vídeo en bruto y HELM devuelve el MP4 editado (sin tomas repetidas, muletillas ni silencios, 1080×1920 y con subtítulos).')
+  await ctx.log(`Últimos 7 días en ${ctx.perfil?.name || 'este perfil'}: ${listos} listos, ${enMarcha} editándose, ${errores} con error.`)
+  return `Editor de reels: ${listos} vídeos listos y ${enMarcha} en marcha esta semana. Se sube desde Agentes → Editor de reels.`
 }
 
 // ── El agente de virales (lunes 7:00 · o a mano) ─────────────────────────────

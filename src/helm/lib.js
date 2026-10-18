@@ -720,6 +720,60 @@ export const trialReelsApi = {
   borrar: (clientId, id) => apiFetch('/api/trial-reels?action=borrar', { method: 'POST', body: { clientId, id } }),
 }
 
+// Editor de reels (api/editor.js): sube el vídeo en bruto y HELM lo devuelve
+// editado. La subida va en crudo (el archivo es el cuerpo, no JSON) y por
+// XMLHttpRequest, que es lo que sabe contar lo que lleva subido.
+//   subir(clientId, archivo, { alProgreso(fraccion, { cargado, total }), senal })
+//   → promesa con { id }. `senal` (AbortSignal) cancela la subida.
+function subirEnCrudo(url, archivo, { alProgreso, onProgress, senal } = {}) {
+  const avisa = alProgreso || onProgress
+  return new Promise((ok, mal) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', url)
+    const token = localStorage.getItem('bw_admin_jwt')
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    xhr.setRequestHeader('Content-Type', archivo.type || 'video/mp4')
+    xhr.setRequestHeader('X-Nombre', encodeURIComponent(archivo.name || 'video'))
+    xhr.responseType = 'text'
+    if (avisa) {
+      xhr.upload.onprogress = (e) => {
+        const total = e.lengthComputable ? e.total : archivo.size
+        avisa(total ? Math.min(1, e.loaded / total) : 0, { cargado: e.loaded, total })
+      }
+    }
+    xhr.onload = () => {
+      let data = {}
+      try { data = JSON.parse(xhr.responseText || '{}') } catch { /* sin JSON */ }
+      if (xhr.status === 401) {
+        localStorage.removeItem('bw_admin_jwt')
+        localStorage.removeItem('bw_superadmin')
+        localStorage.removeItem('bw_client')
+        if (typeof window !== 'undefined') window.location.href = '/login'
+        return mal(new Error('Tu sesión ha caducado. Vuelve a iniciar sesión.'))
+      }
+      if (xhr.status < 200 || xhr.status >= 300) return mal(new Error(data?.error || `Error ${xhr.status}`))
+      ok(data)
+    }
+    xhr.onerror = () => mal(new Error('La subida se cortó. Comprueba la conexión y vuelve a probar.'))
+    xhr.onabort = () => mal(Object.assign(new Error('Subida cancelada'), { cancelada: true }))
+    if (senal) {
+      if (senal.aborted) { xhr.abort(); return }
+      senal.addEventListener('abort', () => xhr.abort(), { once: true })
+    }
+    xhr.send(archivo)
+  })
+}
+
+export const editorApi = {
+  subir: (clientId, archivo, opciones) => subirEnCrudo(`/api/editor?action=subir&clientId=${clientId}`, archivo, opciones),
+  lista: (clientId) => apiFetch(`/api/editor?action=lista&clientId=${clientId}`),
+  estado: (clientId, id) => apiFetch(`/api/editor?action=estado&clientId=${clientId}&id=${encodeURIComponent(id)}`),
+  descarga: (clientId, id) => apiBlob(`/api/editor?action=descarga&clientId=${clientId}&id=${encodeURIComponent(id)}`),
+  estilos: (clientId) => apiFetch(`/api/editor?action=estilos&clientId=${clientId}`),
+  guardarEstilo: (clientId, params) => apiFetch('/api/editor?action=estilo', { method: 'POST', body: { clientId, params } }),
+  borrar: (clientId, id) => apiFetch('/api/editor?action=borrar', { method: 'POST', body: { clientId, id } }),
+}
+
 // Web Creator (api/web-creator.js): las webs de los clientes en fabricación.
 export const webCreatorApi = {
   lista: (clientId) => apiFetch(`/api/web-creator?action=lista&clientId=${clientId}`),
