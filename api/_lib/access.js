@@ -32,6 +32,14 @@ export async function agenciaDe(clientId) {
 /** Olvida lo recordado de un perfil (al crearlo o moverlo de agencia). */
 export function olvidarPerfil(clientId) {
   agenciaDePerfil.delete(clientId)
+  olvidarVisibles()
+}
+
+// Los perfiles de cada agencia, unos segundos: la pasarela los pide en CADA
+// petición a /api/db de un administrador. Se olvidan al escribir en `clients`.
+const perfilesDeAgencia = new Map() // agenciaId -> { ids, exp }
+export function olvidarVisibles() {
+  perfilesDeAgencia.clear()
 }
 
 /** ¿Puede esta sesión entrar a ese perfil? */
@@ -83,9 +91,13 @@ export async function perfilesVisibles(auth) {
   if (auth.plataforma) return null
   if (auth.superadmin || auth.role === 'superadmin') {
     if (!auth.agenciaId) return []
+    const visto = perfilesDeAgencia.get(auth.agenciaId)
+    if (visto && visto.exp > Date.now()) return visto.ids
     const { data, error } = await supabase.from('clients').select('id').eq('agencia_id', auth.agenciaId)
     if (error) throw error
-    return (data || []).map(c => c.id)
+    const ids = (data || []).map(c => c.id)
+    perfilesDeAgencia.set(auth.agenciaId, { ids, exp: Date.now() + 15_000 })
+    return ids
   }
   return auth.clientId ? [auth.clientId] : []
 }

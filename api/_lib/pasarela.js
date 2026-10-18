@@ -30,7 +30,7 @@
 // tablas de secretos tampoco las abre por aquí.
 import { supabase } from '../lib/supabase.js'
 import { validateAuth } from './auth.js'
-import { perfilesVisibles } from './access.js'
+import { perfilesVisibles, olvidarVisibles } from './access.js'
 
 const BASE = () => process.env.SUPABASE_URL || 'http://localhost:54321'
 const CLAVE = () => process.env.SUPABASE_SERVICE_KEY || ''
@@ -266,6 +266,8 @@ export async function pasarela(req, res) {
     const t = ruta.match(/^\/rest\/v1\/([a-z0-9_]+)$/)
     if (t) {
       const tabla = t[1]
+      // Un perfil creado o movido tiene que salir ya en la siguiente lista.
+      if (tabla === 'clients' && !['GET', 'HEAD'].includes(req.method)) olvidarVisibles()
       const { query: q, filas } = await recortaTabla({
         auth, ids, metodo: req.method, tabla, query, cuerpo, prefer: String(req.headers.prefer || ''),
       })

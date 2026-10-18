@@ -39,6 +39,12 @@ function csp(ruta) {
   ].join('; ')
 }
 
+// Los ficheros del build con hash en el nombre (assets/index-Bx9z3Yqa.js) no
+// cambian nunca: el navegador puede guardarlos un año sin preguntar. Solo los
+// de primer nivel de /assets: /assets/logos/… viene de public/, sin hash, y
+// con caché larga un logo nuevo tardaría un año en verse.
+const CON_HASH = /^\/assets\/[^/]+-[A-Za-z0-9_-]{8}\.(js|css|woff2?|png|jpe?g|svg|webp|avif|gif|ico|mp4|webm|json|wasm)(\?.*)?$/
+
 export const CABECERAS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
@@ -53,6 +59,19 @@ export function cabecerasSeguridad() {
       server.middlewares.use((req, res, next) => {
         for (const [k, v] of Object.entries(CABECERAS)) res.setHeader(k, v)
         res.setHeader('Content-Security-Policy', csp(req.url || '/'))
+        if (CON_HASH.test(req.url || '')) {
+          // sirv manda su «no-cache» en writeHead, que pisa a setHeader: se
+          // quita de ahí y se deja el nuestro.
+          const writeHead = res.writeHead
+          res.writeHead = function (estado, ...resto) {
+            const i = typeof resto[0] === 'string' ? 1 : 0
+            if (resto[i] && typeof resto[i] === 'object') {
+              for (const k of Object.keys(resto[i])) if (k.toLowerCase() === 'cache-control') delete resto[i][k]
+            }
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+            return writeHead.call(this, estado, ...resto)
+          }
+        }
         next()
       })
     },
