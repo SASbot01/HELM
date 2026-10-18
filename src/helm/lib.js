@@ -720,6 +720,15 @@ export const trialReelsApi = {
   borrar: (clientId, id) => apiFetch('/api/trial-reels?action=borrar', { method: 'POST', body: { clientId, id } }),
 }
 
+// Web Creator (api/web-creator.js): las webs de los clientes en fabricación.
+export const webCreatorApi = {
+  lista: (clientId) => apiFetch(`/api/web-creator?action=lista&clientId=${clientId}`),
+  ficha: (clientId, id) => apiFetch(`/api/web-creator?action=ficha&clientId=${clientId}&id=${encodeURIComponent(id)}`),
+  estudiar: (clientId, id) => apiFetch('/api/web-creator?action=estudiar', { method: 'POST', body: { clientId, id } }),
+  publicacion: (clientId, id, datos) =>
+    apiFetch('/api/web-creator?action=publicacion', { method: 'POST', body: { clientId, id, ...datos } }),
+}
+
 // El setter de Instagram (api/setter-ig.js).
 export const setterIgApi = {
   estado: (clientId) => apiFetch(`/api/setter-ig?action=estado&clientId=${clientId}`),

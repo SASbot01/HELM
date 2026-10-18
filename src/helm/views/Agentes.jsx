@@ -21,6 +21,7 @@ import EditorReel from '../../agents/EditorReel'
 import Portadas from '../../agents/Portadas'
 import SetterIG from '../../agents/SetterIG'
 import TrialReels from '../../agents/TrialReels'
+import WebCreator from '../../agents/WebCreator'
 import '../../agents/agentos.css'
 import './estudioIg.css'
 
@@ -46,7 +47,7 @@ export default function Agentes({ clientId, client }) {
     return (
       <div className="ag embebido">
         <MenuAgentes
-          agentes={AGENTES.filter(a => !a.soloAdmin || esAdmin())}
+          agentes={AGENTES.filter(a => (!a.soloAdmin || esAdmin()) && (!a.soloPerfiles || a.soloPerfiles.includes(client?.slug)))}
           onAbrir={setVista}
           metricaDe={(a) => (a.key === 'contenido' && creadores
             ? { n: creadores.length, lb: creadores.length === 1 ? 'creador' : 'creadores' }
@@ -82,6 +83,10 @@ export default function Agentes({ clientId, client }) {
 
   if (vista === 'trial-reels') {
     return <TrialReels clientId={clientId} client={client} onVolver={() => setVista('menu')} />
+  }
+
+  if (vista === 'web-creator') {
+    return <WebCreator clientId={clientId} client={client} onVolver={() => setVista('menu')} />
   }
 
   if (vista === 'equipo') {

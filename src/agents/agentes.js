@@ -86,6 +86,17 @@ export const AGENTES = [
     estado: 'activo',
     icono: 'trial',
   },
+  {
+    key: 'web-creator',
+    ruta: 'web-creator',
+    nombre: 'Web Creator',
+    resumen: 'Los clientes en «En fabricación»: su estudio de las webs mejor posicionadas y el prompt para construir la suya.',
+    detalle: 'Al pasar un contacto a «En fabricación», reúne todo lo que hay de él en el CRM y la prospección, estudia las webs de su sector que mejor posicionan en Google y Maps y prepara el prompt para Claude Code, que la construye, la sube a GitHub y la publica en Vercel.',
+    estado: 'activo',
+    icono: 'web',
+    // De momento, solo en el perfil que vende webs.
+    soloPerfiles: ['web-seller'],
+  },
 ]
 
 // Las partes del agente de contenido, en el orden en que se enseñan.

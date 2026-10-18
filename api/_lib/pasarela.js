@@ -48,6 +48,8 @@ const SECRETAS = new Set([
   'helm_setter_ig', 'helm_ig_conversaciones', 'helm_ig_mensajes',
   // Trial reels: los trabajos de vídeo, solo por api/trial-reels.js.
   'helm_trial_reels',
+  // Web Creator: estudio y prompt de cada web, solo por api/web-creator.js.
+  'helm_web_creator', 'helm_web_fabricacion',
 ])
 
 // `team` guarda los accesos (con su contraseña). El panel solo lee nombres
