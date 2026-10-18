@@ -50,6 +50,8 @@ const SECRETAS = new Set([
   'helm_trial_reels',
   // Web Creator: estudio y prompt de cada web, solo por api/web-creator.js.
   'helm_web_creator', 'helm_web_fabricacion',
+  // La oficina de cada agente: el chat va por api/agente-oficina.js.
+  'helm_agente_chat',
 ])
 
 // `team` guarda los accesos (con su contraseña). El panel solo lee nombres

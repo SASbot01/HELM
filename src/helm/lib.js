@@ -588,6 +588,18 @@ export const creadoresApi = {
   drive: (clientId) => apiFetch(`/api/agentes-perfil?action=drive&clientId=${clientId}`),
 }
 
+// La oficina de un agente: su estado vivo y el chat con él.
+export const oficinaApi = {
+  estado: (clientId, agente) =>
+    apiFetch(`/api/agente-oficina?action=estado&clientId=${clientId}&agente=${encodeURIComponent(agente)}`),
+  historial: (clientId, agente) =>
+    apiFetch(`/api/agente-oficina?action=historial&clientId=${clientId}&agente=${encodeURIComponent(agente)}`),
+  hablar: (clientId, agente, texto, recordar = false) =>
+    apiFetch('/api/agente-oficina?action=hablar', { method: 'POST', body: { clientId, agente, texto, recordar } }),
+  instruir: (clientId, agente, texto) =>
+    apiFetch('/api/agente-oficina?action=instruir', { method: 'POST', body: { clientId, agente, texto } }),
+}
+
 // Equipos IA — equipo de Contenido: Agente Persona (base) + Agente 1 (ideas diarias).
 export const agentesApi = {
   base: (clientId) => apiFetch(`/api/agentes-contenido?action=base&clientId=${clientId}`),

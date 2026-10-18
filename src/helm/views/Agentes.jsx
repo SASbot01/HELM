@@ -18,6 +18,7 @@ import { MenuAgentes, MenuDepartamentos, CreadoresGrid } from '../../agents/Piez
 import Ficha from '../../agents/Ficha'
 import PanelDrive from '../../agents/Drive'
 import Equipo from '../../agents/Equipo'
+import Oficina from '../../agents/Oficina'
 import EstudioInstagram from './EstudioInstagram'
 import EditorReel from '../../agents/EditorReel'
 import Portadas from '../../agents/Portadas'
@@ -55,16 +56,29 @@ export default function Agentes({ clientId, client }) {
     ? { n: creadores.length, lb: creadores.length === 1 ? 'creador' : 'creadores' }
     : null)
   const volver = () => setVista(dep ? `dep:${dep}` : 'menu')
+  // Al pulsar un agente se entra en su oficina (of:<key>), no directo al panel.
+  const aLaOficina = (k) => `of:${k}`
 
   if (vista === 'menu') {
     const sueltos = visibles.filter(a => !a.departamento)
     return (
       <div className="ag embebido">
-        {sueltos.length > 0 && <MenuAgentes agentes={sueltos} onAbrir={(k) => { setDep(null); setVista(k) }} metricaDe={metricaDe} />}
+        {sueltos.length > 0 && <MenuAgentes agentes={sueltos} onAbrir={(k) => { setDep(null); setVista(aLaOficina(k)) }} metricaDe={metricaDe} />}
         <h2 className="ag-seccion ag-deps-titulo">Departamentos</h2>
         <MenuDepartamentos departamentos={departamentos} onAbrir={(k) => { setDep(k); setVista(`dep:${k}`) }} />
       </div>
     )
+  }
+
+  if (vista.startsWith('of:')) {
+    const a = visibles.find(x => `of:${x.key}` === vista)
+    if (!a) return (
+      <div className="ag embebido">
+        <p className="ag-vacio">Ese agente no está en este perfil.</p>
+        <button type="button" className="ag-btn" onClick={volver}>Volver</button>
+      </div>
+    )
+    return <Oficina clientId={clientId} agente={a} onVolver={volver} onAbrir={(k) => setVista(k)} />
   }
 
   if (vista.startsWith('dep:')) {
@@ -88,33 +102,33 @@ export default function Agentes({ clientId, client }) {
             <p>{d.resumen}</p>
           </div>
         </header>
-        <MenuAgentes agentes={d.agentes} onAbrir={setVista} metricaDe={metricaDe} />
+        <MenuAgentes agentes={d.agentes} onAbrir={(k) => setVista(aLaOficina(k))} metricaDe={metricaDe} />
       </div>
     )
   }
 
   if (vista === 'estudio') {
-    return <EstudioInstagram clientId={clientId} client={client} onVolver={volver} />
+    return <EstudioInstagram clientId={clientId} client={client} onVolver={() => setVista('of:estudio')} />
   }
 
   if (vista === 'editor') {
-    return <EditorReel clientId={clientId} client={client} onVolver={volver} />
+    return <EditorReel clientId={clientId} client={client} onVolver={() => setVista('of:editor')} />
   }
 
   if (vista === 'portadas') {
-    return <Portadas clientId={clientId} client={client} onVolver={volver} />
+    return <Portadas clientId={clientId} client={client} onVolver={() => setVista('of:portadas')} />
   }
 
   if (vista === 'setter-ig') {
-    return <SetterIG clientId={clientId} client={client} onVolver={volver} />
+    return <SetterIG clientId={clientId} client={client} onVolver={() => setVista('of:setter-ig')} />
   }
 
   if (vista === 'trial-reels') {
-    return <TrialReels clientId={clientId} client={client} onVolver={volver} />
+    return <TrialReels clientId={clientId} client={client} onVolver={() => setVista('of:trial-reels')} />
   }
 
   if (vista === 'web-creator') {
-    return <WebCreator clientId={clientId} client={client} onVolver={volver} />
+    return <WebCreator clientId={clientId} client={client} onVolver={() => setVista('of:web-creator')} />
   }
 
   if (vista === 'equipo') {
@@ -122,7 +136,7 @@ export default function Agentes({ clientId, client }) {
       <div className="ag embebido">
         <header className="ag-top dentro">
           <div>
-            <button type="button" className="ag-volver" onClick={volver}>
+            <button type="button" className="ag-volver" onClick={() => setVista('of:equipo')}>
               <ArrowLeft size={14} strokeWidth={2.2} /> Agentes
             </button>
             <h1>Equipo de agentes</h1>
@@ -139,7 +153,7 @@ export default function Agentes({ clientId, client }) {
       <div className="ag embebido">
         <header className="ag-top dentro">
           <div>
-            <button type="button" className="ag-volver" onClick={volver}>
+            <button type="button" className="ag-volver" onClick={() => setVista('of:drive')}>
               <ArrowLeft size={14} strokeWidth={2.2} /> Agentes
             </button>
             <h1>Calendario de guiones</h1>
@@ -166,7 +180,7 @@ export default function Agentes({ clientId, client }) {
     <div className="ag embebido">
       <header className="ag-top dentro">
         <div>
-          <button type="button" className="ag-volver" onClick={volver}>
+          <button type="button" className="ag-volver" onClick={() => setVista('of:contenido')}>
             <ArrowLeft size={14} strokeWidth={2.2} /> Agentes
           </button>
           <h1>Agente de contenido</h1>
