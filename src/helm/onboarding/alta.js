@@ -5,9 +5,9 @@
 // tienda o a quien vende formación. Con esto la agencia y los agentes ya saben
 // qué vende, a quién, cuánto factura, dónde está en redes y cuánto puede grabar.
 // Desde 2026-10-15 es el ÚNICO onboarding que se ofrece en el panel, y al
-// completarlo se generan las Biblias. El de contenido (schema.js) y el
-// operativo (operativo.js) siguen en el código por los perfiles que ya los
-// rellenaron.
+// completarlo se generan las Biblias. El de contenido (schema.js) sigue en el
+// código por los perfiles que ya lo rellenaron; el operativo se retiró el
+// 18-oct (nadie lo usaba).
 //
 // Lo rellena el propio cliente desde un enlace sin cuenta (/alta/<token>, ver
 // api/onboarding.js) o el equipo desde Onboarding en el panel. Mismos tipos de

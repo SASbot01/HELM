@@ -40,10 +40,7 @@ landing-bootcamp-fba/
 .env.server
 .places-key
 .env.server.bak-*
-.dist-build/
-.dist-nuevo/
-__pycache__/
-.dist-socio/
+.dist-*/
 
 # Llave de la cuenta de servicio de Google Drive (helm-drive). Es una contraseña.
 .google-drive-sa.json

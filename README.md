@@ -1,57 +1,40 @@
 # HELM
 
-El puesto de mando del negocio: CRM · Ventas · Diario · Finanzas · Informe · Plugins.
+El panel de operaciones de las agencias de Silvestre AI: CRM, contenido con IA,
+ventas, cobros y agentes, un panel por cliente («perfil»). En producción en
+https://helm.s4sf.net.
 
-Se entra por `/login` (superadmin) y todo vive bajo `/admin`. El resto de la
-plataforma antigua (apex-operations, ClientApp multi-tenant, MID, ERP, landings,
-funnels y ~190 endpoints) se retiró; sigue disponible en el historial de git
-(commit `ef80bbc`) si hiciera falta recuperar algo.
+## Cómo está hecho
 
-Producción: [central.blackwolfsec.io](https://central.blackwolfsec.io) → `/admin`
+| Carpeta | Qué hay |
+|---|---|
+| `src/` | El panel (Vite + React). `src/helm` es la app; `src/agents` los agentes (Agent OS, también en `/agents`); `src/pages` las páginas públicas (landings, `/alta`, `/aiparatodo`…). |
+| `api/` | Un fichero por endpoint: `/api/<nombre>` → `api/<nombre>.js`. Las piezas compartidas, en `api/_lib`; el cliente de la base, en `api/lib/supabase.js`. |
+| `scripts/` | `api-server.mjs` (sirve `api/` en producción), `agents-worker.mjs` (el worker de los agentes) y herramientas de terminal. Lo de un solo uso, en `scripts/historico/`. |
+| `migrations/` | El SQL de la base, aplicado a mano. Ver `migrations/README.md`. |
+| `tests/` | Pruebas con Vitest: `npm test`. |
+| `docs/` | Guías (apps de Google, Instagram, setter…) y la auditoría. |
+| `public/` | Estáticos: logos, letras e imágenes de las páginas públicas. |
 
----
+## En el servidor (minipc)
 
-## Stack
+- Código en `/home/s4sf/helm`, con el entorno en `.env.server`.
+- Servicios systemd: `helm-web` (el build con `vite preview`, :5173), `helm-api`
+  (`scripts/api-server.mjs`, :5182), `helm-agents` (el worker) y `helm-apex`.
+  Se publica con un túnel de Cloudflare.
+- Base de datos: Postgres de Supabase en Docker (`supabase_db_apexallinone`).
+- Despliegues, copias y herramientas: `/home/s4sf/helm-ops` (tiene su README).
 
-- **Frontend**: React 19 + Vite 7 + React Router 7 (`src/helm/`)
-- **UI**: lucide-react, recharts, CSS propio (`src/helm/theme.css`)
-- **Backend**: una sola Vercel Function — `api/admin.js` (auth superadmin)
-- **Datos**: Supabase (Postgres + Auth + Storage)
-- **Deploy**: Vercel
-
----
-
-## Quick start
+## Desarrollo
 
 ```bash
 npm install
-cp .env.example .env   # rellenar las claves
-npm run dev            # http://localhost:5173
+npm run dev      # el panel
+npm test         # las pruebas
+npm run build    # el build de producción
 ```
 
-| Script                 | Acción                          |
-| ---------------------- | ------------------------------- |
-| `npm run dev`          | Vite dev server con HMR         |
-| `npm run build`        | Build de producción a `dist/`   |
-| `npm run preview`      | Servir el build local           |
-| `npm run lint`         | ESLint                          |
-| `npm run icons:generate` | Regenerar iconos PWA          |
-
----
-
-## Estructura
-
-```
-src/
-  main.jsx                  # rutas: / → /admin, /login, /admin/*
-  helm/                     # la app entera (views, plugins, ui, lib)
-  pages/admin/SuperAdminLogin.jsx
-  utils/{supabase,data}.js
-  components/{Toast,PasswordInput}.jsx
-  contexts/ThemeContext.jsx
-api/
-  admin.js                  # login superadmin + gestión
-  _lib/{auth,passwords}.js
-  lib/supabase.js
-migrations/ · sql/ · supabase/   # esquema de la BD
-```
+Desplegar = subir los ficheros cambiados a `helm-ops/despliegues/<fecha>-<nombre>/staging`
+y lanzar su `desplegar.sh`: comprueba que los ficheros del servidor no han cambiado
+(huellas), copia, hace el build y reinicia lo que haga falta. Nunca en las franjas
+del diario (7:55–8:40, 13:55–14:40 y 19:55–20:40, hora de Madrid).
