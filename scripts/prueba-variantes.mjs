@@ -113,7 +113,7 @@ async function main() {
         // cualquier programa con ffmpeg) y no dice nada: solo falla si queda
         // algo de la fuente o la marca con versión del codificador.
         ...j.streams.flatMap(x => Object.entries(x.tags || {})
-          .filter(([k, val]) => ['title', 'comment', 'creation_time', 'location'].includes(k) || (k === 'encoder' && /\d/.test(val)))
+          .filter(([k, val]) => ['title', 'comment', 'creation_time', 'location'].includes(k) || (k === 'encoder' && /\d+\.\d+/.test(val)))
           .map(([k]) => k)),
       ]
       const checks = {
@@ -136,7 +136,7 @@ async function main() {
         fuente: f.nombre, caso: c.nombre,
         'fuente s': infoFuente.duracion.toFixed(2), 'esperada s': esperada.toFixed(2), 'sale s': dur.toFixed(2),
         tamaño: `${v.width}×${v.height}`, fps: v.avg_frame_rate, audio: a ? `${a.codec_name} ${a.sample_rate} Hz ${a.channels}ch` : 'no',
-        MB: (r.bytes / 1048576).toFixed(1), 'tarda s': seg, resultado: mal.length ? `FALLA: ${mal.join(', ')}` : 'ok',
+        MB: (r.bytes / 1048576).toFixed(1), 'tarda s': seg, resultado: mal.length ? `FALLA: ${mal.join(', ')}${etiquetas.length ? ` (${etiquetas.join(', ')})` : ''}` : 'ok',
       })
     }
   }
