@@ -8,6 +8,10 @@
 //                estructura, CTA, y cada frase como gancho / planteamiento /
 //                remate / venta
 //
+// Y otros trabajos que no son del corpus: entre ellos `editor-render`, el
+// Editor de reels (api/_lib/editor/trabajo.js): transcribe palabra a palabra
+// el vídeo que subió alguien y lo devuelve editado con ffmpeg.
+//
 // Por qué un proceso aparte y no un endpoint: transcribir un reel de 60 s en
 // esta máquina (4 núcleos, sin GPU) tarda entre 20 y 40 segundos. Eso no cabe
 // en una petición HTTP, y si se cae a mitad no se puede reintentar solo.
@@ -110,6 +114,9 @@ async function coge() {
     .order('created_at', { ascending: true })
     .limit(1)
   let { data, error } = await pendientes().like('tipo', 'drive-%')
+  // Lo mismo con el Editor de reels: alguien ha subido un vídeo y está
+  // mirando la barra de progreso.
+  if (!error && !data?.length) ({ data, error } = await pendientes().eq('tipo', 'editor-render'))
   // Después, las noticias y el equipo de agentes: son pocos trabajos al día y
   // cortos, y lo de la mañana no puede esperar a que se vacíe la cola de reels.
   if (!error && !data?.length) ({ data, error } = await pendientes().in('tipo', ['noticias', 'articulo', 'equipo', 'avatar', 'radar']))
@@ -744,12 +751,21 @@ const { estudiaAd } = await import('../api/_lib/ads.js')
 // fabricación», se estudia su sector y se prepara el prompt de su web.
 const { miraFabricacion, generaEstudioWeb } = await import('../api/_lib/webcreator.js')
 
+// El Editor de reels (api/_lib/editor/trabajo.js): la API sube el vídeo y
+// encola; aquí se transcribe palabra a palabra y se monta. Lo de más de 7
+// días (originales y editados) se borra cada hora.
+const { editorRender } = await import('../api/_lib/editor/trabajo.js')
+const { limpiaEdiciones } = await import('../api/_lib/editor/archivos.js')
+const editaReel = (job) => editorRender(job, { db, log, py: PY, script: TRANSCRIBE, modelo: MODELO_WHISPER })
+const CADA_CUANTO_LIMPIAR_EDITOR_MS = 3600_000
+let ultimaLimpiezaEditor = 0
+
 const CADA_CUANTO_AGENDA_MS = 60_000
 let ultimaAgenda = 0
 
 // ── Bucle ───────────────────────────────────────────────────────────────────
 
-const PASOS = { descargar, transcribir, etiquetar, 'drive-ingesta': driveIngesta, estudiar, equipo: ejecutaAgente, noticias: generaNoticias, articulo: generaArticulo, avatar: generaAvatar, radar: generaRadar, metricas: sincronizaMetricas, 'ad-estudio': estudiaAd, 'web-estudio': generaEstudioWeb }
+const PASOS = { descargar, transcribir, etiquetar, 'drive-ingesta': driveIngesta, estudiar, equipo: ejecutaAgente, noticias: generaNoticias, articulo: generaArticulo, avatar: generaAvatar, radar: generaRadar, metricas: sincronizaMetricas, 'ad-estudio': estudiaAd, 'web-estudio': generaEstudioWeb, 'editor-render': editaReel }
 
 let parando = false
 for (const s of ['SIGINT', 'SIGTERM']) {
@@ -782,6 +798,11 @@ async function bucle() {
         await miraRadar().catch(e => log('no pude mirar el radar:', e.message))
         await miraMetricas().catch(e => log('no pude mirar las métricas del día:', e.message))
         await miraFabricacion().catch(e => log('no pude mirar las webs en fabricación:', e.message))
+      }
+      if (Date.now() - ultimaLimpiezaEditor > CADA_CUANTO_LIMPIAR_EDITOR_MS) {
+        ultimaLimpiezaEditor = Date.now()
+        const n = await limpiaEdiciones().catch(e => { log('no pude limpiar el editor de reels:', e.message); return 0 })
+        if (n) log(`editor de reels: ${n} edición(es) de más de 7 días borradas del disco`)
       }
       job = await coge()
       if (!job) { await duerme(ESPERA_VACIO_MS); continue }
