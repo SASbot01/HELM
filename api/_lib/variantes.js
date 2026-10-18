@@ -25,8 +25,8 @@ import { normalizaAjustes, tramos, reencuadre, LIENZO, FPS } from '../../src/age
 
 export { normalizaAjustes, tramos, reencuadre }
 
-const FFMPEG = () => process.env.HELM_FFMPEG || 'ffmpeg'
-const FFPROBE = () => process.env.HELM_FFPROBE || 'ffprobe'
+export const FFMPEG = () => process.env.HELM_FFMPEG || 'ffmpeg'
+export const FFPROBE = () => process.env.HELM_FFPROBE || 'ffprobe'
 export const CARPETA = () => path.join(process.env.HELM_DATA_DIR || '/home/s4sf/helm-data', 'trial-reels')
 
 // Del CDN de Meta y de nada más (el mismo criterio que api/portadas.js).
@@ -159,29 +159,39 @@ export function argumentosFfmpeg({ entrada, salida, gancho = null, ajustes, info
 
   args.push('-filter_complex', f.join(';'), '-map', '[vout]')
   if (audio) args.push('-map', '[aout]')
-  args.push(
-    '-c:v', 'libx264', '-profile:v', 'high', '-level:v', '4.1',
-    // Los vídeos largos, más deprisa: tienen que caber en el tope de tiempo.
-    '-preset', (t.salida || 0) > 90 ? 'faster' : 'medium', '-crf', '20',
-    '-pix_fmt', 'yuv420p', '-r', String(FPS), '-g', String(FPS * 2),
-  )
-  if (audio) args.push('-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2')
-  else args.push('-an')
-  // Sin metadatos: ni los de la fuente (título, fecha, móvil, GPS) ni la marca
-  // del codificador (bitexact y la etiqueta «encoder» vacía, que la borra; el
-  // ffmpeg 6.1 del servidor deja «Lavc libx264», sin versión, y no hay manera).
-  args.push(
-    '-map_metadata', '-1', '-map_chapters', '-1', '-fflags', '+bitexact', '-metadata:s:v:0', 'encoder=',
-    '-movflags', '+faststart', '-f', 'mp4', salida,
-  )
+  // Los vídeos largos, más deprisa: tienen que caber en el tope de tiempo.
+  args.push(...argumentosCodificacion({ audio, preset: (t.salida || 0) > 90 ? 'faster' : 'medium' }), salida)
   return args
+}
+
+/**
+ * Cómo se codifica lo que sale, para Trial reels y para el Editor de reels:
+ * H.264 high 4.1, yuv420p, 30 fps, GOP de 2 s, AAC 48 kHz estéreo (o sin
+ * pista de audio) y MP4 con +faststart. PURA. Va justo antes de la salida.
+ */
+export function argumentosCodificacion({ audio, preset = 'medium' }) {
+  return [
+    '-c:v', 'libx264', '-profile:v', 'high', '-level:v', '4.1',
+    '-preset', preset, '-crf', '20',
+    '-pix_fmt', 'yuv420p', '-r', String(FPS), '-g', String(FPS * 2),
+    ...(audio ? ['-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2'] : ['-an']),
+    // Sin metadatos: ni los de la fuente (título, fecha, móvil, GPS) ni la marca
+    // del codificador (bitexact y la etiqueta «encoder» vacía, que la borra; el
+    // ffmpeg 6.1 del servidor deja «Lavc libx264», sin versión, y no hay manera).
+    '-map_metadata', '-1', '-map_chapters', '-1', '-fflags', '+bitexact', '-metadata:s:v:0', 'encoder=',
+    '-movflags', '+faststart', '-f', 'mp4',
+  ]
 }
 
 // ── Lanzar binarios ─────────────────────────────────────────────────────────
 const COLA = globalThis.__helmTrialReels || (globalThis.__helmTrialReels = { cola: [], activo: null, hijo: null })
 
-/** Lanza un binario sin shell, con tope de tiempo. Devuelve { stdout, stderr }. */
-export function ejecuta(bin, args, { tope = TOPE_FFMPEG_MS, registra = false } = {}) {
+/**
+ * Lanza un binario sin shell, con tope de tiempo. Devuelve { stdout, stderr }.
+ *   alLeer → se llama con cada trozo de stdout (el -progress de ffmpeg)
+ *   senal  → un AbortSignal: si se aborta, se mata el proceso
+ */
+export function ejecuta(bin, args, { tope = TOPE_FFMPEG_MS, registra = false, alLeer = null, senal = null } = {}) {
   return new Promise((ok, mal) => {
     const hijo = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] })
     if (registra) COLA.hijo = hijo
@@ -189,15 +199,22 @@ export function ejecuta(bin, args, { tope = TOPE_FFMPEG_MS, registra = false } =
     try { os.setPriority(hijo.pid, 10) } catch { /* sin permiso: da igual */ }
     let stdout = ''
     let stderr = ''
-    hijo.stdout.on('data', d => { if (stdout.length < 2_000_000) stdout += d })
+    hijo.stdout.on('data', d => {
+      if (stdout.length < 2_000_000) stdout += d
+      if (alLeer) { try { alLeer(String(d)) } catch { /* quien escucha no para el proceso */ } }
+    })
     hijo.stderr.on('data', d => { stderr = (stderr + d).slice(-4000) })
     const reloj = setTimeout(() => { hijo.kill('SIGKILL') }, tope)
+    const corta = () => hijo.kill('SIGKILL')
+    if (senal?.aborted) corta()
+    else senal?.addEventListener?.('abort', corta, { once: true })
     hijo.on('error', e => { clearTimeout(reloj); mal(err(`No se pudo lanzar ${path.basename(bin)}: ${e.message}`)) })
-    hijo.on('close', (code, senal) => {
+    hijo.on('close', (code, senal2) => {
       clearTimeout(reloj)
+      senal?.removeEventListener?.('abort', corta)
       if (registra && COLA.hijo === hijo) COLA.hijo = null
       if (code === 0) return ok({ stdout, stderr })
-      const motivo = senal === 'SIGKILL' ? 'se cortó (tardaba demasiado o se canceló)' : (stderr.trim().split('\n').slice(-3).join(' ') || `código ${code}`)
+      const motivo = senal2 === 'SIGKILL' ? 'se cortó (tardaba demasiado o se canceló)' : (stderr.trim().split('\n').slice(-3).join(' ') || `código ${code}`)
       mal(err(`ffmpeg: ${motivo}`.slice(0, 400)))
     })
   })
