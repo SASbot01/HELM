@@ -90,7 +90,7 @@ export function crearHistoria(r) {
     const w = window.innerWidth, h = window.innerHeight
     r.mascara.setAttribute('viewBox', `0 0 ${w} ${h}`)
     const fuente = '"Barlow Condensed", "Arial Narrow", Impact, sans-serif'
-    const fs = Math.min(w * 0.42, h * 0.62)
+    const fs = Math.min(w * (w < 760 ? 0.36 : 0.42), h * 0.62)   // «HELM» mide ~2,3 fs de ancho
     const g = document.createElement('canvas').getContext('2d')
     g.font = `900 ${fs}px ${fuente}`
     const cap = g.measureText('H').actualBoundingBoxAscent || fs * 0.7
