@@ -79,3 +79,22 @@
   .por-taller { grid-template-columns: 1fr; }
   .por-lienzo-col { position: static; max-width: 340px; margin: 0 auto; width: 100%; }
 }
+
+/* ── Fondo generado con IA (Ideogram) ────────────────────────────────────── */
+.por-ia { display: flex; flex-direction: column; gap: 8px; }
+.por-ia-tema { width: 100%; }
+.por-ia-prompt {
+  width: 100%; box-sizing: border-box; resize: vertical; min-height: 64px;
+  font: inherit; font-size: .86rem; line-height: 1.4; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--text);
+}
+.por-ia-prompt:focus, .por-ia-tema:focus { outline: none; border-color: var(--orange); }
+.por-ia-falta {
+  display: flex; align-items: flex-start; gap: 7px;
+  border: 1px dashed var(--border); border-radius: 8px; padding: 10px 12px;
+}
+.por-ia-falta code { font-size: .82em; }
+.por-ia-badge {
+  display: inline-flex; align-items: center; gap: 5px; margin: 8px 0 0;
+  font-size: .78rem; font-weight: 600; color: var(--orange);
+}

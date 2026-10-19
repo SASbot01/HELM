@@ -717,6 +717,11 @@ export const portadasApi = {
     apiFetch('/api/portadas?action=textos', { method: 'POST', body: { clientId, mediaId } }),
   video: (clientId, mediaId) => apiBlob(`/api/portadas?action=video&clientId=${clientId}&mediaId=${encodeURIComponent(mediaId)}`),
   imagen: (clientId, mediaId) => apiBlob(`/api/portadas?action=imagen&clientId=${clientId}&mediaId=${encodeURIComponent(mediaId)}`),
+  capacidad: (clientId) => apiFetch(`/api/portadas?action=capacidad&clientId=${clientId}`),
+  fondoPrompt: (clientId, mediaId, tema) =>
+    apiFetch('/api/portadas?action=fondo-prompt', { method: 'POST', body: { clientId, mediaId, tema } }),
+  fondoIa: (clientId, prompt) =>
+    apiFetch('/api/portadas?action=fondo-ia', { method: 'POST', body: { clientId, prompt } }),
 }
 
 // Trial reels (api/trial-reels.js): variantes editadas de un reel propio para

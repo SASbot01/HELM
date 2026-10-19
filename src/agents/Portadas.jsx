@@ -187,6 +187,19 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
   const [pidiendo, setPidiendo] = useState(false)
   const [checks, setChecks] = useState([])
   const [previa, setPrevia] = useState('')
+  // Fondo con IA (Ideogram): solo si el server tiene la clave de imagen.
+  const [hayIa, setHayIa] = useState(false)
+  const [promptIa, setPromptIa] = useState('')
+  const [temaIa, setTemaIa] = useState('')
+  const [pidiendoPrompt, setPidiendoPrompt] = useState(false)
+  const [generandoIa, setGenerandoIa] = useState(false)
+  const [fondoEsIa, setFondoEsIa] = useState(false)
+
+  useEffect(() => {
+    let vivo = true
+    portadasApi.capacidad(clientId).then(d => { if (vivo) setHayIa(Boolean(d.fondoIa)) }).catch(() => {})
+    return () => { vivo = false }
+  }, [clientId])
 
   // La portada que tiene ahora el reel, por si se prefiere de fondo (o si el
   // vídeo no se puede descargar).
@@ -214,6 +227,7 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
 
   function elegirFuente(f) {
     setFuente(f)
+    if (f !== 'ia') setFondoEsIa(false)
     if (f === 'actual') traerActual()
     if (f === 'video') capturar()
   }
@@ -243,6 +257,25 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
     setPidiendo(false)
   }
   const usar = (o) => { setTexto(o.texto); setResaltada(o.resaltada); setSecundario(o.secundario || ''); setPlantilla(o.plantilla) }
+
+  async function sugerirPrompt() {
+    setPidiendoPrompt(true); setError('')
+    try { const d = await portadasApi.fondoPrompt(clientId, reel?.media_id, temaIa); setPromptIa(d.prompt) }
+    catch (e) { setError(e.message) }
+    setPidiendoPrompt(false)
+  }
+
+  async function generarFondoIa() {
+    const p = promptIa.trim()
+    if (!p) { setError('Escribe o sugiere primero la descripción del fondo'); return }
+    setGenerandoIa(true); setError('')
+    try {
+      const d = await portadasApi.fondoIa(clientId, p)
+      const img = await cargaImagen(d.imagen)
+      setImagen(img); setEncuadre(0.5); setZoom(1); setFondoEsIa(true)
+    } catch (e) { setError(e.message) }
+    setGenerandoIa(false)
+  }
 
   // Componer: cada cambio vuelve a pintar el lienzo entero (es un instante).
   useEffect(() => {
@@ -311,6 +344,7 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
               {reel && <button type="button" role="tab" aria-selected={fuente === 'video'} className={fuente === 'video' ? 'on' : ''} onClick={() => elegirFuente('video')}><Film size={14} /> Fotograma</button>}
               {reel && <button type="button" role="tab" aria-selected={fuente === 'actual'} className={fuente === 'actual' ? 'on' : ''} onClick={() => elegirFuente('actual')}><ImagenIcono size={14} /> Portada actual</button>}
               <button type="button" role="tab" aria-selected={fuente === 'foto'} className={fuente === 'foto' ? 'on' : ''} onClick={() => elegirFuente('foto')}><Upload size={14} /> Foto</button>
+              <button type="button" role="tab" aria-selected={fuente === 'ia'} className={fuente === 'ia' ? 'on' : ''} onClick={() => elegirFuente('ia')}><Sparkles size={14} /> Fondo IA</button>
             </div>
             {cargando && <p className="por-ayuda"><Loader2 size={14} className="por-gira" /> {cargando}</p>}
             {fuente === 'video' && videoUrl && (
@@ -332,6 +366,35 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
               </div>
             )}
             {fuente === 'foto' && <label className="por-subir"><Upload size={14} /> Elegir foto <input type="file" accept="image/*" onChange={subirFoto} /></label>}
+            {fuente === 'ia' && (
+              !hayIa ? (
+                <p className="por-ayuda por-ia-falta">
+                  <AlertTriangle size={14} /> Para generar el fondo con IA hace falta la clave de imagen en el servidor
+                  (<code>REPLICATE_API_TOKEN</code> en <code>.env.server</code>). Cuando esté, aparece aquí.
+                </p>
+              ) : (
+                <div className="por-ia">
+                  <input
+                    type="text" className="por-ia-tema" value={temaIa} maxLength={120}
+                    placeholder="Tema del fondo (p. ej. gimnasio al amanecer)"
+                    onChange={e => setTemaIa(e.target.value)}
+                  />
+                  <button type="button" className="ag-btn sm" onClick={sugerirPrompt} disabled={pidiendoPrompt || generandoIa}>
+                    {pidiendoPrompt ? <><Loader2 size={13} className="por-gira" /> Pensando…</> : <><Sparkles size={13} /> Sugerir estilo</>}
+                  </button>
+                  <textarea
+                    className="por-ia-prompt" value={promptIa} rows={3} maxLength={1500}
+                    placeholder="Describe el fondo (en inglés funciona mejor). Sin texto ni caras."
+                    onChange={e => setPromptIa(e.target.value)}
+                  />
+                  <button type="button" className="ag-btn primario sm" onClick={generarFondoIa} disabled={generandoIa || !promptIa.trim()}>
+                    {generandoIa ? <><Loader2 size={13} className="por-gira" /> Generando el fondo…</> : <><Sparkles size={13} /> Generar fondo</>}
+                  </button>
+                  <small className="por-ayuda">El titular lo pone HELM encima, nítido. El fondo es IA: márcalo como tal al publicar.</small>
+                </div>
+              )
+            )}
+            {fondoEsIa && <p className="por-ia-badge"><Sparkles size={12} /> Fondo generado con IA</p>}
             <label>Encuadre vertical <input type="range" min="0" max="1" step="0.01" value={encuadre} onChange={e => setEncuadre(Number(e.target.value))} /></label>
             <label>Zoom <input type="range" min="1" max="1.8" step="0.01" value={zoom} onChange={e => setZoom(Number(e.target.value))} /></label>
           </section>

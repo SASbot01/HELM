@@ -4,16 +4,19 @@
 //   GET  ?action=marca  &clientId=             → el kit de la serie del perfil
 //   POST ?action=marca  { clientId, marca }    → guardarlo
 //   POST ?action=textos { clientId, mediaId }  → 3 propuestas de texto (gasta créditos)
-//   GET  ?action=video  &clientId=&mediaId=    → el vídeo del reel, para elegir fotograma
-//   GET  ?action=imagen &clientId=&mediaId=    → la portada actual
+//   GET  ?action=video     &clientId=&mediaId= → el vídeo del reel, para elegir fotograma
+//   GET  ?action=imagen    &clientId=&mediaId= → la portada actual
+//   GET  ?action=capacidad &clientId=          → ¿se puede generar fondo con IA?
+//   POST ?action=fondo-prompt { clientId, mediaId?, tema? } → un prompt de fondo (gasta créditos)
+//   POST ?action=fondo-ia     { clientId, prompt }          → genera el fondo con IA (gasta en Replicate)
 //
-// La imagen NO la pinta una IA. El estudio de portadas (docs/estudio-portadas-
-// reels.md) lo deja claro: la portada convierte en el perfil y en Explorar, y
-// lo que funciona es texto corto, legible y en serie sobre la cara real. Una
-// IA de imagen deforma caras, se come las tildes y obliga a avisar (Ley de IA,
-// art. 50), y la cara del cliente saldría a un tercero. Así que Claude propone
-// el texto, el navegador compone con tipografía sobre el fotograma
-// (src/agents/portadas/componer.js) y la cara no sale de HELM.
+// El TITULAR nunca lo pinta una IA: el estudio de portadas (docs/estudio-
+// portadas-reels.md) manda texto corto, legible y en serie, así que Claude
+// propone el texto y el navegador lo compone con tipografía nítida
+// (src/agents/portadas/componer.js). Lo que SÍ puede generar la IA, desde el
+// 2026-10-19, es el FONDO: una escena 9:16 con hueco para el titular, cuando
+// no vale un fotograma. Nunca la cara real del cliente (el prompt lo prohíbe)
+// y la portada se marca como IA (Ley de IA, art. 50). Ver api/_lib/imagen.js.
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { supabase } from './lib/supabase.js'
@@ -22,6 +25,7 @@ import { requireProfileAccess } from './_lib/access.js'
 import { llmChat } from './_lib/llm.js'
 import { getToken, getMediaUrls } from './_lib/instagram.js'
 import { fetchPublico } from './_lib/web.js'
+import { generaFondo, hayClaveImagen } from './_lib/imagen.js'
 import {
   normalizaMarca, normalizaOpciones, MARCA_POR_DEFECTO, PLANTILLAS, PALABRAS, MAX_CARACTERES,
 } from '../src/agents/portadas/reglas.js'
@@ -50,6 +54,20 @@ Responde SOLO con JSON, sin nada alrededor:
 {"opciones":[{"texto":"…","resaltada":"…","secundario":"","plantilla":"…","angulo":"A · beneficio","porque":"una frase"}]}`
 
 const recorta = (s, n) => String(s || '').slice(0, n)
+
+// Cómo Claude escribe el prompt del FONDO para Ideogram. En inglés (el modelo
+// responde mejor), vertical, con hueco arriba para el titular, SIN texto y SIN
+// caras reconocibles: la persona y el título van aparte.
+const REGLAS_FONDO = `You write a single image prompt for Ideogram that generates a VERTICAL 9:16 BACKGROUND for an Instagram reel cover. The background sets the mood; the headline text and any person are added separately afterwards, so:
+
+RULES
+1. NO text, letters, numbers or logos in the image. The title is composed on top later.
+2. NO recognizable human faces or real people. Abstract figures, hands, objects, places, textures or scenes are fine, but never a portrait that could be mistaken for the client.
+3. Composition: leave the TOP THIRD visually calm (space for a headline). Strong, scroll-stopping, high-contrast, editorial thumbnail look.
+4. Match the sector and topic you are given, and the brand colours if provided. Think like the best thumbnail designers of that niche (fitness, filmmaking, AI, beauty…).
+5. One or two sentences, concrete and visual (subject, setting, lighting, colour, mood, style). End with: "vertical 9:16, no text, cinematic, high detail".
+
+Reply with ONLY the prompt in English, nothing else.`
 
 async function marcaDe(clientId) {
   const { data } = await supabase.from('agent_memory').select('id, contenido')
@@ -173,6 +191,54 @@ export default async function handler(req, res) {
       const opciones = normalizaOpciones(extraeJson(respuesta)?.opciones)
       if (!opciones.length) return res.status(502).json({ error: 'La IA no ha dado ninguna opción válida. Prueba otra vez.' })
       return res.status(200).json({ opciones })
+    }
+
+    // ── GET ?action=capacidad ──────────────────────────────────────────────
+    // ¿Hay clave de imagen en el server? El panel enseña u oculta el fondo IA.
+    if (req.method === 'GET' && action === 'capacidad') {
+      return res.status(200).json({ fondoIa: hayClaveImagen() })
+    }
+
+    // ── POST ?action=fondo-prompt ──────────────────────────────────────────
+    // Claude escribe el prompt del fondo a partir del reel, el tema y el kit.
+    if (req.method === 'POST' && action === 'fondo-prompt') {
+      const tema = recorta(String(req.body?.tema || '').trim(), 400)
+      const mediaId = String(req.body?.mediaId || '')
+      let caption = ''
+      if (mediaId) {
+        const { data: reel } = await supabase.from('helm_ig_media')
+          .select('caption').eq('client_id', clientId).eq('media_id', mediaId).maybeSingle()
+        caption = recorta(reel?.caption || '', 1500)
+      }
+      if (!tema && !caption) return res.status(400).json({ error: 'Dime el tema del fondo o elige un reel' })
+      const { marca } = await marcaDe(clientId)
+      const colores = [marca?.colorPrincipal, marca?.colorResalte].filter(Boolean)
+      const usuario = [
+        tema ? `TEMA DEL FONDO: ${tema}` : '',
+        caption ? `CAPTION DEL REEL (para el tono, no para copiar):\n${caption}` : '',
+        colores.length ? `COLORES DE LA MARCA: ${colores.join(', ')}` : '',
+        'Escribe el prompt del fondo.',
+      ].filter(Boolean).join('\n\n')
+      let prompt
+      try {
+        prompt = await llmChat({ clientId, system: REGLAS_FONDO, messages: [{ role: 'user', content: usuario }], maxTokens: 300, temperature: 0.8 })
+      } catch (err) {
+        return res.status(err.statusCode || 502).json({ error: err.message || 'La IA no ha respondido' })
+      }
+      return res.status(200).json({ prompt: String(prompt || '').trim().replace(/^["'`]+|["'`]+$/g, '') })
+    }
+
+    // ── POST ?action=fondo-ia ──────────────────────────────────────────────
+    // Genera el fondo con Ideogram (gasta en Replicate). Sin clave → 503 claro.
+    if (req.method === 'POST' && action === 'fondo-ia') {
+      const prompt = recorta(String(req.body?.prompt || '').trim(), 1500)
+      if (!prompt) return res.status(400).json({ error: 'Escribe la descripción del fondo' })
+      try {
+        const { dataUrl } = await generaFondo({ prompt, aspecto: '9:16' })
+        return res.status(200).json({ imagen: dataUrl, ia: true })
+      } catch (err) {
+        return res.status(err.statusCode || 502).json({ error: err.message || 'No se pudo generar el fondo' })
+      }
     }
 
     // ── GET ?action=video | imagen ─────────────────────────────────────────
