@@ -2,72 +2,80 @@
 // dominio del panel para quien entra sin sesión; con sesión, Raiz en main.jsx
 // le manda a /admin).
 //
-// Cuatro preguntas, en este orden: qué es y para quién, cómo funciona, qué
-// cuesta y por dónde se entra. Todo lo que nombra existe en el panel (ver
-// src/helm/permisos.js → SECCIONES) y las capturas son de la app de verdad:
-// aquí no se promete nada que no esté hecho, ni hay testimonios ni cifras de
-// clientes.
+// Una historia guiada por el scroll: la palabra HELM se abre sobre una escena
+// 3D (escena.js, cargada aparte) y siete capítulos cuentan qué es y cómo
+// funciona mientras la cámara recorre el «puesto de mando». Debajo, lo de
+// siempre: pasos, secciones del panel, el conector de Claude y los precios.
+//
+// Todo lo que nombra existe en el panel (ver src/helm/permisos.js → SECCIONES)
+// y aquí no se promete nada que no esté hecho, ni hay testimonios ni cifras de
+// clientes (las del informe de la escena van marcadas como ejemplo).
+// Textos en español, inglés y alemán: textos.js.
 //
 // Los packs los decide el servidor (GET /api/creditos?action=packs). Si no
 // contesta, la sección de precios explica el modelo igual, sin las cifras.
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Users, ClipboardList, Bot, CalendarRange, ChartColumn, Wallet, FileText, UserCog, ScanSearch, Plug, ArrowRight,
 } from 'lucide-react'
+import { crearHistoria } from './historia.js'
+import { IDIOMAS, traductor, idiomaInicial } from './textos.js'
+import '../../fonts/barlow-condensed.css'
 import './web.css'
-
-const PASOS = [
-  {
-    titulo: 'Crea tu agencia',
-    texto: 'Te registras con el nombre de tu agencia y entras directo al panel, con créditos de bienvenida para probar la IA.',
-  },
-  {
-    titulo: 'Un perfil por cliente',
-    texto: 'Cada cliente tiene su CRM, su onboarding y su equipo. Invitas a closers, setters o editores y cada uno ve solo lo suyo.',
-  },
-  {
-    titulo: 'El contenido se mueve solo',
-    texto: 'Los agentes escriben los guiones a partir de creadores de referencia y los colocan en el roadmap. Tú grabas; el vídeo entra por Drive y HELM lo ordena.',
-  },
-  {
-    titulo: 'Mide y ajusta',
-    texto: 'El informe trae las métricas de Instagram y estudia qué tienen las piezas que funcionan, para decidir qué grabar la semana siguiente.',
-  },
-]
 
 // Secciones reales del panel, con su nombre del menú.
 const SECCIONES = [
-  [Users, 'CRM', 'Pipeline por etapas, ficha de contacto y actividad. Los formularios meten los leads solos.'],
-  [ClipboardList, 'Onboarding', 'Las respuestas del cliente y su Biblia: el contexto que leen los agentes.'],
-  [Bot, 'Agentes', 'El equipo de IA de cada perfil y sus creadores de referencia.'],
-  [CalendarRange, 'Roadmap', 'El plan a seis meses, semana a semana, con el guion de cada día.'],
-  [ChartColumn, 'Informe', 'Métricas de Instagram y el estudio de qué funciona.'],
-  [Wallet, 'Ventas y finanzas', 'Ventas, ingresos, gastos y comisiones.'],
-  [FileText, 'Documentos', 'Presupuestos y facturas.'],
-  [UserCog, 'Equipo', 'Personas, pagos y permisos por rol.'],
-  [ScanSearch, 'Scraper', 'Leads de cinco fuentes, directos al embudo.'],
-  [Plug, 'Conector de Claude', 'Un enlace para tu agencia entera.'],
+  [Users, 'crm'], [ClipboardList, 'onb'], [Bot, 'age'], [CalendarRange, 'road'], [ChartColumn, 'inf'],
+  [Wallet, 'fin'], [FileText, 'doc'], [UserCog, 'eq'], [ScanSearch, 'scr'], [Plug, 'con'],
 ]
 
 // Las herramientas que el conector le da a Claude (api/mcp/[token].js → DEL_CLIENTE).
 const HERRAMIENTAS = ['perfiles', 'calendario', 'programar_guiones', 'corpus', 'identidades', 'metricas', 'ordenar_video', 'guardar_memoria']
 
-const num = (v) => Number(v).toLocaleString('es-ES', { useGrouping: 'always' })
+const LOCALE = { es: 'es-ES', en: 'en-GB', de: 'de-DE' }
 
-function Movil({ src, alt, className = '' }) {
+function Marca({ clase = '' }) {
   return (
-    <figure className={'hw-movil ' + className}>
-      <img src={src} alt={alt} width="786" height="1550" decoding="async" />
-    </figure>
+    <span className={'hx-marca ' + clase}>
+      <img src="/assets/logos/helm-mark.svg" alt="" />
+      <span>HELM</span>
+    </span>
   )
 }
 
 export default function Web() {
+  const [lang, setLang] = useState(idiomaInicial)
+  const T = useMemo(() => traductor(lang), [lang])
+  const TRef = useRef(T)
+  TRef.current = T
   const [precios, setPrecios] = useState(null)
+  const [menu, setMenu] = useState(false)
+  const escenaRef = useRef(null)
+  const ref = {
+    raiz: useRef(null), cabecera: useRef(null), historia: useRef(null), escenario: useRef(null),
+    mascara: useRef(null), palabra: useRef(null), texto: useRef(null), intro: useRef(null),
+    capitulos: useRef(null), canvas: useRef(null), etiquetas: useRef(null),
+  }
+  const num = (v) => Number(v).toLocaleString(LOCALE[lang], { useGrouping: 'always' })
+
+  // Idioma: título, <html lang> y la escena.
+  useEffect(() => {
+    document.title = T('meta.titulo')
+    document.documentElement.lang = lang
+    escenaRef.current?.idioma(() => TRef.current)
+  }, [lang, T])
+  useEffect(() => () => { document.documentElement.lang = 'es' }, [])
+
+  function cambiaIdioma(l) {
+    setLang(l)
+    try { localStorage.setItem('helm-web-lang', l) } catch { /* sin almacenamiento */ }
+    const u = new URL(window.location.href)
+    u.searchParams.set('lang', l)
+    window.history.replaceState(window.history.state, '', u.pathname + u.search + u.hash)
+  }
 
   useEffect(() => {
-    document.title = 'HELM · El sistema para operar a tus clientes'
     let vivo = true
     fetch('/api/creditos?action=packs')
       .then(r => (r.ok ? r.json() : null))
@@ -76,161 +84,283 @@ export default function Web() {
     return () => { vivo = false }
   }, [])
 
+  // La historia y la escena 3D. Van por estilos y clases, fuera de React.
+  useEffect(() => {
+    const raiz = ref.raiz.current
+    const historia = crearHistoria({
+      raiz,
+      cabecera: ref.cabecera.current,
+      historia: ref.historia.current,
+      escenario: ref.escenario.current,
+      mascara: ref.mascara.current,
+      palabra: ref.palabra.current,
+      texto: ref.texto.current,
+      intro: ref.intro.current,
+      capitulos: ref.capitulos.current,
+      tarjetas: Array.from(ref.escenario.current.querySelectorAll('[data-tarjeta]')),
+    })
+    window.__helmWeb = historia
+    let cancelado = false
+    let escena = null
+    import('./escena.js')
+      .then(({ hayWebGL, montarEscena }) => {
+        if (cancelado) return
+        if (!hayWebGL()) { raiz.classList.add('sin-3d'); return }
+        escena = montarEscena({ canvas: ref.canvas.current, etiquetas: ref.etiquetas.current, getT: () => TRef.current })
+        escenaRef.current = escena
+        historia.onFrame((t, dt, fuera) => { if (!fuera) escena.render(t, dt) })
+      })
+      .catch((e) => { console.warn('[helm web] sin escena 3D', e); raiz.classList.add('sin-3d') })
+
+    // Un ancla en la URL (#precios…): el alto de la historia ya está fijado.
+    if (window.location.hash) {
+      const el = document.getElementById(window.location.hash.slice(1))
+      if (el) setTimeout(() => el.scrollIntoView(), 0)
+    }
+    return () => {
+      cancelado = true
+      historia.dispose()
+      escena?.dispose()
+      escenaRef.current = null
+      if (window.__helmWeb === historia) delete window.__helmWeb
+    }
+    // Las refs no cambian: el efecto se monta una vez.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const Idiomas = ({ clase = '' }) => (
+    <div className={'hx-idioma ' + clase} role="group" aria-label={T('nav.idioma')}>
+      {IDIOMAS.map(l => (
+        <button key={l} type="button" lang={l} aria-pressed={l === lang} onClick={() => cambiaIdioma(l)}>{l.toUpperCase()}</button>
+      ))}
+    </div>
+  )
+  const enlaces = [['#como', 'nav.como'], ['#dentro', 'nav.dentro'], ['#claude', 'nav.claude'], ['#precios', 'nav.precios']]
+
   return (
-    <div className="hw">
-      <header className="hw-cab">
-        <div className="hw-cab-in">
-          <Link to="/web" className="hw-marca" aria-label="HELM">
-            <img src="/assets/logos/helm-mark.svg" alt="" />
-            <span>HELM</span>
-          </Link>
-          <nav className="hw-nav" aria-label="Secciones">
-            <a href="#como">Cómo funciona</a>
-            <a href="#claude">Claude</a>
-            <a href="#precios">Precios</a>
-          </nav>
-          <div className="hw-cab-acc">
-            <Link to="/login" className="hw-btn hw-btn--sec">Entrar</Link>
-            <Link to="/registro" className="hw-btn">Crear cuenta</Link>
-          </div>
+    // className fijo: historia.js y la escena le ponen clases (is-fuera, sin-3d)
+    // que React borraría al re-renderizar; el menú va por data-menu.
+    <div className="hx" data-menu={menu ? 'abierto' : undefined} ref={ref.raiz}>
+      <div className="hx-cielo" aria-hidden="true" />
+      <canvas className="hx-escena" ref={ref.canvas} aria-hidden="true" />
+      <div className="hx-etiquetas" ref={ref.etiquetas} aria-hidden="true" />
+      <div className="hx-grano" aria-hidden="true" />
+
+      <header className="hx-cab" ref={ref.cabecera}>
+        <Link to="/web" className="hx-cab-marca" aria-label="HELM"><Marca /></Link>
+        <nav className="hx-nav" aria-label="HELM">
+          {enlaces.map(([h, k]) => <a key={h} href={h}>{T(k)}</a>)}
+        </nav>
+        <div className="hx-cab-der">
+          <Idiomas />
+          <Link to="/login" className="hx-btn hx-btn--sec hx-btn--sm hx-solo-ancho">{T('nav.entrar')}</Link>
+          <Link to="/registro" className="hx-btn hx-btn--sm hx-solo-ancho">{T('nav.crear')}</Link>
+          <button type="button" className="hx-hamb" aria-expanded={menu} aria-controls="hx-menu" onClick={() => setMenu(m => !m)}>
+            <span /><span /><span className="hx-sr">{T('nav.menu')}</span>
+          </button>
         </div>
       </header>
 
+      <div className="hx-menu" id="hx-menu" onClick={(e) => { if (e.target.closest('a')) setMenu(false) }}>
+        <nav aria-label="HELM">
+          {enlaces.map(([h, k]) => <a key={h} href={h}>{T(k)}</a>)}
+        </nav>
+        <div className="hx-ctas">
+          <Link to="/registro" className="hx-btn">{T('nav.crear')}</Link>
+          <Link to="/login" className="hx-btn hx-btn--sec">{T('nav.entrar')}</Link>
+        </div>
+      </div>
+
       <main>
-        <section className="hw-hero">
-          <div className="hw-hero-txt">
-            <p className="hw-eti">Para agencias que llevan clientes</p>
-            <h1>El sistema con el que operamos a nuestros clientes. <span>Ahora, para los tuyos.</span></h1>
-            <p className="hw-lead">
-              HELM junta en un panel el CRM, el contenido y las ventas de cada cliente, con agentes de IA
-              que escriben los guiones y los programan. En Silvestre AI lo usamos cada día: crea tu agencia
-              y úsalo con tus clientes.
-            </p>
-            <div className="hw-ctas">
-              <Link to="/registro" className="hw-btn hw-btn--xl">Crear cuenta <ArrowRight size={17} /></Link>
-              <a href="#como" className="hw-btn hw-btn--xl hw-btn--sec">Ver cómo funciona</a>
+        {/* ══ Historia: escena fija; las tarjetas cambian con el scroll ══ */}
+        <div className="hx-historia" ref={ref.historia}>
+          <span className="hx-ancla" id="inicio" data-at="0" />
+          <span className="hx-ancla" id="como" data-at="2.45" />
+
+          <div className="hx-escenario" ref={ref.escenario}>
+            <svg className="hx-mascara" ref={ref.mascara} aria-hidden="true" focusable="false">
+              <defs>
+                <mask id="hx-mascara" maskUnits="userSpaceOnUse">
+                  <rect x="0" y="0" width="100%" height="100%" fill="#fff" />
+                  <g ref={ref.palabra}><text ref={ref.texto} x="0" y="0" textAnchor="middle" fill="#000">HELM</text></g>
+                </mask>
+              </defs>
+              <rect x="0" y="0" width="100%" height="100%" fill="#050508" mask="url(#hx-mascara)" />
+            </svg>
+
+            <div className="hx-intro" ref={ref.intro}>
+              <p>{T('hero.tag')}</p>
+              <span className="hx-cue"><span>{T('hero.desliza')}</span><i /></span>
             </div>
-            <p className="hw-nota">Sin cuota mensual. Pagas lo que gasta la IA.</p>
-          </div>
-          <div className="hw-hero-vis" aria-label="Capturas del panel de HELM">
-            <Movil src="/socio/sistema/menu.jpg" alt="El menú de un perfil en HELM, con todas sus secciones" className="hw-movil--a" />
-            <Movil src="/socio/sistema/informe.jpg" alt="El informe de HELM: facturado, cobrado, ventas y balance" className="hw-movil--b" />
-            <Movil src="/socio/sistema/agentes.jpg" alt="El equipo de agentes de IA de un perfil" className="hw-movil--c" />
-          </div>
-        </section>
 
-        <section className="hw-bloque" id="como">
-          <p className="hw-eti">Cómo funciona</p>
-          <h2>De la cuenta al primer guion grabado.</h2>
-          <ol className="hw-pasos">
-            {PASOS.map((p, i) => (
-              <li key={p.titulo}>
-                <span className="hw-nodo" aria-hidden="true">{i + 1}</span>
-                <div>
-                  <h3>{p.titulo}</h3>
-                  <p>{p.texto}</p>
+            <div className="hx-tarjetas">
+              <section className="hx-tarjeta hx-tarjeta--hero" data-tarjeta="0">
+                <p className="hx-badge">{T('hero.badge')}</p>
+                <h1 className="hx-display">
+                  <span>{T('hero.l1')}</span>
+                  <span className="hx-oro">{T('hero.l2')}</span>
+                  <span>{T('hero.l3')}</span>
+                </h1>
+                <p className="hx-lead">{T('hero.lead')}</p>
+                <div className="hx-ctas">
+                  <Link to="/registro" className="hx-btn hx-btn--xl">{T('hero.cta1')} <ArrowRight size={17} /></Link>
+                  <a href="#como" className="hx-btn hx-btn--xl hx-btn--sec">{T('hero.cta2')}</a>
                 </div>
-              </li>
-            ))}
-          </ol>
-        </section>
+                <p className="hx-nota">{T('hero.nota')}</p>
+              </section>
 
-        <section className="hw-bloque">
-          <p className="hw-eti">Lo que hay dentro</p>
-          <h2>Las mismas secciones que usamos a diario, en cada uno de tus clientes.</h2>
-          <ul className="hw-secciones">
-            {SECCIONES.map(([Icono, t, d]) => (
-              <li key={t}>
-                <Icono size={18} strokeWidth={1.75} aria-hidden="true" />
-                <div>
-                  <b>{t}</b>
-                  <span>{d}</span>
+              {[1, 2, 3, 4, 5, 6, 7].map(i => {
+                const pills = ['x1', 'x2', 'x3', 'x4'].map(x => `c${i}.${x}`).filter(k => T(k) !== k)
+                return (
+                  <section className="hx-tarjeta" data-tarjeta={i} key={i}>
+                    <p className="hx-kicker">{T(`c${i}.k`)}</p>
+                    <h2 className="hx-display-2">{T(`c${i}.t`)}</h2>
+                    <p>{T(`c${i}.p`)}</p>
+                    {pills.length > 0 && <ul className="hx-pills">{pills.map(k => <li key={k}>{T(k)}</li>)}</ul>}
+                  </section>
+                )
+              })}
+
+              <section className="hx-tarjeta hx-tarjeta--fin" data-tarjeta="8">
+                <h2 className="hx-display">
+                  <span>{T('fin.t1')}</span>
+                  <span className="hx-oro">{T('fin.t2')}</span>
+                </h2>
+                <p>{T('fin.p')}</p>
+                <div className="hx-ctas">
+                  <Link to="/registro" className="hx-btn hx-btn--xl">{T('fin.cta1')} <ArrowRight size={17} /></Link>
+                  <a href="#precios" className="hx-btn hx-btn--xl hx-btn--sec">{T('fin.cta2')}</a>
                 </div>
-              </li>
-            ))}
-          </ul>
+              </section>
+            </div>
+
+            <ol className="hx-capitulos" ref={ref.capitulos} aria-hidden="true">
+              {[1, 2, 3, 4, 5, 6, 7].map(i => <li key={i}>{String(i).padStart(2, '0')}</li>)}
+            </ol>
+          </div>
+        </div>
+
+        {/* ══ Cómo funciona ══ */}
+        <section className="hx-sec hx-sec--brillo" id="pasos">
+          <div className="hx-envuelve">
+            <div className="hx-cabeza">
+              <p className="hx-kicker">{T('pasos.k')}</p>
+              <h2>{T('pasos.t')}</h2>
+            </div>
+            <ol className="hx-pasos">
+              {[1, 2, 3, 4].map(i => (
+                <li key={i} className="hx-pieza">
+                  <span className="hx-paso-n hx-oro">{String(i).padStart(2, '0')}</span>
+                  <h3>{T(`pasos.${i}.t`)}</h3>
+                  <p>{T(`pasos.${i}.p`)}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
         </section>
 
-        <section className="hw-bloque hw-claude" id="claude">
-          <div>
-            <p className="hw-eti">Conector de Claude</p>
-            <h2>Tu agencia, dentro de Claude.</h2>
-            <p className="hw-sub">
-              Pegas un enlace en Claude y trabaja con todos tus clientes desde el chat: consulta el
-              calendario y las métricas, escribe con la voz de cada perfil, programa guiones y coloca
-              los vídeos en su carpeta.
-            </p>
-          </div>
-          <div className="hw-pieza hw-terminal" aria-label="Herramientas que el conector le da a Claude">
-            <div className="hw-terminal-cab"><i /><i /><i /><span>helm · conector</span></div>
-            <ul>
-              {HERRAMIENTAS.map(h => <li key={h}><code>{h}</code></li>)}
+        {/* ══ Lo que hay dentro ══ */}
+        <section className="hx-sec" id="dentro">
+          <div className="hx-envuelve">
+            <div className="hx-cabeza">
+              <p className="hx-kicker">{T('dentro.k')}</p>
+              <h2>{T('dentro.t')}</h2>
+            </div>
+            <ul className="hx-secciones">
+              {SECCIONES.map(([Icono, k]) => (
+                <li key={k} className="hx-pieza">
+                  <span className="hx-icono"><Icono size={20} strokeWidth={1.75} aria-hidden="true" /></span>
+                  <b>{T(`sec.${k}.t`)}</b>
+                  <span>{T(`sec.${k}.p`)}</span>
+                </li>
+              ))}
             </ul>
           </div>
         </section>
 
-        <section className="hw-bloque" id="precios">
-          <p className="hw-eti">Precios</p>
-          <h2>Pago por uso. Sin cuota ni permanencia.</h2>
-          <p className="hw-sub">
-            Compras créditos por adelantado y se gastan solo cuando trabaja la IA de HELM.
-            Usar el panel no gasta nada.
-          </p>
-          <div className="hw-precio">
-            <div className="hw-pieza hw-precio-reglas">
-              <dl>
-                <div><dt>1 €</dt><dd>100 créditos</dd></div>
-                <div>
-                  <dt>{precios?.bienvenida ? num(precios.bienvenida) : 'Regalo'}</dt>
-                  <dd>créditos de bienvenida al registrarte</dd>
-                </div>
-              </dl>
-              <div className="hw-gasta">
-                <div>
-                  <b>Gasta créditos</b>
-                  <span>Los agentes que escriben guiones, el contenido automático y el asistente del panel.</span>
-                </div>
-                <div>
-                  <b>No gasta</b>
-                  <span>El CRM, el roadmap, los documentos y lo que Claude haga con tu propia cuenta a través del conector.</span>
-                </div>
-              </div>
+        {/* ══ Conector de Claude ══ */}
+        <section className="hx-sec hx-sec--brillo" id="claude">
+          <div className="hx-envuelve hx-claude">
+            <div className="hx-cabeza">
+              <p className="hx-kicker">{T('claude.k')}</p>
+              <h2>{T('claude.t')}</h2>
+              <p>{T('claude.p')}</p>
             </div>
-            {precios?.packs?.length > 0 && (
-              <ul className="hw-packs" aria-label="Packs de créditos">
-                {precios.packs.map(p => (
-                  <li key={p.id} className="hw-pieza">
-                    <span className="hw-pack-eur">{num(p.euros)} €</span>
-                    <span className="hw-pack-cr">{num(p.creditos)} créditos</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <div className="hx-pieza hx-terminal" aria-label={T('claude.herr')}>
+              <div className="hx-terminal-cab"><i /><i /><i /><span>helm · mcp</span></div>
+              <ul>{HERRAMIENTAS.map(h => <li key={h}><code>{h}</code></li>)}</ul>
+            </div>
           </div>
         </section>
 
-        <section className="hw-final hw-pieza">
-          <img src="/assets/logos/helm-mark.svg" alt="" className="hw-final-logo" />
-          <h2>Empieza con tu primer cliente.</h2>
-          <p>Crea la cuenta, da de alta a un cliente y prueba el sistema con los créditos de bienvenida.</p>
-          <div className="hw-ctas">
-            <Link to="/registro" className="hw-btn hw-btn--xl">Crear cuenta <ArrowRight size={17} /></Link>
-            <Link to="/login" className="hw-btn hw-btn--xl hw-btn--sec">Ya tengo cuenta</Link>
+        {/* ══ Precios ══ */}
+        <section className="hx-sec" id="precios">
+          <div className="hx-envuelve">
+            <div className="hx-cabeza hx-cabeza--centro">
+              <p className="hx-kicker">{T('precios.k')}</p>
+              <h2>{T('precios.t')}</h2>
+              <p>{T('precios.p')}</p>
+            </div>
+            <div className="hx-precio">
+              <div className="hx-pieza hx-precio-reglas">
+                <dl>
+                  <div><dt>1 €</dt><dd>{T('precios.cien')}</dd></div>
+                  <div>
+                    <dt>{precios?.bienvenida ? num(precios.bienvenida) : T('precios.regalo')}</dt>
+                    <dd>{T('precios.bienvenida')}</dd>
+                  </div>
+                </dl>
+                <div className="hx-gasta">
+                  <div><b>{T('precios.gasta.t')}</b><span>{T('precios.gasta.p')}</span></div>
+                  <div><b>{T('precios.nogasta.t')}</b><span>{T('precios.nogasta.p')}</span></div>
+                </div>
+              </div>
+              {precios?.packs?.length > 0 && (
+                <ul className="hx-packs" aria-label={T('precios.packs')}>
+                  {precios.packs.map(p => (
+                    <li key={p.id} className="hx-pieza">
+                      <span className="hx-pack-eur">{num(p.euros)} €</span>
+                      <span className="hx-pack-cr">{num(p.creditos)} {T('precios.creditos')}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
-          <p className="hw-puente">
-            ¿Prefieres que lo montemos y lo llevemos contigo? <a href="https://s4sf.net/empresas">Mira cómo trabajamos</a>.
-          </p>
+        </section>
+
+        {/* ══ Cierre ══ */}
+        <section className="hx-sec hx-sec--final">
+          <div className="hx-envuelve">
+            <div className="hx-final hx-pieza">
+              <img src="/assets/logos/helm-mark.svg" alt="" className="hx-final-logo" />
+              <h2>{T('fin.t1')} <span className="hx-oro">{T('fin.t2')}</span></h2>
+              <p>{T('fin.p')}</p>
+              <div className="hx-ctas">
+                <Link to="/registro" className="hx-btn hx-btn--xl">{T('fin.cta1')} <ArrowRight size={17} /></Link>
+                <Link to="/login" className="hx-btn hx-btn--xl hx-btn--sec">{T('puente.ya')}</Link>
+              </div>
+              <p className="hx-puente">
+                <b>{T('puente.t')}</b> {T('puente.p')} <a href="https://s4sf.net/empresas">{T('puente.cta')} →</a>
+              </p>
+            </div>
+          </div>
         </section>
       </main>
 
-      <footer className="hw-pie">
-        <span className="hw-marca hw-marca--pie"><img src="/assets/logos/helm-mark.svg" alt="" /><span>HELM</span></span>
-        <span>Hecho por Silvestre AI</span>
-        <nav>
-          <Link to="/login">Entrar</Link>
-          <Link to="/registro">Crear cuenta</Link>
-          <a href="https://s4sf.net">s4sf.net</a>
-        </nav>
+      <footer className="hx-pie">
+        <div className="hx-envuelve hx-pie-in">
+          <Marca clase="hx-marca--pie" />
+          <span>{T('pie.hecho')}</span>
+          <nav>
+            <Link to="/login">{T('nav.entrar')}</Link>
+            <Link to="/registro">{T('nav.crear')}</Link>
+            <Link to="/privacidad">{T('pie.privacidad')}</Link>
+            <Link to="/aviso-legal">{T('pie.legal')}</Link>
+            <a href="https://s4sf.net">s4sf.net</a>
+          </nav>
+          <Idiomas clase="hx-idioma--pie" />
+        </div>
       </footer>
     </div>
   )
