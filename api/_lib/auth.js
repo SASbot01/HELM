@@ -86,6 +86,33 @@ async function cuentaSuperadmin(sub, payload) {
   return cuenta
 }
 
+// Lo mismo para los accesos de un perfil (tabla `team`): hasta ahora su JWT
+// valía 12 h aunque se le quitara el acceso o se desactivara. Se relee un
+// minuto como mucho y, de paso, el servidor sabe su NIVEL (propietario, admin,
+// miembro), que el JWT no lleva y que hacía falta para no fiarse del navegador.
+const accesosVistos = new Map() // sub -> { cuenta, exp }
+async function cuentaAcceso(sub, payload) {
+  if (!sub) return { ok: false, nivel: null }
+  const visto = accesosVistos.get(sub)
+  if (visto && visto.exp > Date.now()) return visto.cuenta
+  const { data, error } = await supabase.from('team')
+    .select('active, role, client_id').eq('id', sub).maybeSingle()
+  // Base caída: como con los superadmins, vale el token (está firmado).
+  if (error) return { ok: true, nivel: null }
+  const cuenta = {
+    ok: Boolean(data) && data.active !== false && (!payload.clientId || data.client_id === payload.clientId),
+    nivel: data?.role || null,
+  }
+  accesosVistos.set(sub, { cuenta, exp: Date.now() + 60_000 })
+  return cuenta
+}
+
+/** Para que quitar un acceso surta efecto ya, sin esperar al minuto. */
+export function olvidarAcceso(sub) {
+  if (sub) accesosVistos.delete(sub)
+  else accesosVistos.clear()
+}
+
 export async function validateAuth(req, { required = true } = {}) {
   const header = req.headers?.authorization || req.headers?.Authorization || ''
   const token = header.startsWith('Bearer ') ? header.slice(7) : ''
@@ -112,7 +139,7 @@ export async function validateAuth(req, { required = true } = {}) {
       // seguiría viéndolo todo hasta que le caducara el token.
       // Un superadmin es el administrador de UNA agencia: ve los perfiles de
       // la suya. `plataforma` ve todas.
-      let cuenta = { agenciaId: null, plataforma: false }
+      let cuenta = { agenciaId: null, plataforma: false, nivel: null }
       if (payload.superadmin === true || payload.role === 'superadmin') {
         cuenta = await cuentaSuperadmin(payload.sub, payload)
         if (!cuenta.ok) {
@@ -120,6 +147,14 @@ export async function validateAuth(req, { required = true } = {}) {
           e.statusCode = 401
           throw e
         }
+      } else if (payload.role === 'client') {
+        const acceso = await cuentaAcceso(payload.sub, payload)
+        if (!acceso.ok) {
+          const e = new Error('Este acceso ya no está activo')
+          e.statusCode = 401
+          throw e
+        }
+        cuenta = { ...cuenta, nivel: acceso.nivel }
       }
 
       const auth = {
@@ -131,6 +166,8 @@ export async function validateAuth(req, { required = true } = {}) {
         superadmin: payload.superadmin === true,
         agenciaId: cuenta.agenciaId,
         plataforma: cuenta.plataforma,
+        // Nivel del acceso de equipo, leído de `team` (no del navegador).
+        nivel: cuenta.nivel || null,
       }
       // Para el cobro de créditos (ver ./creditos.js): a quién se le apunta lo
       // que gaste esta petición.

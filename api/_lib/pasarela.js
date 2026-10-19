@@ -54,9 +54,53 @@ const SECRETAS = new Set([
   'helm_agente_chat',
 ])
 
+// LISTA BLANCA: las únicas tablas que el panel toca por aquí (las que usa
+// src/; tests/pasarela.test.js comprueba que no falta ninguna). Antes era una
+// lista negra y quedaban abiertas, para cualquier sesión de su perfil, tablas
+// heredadas con secretos que el panel ni usa (whatsapp_config, email_config,
+// calendly_auth, console_api_keys…). Una tabla nueva del panel se añade aquí.
+export const PANEL = new Set([
+  'ceo_finance_entries', 'clients', 'crm_activities', 'crm_contacts', 'crm_pipelines', 'crm_tasks',
+  'helm_calls', 'helm_collaborations', 'helm_content_calendar', 'helm_documentos_venta',
+  'helm_fiscal_avisos', 'helm_fiscal_obligaciones', 'helm_fiscal_perfil', 'helm_form_responses',
+  'helm_forms', 'helm_gastos', 'helm_ig_media', 'helm_library', 'helm_links', 'helm_onboarding',
+  'helm_permissions', 'helm_services', 'helm_team', 'helm_virales', 'products', 'reports', 'sales', 'team',
+])
+
+// Lo que PostgREST acepta y el panel usa. PUT y compañía, fuera.
+const METODOS = new Set(['GET', 'HEAD', 'POST', 'PATCH', 'DELETE'])
+
 // `team` guarda los accesos (con su contraseña). El panel solo lee nombres
 // para asignar tareas; escribir va por api/equipo.js.
 const COLUMNAS_TEAM = new Set(['id', 'name', 'client_id', 'active', 'role', 'email'])
+// Parámetros de PostgREST que no filtran por ninguna columna.
+const NO_FILTRAN = new Set(['select', 'limit', 'offset', 'on_conflict', 'columns'])
+
+// Quien manda en un perfil: propietario ('admin,ceo,director') o admin ('admin'),
+// igual que api/equipo.js.
+const nivelTotal = (nivel) => String(nivel || '').split(',').map(s => s.trim()).includes('admin')
+
+/**
+ * En `team` solo se puede filtrar y ordenar por las columnas que se dejan
+ * leer: si no, un filtro sobre password_hash (`like.scrypt:ab*`) contesta sí o
+ * no y deja sacar el hash de la contraseña de un compañero letra a letra.
+ */
+function revisaFiltrosTeam(query) {
+  const fuera = (c) => !COLUMNAS_TEAM.has(c)
+  for (const [k, v] of query) {
+    if (NO_FILTRAN.has(k)) continue
+    if (k === 'order') {
+      const cols = v.split(',').map(s => s.trim().split('.')[0]).filter(Boolean)
+      if (cols.some(fuera)) throw prohibido('Por ese campo de team no se puede ordenar')
+      continue
+    }
+    // El panel no usa or/and en team (solo client_id, active y orden por
+    // nombre): fuera del todo, mejor que intentar leer dentro (con comillas o
+    // anidados se colaría una columna).
+    if (/(^|\.)(or|and)$/.test(k)) throw prohibido('Por esos campos de team no se puede filtrar')
+    if (fuera(k)) throw prohibido('Por esos campos de team no se puede filtrar')
+  }
+}
 
 // Solo el administrador de la agencia: qué perfiles existen y qué secciones
 // ve cada uno. Un acceso de cliente podría, si no, darse secciones a sí mismo.
@@ -131,8 +175,12 @@ function prohibido(msg = 'No tienes acceso a esto') {
  * Revisa y recorta una petición a /rest/v1/<tabla>. Devuelve la query ya
  * recortada (URLSearchParams) y, si hace falta, el cuerpo reescrito.
  */
-async function recortaTabla({ auth, ids, metodo, tabla, query, cuerpo, prefer }) {
+export async function recortaTabla({ auth, ids, metodo, tabla, query, cuerpo, prefer }) {
   if (SECRETAS.has(tabla)) throw prohibido()
+  if (!PANEL.has(tabla)) {
+    console.warn(`[db] tabla fuera de la lista del panel: ${tabla} (${metodo})`)
+    throw prohibido()
+  }
   const cols = await columnasDe(tabla)
   if (!cols) throw Object.assign(new Error(`No existe la tabla ${tabla}`), { statusCode: 404 })
 
@@ -147,13 +195,32 @@ async function recortaTabla({ auth, ids, metodo, tabla, query, cuerpo, prefer })
     if (!lee) throw prohibido('Los accesos se gestionan desde Equipo')
     const pedidas = (select || '*').split(',').map(c => c.trim())
     if (pedidas.some(c => !COLUMNAS_TEAM.has(c))) throw prohibido('Esas columnas de team no se pueden leer')
+    revisaFiltrosTeam(query)
   }
   if (!lee && SOLO_ADMIN_ESCRIBE.has(tabla) && !esAdmin(auth)) throw prohibido('Solo el administrador puede cambiar esto')
   if (tabla === 'clients' && metodo === 'DELETE') throw prohibido('Los perfiles se borran desde Perfiles')
 
+  // Un «guardar pisando» (upsert) en perfiles o colaboraciones no pasa por el
+  // recorte de abajo: con `on_conflict=id` (o slug) reescribiría el perfil de
+  // OTRA agencia y, como el perfil nuevo nace en la agencia de quien guarda, se
+  // lo llevaría a la suya. El registro es público, así que cualquiera podía.
+  const pisa = /resolution\s*=/i.test(prefer) || query.has('on_conflict')
+  if (pisa && (tabla === 'clients' || tabla === 'helm_collaborations') && !auth.plataforma) {
+    throw prohibido('Eso no se puede guardar así')
+  }
+
   const filas = metodo === 'POST' || metodo === 'PATCH' ? filasDe(cuerpo) : []
   const vetadas = auth.plataforma ? [] : (SOLO_SERVIDOR[tabla] || []).filter(c => c !== 'agencia_id')
   if (filas.some(f => vetadas.some(c => c in f))) throw prohibido('Ese campo lo gestiona el servidor')
+
+  // El oficio de cada persona (dueño, closer…) decide lo que ve y edita: solo lo
+  // cambia, y solo borra personas, quien manda en el perfil o el administrador.
+  // Si no, cualquiera del equipo se subía a «dueño» él solo.
+  if (tabla === 'helm_team' && !lee && !esAdmin(auth) && !nivelTotal(auth.nivel)) {
+    if (metodo === 'DELETE' || filas.some(f => 'role' in f)) {
+      throw prohibido('Solo quien manda en el perfil cambia el equipo')
+    }
+  }
 
   // Perfiles nuevos: nacen en la agencia de quien los crea. Y nadie mueve un
   // perfil de agencia desde aquí.
@@ -188,9 +255,12 @@ async function recortaTabla({ auth, ids, metodo, tabla, query, cuerpo, prefer })
   if (metodo === 'POST') {
     if (filas.some(f => !ids.includes(f.client_id))) throw prohibido('No puedes crear filas en ese perfil')
     // Un upsert que pisa filas existentes: tiene que pisarlas dentro de tus
-    // perfiles. Por (client_id, …) siempre lo es; por id, se comprueba.
-    if (/resolution=merge-duplicates/.test(prefer)) {
-      const conflicto = (query.get('on_conflict') || 'id').split(',').map(c => c.trim())
+    // perfiles. Por (client_id, …) siempre lo es; por id, se comprueba. Sin
+    // `on_conflict` PostgREST usaría la clave primaria de la tabla, que no
+    // siempre es `id` (p. ej. event_id): se exige decirla.
+    if (/resolution\s*=\s*merge-duplicates/i.test(prefer)) {
+      if (!query.get('on_conflict')) throw prohibido('Ese guardado no se puede hacer por aquí')
+      const conflicto = query.get('on_conflict').split(',').map(c => c.trim())
       if (!conflicto.includes('client_id')) {
         if (conflicto.join() !== 'id') throw prohibido('Ese guardado no se puede hacer por aquí')
         const conId = filas.map(f => f.id).filter(Boolean)
@@ -250,6 +320,13 @@ async function reenvia(req, res, { ruta, query, cuerpo, conClave = true }) {
 export async function pasarela(req, res) {
   try {
     if (req.method === 'OPTIONS') { res.statusCode = 204; return res.end() }
+    if (!METODOS.has(req.method)) return corta(res, 405, 'Método no permitido')
+    // Solo el esquema `public`: con Accept-Profile/Content-Profile se podría
+    // pedir otro esquema expuesto con una tabla que se llame igual.
+    for (const h of ['accept-profile', 'content-profile']) {
+      const v = req.headers?.[h]
+      if (v && String(v).trim().toLowerCase() !== 'public') return corta(res, 403, 'Ese esquema no se abre por aquí')
+    }
     const u = new URL(req.url, 'http://local')
     const ruta = u.pathname.replace(/^\/api\/db/, '')
     const query = new URLSearchParams(u.search)

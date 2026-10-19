@@ -17,7 +17,7 @@
 // Sin `personId`, `grant` crea un acceso suelto para el perfil (el que se pide
 // al dar de alta un negocio nuevo) sin colgarlo de nadie del equipo.
 import { supabase } from './lib/supabase.js'
-import { applyCors, rateLimit, getClientIp, writeAudit } from './_lib/auth.js'
+import { applyCors, rateLimit, getClientIp, writeAudit, olvidarAcceso } from './_lib/auth.js'
 import { requireProfileAccess } from './_lib/access.js'
 import { hashPassword } from './_lib/passwords.js'
 
@@ -148,6 +148,7 @@ export default async function handler(req, res) {
     if (loginId) {
       const { error } = await supabase.from('team').update(fila).eq('id', loginId)
       if (error) return res.status(500).json({ error: error.message })
+      olvidarAcceso(loginId)   // su nivel nuevo vale ya, no dentro de un minuto
     } else {
       const { data, error } = await supabase.from('team').insert(fila).select('id').single()
       if (error) return res.status(500).json({ error: error.message })
@@ -181,6 +182,7 @@ export default async function handler(req, res) {
     const { error } = await supabase.from('team')
       .update({ active: false }).eq('id', persona.login_id)
     if (error) return res.status(500).json({ error: error.message })
+    olvidarAcceso(persona.login_id)   // su sesión deja de valer ya
 
     await supabase.from('helm_team')
       .update({ login_id: null, updated_at: new Date().toISOString() }).eq('id', persona.id)
