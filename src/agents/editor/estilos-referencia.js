@@ -63,6 +63,19 @@ export const ESTILOS_REFERENCIA = [
     prompt: 'Edita el reel en el estilo de samzia (mentalidad, grind hacia el éxito). SOLO b-roll cinematográfico, oscuro y aspiracional, sin talking head: skyline nocturno con luces de ciudad, figura con capucha frente a pantallas de código/trading, interiores de lujo minimalistas. Color frío, oscuro, alto contraste, poca profundidad de campo. Subtítulos blancos, negrita, minúscula, UNA palabra por plano, centrados a media altura, al ritmo de la música. Cada plano dura ~2 s con una sola palabra: muy minimalista. Tono: grind solitario, épico. [Ritmo exacto al audio.]',
   },
   {
+    clave: 'felipetambara.ia',
+    nombre: 'felipetambara.ia',
+    nicho: 'IA / listas de herramientas',
+    idioma: 'pt',
+    // Probado de verdad el 2026-10-19 en el reel 1019 de Alex (render con
+    // Pillow + ffmpeg en el server, helm-ops/tmp/edicion-1019/render.py).
+    reels: [
+      { shortcode: 'Db1JYvvRXxG', url: 'https://www.instagram.com/reel/Db1JYvvRXxG/', caption: 'Salva esse vídeo pra não perder as ferramentas', likes: 12900 },
+    ],
+    estilo: null,
+    prompt: 'Edita el reel en el estilo de felipetambara.ia (listas de herramientas). Talking head fijo, sin b-roll. Cada vez que dice «usa esto para X», CORTE SECO a un set nuevo, un fotograma antes de la frase: arriba un TÍTULO en serif blanca (Instrument Serif) curvado en arco, en español («Generar ideas», «Generar vídeos», «Generar imágenes», «Organización», «Automatizaciones»); a la izquierda una COLUMNA de 4 apps de esa categoría (icono de app con esquinas redondeadas + nombre en blanco seminegrita; logos sin tarjeta tal cual), que entra con un pop corto de un fotograma por fila. Ningún nombre puede tapar ojos o boca: si es largo, va en la última fila. Subtítulos en minúscula, blancos, sans medium (Inter), palabra a palabra, abajo a la derecha sobre el pecho, en trozos «usa esto para» + palabra clave, sin pasar del 86 % del ancho (botones de Instagram). Si el fondo es claro, degradado oscuro suave arriba y a la izquierda y sombra doble en los textos. Cierre en «guarda este vídeo»: título «Guárdalo» + icono de guardar. Audio normalizado a −14 LUFS, pico ≤ −2 dBTP. Primer fotograma con el set completo (es la portada por defecto).',
+  },
+  {
     clave: 'izansimon',
     nombre: 'izansimon',
     nicho: 'fitness',
