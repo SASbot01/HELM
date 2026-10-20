@@ -80,12 +80,12 @@ export default function Clase() {
         <div className="ini-sep">Empieza aquí</div>
 
         <div className="ini-botones">
-          {/* El primario: la comunidad gratis. El correo se pide allí. */}
+          {/* El primario: AI para todo, gratis. El correo se pide allí. */}
           <Link className="ini-btn on" to="/aiparatodo" onClick={() => track('clic_cta', { donde: 'bio-aiparatodo' })}>
             <span className="ini-btn-icono"><Sparkles size={20} /></span>
             <span className="ini-btn-txt">
               <b>AI para todo</b>
-              <small>La comunidad gratis: skills, news y guías de Claude</small>
+              <small>Gratis: webs premiadas con su prompt, skills, news y guías de Claude</small>
             </span>
             <ChevronRight className="ini-flecha" size={20} />
           </Link>

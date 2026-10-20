@@ -79,15 +79,36 @@ describe('miembro', () => {
   })
 
   it('sin comunidad, AI para todo en silvestre, como siempre', async () => {
-    const r = await pide('miembro', { nombre: 'Luis', email: 'luis@example.com', profesion: 'editor', ingresos: 'mas_1000', pipeline: 'Lead magnet', nota: 'pidió la guía' })
+    const r = await pide('miembro', { nombre: 'Luis', email: 'luis@example.com', profesion: 'negocio', pipeline: 'Lead magnet', nota: 'pidió la guía' })
     expect(r.statusCode).toBe(200)
     expect(perfiles()).toEqual(['silvestre'])
     const [fila] = altas()
     expect(fila).toMatchObject({
       client_id: 'id-de-silvestre', source: 'AI para todo', utm_source: 'aiparatodo', utm_medium: 'comunidad',
-      pipeline_id: 'id-de-silvestre/Lead magnet', notes: 'AI para todo · pidió la guía · profesión: editor · ingresos: Más de 1.000 €/mes',
+      pipeline_id: 'id-de-silvestre/Lead magnet', notes: 'AI para todo · pidió la guía · profesión: Tengo un negocio',
     })
-    expect(fila.custom_fields.aiparatodo).toMatchObject({ profesion: 'editor', ingresos: 'mas_1000' })
+    expect(fila.custom_fields.aiparatodo).toMatchObject({ profesion: 'Tengo un negocio' })
+  })
+
+  it('AI para todo es gratis y sin ingresos: no los pide y, si llegan, no los guarda', async () => {
+    const r = await pide('miembro', { comunidad: 'aiparatodo', nombre: 'Eva', email: 'eva@example.com', profesion: 'freelance', ingresos: 'mas_1000', nota: 'entró por webs/lando-norris' })
+    expect(r.statusCode).toBe(200)
+    const [fila] = altas()
+    expect(fila.custom_fields.aiparatodo).not.toHaveProperty('ingresos')
+    expect(fila.custom_fields.aiparatodo).toMatchObject({ profesion: 'Freelance o creador', entrada: 'entró por webs/lando-norris' })
+    expect(fila.notes).toBe('AI para todo · entró por webs/lando-norris · profesión: Freelance o creador')
+    expect(fila.pipeline_id).toBe('id-de-silvestre/Página de inicio')
+  })
+
+  it('quien vuelve conserva lo que dejó la otra vez en su comunidad (los ingresos de cuando se pedían)', async () => {
+    existente = {
+      id: 'c-viejo', name: 'Eva', notes: '', custom_fields: { aiparatodo: { profesion: 'diseñadora', ingresos: 'mas_1000' } },
+      utm_source: 'aiparatodo', utm_medium: 'comunidad', utm_campaign: null, utm_content: null,
+    }
+    const r = await pide('miembro', { comunidad: 'aiparatodo', nombre: 'Eva', email: 'eva@example.com', profesion: 'negocio', nota: 'entró por webs/odyssee' })
+    expect(r.statusCode).toBe(200)
+    const [c] = cambios()
+    expect(c.custom_fields.aiparatodo).toMatchObject({ profesion: 'Tengo un negocio', ingresos: 'mas_1000', entrada: 'entró por webs/odyssee' })
   })
 
   it('cada comunidad solo acepta lo suyo', async () => {
@@ -97,7 +118,8 @@ describe('miembro', () => {
       [{ comunidad: 'filmmakingparatodo', ingresos: 'mas_1000', profesion: 'bodas' }, 'Elige tus ingresos'],
       [{ comunidad: 'filmmakingparatodo', ingresos: 'mas_3000', profesion: 'astronauta' }, 'Elige a qué te dedicas'],
       [{ comunidad: 'filmmakingparatodo', ingresos: 'mas_3000', profesion: 'constructor' }, 'Elige a qué te dedicas'],
-      [{ comunidad: 'aiparatodo', ingresos: 'menos_500', profesion: 'x' }, 'Elige tus ingresos'],
+      [{ comunidad: 'aiparatodo', ingresos: 'menos_500', profesion: 'x' }, 'Elige a qué te dedicas'],
+      [{ comunidad: 'aiparatodo', profesion: '__proto__' }, 'Elige a qué te dedicas'],
     ]
     for (const [extra, error] of casos) {
       const r = await pide('miembro', { nombre: 'X', email: 'x@example.com', ingresos: 'mas_1000', profesion: 'x', ...extra })

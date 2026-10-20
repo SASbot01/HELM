@@ -328,8 +328,10 @@ async function miembro(b) {
   // El campo trampa: oculto en la página, solo lo rellena un bot.
   if (txt(b.website, 200)) throw fallo(400, 'No se ha podido enviar')
   const correo = correoDe(b.email)
-  const ingresos = txt(b.ingresos, 40)
-  if (!Object.hasOwn(c.ingresos, ingresos)) throw fallo(400, 'Elige tus ingresos')
+  // Los ingresos, solo en las comunidades que los piden (c.ingresos); en las
+  // demás no se guardan aunque lleguen.
+  const ingresos = c.ingresos ? txt(b.ingresos, 40) : null
+  if (c.ingresos && !Object.hasOwn(c.ingresos, ingresos)) throw fallo(400, 'Elige tus ingresos')
   // La profesión: texto libre, o una de las opciones de la comunidad si las da.
   const oficio = c.profesiones ? c.profesiones[Object.hasOwn(c.profesiones, String(b.profesion)) ? b.profesion : ''] : txt(b.profesion, 120)
   if (c.profesiones && !oficio) throw fallo(400, 'Elige a qué te dedicas')
@@ -345,8 +347,8 @@ async function miembro(b) {
   // Las UTM de ESTA entrada quedan también aquí: si la persona ya estaba en el
   // CRM, sus columnas de UTM no se tocan (son las de su primera llegada).
   const utm = Object.fromEntries(['utm_source', 'utm_medium', 'utm_campaign', 'utm_content'].filter(k => o[k]).map(k => [k, o[k]]))
-  const datos = { profesion: oficio, ingresos, entrada: nota, enviado: ahora(), ...(Object.keys(utm).length ? { utm } : {}) }
-  const linea = [c.nombre, nota, `profesión: ${oficio || '—'}`, `ingresos: ${c.ingresos[ingresos]}`].filter(Boolean).join(' · ')
+  const datos = { profesion: oficio, ...(ingresos ? { ingresos } : {}), entrada: nota, enviado: ahora(), ...(Object.keys(utm).length ? { utm } : {}) }
+  const linea = [c.nombre, nota, `profesión: ${oficio || '—'}`, ingresos && `ingresos: ${c.ingresos[ingresos]}`].filter(Boolean).join(' · ')
 
   const fila = {
     client_id: clientId,
@@ -373,7 +375,9 @@ async function miembro(b) {
     // anuncios (api/_lib/ads.js).
     const cambios = {
       notes: sumaNota(previo.notes, linea),
-      custom_fields: { ...(previo.custom_fields || {}), [c.clave]: datos },
+      // Lo que dejó en otra visita (p. ej. los ingresos de cuando se pedían)
+      // se queda; lo de esta entrada lo pisa.
+      custom_fields: { ...(previo.custom_fields || {}), [c.clave]: { ...(previo.custom_fields?.[c.clave] || {}), ...datos } },
       last_activity_at: ahora(), updated_at: ahora(),
     }
     if (!previo.name) cambios.name = fila.name

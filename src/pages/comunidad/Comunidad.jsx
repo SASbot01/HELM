@@ -16,6 +16,11 @@
 // News no es contenido fijo: es el diario que escribe la redacción automática
 // de HELM y las breves del agente de noticias en el perfil de la comunidad,
 // leídos de su API (cfg.api).
+//
+// Una comunidad puede pintar una sección a su manera (cfg.vistas): la lista con
+// vistas.seccion[clave] y cada hilo con vistas.hilo[clave]. Las dos reciben el
+// acceso y su setter, para poner la puerta donde quieran (las webs de
+// referencia de AI para todo, por ejemplo).
 import { useEffect, useRef, useState } from 'react'
 import { Routes, Route, Link, Navigate, useParams, useLocation } from 'react-router-dom'
 import {
@@ -61,8 +66,8 @@ export default function Comunidad({ config: cfg }) {
         <Cabecera />
         <Routes>
           <Route index element={<Portada />} />
-          <Route path=":seccion" element={<Seccion />} />
-          <Route path=":seccion/:tema" element={<Seccion />} />
+          <Route path=":seccion" element={<Seccion acceso={acceso} setAcceso={setAcceso} />} />
+          <Route path=":seccion/:tema" element={<Seccion acceso={acceso} setAcceso={setAcceso} />} />
           <Route path=":seccion/:tema/:slug" element={<HiloRuta acceso={acceso} setAcceso={setAcceso} />} />
           <Route path="*" element={<Navigate to={cfg.ruta} replace />} />
         </Routes>
@@ -80,7 +85,7 @@ function Cabecera() {
       <nav className="aip-nav">
         {cfg.secciones.map(s => {
           const Icono = cfg.iconos[s.key]
-          return <Link key={s.key} to={`${cfg.ruta}/${s.key}`}><Icono size={15} /> {s.key === 'guia' ? 'Guía' : s.titulo}</Link>
+          return <Link key={s.key} to={`${cfg.ruta}/${s.key}`}><Icono size={15} /> {s.corto || (s.key === 'guia' ? 'Guía' : s.titulo)}</Link>
         })}
         <a className="aip-nav-cta" href={cfg.fundador.instagram} target="_blank" rel="noopener noreferrer"><Instagram size={15} />{` ${cfg.textos.navCta}`}</a>
       </nav>
@@ -116,7 +121,7 @@ function Portada() {
               <h3>{s.titulo}</h3>
               <p>{s.desc}</p>
               <span className="aip-zona-pie">
-                {s.key === 'news' ? cfg.textos.zonaNews : `${s.temas.length} tema${s.temas.length === 1 ? '' : 's'} · ${n} hilo${n === 1 ? '' : 's'}`}
+                {s.key === 'news' ? cfg.textos.zonaNews : s.pie ? s.pie(n) : `${s.temas.length} tema${s.temas.length === 1 ? '' : 's'} · ${n} hilo${n === 1 ? '' : 's'}`}
                 <ArrowRight size={14} />
               </span>
             </Link>
@@ -353,15 +358,23 @@ function Pie() {
 // breves de la mañana del agente de noticias. Las piezas tienen su página;
 // las breves, la de siempre (Hilo).
 
-/** La sección: el diario en News, el foro en las demás. */
-function Seccion() {
+/** La sección: la vista propia si la comunidad la tiene, el diario en News y
+ *  el foro en las demás. */
+function Seccion(props) {
+  const cfg = useComunidad()
   const { seccion } = useParams()
+  const Propia = cfg.vistas?.seccion && Object.hasOwn(cfg.vistas.seccion, seccion) ? cfg.vistas.seccion[seccion] : null
+  if (Propia) return <Propia {...props} />
   return seccion === 'news' ? <Diario /> : <Foro />
 }
 
-/** Un hilo: en News, el artículo; si es una breve o de otra sección, Hilo. */
+/** Un hilo: la vista propia si la hay; en News, el artículo; si es una breve
+ *  o de otra sección, Hilo. */
 function HiloRuta(props) {
+  const cfg = useComunidad()
   const { seccion, slug } = useParams()
+  const Propia = cfg.vistas?.hilo && Object.hasOwn(cfg.vistas.hilo, seccion) ? cfg.vistas.hilo[seccion] : null
+  if (Propia) return <Propia {...props} />
   return seccion === 'news' && !esBreve(slug) ? <Articulo {...props} /> : <Hilo {...props} />
 }
 

@@ -1,0 +1,188 @@
+/* AI para todo — las webs de referencia (Webs.jsx). Con los colores del motor
+   de las comunidades (comunidad.css): granate, rosa y papel sobre negro. Las
+   capturas van a 16:10, que es como se hicieron (1440×900). */
+
+.aipw { max-width: 1240px; }
+.aipw-oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ── Cabecera, escalera de premios y filtros ───────────────────────────── */
+.aipw-cab { display: grid; gap: 10px; margin-bottom: 22px; }
+.aipw-cab .aip-kicker { margin: 0; color: var(--rosa); }
+.aipw-cab .aip-h1 { margin: 0; }
+.aipw-cab .aip-sub { margin: 4px 0 0; max-width: 680px; }
+
+.aipw-escalera { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 12px; font-size: 13px; color: var(--papel-2); }
+.aipw-escalera-tit { font: 600 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--papel-3); margin-right: 4px; }
+.aipw-escalon { display: inline-flex; align-items: center; gap: 7px; }
+.aipw-flecha { color: var(--papel-3); }
+
+.aipw-insignias { display: flex; flex-wrap: wrap; gap: 6px; }
+.aipw-insignia, .aipw-mejor {
+  font: 600 10.5px/1 var(--mono); letter-spacing: .05em; text-transform: uppercase; white-space: nowrap;
+  padding: 5px 7px; border-radius: 5px; border: 1px solid currentColor;
+}
+.aipw-insignia.soty { color: #f0c44c; }
+.aipw-insignia.sotm { color: #ff6b5e; }
+.aipw-insignia.sotd { color: #efe3e5; }
+.aipw-insignia.hm { color: #a99aa0; }
+.aipw-insignia.eleccion { color: var(--rosa); border-style: dashed; }
+.aipw-mejor { color: #1a0a0e; background: #f0c44c; border-color: #f0c44c; }
+
+.aipw-filtros { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 8px; }
+.aipw-filtros a {
+  display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 999px; text-decoration: none;
+  font-weight: 600; font-size: 14px; color: var(--papel); border: 1px solid var(--linea-2); background: rgba(var(--panel-rgb), 0.6);
+}
+.aipw-filtros a span { font: 600 11.5px var(--mono); color: var(--papel-3); }
+.aipw-filtros a:hover { border-color: var(--rosa); }
+.aipw-filtros a.on { background: var(--papel); color: var(--negro); border-color: var(--papel); }
+.aipw-filtros a.on span { color: var(--negro); opacity: .65; }
+
+/* ── Grupos y rejilla ──────────────────────────────────────────────────── */
+.aipw-grupo { padding-top: 30px; }
+.aipw-grupo-cab { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 24px; margin-bottom: 16px; }
+.aipw-grupo-cab h2 { margin: 0; font-size: clamp(24px, 3.4vw, 32px); font-weight: 800; letter-spacing: -.02em; }
+.aipw-grupo-cab p { margin: 0; max-width: 60ch; font-size: 14.5px; line-height: 1.5; color: var(--papel-2); }
+
+.aipw-rejilla { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 1020px) { .aipw-rejilla { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .aipw-rejilla { grid-template-columns: minmax(0, 1fr); } }
+
+.aipw-tarjeta {
+  display: flex; flex-direction: column; min-width: 0; overflow: hidden; border-radius: 16px;
+  border: 1px solid var(--linea-2); background: var(--panel); transition: border-color .2s, transform .2s, box-shadow .2s;
+}
+.aipw-tarjeta:hover { border-color: var(--rosa); transform: translateY(-3px); box-shadow: 0 24px 50px -26px rgba(var(--acento-rgb), 0.9); }
+.aipw-tarjeta.mejor { border-color: rgba(240, 196, 76, .7); }
+
+/* La captura: la portada, y al pasar por encima, lo que hay un poco más abajo. */
+.aipw-captura { position: relative; display: block; aspect-ratio: 16 / 10; overflow: hidden; background: var(--foto-fondo); border-bottom: 1px solid var(--linea); }
+.aipw-captura img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top center; transition: opacity .35s, transform .6s; }
+.aipw-captura-2 { opacity: 0; }
+@media (hover: hover) {
+  .aipw-tarjeta:hover .aipw-captura img { transform: scale(1.02); }
+  .aipw-tarjeta:hover .aipw-captura-2 { opacity: 1; }
+}
+.aipw-entrada {
+  position: absolute; right: 10px; bottom: 10px; padding: 4px 8px; border-radius: 7px;
+  font: 600 11px var(--mono); color: var(--papel-2); background: rgba(var(--negro-rgb), 0.78);
+}
+.aipw-num {
+  position: absolute; left: 10px; top: 10px; padding: 4px 8px; border-radius: 7px;
+  font: 800 13px var(--mono); color: var(--rosa); background: rgba(var(--negro-rgb), 0.78); backdrop-filter: blur(6px);
+}
+
+.aipw-tarjeta-txt { display: flex; flex-direction: column; gap: 8px; padding: 16px 18px 18px; flex: 1; }
+.aipw-tarjeta-txt h3 { margin: 2px 0 0; font-size: 21px; font-weight: 800; letter-spacing: -.02em; line-height: 1.12; }
+.aipw-tarjeta-txt h3 a { text-decoration: none; }
+.aipw-tarjeta-txt h3 a:hover { color: var(--rosa); }
+.aipw-meta { margin: 0; font-size: 13px; color: var(--papel-3); }
+.aipw-porque { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--papel-2); }
+.aipw-porque b { color: var(--papel); }
+.aipw-acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 8px; }
+.aipw-acciones.grande { margin: 14px 0 0; align-items: center; gap: 14px; }
+.aipw-aviso { margin: 0; font-size: 12.5px; color: var(--rosa); }
+
+/* ── El pie del panel ──────────────────────────────────────────────────── */
+.aipw-pie { margin-top: 44px; padding-top: 20px; border-top: 1px solid var(--linea); display: grid; gap: 10px; max-width: 820px; }
+.aipw-pie p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--papel-3); }
+.aipw-pie .aipw-regla { font-size: 15px; color: var(--papel); }
+.aipw-pie .aipw-regla b { color: var(--rosa); }
+.aipw-fuentes a { color: var(--papel-2); }
+
+/* ── La ventana de la puerta ───────────────────────────────────────────── */
+.aipw-velo {
+  position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px;
+  background: rgba(var(--negro-rgb), 0.78); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); overflow-y: auto;
+}
+.aipw-ventana { position: relative; width: min(680px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; border-radius: 18px; }
+.aipw-ventana > .aip-puerta { margin: 0; }
+.aipw-cerrar {
+  position: absolute; right: 12px; top: 12px; z-index: 1; display: grid; place-items: center; width: 36px; height: 36px;
+  border-radius: 10px; border: 1px solid var(--linea-2); background: rgba(var(--negro-rgb), 0.8); color: var(--papel); cursor: pointer;
+}
+.aipw-cerrar:hover { border-color: var(--rosa); }
+.aipw-ventana-listo { padding: 24px; border-radius: 18px; border: 1px solid var(--linea-2); background: #12070a; }
+.aipw-ventana-listo .aip-kicker { margin: 0 0 6px; color: var(--verde); }
+.aipw-ventana-listo h2 { margin: 0 0 14px; font-size: 26px; letter-spacing: -.02em; }
+.aipw-ventana-listo > p { color: var(--papel-2); }
+
+/* ── El prompt ─────────────────────────────────────────────────────────── */
+.aipw-prompt { margin-top: 18px; border-radius: 16px; border: 1px solid var(--linea-2); background: var(--codigo-fondo); overflow: hidden; }
+.aipw-prompt-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--linea); }
+.aipw-prompt-cab b { font-size: 15px; }
+.aipw-prompt pre {
+  margin: 0; padding: 16px; max-height: 420px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  font: 500 13px/1.6 var(--mono); color: var(--codigo-texto);
+}
+.aipw-prompt-pie { margin: 0; padding: 0 16px 14px; font-size: 13px; color: var(--papel-3); }
+.aipw-prompt .aipw-aviso { padding: 0 16px 10px; }
+
+/* ── La ficha ──────────────────────────────────────────────────────────── */
+.aipw-ficha { max-width: 1120px; }
+.aipw-ficha-cab { display: grid; gap: 10px; margin-bottom: 22px; }
+.aipw-ficha-cab .aip-kicker, .aipw-ficha-cab .aip-h1 { margin: 0; }
+.aipw-ficha-cab .aip-kicker { color: var(--rosa); overflow-wrap: anywhere; }
+.aipw-premio { margin: 0; font-size: 15.5px; color: var(--papel); }
+
+.aipw-capturas { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+@media (max-width: 760px) { .aipw-capturas { grid-template-columns: 1fr; } }
+.aipw-capturas.una { grid-template-columns: 1fr; max-width: 760px; }
+.aipw-capturas figure { margin: 0; border-radius: 14px; overflow: hidden; border: 1px solid var(--linea-2); background: var(--foto-fondo); }
+.aipw-capturas img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; object-position: top center; }
+.aipw-capturas figcaption { padding: 8px 12px; font: 600 11.5px var(--mono); color: var(--papel-3); border-top: 1px solid var(--linea); }
+
+.aipw-estilo h2 { margin: 0 0 8px; font-size: 22px; letter-spacing: -.02em; }
+.aipw-estilo h3 { margin: 18px 0 8px; font-size: 16px; }
+.aipw-estilo > p { margin: 0; line-height: 1.6; color: var(--papel-2); }
+.aipw-estilo ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.aipw-estilo li { display: grid; grid-template-columns: 18px 1fr; gap: 8px; line-height: 1.5; }
+.aipw-estilo li svg { margin-top: 3px; color: var(--verde); }
+.aipw-estilo .aipw-porque { margin-top: 16px; }
+.aipw-paleta { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 10px; }
+.aipw-color { display: inline-flex; align-items: center; gap: 7px; padding: 5px 9px 5px 5px; border-radius: 8px; border: 1px solid var(--linea); font: 600 12px var(--mono); color: var(--papel-2); }
+.aipw-color i { width: 20px; height: 20px; border-radius: 5px; border: 1px solid rgba(255, 255, 255, .18); }
+.aipw-letra { margin: 0 !important; font-size: 14.5px; color: var(--papel-2); }
+.aipw-letra b { color: var(--papel); }
+.aipw-prueba { font-size: 13.5px; color: var(--papel-2); }
+.aipw-prueba:hover { color: var(--rosa); }
+.aipw-ficha .aip-puerta { margin-top: 18px; }
+
+.aipw-vecinas { display: flex; justify-content: space-between; gap: 12px; margin-top: 28px; }
+.aipw-vecinas a {
+  display: inline-flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px; text-decoration: none;
+  border: 1px solid var(--linea-2); background: var(--panel); min-width: 0;
+}
+.aipw-vecinas a:hover { border-color: var(--rosa); }
+.aipw-vecinas a.sig { text-align: right; margin-left: auto; }
+.aipw-vecinas small { display: block; font: 600 11px var(--mono); color: var(--papel-3); }
+.aipw-vecinas b { display: block; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── La muestra en la portada de AI para todo ──────────────────────────── */
+.aipw-vitrina {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 22px; align-items: center;
+  width: 100%; max-width: 980px; margin: 0 auto 30px; padding: 20px; text-align: left; text-decoration: none;
+  border-radius: 18px; border: 1px solid var(--linea-2); background: var(--panel); transition: border-color .2s, transform .2s;
+}
+.aipw-vitrina:hover { border-color: var(--rosa); transform: translateY(-2px); }
+.aipw-vitrina-txt { display: grid; gap: 8px; justify-items: start; }
+.aipw-vitrina-txt .aip-kicker { margin: 0; color: var(--rosa); }
+.aipw-vitrina-txt h3 { margin: 0; font-size: clamp(22px, 3vw, 28px); font-weight: 800; letter-spacing: -.02em; line-height: 1.1; }
+.aipw-vitrina-txt p { margin: 0; color: var(--papel-2); line-height: 1.5; font-size: 15px; }
+.aipw-vitrina-txt .aip-btn { margin-top: 6px; }
+.aipw-vitrina-fotos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.aipw-vitrina-fotos img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; object-position: top center; border-radius: 9px; border: 1px solid var(--linea); }
+@media (max-width: 760px) {
+  .aipw-vitrina { grid-template-columns: 1fr; }
+  .aipw-vitrina-fotos { order: -1; }
+}
+
+/* Las cuatro secciones de AI para todo en la portada, en fila (el motor las
+   pone de tres en tres y la cuarta se quedaba sola). Solo donde está Webs. */
+@media (min-width: 981px) { .aip-portada .aip-zonas:has(.aip-zona.webs) { grid-template-columns: repeat(4, 1fr); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .aipw-tarjeta, .aipw-captura img, .aipw-vitrina { transition: none; }
+  .aipw-tarjeta:hover, .aipw-vitrina:hover { transform: none; }
+  .aipw-tarjeta:hover .aipw-captura img { transform: none; }
+}

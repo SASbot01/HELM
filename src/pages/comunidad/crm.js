@@ -1,7 +1,8 @@
 // Las comunidades — el alta del miembro en el CRM.
 //
-// La puerta de datos (Puerta.jsx) pide cuatro cosas: nombre, correo, profesión
-// e ingresos al mes. Entran en HELM como un contacto del perfil de la
+// La puerta de datos (Puerta.jsx) pide nombre, correo y profesión, y los
+// ingresos al mes en las comunidades que los quieren (cfg.puerta.datos.ingresos).
+// Entran en HELM como un contacto del perfil de la
 // comunidad; cuál es ese perfil lo decide el servidor con su lista cerrada
 // (api/_lib/comunidades.js): aquí solo se dice de qué comunidad viene.
 //
@@ -21,8 +22,11 @@ export async function altaMiembro(cfg, { nombre, email, profesion, ingresos, pip
   const correo = String(email || '').trim().toLowerCase()
   if (!correo) throw new Error('Falta el correo')
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) throw new Error('Revisa el correo')
-  if (!cfg.puerta.datos.ingresos[ingresos]) throw new Error('Elige tus ingresos')
-  return pideLead('miembro', { comunidad: cfg.clave, nombre, email: correo, profesion, ingresos, pipeline, nota, website, origen: origen() }, cfg.apiBase)
+  const tramos = cfg.puerta.datos.ingresos
+  if (tramos && !Object.hasOwn(tramos, String(ingresos))) throw new Error('Elige tus ingresos')
+  return pideLead('miembro', {
+    comunidad: cfg.clave, nombre, email: correo, profesion, ...(tramos ? { ingresos } : {}), pipeline, nota, website, origen: origen(),
+  }, cfg.apiBase)
 }
 
 /**
