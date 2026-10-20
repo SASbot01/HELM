@@ -20,7 +20,7 @@ import {
 import {
   Panel, Empty, Modal, Field, Input, Select, Kpi, MoneyInput, CountInput, FormNote, SearchSelect,
 } from '../ui'
-import { cobrosPrevistos, porMes } from '../cobrosPrevistos'
+import { cobrosPrevistos, porMes, hoyLocal } from '../cobrosPrevistos'
 
 const MESES_PREVISTOS = 6
 // Las fechas AAAA-MM-DD, sin pasar por la hora local: en una zona con desfase
@@ -79,7 +79,7 @@ export default function Ventas({ clientId }) {
     return { revenue, cash, pendiente: revenue - cash, count: activas.length }
   }, [activas])
   const previstos = useMemo(
-    () => porMes(cobrosPrevistos(rows || [], { hoy: todayISO(), meses: MESES_PREVISTOS, esCancelada: isSaleCancelled })),
+    () => porMes(cobrosPrevistos(rows || [], { hoy: hoyLocal(), meses: MESES_PREVISTOS, esCancelada: isSaleCancelled })),
     [rows],
   )
 

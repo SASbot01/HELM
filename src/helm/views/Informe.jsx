@@ -5,14 +5,13 @@ import { Evolucion, PorPrograma } from './informe/Graficas'
 import { supabase, money, fmtDate, getOnboarding, onboardingApi, isSaleCancelled, cuotasPendientes } from '../lib'
 import { Kpi, Panel, Empty } from '../ui'
 import { seccionDelProducto } from '../producto'
-import { mensualidadesVivas } from '../cobrosPrevistos'
+import { mensualidadesVivas, hoyLocal } from '../cobrosPrevistos'
 
 // Las fechas AAAA-MM-DD sin pasar por la hora local (en Latinoamérica,
 // new Date('2026-11-05') cae el día 4).
 const fmtDia = (iso) => (iso
   ? new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' })
   : '—')
-const hoyISO = () => new Date().toISOString().slice(0, 10)
 
 // Banner de arranque: empuja al onboarding (el alta; o el de contenido en los
 // perfiles que lo hicieron antes) mientras no esté hecho.
@@ -179,7 +178,7 @@ export default function Informe({ clientId, onNavigate }) {
       .sort((a, b) => b.pendientes - a.pendientes)
     // Y las mensualidades vivas (las de 197 € al mes…): no tienen nº de
     // cuotas, así que se cuentan los pagos y se dice cuándo toca el siguiente.
-    const mensualidades = mensualidadesVivas(delPrograma, { hoy: hoyISO(), esCancelada: isSaleCancelled })
+    const mensualidades = mensualidadesVivas(delPrograma, { hoy: hoyLocal(), esCancelada: isSaleCancelled })
     const alMes = mensualidades.reduce((a, m) => a + (Number(m.venta.installment_amount) || 0), 0)
     const porCobrar = planes.reduce(
       (a, s) => a + (s.pendientes * (Number(s.installment_amount) || 0)), 0)

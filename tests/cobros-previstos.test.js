@@ -1,8 +1,8 @@
 // Ventas → «Próximos cobros» (src/helm/cobrosPrevistos.js): lo que va a
 // entrar, calculado de los planes y las mensualidades. Con las ventas de
 // Detrás de Cámara tal como quedaron el 20/10/2026.
-import { describe, it, expect } from 'vitest'
-import { cobrosPrevistos, porMes, sumaMeses, cobrosDeLaNota, mensualidadesVivas } from '../src/helm/cobrosPrevistos.js'
+import { describe, it, expect, vi } from 'vitest'
+import { cobrosPrevistos, porMes, sumaMeses, cobrosDeLaNota, mensualidadesVivas, hoyLocal } from '../src/helm/cobrosPrevistos.js'
 
 const VENTAS = [
   { id: 'david', client_name: 'David Villasmil', product: 'Detrás de Cámara · mensualidad', payment_type: 'Suscripción', payment_method: 'Stripe',
@@ -181,6 +181,51 @@ describe('más de un año de mensualidad', () => {
       notes: 'Mensualidad de 197 €: 13 cuotas cobradas (05/10, 05/11, 05/12, 05/01, 05/02, 05/03, 05/04, 05/05, 05/06, 05/07, 05/08, 05/09, 05/10). La suscripción sub_1ABC está cancelada (último cobro el 05/10).' }
     expect(cobrosPrevistos([v], { hoy: '2026-10-20' })).toEqual([])
     expect(cobrosDeLaNota(v.notes, v.plan_start).at(-1)).toBe('2026-10-05')
+  })
+})
+
+describe('verificación: retrasos, cambios de día y años', () => {
+  const m = (extra) => ({ id: 'v', client_name: 'V', product: 'M', payment_type: 'Suscripción', status: 'won', installments_total: null, installment_amount: 197, ...extra })
+  const primera = (v, hoy) => cobrosPrevistos([v], { hoy })[0]
+
+  it('un cobro con 17 días de retraso sigue siendo de su mes: noviembre se debe', () => {
+    expect(primera(m({ plan_start: '2026-05-05', installments_paid: 6, notes: '6 cuotas cobradas (05/05, 05/06, 05/07, 05/08, 05/09, 22/10).' }), '2026-10-25'))
+      .toMatchObject({ fecha: '2026-11-05', n: 7 })
+  })
+
+  it('la cuota del 28 cobrada el 2 del mes siguiente es la del mes anterior', () => {
+    expect(primera(m({ plan_start: '2026-10-28', installments_paid: 3, notes: '3 cuotas cobradas (28/10, 28/11, 02/01).' }), '2027-01-10'))
+      .toMatchObject({ fecha: '2027-01-28', n: 4 })
+  })
+
+  it('si cambió el día de cobro (otra suscripción, o el enlace), manda el nuevo', () => {
+    expect(primera(m({ plan_start: '2026-05-05', installments_paid: 6,
+      notes: '6 cuotas cobradas (05/05, 05/06, 05/07, 22/08, 22/09, 22/10). La suscripción sub_OLD está cancelada (último cobro el 05/07).' }), '2026-10-25'))
+      .toMatchObject({ fecha: '2026-11-22', n: 7 })
+    expect(primera(m({ plan_start: '2026-05-25', installments_paid: 6, notes: '6 cuotas cobradas (25/05, 25/06, 10/07, 10/08, 10/09, 10/10).' }), '2026-10-20'))
+      .toMatchObject({ fecha: '2026-11-10', n: 7 })
+  })
+
+  it('David: suscripción caída y octubre pagado con el enlace el 8 → la 7ª el 4 de noviembre', () => {
+    expect(primera(m({ plan_start: '2026-05-04', installments_paid: 6,
+      notes: 'Mensualidad de 197 €: 6 cuotas cobradas (04/05, 04/06, 04/07, 04/08, 04/09, 08/10). La suscripción sub_1TTURl está cancelada (último cobro el 04/09/2026). Desde entonces paga con el enlace suelto, que cuenta aquí igual.' }), '2026-10-20'))
+      .toMatchObject({ fecha: '2026-11-04', n: 7, vencido: false })
+  })
+
+  it('con el año en el aviso, quien se volvió a suscribir el mismo día un año después sigue', () => {
+    const v = m({ plan_start: '2026-05-05', installments_paid: 14,
+      notes: '14 cuotas cobradas (05/05, 05/06, 05/07, 05/08, 05/09, 05/10, 05/11, 05/12, 05/01, 05/02, 05/03, 05/04, 05/05, 05/06). La suscripción sub_1OLD está cancelada (último cobro el 05/06/2026).' })
+    expect(primera(v, '2027-06-10')).toMatchObject({ fecha: '2027-07-05', n: 15 })
+  })
+
+  it('hoyLocal es el día de quien mira, no el de UTC', () => {
+    const antes = process.env.TZ
+    process.env.TZ = 'America/Bogota'
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-21T01:00:00Z'))   // 20:00 del 20 en Bogotá
+    expect(hoyLocal()).toBe('2026-10-20')
+    vi.useRealTimers()
+    process.env.TZ = antes
   })
 })
 

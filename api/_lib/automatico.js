@@ -4,7 +4,9 @@
 // service = 'helm-automatico' (solo la lee la service key):
 //
 //   {
-//     stripe: { clave, enlaces, mensualidad },   // cobros de sus enlaces de pago
+//     stripe: { clave, enlaces, mensualidad, alias },  // cobros de sus enlaces de pago
+//                                                // (alias: correos que pagan la
+//                                                // mensualidad de otro cliente)
 //                                                // en un Stripe compartido;
 //                                                // `clave` es el NOMBRE de la
 //                                                // variable de entorno, nunca
@@ -46,7 +48,8 @@ export async function ponerAlDia({ supabase, clientId, config, hoy = hoyMadrid()
     else {
       try {
         r.stripe = await historicoPorEnlaces({
-          supabase, clientId, apiKey, enlaces: config.stripe.enlaces, mensualidad: config.stripe.mensualidad || null, prueba,
+          supabase, clientId, apiKey, enlaces: config.stripe.enlaces, mensualidad: config.stripe.mensualidad || null,
+          alias: config.stripe.alias || {}, prueba,
         })
         r.errores.push(...r.stripe.errores.map(e => `Stripe: ${e}`))
       } catch (e) { r.errores.push(`Stripe: ${e.message}`) }
