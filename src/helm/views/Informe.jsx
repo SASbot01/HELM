@@ -5,6 +5,14 @@ import { Evolucion, PorPrograma } from './informe/Graficas'
 import { supabase, money, fmtDate, getOnboarding, onboardingApi, isSaleCancelled, cuotasPendientes } from '../lib'
 import { Kpi, Panel, Empty } from '../ui'
 import { seccionDelProducto } from '../producto'
+import { mensualidadesVivas } from '../cobrosPrevistos'
+
+// Las fechas AAAA-MM-DD sin pasar por la hora local (en Latinoamérica,
+// new Date('2026-11-05') cae el día 4).
+const fmtDia = (iso) => (iso
+  ? new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' })
+  : '—')
+const hoyISO = () => new Date().toISOString().slice(0, 10)
 
 // Banner de arranque: empuja al onboarding (el alta; o el de contenido en los
 // perfiles que lo hicieron antes) mientras no esté hecho.
@@ -108,7 +116,7 @@ export default function Informe({ clientId, onNavigate }) {
       // `status` entra en el select para poder descartar las canceladas: una
       // venta anulada no puede seguir contando como facturación.
       supabase.from('sales')
-        .select('revenue, cash_collected, date, client_name, product, status, ' +
+        .select('id, revenue, cash_collected, date, client_name, product, status, payment_type, notes, ' +
           'installments_total, installments_paid, installment_amount, plan_start, plan_end')
         .eq('client_id', clientId).order('date', { ascending: false }).limit(2000),
       supabase.from('ceo_finance_entries')
@@ -162,10 +170,17 @@ export default function Informe({ clientId, onNavigate }) {
 
     // Pagos fraccionados vivos: los que aún tienen cuotas por cobrar. Sin esto
     // el informe daba por buena toda la facturación aunque estuviera a medias.
-    const planes = filtradas
+    // Un plan con cuotas pendientes sale empiece cuando empiece (uno de mayo
+    // sigue cobrando en octubre); los ya cobrados, solo los del periodo.
+    const delPrograma = todas.filter(s => programa === '__all__' || (s.product || '').trim() === programa)
+    const planes = delPrograma
       .map(s => ({ ...s, pendientes: cuotasPendientes(s) }))
-      .filter(s => s.pendientes != null)
+      .filter(s => s.pendientes != null && (s.pendientes > 0 || enRango(s.date)))
       .sort((a, b) => b.pendientes - a.pendientes)
+    // Y las mensualidades vivas (las de 197 € al mes…): no tienen nº de
+    // cuotas, así que se cuentan los pagos y se dice cuándo toca el siguiente.
+    const mensualidades = mensualidadesVivas(delPrograma, { hoy: hoyISO(), esCancelada: isSaleCancelled })
+    const alMes = mensualidades.reduce((a, m) => a + (Number(m.venta.installment_amount) || 0), 0)
     const porCobrar = planes.reduce(
       (a, s) => a + (s.pendientes * (Number(s.installment_amount) || 0)), 0)
 
@@ -206,7 +221,7 @@ export default function Informe({ clientId, onNavigate }) {
       revenue, cash, ventas: filtradas.length, serie,
       ticket: filtradas.length ? revenue / filtradas.length : 0,
       balance: ingresos + gastos,
-      planes, porCobrar,
+      planes, porCobrar, mensualidades, alMes,
       tabla,
       recientes: filtradas.slice(0, 8),
     }
@@ -247,6 +262,9 @@ export default function Informe({ clientId, onNavigate }) {
         {d.planes.length > 0 && (
           <Kpi label="Pendiente en cuotas" value={money(d.porCobrar)} sub={`${d.planes.length} plan${d.planes.length === 1 ? '' : 'es'} de pago`} />
         )}
+        {d.mensualidades.length > 0 && (
+          <Kpi label="Mensualidades" value={`${money(d.alMes)}/mes`} sub={`${d.mensualidades.length} activa${d.mensualidades.length === 1 ? '' : 's'}`} />
+        )}
       </div>
 
       {/* Las gráficas van justo detrás de las cifras y delante de las tablas:
@@ -256,8 +274,8 @@ export default function Informe({ clientId, onNavigate }) {
         <PorPrograma tabla={d.tabla} />
       </div>
 
-      {d.planes.length > 0 && (
-        <Panel title="Pagos fraccionados">
+      {(d.planes.length > 0 || d.mensualidades.length > 0) && (
+        <Panel title={d.mensualidades.length ? 'Pagos fraccionados y mensualidades' : 'Pagos fraccionados'}>
           <div className="helm-tablewrap">
             <table className="helm-table">
               <thead>
@@ -278,8 +296,23 @@ export default function Informe({ clientId, onNavigate }) {
                       </span>
                     </td>
                     <td className="helm-num">{s.installment_amount ? money(s.installment_amount) : '—'}</td>
-                    <td>{s.plan_start ? fmtDate(s.plan_start) : '—'}</td>
-                    <td>{s.plan_end ? fmtDate(s.plan_end) : '—'}</td>
+                    <td>{s.plan_start ? fmtDia(s.plan_start) : '—'}</td>
+                    <td>{s.plan_end ? fmtDia(s.plan_end) : '—'}</td>
+                  </tr>
+                ))}
+                {d.mensualidades.map(m => (
+                  <tr key={`m-${m.venta.id}`} className="pending">
+                    <td>{m.venta.client_name || '—'}</td>
+                    <td>{m.venta.product || '—'}</td>
+                    <td className="helm-num">{m.pagos} {m.pagos === 1 ? 'pago' : 'pagos'}</td>
+                    <td>
+                      <span className={'helm-chip ' + (m.vencida ? 'red' : 'amber')}>
+                        {m.vencida ? `Vencida la ${m.n}ª (${fmtDia(m.siguiente)})` : `La ${m.n}ª el ${fmtDia(m.siguiente)}`}
+                      </span>
+                    </td>
+                    <td className="helm-num">{money(m.venta.installment_amount)}</td>
+                    <td>{fmtDia(m.venta.plan_start)}</td>
+                    <td>Mensual</td>
                   </tr>
                 ))}
               </tbody>

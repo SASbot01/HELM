@@ -2,7 +2,7 @@
 // entrar, calculado de los planes y las mensualidades. Con las ventas de
 // Detrás de Cámara tal como quedaron el 20/10/2026.
 import { describe, it, expect } from 'vitest'
-import { cobrosPrevistos, porMes, sumaMeses, cobrosDeLaNota } from '../src/helm/cobrosPrevistos.js'
+import { cobrosPrevistos, porMes, sumaMeses, cobrosDeLaNota, mensualidadesVivas } from '../src/helm/cobrosPrevistos.js'
 
 const VENTAS = [
   { id: 'david', client_name: 'David Villasmil', product: 'Detrás de Cámara · mensualidad', payment_type: 'Suscripción', payment_method: 'Stripe',
@@ -155,6 +155,22 @@ describe('casos de la revisión', () => {
     const v = { id: 's', client_name: 'S', payment_type: 'Fraccionado', status: 'won', revenue: 1200, cash_collected: 400,
       installments_total: 3, installments_paid: 1, installment_amount: 400, date: '2026-10-10', plan_start: null, plan_end: null }
     expect(fechas(v, '2026-10-20')).toEqual(['2026-11-10', '2026-12-10'])
+  })
+})
+
+describe('mensualidadesVivas (Informe)', () => {
+  it('las de 197 €: cuántos pagos llevan y cuándo toca el siguiente', () => {
+    const conDavid = VENTAS.map(v => (v.id === 'david' ? { ...v, notes: `${v.notes}\n[20/10] Sigue pagando la mensualidad de 197 €.` } : v))
+    const m = mensualidadesVivas(conDavid, { hoy: '2026-10-20' })
+    expect(m.map(x => [x.venta.id, x.pagos, x.siguiente, x.n, x.vencida])).toEqual([
+      ['david', 5, '2026-10-04', 6, true],
+      ['alexander', 6, '2026-11-05', 7, false],
+      ['alicia', 1, '2026-11-08', 2, false],
+    ])
+  })
+
+  it('sin la nota de que sigue, la de David (impagada) no sale', () => {
+    expect(mensualidadesVivas(VENTAS, { hoy: '2026-10-20' }).map(x => x.venta.id)).toEqual(['alexander', 'alicia'])
   })
 })
 

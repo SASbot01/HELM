@@ -86,6 +86,42 @@ function mesDelCobro(fecha, dia) {
 }
 
 /**
+ * Si `v` es una mensualidad que sigue viva: el mes de su último cobro (`base`)
+ * y el día en que cobra (`dia`). Si no lo es, o se paró, null.
+ */
+function mensualidadViva(v, hoy) {
+  const pagadas = Number(v.installments_paid) || 0
+  if (v.payment_type !== 'Suscripción' || Number(v.installments_total) || !v.plan_start || pagadas < 1 || !(Number(v.installment_amount) > 0)) return null
+  const cobros = cobrosDeLaNota(v.notes, v.plan_start)
+  if (parada(v.notes, cobros)) return null
+  const dia = diaDe(v.plan_start)
+  // El mes del último cobro; sin la lista de la nota (una venta apuntada a
+  // mano), el que toca contando desde el inicio.
+  const base = cobros.length ? mesDelCobro(cobros.at(-1), dia) : sumaMeses(v.plan_start, pagadas - 1, dia)
+  // Más de un mes sin cobrarse: ya no se da por hecho que siga.
+  if (Date.parse(sumaMeses(base, 1, dia)) < Date.parse(hoy) - 31 * DIA) return null
+  return { base, dia }
+}
+
+/**
+ * Las mensualidades vivas (Informe → «Pagos fraccionados y mensualidades»):
+ * cuántos pagos llevan y cuándo toca el siguiente (vencido si ya pasó).
+ * @returns {{ venta, pagos, siguiente, n, vencida }[]}
+ */
+export function mensualidadesVivas(ventas, { hoy, esCancelada = cancelada } = {}) {
+  const out = []
+  for (const v of ventas || []) {
+    if (esCancelada(v)) continue
+    const viva = mensualidadViva(v, hoy)
+    if (!viva) continue
+    const pagos = Number(v.installments_paid) || 0
+    const siguiente = sumaMeses(viva.base, 1, viva.dia)
+    out.push({ venta: v, pagos, siguiente, n: pagos + 1, vencida: siguiente < hoy })
+  }
+  return out.sort((a, b) => a.siguiente.localeCompare(b.siguiente))
+}
+
+/**
  * Los cobros previstos desde los vencidos hasta el final del mes `meses`
  * contando el actual, por fecha.
  * @returns {{ fecha, cliente, concepto, importe, como, vencido, ventaId, tipo, n, de }[]}
@@ -128,17 +164,10 @@ export function cobrosPrevistos(ventas, { hoy, meses = 6, esCancelada = cancelad
       continue
     }
 
-    if (v.payment_type === 'Suscripción' && v.plan_start && pagadas >= 1 && Number(v.installment_amount) > 0) {
-      const cobros = cobrosDeLaNota(v.notes, v.plan_start)
-      if (parada(v.notes, cobros)) continue
-      const dia = diaDe(v.plan_start)
-      // El mes del último cobro; sin la lista de la nota (una venta apuntada a
-      // mano), el que toca contando desde el inicio.
-      const base = cobros.length ? mesDelCobro(cobros.at(-1), dia) : sumaMeses(v.plan_start, pagadas - 1, dia)
-      // Más de un mes sin cobrarse: ya no se da por hecho que siga.
-      if (Date.parse(sumaMeses(base, 1, dia)) < Date.parse(hoy) - 31 * DIA) continue
+    const viva = mensualidadViva(v, hoy)
+    if (viva) {
       for (let k = 1; k <= 24; k++) {
-        const fecha = sumaMeses(base, k, dia)
+        const fecha = sumaMeses(viva.base, k, viva.dia)
         if (fecha > hasta) break
         pon(v, fecha, Number(v.installment_amount), { tipo: 'mensualidad', n: pagadas + k })
       }
