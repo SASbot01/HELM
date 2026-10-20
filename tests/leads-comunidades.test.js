@@ -167,6 +167,31 @@ describe('miembro', () => {
   })
 })
 
+describe('el tope de altas', () => {
+  const desde = async (ipFija, body) => {
+    const res = respuesta()
+    await leads({ method: 'POST', query: { action: 'miembro' }, body, headers: { 'x-forwarded-for': ipFija }, socket: {} }, res)
+    return res.statusCode
+  }
+
+  it('quien ya está en el CRM y vuelve no gasta el tope; las altas nuevas sí, con tope por IP', async () => {
+    existente = { id: 'c-vuelve', name: 'Ana', notes: '', custom_fields: {}, utm_source: null, utm_medium: null, utm_campaign: null, utm_content: null }
+    const vueltas = []
+    for (let i = 0; i < 15; i++) vueltas.push(await desde('10.9.9.9', { comunidad: 'aiparatodo', nombre: 'Ana', email: 'ana@example.com', profesion: 'negocio', nota: 'entró por webs/zentry' }))
+    expect(vueltas).toEqual(Array(15).fill(200))
+    expect(altas()).toHaveLength(0)
+
+    existente = null
+    const nuevas = []
+    for (let i = 0; i < 11; i++) nuevas.push(await desde('10.8.8.8', { comunidad: 'aiparatodo', nombre: 'N', email: `n${i}@example.com`, profesion: 'negocio' }))
+    expect(nuevas.slice(0, 10)).toEqual(Array(10).fill(200))
+    expect(nuevas[10]).toBe(429)
+    expect(altas()).toHaveLength(10)
+    // Otra IP sigue pudiendo darse de alta.
+    expect(await desde('10.7.7.7', { comunidad: 'aiparatodo', nombre: 'Otra', email: 'otra@example.com', profesion: 'empresa' })).toBe(200)
+  })
+})
+
 describe('nota', () => {
   it('una ficha de una comunidad no vale en otro perfil', async () => {
     const ficha = await signJwt({ kind: 'lead', clientId: 'id-de-silvestre', sub: 'c1' })

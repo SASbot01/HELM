@@ -95,6 +95,14 @@ function Datos({ listo, pipeline, nota, titulo, texto, boton }) {
       track('lead', { donde: cfg.clave, embudo: pipeline })
       listo({ id: lead?.id || null, nombre, ...(cfg.cobro ? { email } : {}), at: new Date().toISOString() })
     } catch (err) {
+      // En una comunidad gratis, si el servidor está saturado de altas (429),
+      // se entra igual: el contenido es gratis y quien llega no tiene la culpa.
+      // Ese alta no queda en el CRM.
+      if (err.status === 429 && !cfg.cobro) {
+        track('lead_sin_guardar', { donde: cfg.clave })
+        listo({ id: null, nombre: f.nombre.trim(), at: new Date().toISOString() })
+        return
+      }
       setError(err.message); setEstado(null)
     }
   }

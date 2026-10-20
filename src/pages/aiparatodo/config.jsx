@@ -24,7 +24,7 @@ import {
   Fondo, BloqueHelm, TrasHilo, IndiceNN, CuerpoNoNegociables, IndiceModos, CuerpoGuiaModos, CuerpoPost,
 } from './piezas.jsx'
 import { PanelWebs, FichaWeb, VitrinaWebs } from './Webs.jsx'
-import { WEBS } from './webs.js'
+import { PREMIADAS } from './webs.js'
 
 const COBRO_ACTIVO = false
 const COBRO = {
@@ -44,13 +44,16 @@ export default {
   ruta: '/aiparatodo',
   api: '/api/aiparatodo',
   clase: '',
-  // v3: la del muro de pago (11-20 oct). Se mantiene al volver a gratis: quien
-  // pagó o dejó sus datos sigue dentro sin volver a pasar por la puerta.
+  // v3: la del muro de pago (11-20 oct), que se mantiene al volver a gratis:
+  // quien entró por ?pago=ok sigue dentro. Quien dejó sus datos cuando era
+  // gratis los tiene en v2 (6-11 oct) o en la llave sin versión (hasta el 6):
+  // también valen, y se pasan a v3 la primera vez (datos.js · accesoDe).
   llave: 's4sf.aiparatodo.v3',
+  llavesAntiguas: ['s4sf.aiparatodo.v2', 's4sf.aiparatodo'],
   privacidad: '/privacidad',
   cabecera: {
     titulo: 'AI para todo — IA sin humo, de Alex Silvestre',
-    descripcion: `${WEBS.length} webs premiadas con su prompt, skills para Claude, noticias de cada día y la guía completa de Claude, con los 7 tipos de agentes. Gratis y en español.`,
+    descripcion: `${PREMIADAS} webs premiadas (y la de GTA VI) con su prompt, skills para Claude, noticias de cada día y la guía completa de Claude, con los 7 tipos de agentes. Gratis y en español.`,
     imagen: '/inicio/og.jpg', colorBarra: '#050203',
   },
   Fondo,

@@ -59,6 +59,9 @@ function useCopiar() {
 // ── Piezas ─────────────────────────────────────────────────────────────────
 // Una web con un solo pie solo tiene una captura que valga (Forge: la puerta).
 const unaCaptura = (w) => w.pies?.length === 1
+// La segunda captura de la tarjeta solo se ve al pasar el ratón: en una
+// pantalla táctil ni se pinta, para no descargar ~1,4 MB que nadie verá.
+const conRaton = () => { try { return window.matchMedia('(hover: hover)').matches } catch { return false } }
 
 function Insignias({ w }) {
   return (
@@ -164,12 +167,13 @@ function Ventana({ w, accion, acceso, setAcceso, cerrar }) {
 function TarjetaWeb({ w, acceso, pide }) {
   const cfg = useComunidad()
   const [estado, copiar] = useCopiar()
+  const [raton] = useState(conRaton)
   const ficha = `${cfg.ruta}/webs/${w.sector}/${w.slug}`
   return (
     <article className={'aipw-tarjeta' + (w.mejor ? ' mejor' : '') + (w.nivel === 'eleccion' ? ' eleccion' : '')}>
       <Link className="aipw-captura" to={ficha} aria-label={`Ver la ficha de ${w.nombre}`}>
         <img src={imagenDe(w, 'p')} alt={`Portada de la web de ${w.nombre}`} width="960" height="600" loading="lazy" decoding="async" />
-        {unaCaptura(w) ? null : <img className="aipw-captura-2" src={imagenDe(w, 2)} alt="" width="1440" height="900" loading="lazy" decoding="async" aria-hidden="true" />}
+        {raton && !unaCaptura(w) && <img className="aipw-captura-2" src={imagenDe(w, 2)} alt="" width="1440" height="900" loading="lazy" decoding="async" aria-hidden="true" />}
         <span className="aipw-num">{String(numeroDe(w)).padStart(2, '0')}</span>
         {unaCaptura(w) && <span className="aipw-entrada">Pantalla de entrada</span>}
       </Link>

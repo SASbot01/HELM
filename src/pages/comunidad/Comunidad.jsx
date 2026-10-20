@@ -31,7 +31,7 @@ import { useCabeceraPublica } from '../inicio/cabecera.js'
 import { track } from '../inicio/socio/track.js'
 import { origen } from '../inicio/socio/origen.js'
 import {
-  ComunidadCtx, useComunidad, seccionPorClave, temaNombre, accesoGuardado, useNoticias, useArticulos,
+  ComunidadCtx, useComunidad, seccionPorClave, temaNombre, accesoDe, useNoticias, useArticulos,
   useArticulo, fechaCorta, fechaLarga, recorta, esBreve, sinComillas, ahoraMadrid, edicionAhora, EDICION,
 } from './datos.js'
 import { IndiceCapitulo, CuerpoCapitulo } from './bloques.jsx'
@@ -48,7 +48,7 @@ export default function Comunidad({ config: cfg }) {
   // Vuelta del pago de Stripe (?pago=ok), solo en las comunidades de pago:
   // abre el acceso; guardarlo y limpiar la URL se hace después de pintar.
   const [pagoOk] = useState(() => Boolean(cfg.cobro) && new URLSearchParams(window.location.search).get('pago') === 'ok')
-  const [acceso, setAcceso] = useState(() => (pagoOk ? { id: null, pago: true, at: new Date().toISOString() } : accesoGuardado(cfg.llave)))
+  const [acceso, setAcceso] = useState(() => (pagoOk ? { id: null, pago: true, at: new Date().toISOString() } : accesoDe(cfg)))
   const pagoAtendido = useRef(false)
   useEffect(() => {
     if (!pagoOk || pagoAtendido.current) return

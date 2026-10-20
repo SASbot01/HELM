@@ -313,7 +313,12 @@ const NOTA_DE_ALTA = /^(entró por [a-z0-9-]+\/[a-z0-9-]+|leyó news\/[a-z0-9-]+
 
 // Un tope de altas por hora y comunidad, además del de cada IP: frena que
 // alguien rotando IPs llene el CRM de un cliente. En memoria, por proceso.
+// Solo cuentan las altas NUEVAS: quien ya está en el CRM y vuelve (una puerta
+// por cada «Copiar prompt», cada guía…) no llena nada, y si contara, cualquiera
+// podría agotar el tope repitiendo su propio correo y dejar fuera a los demás.
+// Las nuevas tienen además su tope por IP y comunidad.
 const ALTAS_POR_HORA = Number(process.env.HELM_ALTAS_COMUNIDAD_HORA || 200)
+const ALTAS_POR_IP_HORA = Number(process.env.HELM_ALTAS_COMUNIDAD_IP_HORA || 10)
 const altasRecientes = new Map()   // clave de la comunidad → [instantes]
 function cuentaAlta(clave) {
   const ahoraMs = Date.now()
@@ -323,7 +328,7 @@ function cuentaAlta(clave) {
   altasRecientes.set(clave, lista)
 }
 
-async function miembro(b) {
+async function miembro(b, { ip } = {}) {
   const c = comunidadDe(b)
   // El campo trampa: oculto en la página, solo lo rellena un bot.
   if (txt(b.website, 200)) throw fallo(400, 'No se ha podido enviar')
@@ -341,7 +346,6 @@ async function miembro(b) {
   const pipeline = await embudo(clientId, nombreEmbudo)
   const etapa = pipeline.etapas.find(s => s.key === ETAPA_ENTRADA)?.key || pipeline.etapas[0]?.key || ETAPA_ENTRADA
 
-  cuentaAlta(c.clave)
   const o = origenDe(b.origen)
   const nota = NOTA_DE_ALTA.test(txt(b.nota, 120)) ? txt(b.nota, 120) : ''
   // Las UTM de ESTA entrada quedan también aquí: si la persona ya estaba en el
@@ -387,6 +391,10 @@ async function miembro(b) {
     await actualizar(previo.id, cambios)
     return { id: await ficha(clientId, previo.id) }
   }
+  if (!rateLimit({ key: `alta:${c.clave}:${ip || 'anon'}`, max: ALTAS_POR_IP_HORA, windowMs: 3_600_000 }).ok) {
+    throw fallo(429, 'Ahora mismo hay muchas altas. Prueba en un rato.')
+  }
+  cuentaAlta(c.clave)
   return { id: await ficha(clientId, await crear(fila)) }
 }
 
@@ -563,7 +571,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET' && action === 'apuntados') return res.status(200).json(await apuntados(req.query))
     if (req.method === 'POST' && ACCIONES[action]) {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
-      return res.status(200).json(await ACCIONES[action](body))
+      return res.status(200).json(await ACCIONES[action](body, { ip }))
     }
     return res.status(405).json({ error: 'Método no permitido' })
   } catch (err) {

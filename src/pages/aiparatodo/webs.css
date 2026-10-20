@@ -151,8 +151,10 @@
 .aipw-vecinas { display: flex; justify-content: space-between; gap: 12px; margin-top: 28px; }
 .aipw-vecinas a {
   display: inline-flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px; text-decoration: none;
-  border: 1px solid var(--linea-2); background: var(--panel); min-width: 0;
+  border: 1px solid var(--linea-2); background: var(--panel); min-width: 0; flex: 0 1 50%; max-width: 50%;
 }
+.aipw-vecinas a > span { min-width: 0; overflow: hidden; }
+.aipw-vecinas a > svg { flex: none; }
 .aipw-vecinas a:hover { border-color: var(--rosa); }
 .aipw-vecinas a.sig { text-align: right; margin-left: auto; }
 .aipw-vecinas small { display: block; font: 600 11px var(--mono); color: var(--papel-3); }
