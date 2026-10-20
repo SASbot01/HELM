@@ -147,7 +147,7 @@ export default function Ventas({ clientId }) {
                         <td>{c.cliente}</td>
                         <td>
                           {c.concepto}
-                          <small style={{ color: 'var(--text-mut)' }}>{c.tipo === 'cuota' ? ` · cuota ${c.n}/${c.de}` : ' · mensualidad'}</small>
+                          <small style={{ color: 'var(--text-mut)' }}>{c.tipo === 'cuota' ? ` · cuota ${c.n}/${c.de}` : ` · mensualidad ${c.n}ª`}</small>
                         </td>
                         <td><small style={{ color: 'var(--text-mut)' }}>{c.como}</small></td>
                         <td className="helm-num">{money(c.importe)}</td>
@@ -187,7 +187,18 @@ export default function Ventas({ clientId }) {
                         </small>
                       </td>
                       <td>
-                        {pend == null ? <span className="helm-chip">Pago único</span> : (
+                        {pend == null ? (
+                          // Una mensualidad no es un pago único: lleva la cuenta
+                          // de las cuotas cobradas, para saber por qué mes va.
+                          r.payment_type === 'Suscripción' && Number(r.installments_paid) > 0
+                            ? (
+                              <span className="helm-chip" title={r.plan_start ? `Desde el ${fmtDate(r.plan_start)}` : undefined}>
+                                <CalendarClock size={11} />
+                                mensual · {r.installments_paid} {Number(r.installments_paid) === 1 ? 'pago' : 'pagos'}
+                              </span>
+                            )
+                            : <span className="helm-chip">Pago único</span>
+                        ) : (
                           <span className={'helm-chip ' + (pend === 0 ? 'green' : 'amber')}>
                             <CalendarClock size={11} />
                             {r.installments_paid || 0}/{r.installments_total}

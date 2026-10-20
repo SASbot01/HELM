@@ -83,6 +83,25 @@ describe('cobrosPrevistos (Detrás de Cámara, 20/10/2026)', () => {
     expect(de(cobrosPrevistos(tras, { hoy: '2026-11-05' }), 'michele')[0]).toEqual(['2026-12-04', 331.17])
   })
 
+  it('cada mensualidad lleva su número, para saber por qué mes va', () => {
+    const a = cobros.filter(c => c.ventaId === 'alexander')
+    expect(a.map(c => c.n)).toEqual([7, 8, 9, 10, 11])
+  })
+
+  it('David: la suscripción cayó, pero sigue pagando con un enlace → octubre vencido y luego el día 4', () => {
+    const sigue = VENTAS.map(v => (v.id === 'david'
+      ? { ...v, notes: `${v.notes}\n[20/10] Sigue pagando la mensualidad de 197 € con un enlace de pago.` } : v))
+    const d = cobrosPrevistos(sigue, { hoy: '2026-10-20' }).filter(c => c.ventaId === 'david')
+    expect(d.map(c => [c.fecha, c.importe, c.n, c.vencido])).toEqual([
+      ['2026-10-04', 197, 6, true], ['2026-11-04', 197, 7, false], ['2026-12-04', 197, 8, false],
+      ['2027-01-04', 197, 9, false], ['2027-02-04', 197, 10, false], ['2027-03-04', 197, 11, false],
+    ])
+    // Y con la nota que escribe la tarea diaria cuando paga con el enlace suelto.
+    const conEnlace = VENTAS.map(v => (v.id === 'david'
+      ? { ...v, installments_paid: 6, notes: 'Mensualidad de 197 €: 6 cuotas cobradas (…). La suscripción sub_1TTURl está cancelada (último cobro el 04/09). Desde entonces paga con el enlace suelto, que cuenta aquí igual.' } : v))
+    expect(cobrosPrevistos(conEnlace, { hoy: '2026-10-25' }).filter(c => c.ventaId === 'david')[0]).toMatchObject({ fecha: '2026-11-04', n: 7 })
+  })
+
   it('una mensualidad que lleva más de un mes sin cobrarse no se da por hecha', () => {
     const vieja = [{ ...VENTAS[1], id: 'vieja', installments_paid: 3, notes: '' }]   // siguiente: 05/08
     expect(cobrosPrevistos(vieja, { hoy: '2026-10-20' })).toEqual([])

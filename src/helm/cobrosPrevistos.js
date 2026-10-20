@@ -13,7 +13,9 @@
 //   · Mensualidad (Suscripción sin nº de cuotas): la siguiente, al mes de la
 //     última cobrada y el mismo día en que empezó; y así hasta el horizonte.
 //     No cuenta si su nota dice que la suscripción está cancelada, impagada o
-//     caducada, ni si lleva más de un mes sin cobrarse.
+//     caducada (salvo que diga que sigue pagando, p. ej. con un enlace de pago
+//     suelto), ni si lleva más de un mes sin cobrarse. Cada una lleva su número
+//     (la 7ª mensualidad…) para saber por qué mes va.
 
 const r2 = (n) => Math.round(Number(n) * 100) / 100
 const DIA = 86_400_000
@@ -30,7 +32,13 @@ export function sumaMeses(iso, n, dia = Number(String(iso).slice(8, 10))) {
 
 const finDeMes = (iso) => sumaMeses(iso, 0, 31)
 const cancelada = (v) => String(v?.status || '').toLowerCase().trim() === 'cancelada'
-const parada = (notas) => /suscripci[oó]n \S+ est[aá] (cancelada|impagada|caducada)/i.test(String(notas || ''))
+// Las notas las escribe stripe-historico.js («La suscripción sub_… está
+// cancelada… Desde entonces paga con el enlace suelto…») o alguien a mano
+// («Sigue pagando la mensualidad…»).
+const parada = (notas) => {
+  const n = String(notas || '')
+  return /suscripci[oó]n \S+ est[aá] (cancelada|impagada|caducada)/i.test(n) && !/sigue pagando|paga con el enlace/i.test(n)
+}
 
 /**
  * Los cobros previstos desde los vencidos hasta el final del mes `meses`
@@ -76,7 +84,7 @@ export function cobrosPrevistos(ventas, { hoy, meses = 6, esCancelada = cancelad
       // Más de un mes sin cobrarse: ya no se da por hecho que siga.
       if (Date.parse(fecha) < Date.parse(hoy) - 31 * DIA) continue
       for (let k = 0; fecha <= hasta && k < 24; k++) {
-        pon(v, fecha, Number(v.installment_amount), { tipo: 'mensualidad' })
+        pon(v, fecha, Number(v.installment_amount), { tipo: 'mensualidad', n: pagadas + k + 1 })
         fecha = sumaMeses(v.plan_start, pagadas + k + 1, dia)
       }
     }
