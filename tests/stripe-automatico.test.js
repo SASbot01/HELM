@@ -9,11 +9,12 @@ process.env.JWT_SECRET = 'secreto-de-prueba-para-los-tests-de-stripe-0123456789'
 const SECRETO = 'whsec_prueba'
 const CONFIG = { stripe: { clave: 'HELM_STRIPE_SECRET_KEY', enlaces: [{ id: 'plink_ddc', mensual: true }], alias: {} } }
 let conAutomatico = true
+let configFalla = false
 
 vi.mock('../api/lib/supabase.js', () => {
   const q = (data) => { const o = { select: () => o, eq: () => o, is: () => o, limit: () => Promise.resolve({ data, error: null }), maybeSingle: () => Promise.resolve({ data: Array.isArray(data) ? data[0] : data, error: null }), insert: () => Promise.resolve({ error: null }), delete: () => o }; return o }
   return { supabase: { from: (t) => (t === 'clients' ? q({ id: 'c1', name: 'DDC', slug: 'detras-de-camra' })
-    : t === 'user_integrations' ? q(conAutomatico ? [{ config: CONFIG }] : [])
+    : t === 'user_integrations' ? (configFalla ? { select() { return this }, eq() { return this }, limit: () => Promise.resolve({ data: null, error: { message: 'timeout' } }) } : q(conAutomatico ? [{ config: CONFIG }] : []))
       : q(null)) } }
 })
 vi.mock('../api/_lib/stripe.js', async (orig) => ({ ...(await orig()), getStripeConfig: vi.fn(async () => ({ enabled: true, config: { apiKey: 'rk_live_x', webhookSecret: SECRETO } })) }))
@@ -40,7 +41,7 @@ async function aviso(event) {
   return res
 }
 
-beforeEach(() => { vi.useRealTimers(); conAutomatico = true; ingest.registerStripePayment.mockClear(); historico.historicoPorEnlaces.mockClear() })
+beforeEach(() => { vi.useRealTimers(); conAutomatico = true; configFalla = false; ingest.registerStripePayment.mockClear(); ingest.registerStripeInvoice.mockClear(); historico.historicoPorEnlaces.mockClear() })
 
 describe('eventoDelPerfil', () => {
   it('solo los checkouts de sus enlaces; las facturas, por si son de sus suscripciones', () => {
@@ -90,3 +91,55 @@ describe('«Sincronizar» en un perfil con tarea diaria', () => {
     expect(res.body).toMatchObject({ days: 60, automatico: true, ventas: { nuevas: 0, yaEstaban: 4 }, finanzas: { apuntes: 1 }, leads: { nuevos: 0, yaEstaban: 0 }, productos: { nuevos: 0, actualizados: 0 }, analysis: null })
   })
 })
+
+describe('revisión: errores', () => {
+  it('si no se puede leer la tarea, el webhook da 500 (Stripe reintenta) y no apunta nada suelto', async () => {
+    configFalla = true
+    const r = await aviso({ id: 'evt_9', type: 'invoice.paid', data: { object: { id: 'in_9', amount_paid: 4900, customer_email: 'b@otro.com' } } })
+    expect(r.statusCode).toBe(500)
+    expect(ingest.registerStripeInvoice).not.toHaveBeenCalled()
+    expect(ingest.registerStripePayment).not.toHaveBeenCalled()
+  })
+
+  it('si no se puede leer la tarea, «Sincronizar» da 503 y no importa nada', async () => {
+    configFalla = true
+    const res = respuesta()
+    await apiStripe({ method: 'POST', query: { action: 'sync' }, body: { clientId: 'c1' }, headers: {}, socket: {} }, res)
+    expect(res.statusCode).toBe(503)
+    expect(historico.historicoPorEnlaces).not.toHaveBeenCalled()
+  })
+
+  it('un 401 de Stripe en «Sincronizar» no sale como 401 (el panel echaría al usuario)', async () => {
+    historico.historicoPorEnlaces.mockRejectedValueOnce(Object.assign(new Error('Invalid API Key'), { statusCode: 401 }))
+    const res = respuesta()
+    await apiStripe({ method: 'POST', query: { action: 'sync' }, body: { clientId: 'c1' }, headers: {}, socket: {} }, res)
+    expect(res.statusCode).toBe(502)
+    expect(res.body.error).toMatch(/rechazó la clave/)
+  })
+
+  it('si la puesta al día del webhook falla, se reintenta a los 2 minutos', async () => {
+    vi.useFakeTimers()
+    historico.historicoPorEnlaces.mockRejectedValueOnce(new Error('Stripe 429'))
+    await aviso({ id: 'evt_10', type: 'checkout.session.completed', data: { object: { id: 'cs_10', payment_status: 'paid', payment_link: 'plink_ddc' } } })
+    await vi.advanceTimersByTimeAsync(21_000)
+    expect(historico.historicoPorEnlaces).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(121_000)
+    expect(historico.historicoPorEnlaces).toHaveBeenCalledTimes(2)
+  })
+
+  it('«Sincronizar» espera a la del webhook en marcha: nunca dos a la vez', async () => {
+    let enCurso = 0, maximo = 0
+    historico.historicoPorEnlaces.mockImplementation(async () => {
+      enCurso++; maximo = Math.max(maximo, enCurso)
+      await new Promise(r => setTimeout(r, 30)); enCurso--
+      return { ventas: { nuevas: 0, yaEstaban: 0, vinculadas: 0, actualizadas: 0 }, finanzas: 0, cobrado: 0, ops: [], errores: [] }
+    })
+    const { enSerie, ponerStripeAlDia } = await import('../api/_lib/stripe-automatico.js')
+    const a = enSerie('c1', () => ponerStripeAlDia({ supabase: null, clientId: 'c1', config: CONFIG, apiKeyEnlazada: 'k' }))
+    const res = respuesta()
+    await Promise.all([a, apiStripe({ method: 'POST', query: { action: 'sync' }, body: { clientId: 'c1' }, headers: {}, socket: {} }, res)])
+    expect(res.statusCode).toBe(200)
+    expect(maximo).toBe(1)
+  })
+})
+

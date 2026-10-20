@@ -5,7 +5,7 @@ import { Evolucion, PorPrograma } from './informe/Graficas'
 import { supabase, money, fmtDate, getOnboarding, onboardingApi, isSaleCancelled, cuotasPendientes } from '../lib'
 import { Kpi, Panel, Empty } from '../ui'
 import { seccionDelProducto } from '../producto'
-import { mensualidadesVivas, hoyLocal, ventasPorCobro } from '../cobrosPrevistos'
+import { mensualidadesVivas, hoyLocal, ventasPorCobro, esVentaNueva } from '../cobrosPrevistos'
 
 // Las fechas AAAA-MM-DD sin pasar por la hora local (en Latinoamérica,
 // new Date('2026-11-05') cae el día 4).
@@ -90,12 +90,14 @@ const PERIODOS = [
   { key: 'todo', label: 'Todo', days: null },
 ]
 
+// En la fecha de quien mira, sin pasar por UTC: en España la medianoche del 1
+// es aún el día 30 en UTC, y «Este mes» empezaba un día antes.
 function desdeISO(periodo) {
-  const now = new Date()
-  if (periodo.key === 'mes') return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
-  if (periodo.key === 'ano') return new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10)
+  const hoy = hoyLocal()
+  if (periodo.key === 'mes') return `${hoy.slice(0, 7)}-01`
+  if (periodo.key === 'ano') return `${hoy.slice(0, 4)}-01-01`
   if (periodo.days == null) return null
-  return new Date(now.getTime() - periodo.days * 86400000).toISOString().slice(0, 10)
+  return new Date(Date.parse(`${hoy}T12:00:00Z`) - periodo.days * 86400000).toISOString().slice(0, 10)
 }
 
 export default function Informe({ clientId, onNavigate }) {
@@ -152,6 +154,10 @@ export default function Informe({ clientId, onNavigate }) {
 
     const revenue = filtradas.reduce((a, r) => a + (Number(r.revenue) || 0), 0)
     const cash = filtradas.reduce((a, r) => a + (Number(r.cash_collected) || 0), 0)
+    // Ventas y ticket medio: solo las ventas del periodo, no cada cobro (la
+    // renovación de octubre de una mensualidad de mayo no es una venta nueva).
+    const nuevas = filtradas.filter(esVentaNueva)
+    const facturadoNuevas = nuevas.reduce((a, r) => a + (Number(r.revenue) || 0), 0)
 
     // Desglose por programa (siempre sobre el periodo, ignorando el filtro de
     // programa: si no, la tabla tendría una sola fila y no compararías nada).
@@ -160,7 +166,7 @@ export default function Informe({ clientId, onNavigate }) {
     for (const s of delPeriodo) {
       const k = (s.product || '').trim() || 'Sin programa'
       porPrograma[k] = porPrograma[k] || { unidades: 0, facturado: 0, cobrado: 0 }
-      porPrograma[k].unidades++
+      if (esVentaNueva(s)) porPrograma[k].unidades++   // un cobro más de una venta no es otra venta
       porPrograma[k].facturado += Number(s.revenue) || 0
       porPrograma[k].cobrado += Number(s.cash_collected) || 0
     }
@@ -220,8 +226,8 @@ export default function Informe({ clientId, onNavigate }) {
     }
 
     return {
-      revenue, cash, ventas: filtradas.length, serie,
-      ticket: filtradas.length ? revenue / filtradas.length : 0,
+      revenue, cash, ventas: nuevas.length, serie,
+      ticket: nuevas.length ? facturadoNuevas / nuevas.length : 0,
       balance: ingresos + gastos,
       planes, porCobrar, mensualidades, alMes,
       tabla,

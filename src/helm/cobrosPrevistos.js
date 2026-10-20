@@ -127,6 +127,23 @@ function mensualidadViva(v, hoy) {
 }
 
 /**
+ * El calendario de un plan fraccionado: k (1…total) → la fecha de su cuota.
+ * La 1ª, el inicio (la entrada); la última, `plan_end`; las de en medio, una
+ * por mes hacia atrás desde `plan_end`, el día del inicio si `plan_end` solo
+ * está recortado a fin de mes (un plan del 31 cobra el 30 de noviembre, no el
+ * 28) o el de `plan_end` si no. Sin fechas, cuenta desde la fecha de la venta.
+ */
+function calendarioPlan(v) {
+  const total = Number(v.installments_total) || 0
+  const inicio = v.plan_start || v.date || null
+  const ultima = v.plan_end || (inicio ? sumaMeses(inicio, total - 1) : null)
+  if (!total || !ultima) return null
+  const recortado = inicio && diaDe(ultima) === diaDe(finDeMes(ultima)) && diaDe(inicio) > diaDe(ultima)
+  const dia = recortado ? diaDe(inicio) : diaDe(ultima)
+  return (k) => (k >= total ? ultima : k === 1 && inicio ? inicio : sumaMeses(ultima, -(total - k), dia))
+}
+
+/**
  * Las mensualidades vivas (Informe → «Pagos fraccionados y mensualidades»):
  * cuántos pagos llevan y cuándo toca el siguiente (vencido si ya pasó).
  * @returns {{ venta, pagos, siguiente, n, vencida }[]}
@@ -170,19 +187,13 @@ export function cobrosPrevistos(ventas, { hoy, meses = 6, esCancelada = cancelad
       const falta = r2((Number(v.revenue) || 0) - (Number(v.cash_collected) || 0))
       if (pend <= 0 || falta <= 0.01) continue
       const cuota = Number(v.installment_amount) || r2(falta / pend)
-      const inicio = v.plan_start || v.date || null
-      const ultima = v.plan_end || (inicio ? sumaMeses(inicio, total - 1) : null)
-      if (!ultima) continue
-      // Si plan_end es solo el día del inicio recortado a fin de mes, las de
-      // en medio van el día del inicio; si no, el de plan_end.
-      const recortado = inicio && diaDe(ultima) === diaDe(finDeMes(ultima)) && diaDe(inicio) > diaDe(ultima)
-      const dia = recortado ? diaDe(inicio) : diaDe(ultima)
+      const fechaDe = calendarioPlan(v)
+      if (!fechaDe) continue
       // La diferencia (si es de verdad, no un céntimo de redondeo) va en la primera.
       const primera = r2(falta - cuota * (pend - 1))
       const ajusta = primera > 0 && Math.abs(primera - cuota) >= 1
       for (let i = 0; i < pend; i++) {
-        const fecha = i === pend - 1 ? ultima : sumaMeses(ultima, -(pend - 1 - i), dia)
-        pon(v, fecha, i === 0 && ajusta ? primera : (primera > 0 ? cuota : falta / pend), { tipo: 'cuota', n: pagadas + i + 1, de: total })
+        pon(v, fechaDe(pagadas + i + 1), i === 0 && ajusta ? primera : (primera > 0 ? cuota : falta / pend), { tipo: 'cuota', n: pagadas + i + 1, de: total })
       }
       continue
     }
@@ -200,29 +211,53 @@ export function cobrosPrevistos(ventas, { hoy, meses = 6, esCancelada = cancelad
 }
 
 /**
- * Para contar por fechas (Informe): cada mensualidad partida en sus cobros,
- * cada uno en su día. La tarea diaria guarda una mensualidad como UNA venta
- * fechada en su primer pago, y así la cuota de octubre contaba en mayo. Se
- * parte con la lista de fechas de su nota; si no la trae (apuntada a mano) o
- * no cuadra con los pagos, se queda como está.
+ * Para contar por fechas (Informe): cada venta partida en sus cobros, cada uno
+ * en su día. La 1ª fila es la venta (`cuota` 1, o sin `cuota`); las demás son
+ * cobros de esa misma venta: cuentan en lo facturado/cobrado de su mes, pero
+ * no como ventas nuevas.
+ *
+ *   · Mensualidad: la tarea diaria la guarda como UNA venta fechada en su
+ *     primer pago, y así la cuota de octubre contaba en mayo. Se parte con la
+ *     lista de fechas de su nota, una cuota por cobro. Si no la trae (apuntada
+ *     a mano), no cuadra con los pagos o las cuotas no fueron todas iguales
+ *     (un cupón el primer mes), se queda como está: repartir a partes iguales
+ *     mentiría.
+ *   · Plan fraccionado: lo facturado sigue en la venta (es lo contratado), y
+ *     lo cobrado va cuota a cuota en las fechas de su calendario.
  */
 export function ventasPorCobro(ventas) {
   return (ventas || []).flatMap(v => {
-    if (v.payment_type !== 'Suscripción' || Number(v.installments_total) || !v.plan_start) return [v]
+    const total = Number(v.installments_total) || 0
+    const pagadas = Number(v.installments_paid) || 0
+
+    if (total) {
+      const cobrado = Number(v.cash_collected) || 0
+      const fechaDe = calendarioPlan(v)
+      if (pagadas < 2 || cobrado <= 0 || !fechaDe) return [v]
+      const cuota = Number(v.installment_amount) || r2(cobrado / pagadas)
+      let primera = r2(cobrado - cuota * (pagadas - 1))
+      const iguales = primera <= 0
+      if (iguales) primera = r2(cobrado / pagadas)
+      return Array.from({ length: Math.min(pagadas, total) }, (_, i) => (i === 0
+        ? { ...v, cuota: 1, cash_collected: primera }
+        : { ...v, id: `${v.id}#${i + 1}`, date: fechaDe(i + 1), cuota: i + 1, revenue: 0, cash_collected: iguales ? (i === pagadas - 1 ? r2(cobrado - primera * (pagadas - 1)) : primera) : cuota }))
+    }
+
+    if (v.payment_type !== 'Suscripción' || !v.plan_start) return [v]
     const cobros = cobrosDeLaNota(v.notes, v.plan_start)
     const n = cobros.length
-    if (n < 2 || n !== Number(v.installments_paid)) return [v]
-    const parte = (total, i) => {
-      const t = Number(total) || 0
-      const cada = r2(t / n)
-      return i < n - 1 ? cada : r2(t - cada * (n - 1))
-    }
+    if (n < 2 || n !== pagadas) return [v]
+    const importe = Number(v.installment_amount) || 0
+    const casa = (x) => Math.abs((Number(x) || 0) - importe * n) <= 0.5
+    if (!importe || !casa(v.revenue) || !casa(v.cash_collected)) return [v]
     return cobros.map((fecha, i) => ({
-      ...v, id: `${v.id}#${i + 1}`, date: fecha, cuota: i + 1,
-      revenue: parte(v.revenue, i), cash_collected: parte(v.cash_collected, i),
+      ...v, id: i === 0 ? v.id : `${v.id}#${i + 1}`, date: fecha, cuota: i + 1, revenue: importe, cash_collected: importe,
     }))
   })
 }
+
+/** ¿Esta fila de ventasPorCobro es una venta (y no un cobro más de una)? */
+export const esVentaNueva = (fila) => !fila.cuota || fila.cuota === 1
 
 /** Los mismos cobros juntados por mes: [{ mes: 'AAAA-MM', total, cobros }]. */
 export function porMes(cobros) {

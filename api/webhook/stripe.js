@@ -109,16 +109,24 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Firma inválida' })
   }
 
-  // Perfil llevado por la tarea diaria: se le pasa a ella y listo.
-  const auto = await configAutomatico(supabase, client.id).catch(() => null)
+  // Perfil llevado por la tarea diaria: se le pasa a ella y listo. Si no se
+  // puede saber si lo es (la base falla), 500 y que Stripe reintente: tomarlo
+  // por «no» apuntaría el cobro suelto, quizá de otro negocio.
+  let auto
+  try {
+    auto = await configAutomatico(supabase, client.id)
+  } catch (err) {
+    console.error(`[stripe webhook] ${client.slug}: no se pudo leer la tarea diaria —`, err.message)
+    return res.status(500).json({ error: 'No se pudo leer la configuración del perfil' })
+  }
   if (auto) {
     if (!eventoDelPerfil(auto, event)) return res.status(200).json({ received: true, outcome: `ignorado:${event?.type}` })
     programarPuestaAlDia({
       supabase, clientId: client.id, config: auto, apiKeyEnlazada: cfg.apiKey,
-      alTerminar: (err, r) => {
+      alTerminar: (err, r, intento) => {
         if (err) {
-          console.error(`[stripe webhook] ${client.slug}: no se pudo poner al día —`, err.message)
-          writeAudit({ clientId: client.id, action: 'stripe.webhook.error', statusCode: 500, errorMessage: err.message, metadata: { automatico: true } }).catch(() => {})
+          console.error(`[stripe webhook] ${client.slug}: no se pudo poner al día (intento ${intento}) —`, err.message)
+          writeAudit({ clientId: client.id, action: 'stripe.webhook.error', statusCode: 500, errorMessage: err.message, metadata: { automatico: true, intento } }).catch(() => {})
         } else if (r?.ops?.length || r?.errores?.length) {
           writeAudit({ clientId: client.id, action: 'stripe.webhook.automatico', metadata: { ventas: r.ventas, finanzas: r.finanzas, ops: r.ops, errores: r.errores } }).catch(() => {})
         }

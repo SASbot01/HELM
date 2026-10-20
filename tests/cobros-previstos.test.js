@@ -2,7 +2,7 @@
 // entrar, calculado de los planes y las mensualidades. Con las ventas de
 // Detrás de Cámara tal como quedaron el 20/10/2026.
 import { describe, it, expect, vi } from 'vitest'
-import { cobrosPrevistos, porMes, sumaMeses, cobrosDeLaNota, mensualidadesVivas, hoyLocal, ventasPorCobro } from '../src/helm/cobrosPrevistos.js'
+import { cobrosPrevistos, porMes, sumaMeses, cobrosDeLaNota, mensualidadesVivas, hoyLocal, ventasPorCobro, esVentaNueva } from '../src/helm/cobrosPrevistos.js'
 
 const VENTAS = [
   { id: 'david', client_name: 'David Villasmil', product: 'Detrás de Cámara · mensualidad', payment_type: 'Suscripción', payment_method: 'Stripe',
@@ -243,9 +243,26 @@ describe('ventasPorCobro (el Informe cuenta cada cuota en su mes)', () => {
     expect(new Set(p.map(x => x.id)).size).toBe(6)
   })
 
-  it('los céntimos que no reparten igual van en la última', () => {
-    const p = ventasPorCobro([{ ...david, revenue: 100, cash_collected: 100, installments_paid: 3, notes: '3 cuotas cobradas (04/05, 04/06, 04/07).' }])
-    expect(p.map(x => x.revenue)).toEqual([33.33, 33.33, 33.34])
+  it('si las cuotas no fueron iguales (un cupón el primer mes), no se reparte: mentiría', () => {
+    const cupon = { ...david, revenue: 1082, cash_collected: 1082 }   // 97 + 5 × 197
+    expect(ventasPorCobro([cupon])).toEqual([cupon])
+  })
+
+  it('un plan: lo facturado en la venta y lo cobrado cuota a cuota en su fecha', () => {
+    const gonzalo = { id: 'g', payment_type: 'Fraccionado', revenue: 2000, cash_collected: 2000, installments_total: 2, installments_paid: 2,
+      installment_amount: 1000, date: '2026-10-13', plan_start: '2026-10-13', plan_end: '2026-11-26' }
+    expect(ventasPorCobro([gonzalo]).map(x => [x.date, x.revenue, x.cash_collected, x.cuota])).toEqual([
+      ['2026-10-13', 2000, 1000, 1], ['2026-11-26', 0, 1000, 2],
+    ])
+    const michele = { id: 'm', payment_type: 'Fraccionado', revenue: 1987, cash_collected: 662.34, installments_total: 6, installments_paid: 2,
+      installment_amount: 331.17, date: '2026-10-04', plan_start: '2026-10-04', plan_end: '2027-03-04' }
+    expect(ventasPorCobro([michele]).map(x => [x.date, x.revenue, x.cash_collected])).toEqual([['2026-10-04', 1987, 331.17], ['2026-11-04', 0, 331.17]])
+  })
+
+  it('solo la primera fila es una venta nueva; las demás son cobros de ella', () => {
+    const filas = ventasPorCobro([david])
+    expect(filas.filter(esVentaNueva).map(x => x.date)).toEqual(['2026-05-04'])
+    expect(esVentaNueva({ id: 'suelta' })).toBe(true)
   })
 
   it('lo que no es una mensualidad con su lista se queda igual', () => {

@@ -34,7 +34,8 @@ vi.mock('../api/_lib/pagos.js', () => ({ registrarPago: vi.fn(), buscarOCrearCon
 vi.mock('../api/_lib/stripe-import.js', () => ({ addFinanceEntry: vi.fn(), upsertLead: vi.fn() }))
 
 // Supabase de solo lectura que no encuentra nada: todo sale como «nuevo».
-const q = () => { const o = { select: () => o, eq: () => o, in: () => o, ilike: () => o, not: () => o, limit: () => Promise.resolve({ data: [], error: null }), then: (ok) => Promise.resolve({ data: [], error: null }).then(ok) }; return o }
+const ins = []
+const q = () => { const o = { select: () => o, eq: () => o, in: (c, v) => { ins.push(v); return o }, ilike: () => o, not: () => o, limit: () => Promise.resolve({ data: [], error: null }), then: (ok) => Promise.resolve({ data: [], error: null }).then(ok) }; return o }
 const supabase = { from: () => q() }
 
 const { historicoPorEnlaces } = await import('../api/_lib/stripe-historico.js')
@@ -54,3 +55,18 @@ describe('historicoPorEnlaces · alias', () => {
     expect(r.ops.filter(o => o.startsWith('Mensualidad:'))).toEqual(['Mensualidad: David Villasmil · 6 cuotas de 197 €, 1182 €'])
   })
 })
+
+describe('historicoPorEnlaces · alias (revisión)', () => {
+  it('un alias que se apunta a sí mismo se ignora: David conserva su nombre', async () => {
+    const r = await historicoPorEnlaces({ supabase, clientId: 'c', apiKey: 'k', enlaces: ENLACES, mensualidad: 'M', alias: { [DAVID]: DAVID }, prueba: true })
+    expect(r.ops).toContain('Mensualidad: David Villasmil · 5 cuotas de 197 €, 985 €')
+  })
+
+  it('la mensualidad que tuviera quien pagó (antes del alias) se junta con la del cliente', async () => {
+    ins.length = 0
+    await historicoPorEnlaces({ supabase, clientId: 'c', apiKey: 'k', enlaces: ENLACES, mensualidad: 'M', alias: { [ALICIA]: DAVID }, prueba: true })
+    const huella = (await import('node:crypto')).createHash('sha256').update(ALICIA).digest('hex').slice(0, 16)
+    expect(ins.some(lista => Array.isArray(lista) && lista.includes(`stripe:mensual:${huella}`) && lista.includes('stripe:cs_alicia'))).toBe(true)
+  })
+})
+

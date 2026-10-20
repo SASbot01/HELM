@@ -13,7 +13,10 @@
 import { SERVICIO } from './automatico.js'
 import { historicoPorEnlaces } from './stripe-historico.js'
 
-/** La configuración de la tarea diaria del perfil si lleva sus cobros de Stripe; si no, null. */
+/** La configuración de la tarea diaria del perfil si lleva sus cobros de
+ *  Stripe; si no, null. Si la base falla, LANZA: quien llama no debe tomarlo
+ *  por «no tiene tarea» y apuntar a la antigua (con un Stripe compartido, eso
+ *  mete los cobros de los otros negocios). */
 export async function configAutomatico(supabase, clientId) {
   const { data, error } = await supabase.from('user_integrations')
     .select('config').eq('client_id', clientId).eq('service', SERVICIO).eq('enabled', true).limit(1)
@@ -48,20 +51,39 @@ export async function ponerStripeAlDia({ supabase, clientId, config, apiKeyEnlaz
   })
 }
 
+// Una sola puesta al día por perfil a la vez en este proceso: las del webhook
+// y las de «Sincronizar» van en fila. Dos a la vez leerían «no está» y
+// apuntarían dos veces la venta de un cliente nuevo. (La tarea de las 6:15 es
+// otro proceso; coincidir con ella en el mismo cliente nuevo y en el mismo
+// segundo queda fuera de esto.)
+const enMarcha = new Map()    // clientId → promesa de la última de la fila
+export function enSerie(clientId, fn) {
+  const antes = enMarcha.get(clientId) || Promise.resolve()
+  const p = antes.catch(() => {}).then(fn)
+  enMarcha.set(clientId, p)
+  p.catch(() => {}).finally(() => { if (enMarcha.get(clientId) === p) enMarcha.delete(clientId) })
+  return p
+}
+
 // El webhook: un cobro trae varios avisos seguidos (el checkout, la factura…).
-// Se espera un poco y se pone al día una sola vez; si ya hay una en marcha para
-// ese perfil, la siguiente va detrás, nunca a la vez.
+// Se espera un poco y se pone al día una sola vez. Como a Stripe ya se le ha
+// contestado que sí, si falla se reintenta aquí (a los 2 y a los 10 minutos);
+// si aun así no sale, lo recoge la tarea de la mañana siguiente.
+const REINTENTOS = [120_000, 600_000]
 const enCola = new Map()      // clientId → temporizador
-const enMarcha = new Map()    // clientId → promesa
-export function programarPuestaAlDia({ supabase, clientId, config, apiKeyEnlazada = null, esperaMs = 20_000, alTerminar = null }) {
+export function programarPuestaAlDia({ supabase, clientId, config, apiKeyEnlazada = null, esperaMs = 20_000, alTerminar = null, intento = 1 }) {
   clearTimeout(enCola.get(clientId))
   enCola.set(clientId, setTimeout(() => {
     enCola.delete(clientId)
-    const antes = enMarcha.get(clientId) || Promise.resolve()
-    const p = antes.catch(() => {})
-      .then(() => ponerStripeAlDia({ supabase, clientId, config, apiKeyEnlazada }))
-      .then(r => alTerminar?.(null, r), err => alTerminar?.(err, null))
-      .finally(() => { if (enMarcha.get(clientId) === p) enMarcha.delete(clientId) })
-    enMarcha.set(clientId, p)
+    enSerie(clientId, () => ponerStripeAlDia({ supabase, clientId, config, apiKeyEnlazada })).then(
+      r => alTerminar?.(null, r, intento),
+      err => {
+        alTerminar?.(err, null, intento)
+        const espera = REINTENTOS[intento - 1]
+        if (espera && !enCola.has(clientId)) {
+          programarPuestaAlDia({ supabase, clientId, config, apiKeyEnlazada, esperaMs: espera, alTerminar, intento: intento + 1 })
+        }
+      },
+    )
   }, esperaMs))
 }
