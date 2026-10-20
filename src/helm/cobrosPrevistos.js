@@ -71,7 +71,9 @@ function parada(notas, cobros) {
   if (!avisos.length) return false
   const ultimo = cobros.at(-1)
   if (!ultimo) return true
-  const finales = avisos.filter(a => a[1]).map(a => cobros.find(c => c.slice(5) === `${a[2]}-${a[1]}`) || `${ultimo.slice(0, 4)}-${a[2]}-${a[1]}`)
+  // El cobro de la lista con ese día y mes más reciente: con más de un año de
+  // pagos, el mismo dd/mm sale dos veces y el bueno es el último.
+  const finales = avisos.filter(a => a[1]).map(a => cobros.findLast(c => c.slice(5) === `${a[2]}-${a[1]}`) || `${ultimo.slice(0, 4)}-${a[2]}-${a[1]}`)
   // Sin fecha (nunca llegó a cobrar) no dice nada del resto: decide la regla del mes.
   if (!finales.length) return false
   return ultimo <= finales.sort().at(-1)

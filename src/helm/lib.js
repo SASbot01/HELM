@@ -10,7 +10,14 @@ export const money = (n) =>
 
 export const fmtDate = (d) => {
   if (!d) return '—'
-  try { return new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) } catch { return d }
+  try {
+    // Una fecha sola (AAAA-MM-DD) se lee como medianoche UTC: en una zona con
+    // desfase negativo (Latinoamérica) saldría el día anterior.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      return new Date(`${d}T12:00:00Z`).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' })
+    }
+    return new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
+  } catch { return d }
 }
 
 export const todayISO = () => new Date().toISOString().slice(0, 10)

@@ -174,3 +174,13 @@ describe('mensualidadesVivas (Informe)', () => {
   })
 })
 
+describe('más de un año de mensualidad', () => {
+  it('una suscripción cancelada justo tras su cobro 13º no se sigue previendo', () => {
+    const v = { id: 'x', client_name: 'X', product: 'M', payment_type: 'Suscripción', status: 'won', installments_total: null, installment_amount: 197,
+      plan_start: '2025-10-05', installments_paid: 13,
+      notes: 'Mensualidad de 197 €: 13 cuotas cobradas (05/10, 05/11, 05/12, 05/01, 05/02, 05/03, 05/04, 05/05, 05/06, 05/07, 05/08, 05/09, 05/10). La suscripción sub_1ABC está cancelada (último cobro el 05/10).' }
+    expect(cobrosPrevistos([v], { hoy: '2026-10-20' })).toEqual([])
+    expect(cobrosDeLaNota(v.notes, v.plan_start).at(-1)).toBe('2026-10-05')
+  })
+})
+
