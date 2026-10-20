@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
-// Ventas pinta «Próximos cobros» con los planes y las mensualidades.
+// Ventas pinta «Próximos cobros» con los planes y las mensualidades. En la
+// hora de Bogotá, para comprobar que las fechas no se van un día atrás.
+process.env.TZ = 'America/Bogota'
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 
@@ -37,9 +39,10 @@ describe('Ventas · Próximos cobros', () => {
     expect(t.getByText('Octubre de 2026')).toBeTruthy()
     expect(t.getByText('Noviembre de 2026')).toBeTruthy()
     expect(t.getByText('vencido')).toBeTruthy()          // la de Nicolás del 07/10
-    expect(t.getByText('2026-11-26')).toBeTruthy()       // los 1.000 € de Gonzalo
+    expect(t.getByText('26 nov')).toBeTruthy()          // los 1.000 € de Gonzalo, el 26 y no el 25
     expect(t.getAllByText(/cuota \d\/\d/).length).toBe(1 + 6 + 5)
-    expect(t.getByText(/mensualidad 7ª/)).toBeTruthy()   // la de Alexander del 05/11
+    expect(t.getByText(/· 7ª/)).toBeTruthy()             // la de Alexander del 05/11
+    expect(t.queryByText(/mensualidad · mensualidad/)).toBeNull()
   })
 
   it('en la lista de ventas, una mensualidad dice cuántos pagos lleva (no «Pago único»)', async () => {

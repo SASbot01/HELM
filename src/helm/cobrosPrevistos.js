@@ -8,14 +8,19 @@
 // dos veces en cuanto llegara el pago de verdad.
 //
 //   · Plan fraccionado con cuotas pendientes: una por mes, la última en
-//     `plan_end`. Si lo que falta no cuadra con las cuotas (una cuota con la
-//     reserva descontada, por ejemplo), la diferencia va en la primera.
-//   · Mensualidad (Suscripción sin nº de cuotas): la siguiente, al mes de la
-//     última cobrada y el mismo día en que empezó; y así hasta el horizonte.
-//     No cuenta si su nota dice que la suscripción está cancelada, impagada o
-//     caducada (salvo que diga que sigue pagando, p. ej. con un enlace de pago
-//     suelto), ni si lleva más de un mes sin cobrarse. Cada una lleva su número
-//     (la 7ª mensualidad…) para saber por qué mes va.
+//     `plan_end` (o, si no hay, la que toca desde `plan_start` o la fecha de
+//     la venta). Las de en medio van el día en que empezó el plan cuando
+//     `plan_end` solo está recortado a fin de mes (un plan del 31 cobra el 30
+//     de noviembre, no el 28). Si lo que falta no cuadra con las cuotas (una
+//     cuota con la reserva descontada, por ejemplo), la diferencia va en la
+//     primera.
+//   · Mensualidad (Suscripción sin nº de cuotas): la siguiente, al mes del
+//     ÚLTIMO cobro (la lista de fechas de su nota; un mes saltado no la
+//     descuadra) y el mismo día en que empezó; y así hasta el horizonte. Cada
+//     una lleva su número (la 7ª mensualidad…) para saber por qué mes va. No
+//     cuenta si lleva más de un mes sin cobrarse, ni si su suscripción está
+//     cancelada, impagada o caducada y no ha vuelto a cobrar después (salvo que
+//     la nota diga que sigue pagando, a mano o con el enlace suelto).
 
 const r2 = (n) => Math.round(Number(n) * 100) / 100
 const DIA = 86_400_000
@@ -31,13 +36,53 @@ export function sumaMeses(iso, n, dia = Number(String(iso).slice(8, 10))) {
 }
 
 const finDeMes = (iso) => sumaMeses(iso, 0, 31)
+const dd = (n) => String(n).padStart(2, '0')
+const diaDe = (iso) => Number(iso.slice(8, 10))
 const cancelada = (v) => String(v?.status || '').toLowerCase().trim() === 'cancelada'
-// Las notas las escribe stripe-historico.js («La suscripción sub_… está
-// cancelada… Desde entonces paga con el enlace suelto…») o alguien a mano
-// («Sigue pagando la mensualidad…»).
-const parada = (notas) => {
+
+/** Las fechas de los cobros que lista la nota de una mensualidad (las escribe
+ *  stripe-historico.js: «6 cuotas cobradas (05/05, 05/06, …)»), con su año:
+ *  van en orden desde `inicio`, así que cada vez que el mes baja es otro año. */
+export function cobrosDeLaNota(notas, inicio) {
+  const m = String(notas || '').match(/cobradas?\s*\(([\d/,\s]+)\)/i)
+  if (!m || !inicio) return []
+  let ano = Number(inicio.slice(0, 4))
+  let antes = Number(inicio.slice(5, 7))
+  const out = []
+  for (const trozo of m[1].split(',')) {
+    const [d, mes] = trozo.trim().split('/').map(Number)
+    if (!d || !mes) continue
+    if (mes < antes) ano++
+    antes = mes
+    out.push(`${ano}-${dd(mes)}-${dd(d)}`)
+  }
+  return out
+}
+
+// ¿Se paró? Las notas las escribe stripe-historico.js («La suscripción sub_…
+// está cancelada (último cobro el 04/09)… Desde entonces paga con el enlace
+// suelto…») o alguien a mano («Sigue pagando la mensualidad…»). Una
+// suscripción parada no para al cliente si ha vuelto a cobrar DESPUÉS de su
+// último cobro (otra suscripción, un enlace).
+function parada(notas, cobros) {
   const n = String(notas || '')
-  return /suscripci[oó]n \S+ est[aá] (cancelada|impagada|caducada)/i.test(n) && !/sigue pagando|paga con el enlace/i.test(n)
+  if (/sigue pagando|paga con el enlace/i.test(n)) return false
+  const avisos = [...n.matchAll(/suscripci[oó]n \S+ est[aá] (?:cancelada|impagada|caducada)(?: \(último cobro el (\d{2})\/(\d{2})\))?/gi)]
+  if (!avisos.length) return false
+  const ultimo = cobros.at(-1)
+  if (!ultimo) return true
+  const finales = avisos.filter(a => a[1]).map(a => cobros.find(c => c.slice(5) === `${a[2]}-${a[1]}`) || `${ultimo.slice(0, 4)}-${a[2]}-${a[1]}`)
+  // Sin fecha (nunca llegó a cobrar) no dice nada del resto: decide la regla del mes.
+  if (!finales.length) return false
+  return ultimo <= finales.sort().at(-1)
+}
+
+// El día de cobro más cercano a un pago: uno con días de retraso o de adelanto
+// sigue siendo la cuota de ese mes.
+function mesDelCobro(fecha, dia) {
+  const t = Date.parse(fecha)
+  return [-1, 0, 1].map(k => sumaMeses(fecha, k, dia))
+    .reduce((a, b) => (Math.abs(Date.parse(b) - t) < Math.abs(Date.parse(a) - t) ? b : a))
 }
 
 /**
@@ -66,26 +111,36 @@ export function cobrosPrevistos(ventas, { hoy, meses = 6, esCancelada = cancelad
       const falta = r2((Number(v.revenue) || 0) - (Number(v.cash_collected) || 0))
       if (pend <= 0 || falta <= 0.01) continue
       const cuota = Number(v.installment_amount) || r2(falta / pend)
-      const ultima = v.plan_end || (v.plan_start ? sumaMeses(v.plan_start, total - 1) : null)
+      const inicio = v.plan_start || v.date || null
+      const ultima = v.plan_end || (inicio ? sumaMeses(inicio, total - 1) : null)
       if (!ultima) continue
+      // Si plan_end es solo el día del inicio recortado a fin de mes, las de
+      // en medio van el día del inicio; si no, el de plan_end.
+      const recortado = inicio && diaDe(ultima) === diaDe(finDeMes(ultima)) && diaDe(inicio) > diaDe(ultima)
+      const dia = recortado ? diaDe(inicio) : diaDe(ultima)
       // La diferencia (si es de verdad, no un céntimo de redondeo) va en la primera.
       const primera = r2(falta - cuota * (pend - 1))
       const ajusta = primera > 0 && Math.abs(primera - cuota) >= 1
       for (let i = 0; i < pend; i++) {
-        const fecha = sumaMeses(ultima, -(pend - 1 - i))
+        const fecha = i === pend - 1 ? ultima : sumaMeses(ultima, -(pend - 1 - i), dia)
         pon(v, fecha, i === 0 && ajusta ? primera : (primera > 0 ? cuota : falta / pend), { tipo: 'cuota', n: pagadas + i + 1, de: total })
       }
       continue
     }
 
-    if (v.payment_type === 'Suscripción' && v.plan_start && pagadas >= 1 && Number(v.installment_amount) > 0 && !parada(v.notes)) {
-      const dia = Number(v.plan_start.slice(8, 10))
-      let fecha = sumaMeses(v.plan_start, pagadas, dia)
+    if (v.payment_type === 'Suscripción' && v.plan_start && pagadas >= 1 && Number(v.installment_amount) > 0) {
+      const cobros = cobrosDeLaNota(v.notes, v.plan_start)
+      if (parada(v.notes, cobros)) continue
+      const dia = diaDe(v.plan_start)
+      // El mes del último cobro; sin la lista de la nota (una venta apuntada a
+      // mano), el que toca contando desde el inicio.
+      const base = cobros.length ? mesDelCobro(cobros.at(-1), dia) : sumaMeses(v.plan_start, pagadas - 1, dia)
       // Más de un mes sin cobrarse: ya no se da por hecho que siga.
-      if (Date.parse(fecha) < Date.parse(hoy) - 31 * DIA) continue
-      for (let k = 0; fecha <= hasta && k < 24; k++) {
-        pon(v, fecha, Number(v.installment_amount), { tipo: 'mensualidad', n: pagadas + k + 1 })
-        fecha = sumaMeses(v.plan_start, pagadas + k + 1, dia)
+      if (Date.parse(sumaMeses(base, 1, dia)) < Date.parse(hoy) - 31 * DIA) continue
+      for (let k = 1; k <= 24; k++) {
+        const fecha = sumaMeses(base, k, dia)
+        if (fecha > hasta) break
+        pon(v, fecha, Number(v.installment_amount), { tipo: 'mensualidad', n: pagadas + k })
       }
     }
   }

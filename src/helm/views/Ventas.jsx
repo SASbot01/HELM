@@ -23,6 +23,11 @@ import {
 import { cobrosPrevistos, porMes } from '../cobrosPrevistos'
 
 const MESES_PREVISTOS = 6
+// Las fechas AAAA-MM-DD, sin pasar por la hora local: en una zona con desfase
+// negativo (Latinoamérica), new Date('2026-11-26') cae el día 25.
+const fmtDia = (iso) => (iso
+  ? new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' })
+  : '—')
 const nombreMes = (aaaamm) => {
   const t = new Date(`${aaaamm}-15T12:00:00Z`).toLocaleDateString('es-ES', { month: 'long', year: 'numeric', timeZone: 'UTC' })
   return t.charAt(0).toUpperCase() + t.slice(1)
@@ -141,13 +146,15 @@ export default function Ventas({ clientId }) {
                     {m.cobros.map(c => (
                       <tr key={`${c.ventaId}-${c.fecha}`}>
                         <td>
-                          {fmtDate(c.fecha)}
+                          {fmtDia(c.fecha)}
                           {c.vencido && <span className="helm-chip red" style={{ marginLeft: 6 }}>vencido</span>}
                         </td>
                         <td>{c.cliente}</td>
                         <td>
                           {c.concepto}
-                          <small style={{ color: 'var(--text-mut)' }}>{c.tipo === 'cuota' ? ` · cuota ${c.n}/${c.de}` : ` · mensualidad ${c.n}ª`}</small>
+                          <small style={{ color: 'var(--text-mut)' }}>
+                            {c.tipo === 'cuota' ? ` · cuota ${c.n}/${c.de}` : (/mensualidad/i.test(c.concepto) ? ` · ${c.n}ª` : ` · mensualidad ${c.n}ª`)}
+                          </small>
                         </td>
                         <td><small style={{ color: 'var(--text-mut)' }}>{c.como}</small></td>
                         <td className="helm-num">{money(c.importe)}</td>
@@ -192,7 +199,7 @@ export default function Ventas({ clientId }) {
                           // de las cuotas cobradas, para saber por qué mes va.
                           r.payment_type === 'Suscripción' && Number(r.installments_paid) > 0
                             ? (
-                              <span className="helm-chip" title={r.plan_start ? `Desde el ${fmtDate(r.plan_start)}` : undefined}>
+                              <span className="helm-chip" title={r.plan_start ? `Desde el ${fmtDia(r.plan_start)}` : undefined}>
                                 <CalendarClock size={11} />
                                 mensual · {r.installments_paid} {Number(r.installments_paid) === 1 ? 'pago' : 'pagos'}
                               </span>

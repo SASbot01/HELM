@@ -2,7 +2,7 @@
 // entrar, calculado de los planes y las mensualidades. Con las ventas de
 // Detrás de Cámara tal como quedaron el 20/10/2026.
 import { describe, it, expect } from 'vitest'
-import { cobrosPrevistos, porMes, sumaMeses } from '../src/helm/cobrosPrevistos.js'
+import { cobrosPrevistos, porMes, sumaMeses, cobrosDeLaNota } from '../src/helm/cobrosPrevistos.js'
 
 const VENTAS = [
   { id: 'david', client_name: 'David Villasmil', product: 'Detrás de Cámara · mensualidad', payment_type: 'Suscripción', payment_method: 'Stripe',
@@ -107,3 +107,54 @@ describe('cobrosPrevistos (Detrás de Cámara, 20/10/2026)', () => {
     expect(cobrosPrevistos(vieja, { hoy: '2026-10-20' })).toEqual([])
   })
 })
+
+describe('casos de la revisión', () => {
+  const mensual = (extra) => ({ id: 'm', client_name: 'X', product: 'Mensualidad', payment_type: 'Suscripción', payment_method: 'Stripe',
+    status: 'won', installments_total: null, installment_amount: 197, ...extra })
+  const fechas = (v, hoy) => cobrosPrevistos([v], { hoy }).map(c => c.fecha)
+
+  it('la nota da las fechas de los cobros con su año', () => {
+    expect(cobrosDeLaNota('3 cuotas cobradas (05/11, 05/12, 05/01).', '2026-11-05')).toEqual(['2026-11-05', '2026-12-05', '2027-01-05'])
+    expect(cobrosDeLaNota('Mensualidad de 197 €: 1 cuota cobrada (08/10).', '2026-10-08')).toEqual(['2026-10-08'])
+    expect(cobrosDeLaNota('sin lista', '2026-10-08')).toEqual([])
+  })
+
+  it('un mes saltado no da por pendiente lo ya cobrado (cuenta desde el último cobro)', () => {
+    const v = mensual({ plan_start: '2026-05-08', installments_paid: 5, notes: '5 cuotas cobradas (08/05, 08/06, 08/08, 08/09, 08/10).' })
+    const c = cobrosPrevistos([v], { hoy: '2026-10-20' })
+    expect(c[0]).toMatchObject({ fecha: '2026-11-08', n: 6, vencido: false })
+    expect(c.some(x => x.fecha.startsWith('2026-10'))).toBe(false)
+  })
+
+  it('ni hace desaparecer a quien pagó este mes tras saltarse dos', () => {
+    const v = mensual({ plan_start: '2026-05-08', installments_paid: 4, notes: '4 cuotas cobradas (08/05, 08/06, 08/09, 08/10).' })
+    expect(fechas(v, '2026-10-20')[0]).toBe('2026-11-08')
+  })
+
+  it('quien canceló y se volvió a suscribir sigue contando', () => {
+    const v = mensual({ plan_start: '2026-05-05', installments_paid: 6,
+      notes: 'Mensualidad de 197 €: 6 cuotas cobradas (05/05, 05/06, 05/07, 05/08, 05/09, 05/10). La suscripción sub_1OLD está cancelada (último cobro el 05/06).' })
+    expect(fechas(v, '2026-10-20')[0]).toBe('2026-11-05')
+  })
+
+  it('un plan del día 31 cobra el último día de cada mes, no el 28', () => {
+    const v = { id: 'p', client_name: 'Y', payment_type: 'Fraccionado', status: 'won', revenue: 500, cash_collected: 100,
+      installments_total: 5, installments_paid: 1, installment_amount: 100, plan_start: '2026-10-31', plan_end: '2027-02-28' }
+    const c = cobrosPrevistos([v], { hoy: '2026-11-29' })
+    expect(c.map(x => x.fecha)).toEqual(['2026-11-30', '2026-12-31', '2027-01-31', '2027-02-28'])
+    expect(c[0].vencido).toBe(false)
+  })
+
+  it('un plan con su propio día de cuota (no recortado) lo mantiene', () => {
+    const v = { id: 'g', client_name: 'G', payment_type: 'Fraccionado', status: 'won', revenue: 3000, cash_collected: 1000,
+      installments_total: 3, installments_paid: 1, installment_amount: 1000, plan_start: '2026-10-13', plan_end: '2026-12-26' }
+    expect(fechas(v, '2026-10-20')).toEqual(['2026-11-26', '2026-12-26'])
+  })
+
+  it('un plan sin fechas cuenta desde la fecha de la venta', () => {
+    const v = { id: 's', client_name: 'S', payment_type: 'Fraccionado', status: 'won', revenue: 1200, cash_collected: 400,
+      installments_total: 3, installments_paid: 1, installment_amount: 400, date: '2026-10-10', plan_start: null, plan_end: null }
+    expect(fechas(v, '2026-10-20')).toEqual(['2026-11-10', '2026-12-10'])
+  })
+})
+
