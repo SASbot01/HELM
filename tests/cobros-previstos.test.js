@@ -2,7 +2,7 @@
 // entrar, calculado de los planes y las mensualidades. Con las ventas de
 // Detrás de Cámara tal como quedaron el 20/10/2026.
 import { describe, it, expect, vi } from 'vitest'
-import { cobrosPrevistos, porMes, sumaMeses, cobrosDeLaNota, mensualidadesVivas, hoyLocal } from '../src/helm/cobrosPrevistos.js'
+import { cobrosPrevistos, porMes, sumaMeses, cobrosDeLaNota, mensualidadesVivas, hoyLocal, ventasPorCobro } from '../src/helm/cobrosPrevistos.js'
 
 const VENTAS = [
   { id: 'david', client_name: 'David Villasmil', product: 'Detrás de Cámara · mensualidad', payment_type: 'Suscripción', payment_method: 'Stripe',
@@ -226,6 +226,34 @@ describe('verificación: retrasos, cambios de día y años', () => {
     expect(hoyLocal()).toBe('2026-10-20')
     vi.useRealTimers()
     process.env.TZ = antes
+  })
+})
+
+describe('ventasPorCobro (el Informe cuenta cada cuota en su mes)', () => {
+  const david = { id: 'd', client_name: 'David Villasmil', product: 'Detrás de Cámara · mensualidad', payment_type: 'Suscripción', status: 'won',
+    revenue: 1182, cash_collected: 1182, installments_total: null, installments_paid: 6, installment_amount: 197, plan_start: '2026-05-04', date: '2026-05-04',
+    notes: 'Mensualidad de 197 €: 6 cuotas cobradas (04/05, 04/06, 04/07, 04/08, 04/09, 08/10). La suscripción sub_1 está cancelada (último cobro el 04/09/2026). Desde entonces paga con el enlace suelto, que cuenta aquí igual.' }
+
+  it('David: seis cobros, cada uno en su día, y la suma cuadra', () => {
+    const p = ventasPorCobro([david])
+    expect(p.map(x => [x.date, x.revenue, x.cash_collected, x.cuota])).toEqual([
+      ['2026-05-04', 197, 197, 1], ['2026-06-04', 197, 197, 2], ['2026-07-04', 197, 197, 3],
+      ['2026-08-04', 197, 197, 4], ['2026-09-04', 197, 197, 5], ['2026-10-08', 197, 197, 6],
+    ])
+    expect(new Set(p.map(x => x.id)).size).toBe(6)
+  })
+
+  it('los céntimos que no reparten igual van en la última', () => {
+    const p = ventasPorCobro([{ ...david, revenue: 100, cash_collected: 100, installments_paid: 3, notes: '3 cuotas cobradas (04/05, 04/06, 04/07).' }])
+    expect(p.map(x => x.revenue)).toEqual([33.33, 33.33, 33.34])
+  })
+
+  it('lo que no es una mensualidad con su lista se queda igual', () => {
+    const plan = { id: 'p', payment_type: 'Fraccionado', installments_total: 6, revenue: 1987, date: '2026-10-04', plan_start: '2026-10-04' }
+    const sinLista = { ...david, notes: 'apuntada a mano' }
+    const unaSola = { ...david, installments_paid: 1, revenue: 197, cash_collected: 197, notes: '1 cuota cobrada (08/10).', plan_start: '2026-10-08' }
+    const descuadra = { ...david, installments_paid: 5 }
+    for (const v of [plan, sinLista, unaSola, descuadra]) expect(ventasPorCobro([v])).toEqual([v])
   })
 })
 

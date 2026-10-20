@@ -16,10 +16,17 @@
 // evento esas ventas se quedarían registradas como lead y nunca como venta.
 //
 // La firma es obligatoria: sin `webhookSecret` configurado, se rechaza.
+//
+// En los perfiles cuyos cobros lleva la tarea diaria (helm-automatico con sus
+// enlaces de pago, p. ej. Detrás de Cámara) no se apunta nada aquí: se pone al
+// día con esa misma tarea unos segundos después (_lib/stripe-automatico.js).
+// Apuntarlo aquí también contaba el cobro dos veces y, en un Stripe compartido,
+// metía los cobros de los otros negocios.
 import { supabase } from '../lib/supabase.js'
 import { writeAudit } from '../_lib/auth.js'
 import { getStripeConfig } from '../_lib/stripe.js'
 import { registerStripePayment, registerStripeInvoice } from '../_lib/stripe-ingest.js'
+import { configAutomatico, eventoDelPerfil, programarPuestaAlDia } from '../_lib/stripe-automatico.js'
 
 // Stripe firma el cuerpo crudo: nada de parsearlo antes de verificar.
 export const config = { api: { bodyParser: false } }
@@ -100,6 +107,24 @@ export default async function handler(req, res) {
   if (!(await verifySignature(rawBody, req.headers['stripe-signature'], cfg.webhookSecret))) {
     await writeAudit({ clientId: client.id, action: 'stripe.webhook.invalid_signature', req, statusCode: 400 })
     return res.status(400).json({ error: 'Firma inválida' })
+  }
+
+  // Perfil llevado por la tarea diaria: se le pasa a ella y listo.
+  const auto = await configAutomatico(supabase, client.id).catch(() => null)
+  if (auto) {
+    if (!eventoDelPerfil(auto, event)) return res.status(200).json({ received: true, outcome: `ignorado:${event?.type}` })
+    programarPuestaAlDia({
+      supabase, clientId: client.id, config: auto, apiKeyEnlazada: cfg.apiKey,
+      alTerminar: (err, r) => {
+        if (err) {
+          console.error(`[stripe webhook] ${client.slug}: no se pudo poner al día —`, err.message)
+          writeAudit({ clientId: client.id, action: 'stripe.webhook.error', statusCode: 500, errorMessage: err.message, metadata: { automatico: true } }).catch(() => {})
+        } else if (r?.ops?.length || r?.errores?.length) {
+          writeAudit({ clientId: client.id, action: 'stripe.webhook.automatico', metadata: { ventas: r.ventas, finanzas: r.finanzas, ops: r.ops, errores: r.errores } }).catch(() => {})
+        }
+      },
+    })
+    return res.status(200).json({ received: true, outcome: 'automatico' })
   }
 
   // El mismo evento no se atiende dos veces: se apunta su id antes de

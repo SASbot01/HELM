@@ -14,6 +14,7 @@ import { applyCors, rateLimit, getClientIp, writeAudit } from './_lib/auth.js'
 import { requireProfileAccess } from './_lib/access.js'
 import { stripeFor, getStripeConfig, saveStripeConfig, maskKey } from './_lib/stripe.js'
 import { importStripeWindow, analyzeStripeWindow } from './_lib/stripe-import.js'
+import { configAutomatico, ponerStripeAlDia } from './_lib/stripe-automatico.js'
 
 /**
  * ¿La SUPABASE_SERVICE_KEY del servidor es realmente de servicio?
@@ -171,6 +172,29 @@ export default async function handler(req, res) {
     if (!apiKey) return res.status(400).json({ error: 'Esta cuenta no tiene Stripe enlazado' })
 
     const days = Math.min(Math.max(Number(req.body?.days) || 60, 1), 365)
+
+    // Perfil llevado por la tarea diaria: se pone al día con ella (sus enlaces
+    // de pago, una venta por cliente) en vez de importar cada cobro suelto.
+    // El resumen tiene la forma de siempre para que Ajustes lo pinte igual.
+    const auto = await configAutomatico(supabase, clientId).catch(() => null)
+    if (auto) {
+      let r
+      try {
+        r = await ponerStripeAlDia({ supabase, clientId, config: auto, apiKeyEnlazada: apiKey })
+      } catch (err) {
+        return res.status(err.statusCode || 502).json({ error: `Stripe: ${err.message}` })
+      }
+      const resumen = {
+        days, automatico: true,
+        ventas: { nuevas: r.ventas.nuevas, yaEstaban: r.ventas.yaEstaban + r.ventas.actualizadas + r.ventas.vinculadas },
+        finanzas: { apuntes: r.finanzas },
+        leads: { nuevos: 0, yaEstaban: 0 },
+        productos: { nuevos: 0, actualizados: 0 },
+        ingresos: r.cobrado, moneda: 'EUR', cambios: r.ops, errores: r.errores,
+      }
+      await writeAudit({ clientId, action: 'stripe.sync', req, metadata: { automatico: true, ventas: r.ventas, finanzas: r.finanzas, ops: r.ops } })
+      return res.status(200).json({ ...resumen, analysis: null })
+    }
 
     let summary
     try {

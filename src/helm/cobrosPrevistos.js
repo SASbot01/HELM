@@ -199,6 +199,31 @@ export function cobrosPrevistos(ventas, { hoy, meses = 6, esCancelada = cancelad
   return out.sort((a, b) => a.fecha.localeCompare(b.fecha) || a.cliente.localeCompare(b.cliente))
 }
 
+/**
+ * Para contar por fechas (Informe): cada mensualidad partida en sus cobros,
+ * cada uno en su día. La tarea diaria guarda una mensualidad como UNA venta
+ * fechada en su primer pago, y así la cuota de octubre contaba en mayo. Se
+ * parte con la lista de fechas de su nota; si no la trae (apuntada a mano) o
+ * no cuadra con los pagos, se queda como está.
+ */
+export function ventasPorCobro(ventas) {
+  return (ventas || []).flatMap(v => {
+    if (v.payment_type !== 'Suscripción' || Number(v.installments_total) || !v.plan_start) return [v]
+    const cobros = cobrosDeLaNota(v.notes, v.plan_start)
+    const n = cobros.length
+    if (n < 2 || n !== Number(v.installments_paid)) return [v]
+    const parte = (total, i) => {
+      const t = Number(total) || 0
+      const cada = r2(t / n)
+      return i < n - 1 ? cada : r2(t - cada * (n - 1))
+    }
+    return cobros.map((fecha, i) => ({
+      ...v, id: `${v.id}#${i + 1}`, date: fecha, cuota: i + 1,
+      revenue: parte(v.revenue, i), cash_collected: parte(v.cash_collected, i),
+    }))
+  })
+}
+
 /** Los mismos cobros juntados por mes: [{ mes: 'AAAA-MM', total, cobros }]. */
 export function porMes(cobros) {
   const meses = new Map()

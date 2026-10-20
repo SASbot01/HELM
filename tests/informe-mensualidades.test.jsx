@@ -58,4 +58,11 @@ describe('Informe · pagos fraccionados y mensualidades', () => {
     expect(tabla.getByText('Plan de septiembre')).toBeTruthy()
     expect(screen.getByText('394 €/mes')).toBeTruthy()
   })
+
+  it('«Este mes» cuenta la cuota de octubre de Alexander (y no su mensualidad entera de mayo)', async () => {
+    render(<Informe clientId="ddc" onNavigate={() => {}} />)
+    await screen.findByText('Pagos fraccionados y mensualidades')
+    expect(screen.getAllByText('Detrás de Cámara · mensualidad · 6ª').length).toBeGreaterThan(0)   // la del 05/10
+    expect(screen.queryByText('2026-05-05')).toBeNull()
+  })
 })

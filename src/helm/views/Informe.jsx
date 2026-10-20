@@ -5,7 +5,7 @@ import { Evolucion, PorPrograma } from './informe/Graficas'
 import { supabase, money, fmtDate, getOnboarding, onboardingApi, isSaleCancelled, cuotasPendientes } from '../lib'
 import { Kpi, Panel, Empty } from '../ui'
 import { seccionDelProducto } from '../producto'
-import { mensualidadesVivas, hoyLocal } from '../cobrosPrevistos'
+import { mensualidadesVivas, hoyLocal, ventasPorCobro } from '../cobrosPrevistos'
 
 // Las fechas AAAA-MM-DD sin pasar por la hora local (en Latinoamérica,
 // new Date('2026-11-05') cae el día 4).
@@ -142,7 +142,9 @@ export default function Informe({ clientId, onNavigate }) {
     // `desdeISO` mira el reloj, así que se calcula aquí dentro: si viviera en el
     // cuerpo del render, el compilador no podría memoizar nada.
     const desde = desdeISO(periodo)
-    const todas = sales || []
+    // Lo que se cuenta por fechas va por cobros: cada cuota de una mensualidad
+    // en su mes, y no toda en el mes en que empezó (ventasPorCobro).
+    const todas = ventasPorCobro(sales || []).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
     const enRango = (fecha) => !desde || (fecha || '') >= desde
     const filtradas = todas
       .filter(s => enRango(s.date))
@@ -171,7 +173,8 @@ export default function Informe({ clientId, onNavigate }) {
     // el informe daba por buena toda la facturación aunque estuviera a medias.
     // Un plan con cuotas pendientes sale empiece cuando empiece (uno de mayo
     // sigue cobrando en octubre); los ya cobrados, solo los del periodo.
-    const delPrograma = todas.filter(s => programa === '__all__' || (s.product || '').trim() === programa)
+    // Los planes y las mensualidades, enteros (sin partir por cobros).
+    const delPrograma = (sales || []).filter(s => programa === '__all__' || (s.product || '').trim() === programa)
     const planes = delPrograma
       .map(s => ({ ...s, pendientes: cuotasPendientes(s) }))
       .filter(s => s.pendientes != null && (s.pendientes > 0 || enRango(s.date)))
@@ -363,7 +366,7 @@ export default function Informe({ clientId, onNavigate }) {
                 <tr key={i}>
                   <td>{fmtDate(r.date)}</td>
                   <td>{r.client_name || '—'}</td>
-                  <td>{r.product || '—'}</td>
+                  <td>{r.product || '—'}{r.cuota ? ` · ${r.cuota}ª` : ''}</td>
                   <td className="helm-num">{money(r.revenue)}</td>
                   <td className="helm-num">{money(r.cash_collected)}</td>
                 </tr>
