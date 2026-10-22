@@ -3,11 +3,12 @@
 // directo al suyo (ver HelmApp).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, ArrowUpRight, LogOut, Users, MoreHorizontal, EyeOff, Trash2, RotateCcw, Building2, Send, Inbox } from 'lucide-react'
-import { brandOf, notificacionesApi, perfilesApi, creditosApi, telegramAgenciaApi, altasApi, enlaceAltaPublica } from './lib'
+import { Plus, Search, ArrowUpRight, LogOut, Users, MoreHorizontal, EyeOff, Trash2, RotateCcw, Building2, Send, Inbox, KeyRound } from 'lucide-react'
+import { brandOf, notificacionesApi, perfilesApi, creditosApi, telegramAgenciaApi, altasApi, accesosApi, enlaceAltaPublica } from './lib'
 import Creditos, { BotonCreditos, Bienvenida } from './Creditos'
 import TelegramAgencia from './TelegramAgencia'
 import AltasRecibidas, { DetalleAlta } from './AltasRecibidas'
+import AccesosRecibidos from './AccesosRecibidos'
 import { Modal, Field, Input, FormNote } from './ui'
 import './perfiles.css'
 
@@ -29,6 +30,10 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
   const [falloAltas, setFalloAltas] = useState(null)
   const [verAltas, setVerAltas] = useState(false)
   const [altaAbierta, setAltaAbierta] = useState(null)
+  // Las solicitudes de acceso a AI para todo (puerta con aprobación).
+  const [accesos, setAccesos] = useState(null)
+  const [falloAccesos, setFalloAccesos] = useState(null)
+  const [verAccesos, setVerAccesos] = useState(false)
   const caja = useRef(null)
   const navigate = useNavigate()
 
@@ -47,6 +52,10 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
   const cargarAltas = () => altasApi.lista()
     .then(r => { setAltas(r.altas || []); setFalloAltas(null) })
     .catch(e => setFalloAltas(e.message || 'No se han podido cargar las altas.'))
+  const cargarAccesos = () => accesosApi.pendientes()
+    .then(r => { setAccesos(r.accesos || []); setFalloAccesos(null) })
+    .catch(e => setFalloAccesos(e.message || 'No se han podido cargar los accesos.'))
+  const accesosPendientes = (accesos || []).length
   // Las que esperan a que alguien las mire: el número del botón.
   const nuevas = useMemo(() => (altas || []).filter(a => a.estado === 'enviada').length, [altas])
   // La plataforma ve las de todas las agencias: entonces cada una dice de cuál es.
@@ -56,6 +65,7 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
     notificacionesApi.resumen().then(r => setAvisos(r.porPerfil || {})).catch(() => {})
     cargarInactivos()
     cargarAltas()
+    cargarAccesos()
     // Vuelta de pagar en Stripe: se confirma el pago (el servidor se lo
     // pregunta a Stripe) antes de leer el saldo, para enseñar el nuevo.
     const p = new URLSearchParams(window.location.search)
@@ -114,6 +124,12 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
           >
             <Inbox size={15} /> Altas{nuevas > 0 && <span className="helm-altas-num">{nuevas}</span>}
           </button>
+          <button
+            type="button" className="helm-btn" onClick={() => { setVerAccesos(true); cargarAccesos() }}
+            title={accesosPendientes ? `${accesosPendientes} ${accesosPendientes === 1 ? 'solicitud' : 'solicitudes'} de acceso a AI para todo` : 'Solicitudes de acceso a AI para todo'}
+          >
+            <KeyRound size={15} /> Accesos{accesosPendientes > 0 && <span className="helm-altas-num">{accesosPendientes}</span>}
+          </button>
           {conTelegram && (
             <button type="button" className="helm-btn" onClick={() => setVerTelegram(true)} title="El bot de Telegram de la agencia">
               <Send size={15} /> Telegram
@@ -143,6 +159,11 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
             enlace={agencia?.slug ? enlaceAltaPublica(agencia.slug) : null}
             onAbrir={setAltaAbierta} onReintentar={cargarAltas}
           />
+        </Modal>
+      )}
+      {verAccesos && (
+        <Modal title="Accesos a AI para todo" onClose={() => setVerAccesos(false)} wide>
+          <AccesosRecibidos accesos={accesos} fallo={falloAccesos} onCambio={cargarAccesos} />
         </Modal>
       )}
       {altaAbierta && (

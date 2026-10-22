@@ -569,6 +569,15 @@ export const altasApi = {
   descartar: (altaId) => apiFetch('/api/onboarding?action=alta-descartar', { method: 'POST', body: { altaId } }),
 }
 
+// Accesos con aprobación (AI para todo): las solicitudes pendientes y su visto
+// bueno. Solo superadmin (api/accesos.js lo exige). Al aprobar, la persona entra
+// en la web con su mismo correo; si hay correo saliente, además se le avisa.
+export const accesosApi = {
+  pendientes: (comunidad = 'aiparatodo') => apiFetch(`/api/accesos?action=pendientes&comunidad=${comunidad}`),
+  aprobar: (id, comunidad = 'aiparatodo') => apiFetch(`/api/accesos?action=aprobar&comunidad=${comunidad}`, { method: 'POST', body: { id } }),
+  rechazar: (id, comunidad = 'aiparatodo') => apiFetch(`/api/accesos?action=rechazar&comunidad=${comunidad}`, { method: 'POST', body: { id } }),
+}
+
 // El enlace público del alta de una agencia. Siempre con su slug: sin él, lo
 // que se rellene le llega a la agencia de la casa, no a la que lo mandó.
 const ALTA_PUBLICA = 'https://helm.s4sf.net/alta'

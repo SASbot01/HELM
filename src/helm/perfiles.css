@@ -163,3 +163,29 @@ div.helm-perfil { cursor: default; }
   .helm-alta-botones { flex-direction: column-reverse; }
   .helm .helm-alta-botones .helm-btn { width: 100%; }
 }
+
+/* Accesos a AI para todo (AccesosRecibidos.jsx): las solicitudes con aprobación. */
+.helm-accesos { display: flex; flex-direction: column; gap: 12px; }
+.helm-acc-vacio { display: flex; align-items: center; gap: 8px; color: var(--text-mut); padding: 18px 2px; }
+.helm-acc-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.helm-acc-lista li {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 11px 13px; border: 1px solid var(--border); border-radius: 11px; background: var(--bg-1);
+}
+.helm-acc-quien { min-width: 0; }
+.helm-acc-quien b { display: block; font-size: 14px; color: var(--text); }
+.helm-acc-quien small { display: block; font-size: 12px; color: var(--text-mut); margin-top: 1px; overflow-wrap: anywhere; }
+.helm-acc-acciones { display: flex; gap: 7px; flex-shrink: 0; }
+.helm-btn.sm.ghost { background: transparent; color: var(--text-dim); }
+.helm-acc-ok {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  padding: 10px 12px; border-radius: 10px; font-size: 13px; color: var(--text);
+  background: rgba(34, 197, 94, 0.10); border: 1px solid rgba(34, 197, 94, 0.32);
+}
+.helm-acc-ok > svg { color: var(--green); flex-shrink: 0; }
+.helm-acc-girando { animation: helm-acc-giro 0.8s linear infinite; }
+@keyframes helm-acc-giro { to { transform: rotate(360deg); } }
+@media (max-width: 560px) {
+  .helm-acc-lista li { flex-direction: column; align-items: stretch; }
+  .helm-acc-acciones { justify-content: flex-end; }
+}

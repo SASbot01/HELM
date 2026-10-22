@@ -4,20 +4,22 @@
 // enlace y aterriza aquí. Todo lo que hay en pantalla existe para que haga UNA
 // de estas cosas:
 //
-//   1. AI para todo              → /aiparatodo, la comunidad gratis (skills,
-//                                  news y la guía de Claude). Ahí se deja el
-//                                  correo. Sustituye a la «Charla gratis» (la
-//                                  masterclass detrás de un formulario), que
-//                                  queda en el historial de git.
-//   2. Irse a YouTube            → donde se enseña a fondo.
-//   3. ¿Eres una empresa o negocio? → /empresas, donde se vende HELM montado
+//   1. HELM Academy (Skool)      → la comunidad en Skool. Es la nueva puerta:
+//                                  primero se entra ahí. Tarjeta con el estilo
+//                                  de Skool (portada + «Unirse al grupo»).
+//   2. AI para todo              → /aiparatodo, que ahora pide acceso (nombre y
+//                                  correo) y lo aprueba Alex a quien ya está en
+//                                  el Skool. Se queda, pero deja de ser la
+//                                  puerta principal.
+//   3. Irse a YouTube            → donde se enseña a fondo.
+//   4. ¿Eres una empresa o negocio? → /empresas, donde se vende HELM montado
 //                                  y llevado por Alex.
 //
 // Instagram ya no tiene botón: quien llega aquí viene de Instagram. El handle
 // sigue encima de la foto como firma.
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Youtube, Building2, ChevronRight, Sparkles } from 'lucide-react'
+import { Youtube, Building2, ChevronRight, Sparkles, ArrowUpRight } from 'lucide-react'
 import { useCabeceraPublica } from './inicio/cabecera.js'
 import { track } from './inicio/socio/track.js'
 import FondoHacker from './inicio/FondoHacker.jsx'
@@ -28,6 +30,7 @@ import './inicio/inicio.css'
 const HANDLE = 'silvesttre.ia'
 const YOUTUBE = 'https://www.youtube.com/@silvesttre-ai'
 const INSTAGRAM = `https://www.instagram.com/${HANDLE}`
+const SKOOL = 'https://www.skool.com/helm-academy-4887/about'
 const TITULO = 'Alex Silvestre — Aprende a dirigir la IA, no solo a usarla'
 const DESCRIPCION = 'IA aplicada en español, sin humo y con datos. Entra gratis en AI para todo.'
 
@@ -80,12 +83,35 @@ export default function Clase() {
         <div className="ini-sep">Empieza aquí</div>
 
         <div className="ini-botones">
-          {/* El primario: AI para todo, gratis. El correo se pide allí. */}
-          <Link className="ini-btn on" to="/aiparatodo" onClick={() => track('clic_cta', { donde: 'bio-aiparatodo' })}>
+          {/* El primario: HELM Academy en Skool, con el estilo de Skool
+              (portada violeta + «Unirse al grupo» amarillo). Es la puerta
+              nueva: se entra aquí antes que a AI para todo. */}
+          <a
+            className="ini-skool"
+            href={SKOOL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => track('clic_cta', { donde: 'bio-skool' })}
+          >
+            <span className="ini-skool-cover">
+              <img src="/inicio/skool-alex.jpg" alt="Alex Silvestre en HELM Academy" width="1280" height="800" fetchPriority="high" />
+              <span className="ini-skool-marca"><span className="ini-skool-ha">HA</span> HELM Academy</span>
+            </span>
+            <span className="ini-skool-cuerpo">
+              <span className="ini-skool-info">
+                <b>HELM Academy</b>
+                <small>Comunidad en Skool · Gratis · Por Alex Silvestre</small>
+              </span>
+              <span className="ini-skool-cta">Unirse al grupo <ArrowUpRight size={16} /></span>
+            </span>
+          </a>
+
+          {/* AI para todo se queda, pero ahora pide acceso y lo apruebas tú. */}
+          <Link className="ini-btn" to="/aiparatodo" onClick={() => track('clic_cta', { donde: 'bio-aiparatodo' })}>
             <span className="ini-btn-icono"><Sparkles size={20} /></span>
             <span className="ini-btn-txt">
               <b>AI para todo</b>
-              <small>Gratis: webs premiadas con su prompt, skills, news y guías de Claude</small>
+              <small>Webs premiadas con su prompt, skills, news y guías. Pide acceso.</small>
             </span>
             <ChevronRight className="ini-flecha" size={20} />
           </Link>

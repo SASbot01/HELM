@@ -30,6 +30,33 @@ export async function altaMiembro(cfg, { nombre, email, profesion, ingresos, pip
 }
 
 /**
+ * Pide acceso a una comunidad con aprobación (AI para todo). No abre nada: deja
+ * la solicitud (nombre y correo) para que la apruebe el dueño. Devuelve
+ * `{ estado: 'pendiente' | 'aprobado', id? }`: si ya estaba aprobado, trae la
+ * ficha para entrar.
+ */
+export async function solicitarAcceso(cfg, { nombre, email, website = '' }) {
+  const correo = String(email || '').trim().toLowerCase()
+  if (!String(nombre || '').trim()) throw new Error('Dinos cómo te llamas')
+  if (!correo) throw new Error('Falta el correo')
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) throw new Error('Revisa el correo')
+  return pideLead('solicitar-acceso', {
+    comunidad: cfg.clave, nombre: String(nombre).trim(), email: correo, website, origen: origen(),
+  }, cfg.apiBase)
+}
+
+/**
+ * Comprueba si un correo ya tiene el acceso aprobado. Devuelve
+ * `{ estado: 'aprobado' | 'pendiente' | 'no', id? }`: con la ficha si está
+ * aprobado, para abrir la puerta.
+ */
+export async function comprobarAcceso(cfg, email) {
+  const correo = String(email || '').trim().toLowerCase()
+  if (!correo) throw new Error('Falta el correo')
+  return pideLead('comprobar-acceso', { comunidad: cfg.clave, email: correo }, cfg.apiBase)
+}
+
+/**
  * Deja una línea en las notas del contacto (p. ej. «descargó la guía en PDF»).
  * Solo las que el servidor tiene en su lista (api/leads.js · NOTAS). Nunca
  * lanza: la descarga ya está en marcha y una nota no puede pararla.

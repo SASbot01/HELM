@@ -31,6 +31,7 @@
 import { supabase } from './lib/supabase.js'
 import { applyCors, rateLimit, getClientIp, signJwt, verifyJwt } from './_lib/auth.js'
 import { comunidadPorClave } from './_lib/comunidades.js'
+import { notificar } from './_lib/notificar.js'
 
 // El perfil de todas las landings propias (silvestre). Si mañana hay otra
 // landing de otro perfil, se añade a mano: que el slug venga del navegador
@@ -398,6 +399,81 @@ async function miembro(b, { ip } = {}) {
   return { id: await ficha(clientId, await crear(fila)) }
 }
 
+// ── AI para todo: acceso con aprobación ─────────────────────────────────────
+// Desde el 22-10-2026 el acceso a AI para todo no es automático: se solicita
+// (nombre y correo) y lo aprueba Alex a quien ya está en HELM Academy (el
+// Skool). El estado vive en el propio contacto, en custom_fields.<clave>.acceso
+// ('pendiente' | 'aprobado' | 'rechazado'): así el panel lo ve como un lead más
+// y no hace falta otra tabla. Mientras no está aprobado no se devuelve ficha,
+// así que la puerta del navegador no se abre.
+const estadoAcceso = (contacto, clave) => contacto?.custom_fields?.[clave]?.acceso || null
+
+async function solicitarAcceso(b, { ip } = {}) {
+  // El campo trampa, como en las altas: oculto, solo lo rellena un bot.
+  if (txt(b.website, 200)) throw fallo(400, 'No se ha podido enviar')
+  const c = comunidadDe(b)
+  const correo = correoDe(b.email)
+  const nombre = txt(b.nombre, 80)
+  if (!nombre) throw fallo(400, 'Dinos cómo te llamas')
+
+  const clientId = await perfil(c.perfil)
+  const previo = await buscar(clientId, correo, 'id, name, notes, custom_fields')
+  // Si ya está aprobado, entra directo: volver a pedir acceso no lo echa.
+  if (estadoAcceso(previo, c.clave) === 'aprobado') {
+    return { estado: 'aprobado', id: await ficha(clientId, previo.id) }
+  }
+
+  const yaPendiente = estadoAcceso(previo, c.clave) === 'pendiente'
+  const datos = { ...(previo?.custom_fields?.[c.clave] || {}), acceso: 'pendiente', solicitado: ahora() }
+  const linea = `${c.nombre} · pidió acceso`
+
+  if (previo) {
+    await actualizar(previo.id, {
+      custom_fields: { ...(previo.custom_fields || {}), [c.clave]: datos },
+      notes: sumaNota(previo.notes, linea),
+      last_activity_at: ahora(), updated_at: ahora(),
+    })
+  } else {
+    if (!rateLimit({ key: `acceso:${c.clave}:${ip || 'anon'}`, max: ALTAS_POR_IP_HORA, windowMs: 3_600_000 }).ok) {
+      throw fallo(429, 'Ahora mismo hay muchas solicitudes. Prueba en un rato.')
+    }
+    cuentaAlta(c.clave)
+    const pipeline = await embudo(clientId, PIPELINE_INICIO)
+    const etapa = pipeline.etapas.find(s => s.key === ETAPA_ENTRADA)?.key || pipeline.etapas[0]?.key || ETAPA_ENTRADA
+    await crear({
+      client_id: clientId, name: nombre || correo.split('@')[0], email: correo,
+      source: `${c.nombre} · acceso`, notes: linea,
+      pipeline_id: pipeline.id, status: etapa,
+      utm_source: c.clave, utm_medium: 'acceso',
+      custom_fields: { [c.clave]: datos },
+      last_activity_at: ahora(), updated_at: ahora(),
+    })
+  }
+
+  // Aviso a Alex (campana del panel + Telegram), solo cuando la solicitud es
+  // nueva: si recarga o reintenta, no se repite.
+  if (!yaPendiente) {
+    await notificar(supabase, clientId, {
+      tipo: 'lead', nivel: 'info',
+      titulo: `Acceso a ${c.nombre}: ${nombre}`,
+      cuerpo: `${nombre} (${correo}) pide acceso. Apruébalo en Perfiles → Accesos cuando se haya unido a HELM Academy.`,
+      clave: `acceso:${c.clave}`,
+    })
+  }
+  return { estado: 'pendiente' }
+}
+
+async function comprobarAcceso(b) {
+  const c = comunidadDe(b)
+  const correo = correoDe(b.email)
+  const clientId = await perfil(c.perfil)
+  const previo = await buscar(clientId, correo, 'id, custom_fields')
+  const estado = estadoAcceso(previo, c.clave)
+  if (estado === 'aprobado') return { estado: 'aprobado', id: await ficha(clientId, previo.id) }
+  if (estado === 'pendiente') return { estado: 'pendiente' }
+  return { estado: 'no' }
+}
+
 // ── Primer paso del diagnóstico y del formulario de valor ───────────────────
 // El lead existe en cuanto pasa la puerta, aunque abandone a la tercera
 // pregunta. Si el email ya está, se reutiliza la ficha: quien repite es la
@@ -553,7 +629,7 @@ async function nota(b) {
   return { ok: true }
 }
 
-const ACCIONES = { masterclass, socio, miembro, puerta, completar, nota }
+const ACCIONES = { masterclass, socio, miembro, puerta, completar, nota, 'solicitar-acceso': solicitarAcceso, 'comprobar-acceso': comprobarAcceso }
 
 export default async function handler(req, res) {
   applyCors(req, res)

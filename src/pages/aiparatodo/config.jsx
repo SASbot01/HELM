@@ -26,6 +26,9 @@ import {
 import { PanelWebs, FichaWeb, VitrinaWebs } from './Webs.jsx'
 import { PREMIADAS } from './webs.js'
 
+// HELM Academy (Skool): la comunidad a la que se entra antes de AI para todo.
+const SKOOL_URL = 'https://www.skool.com/helm-academy-4887/about'
+
 const COBRO_ACTIVO = false
 const COBRO = {
   link: 'https://buy.stripe.com/test_7sY3cu5aratnexD1eM5kk01',
@@ -85,7 +88,7 @@ export default {
       gancho: MODOS_GANCHO, kicker: `Guía en PDF · guía principal · ${MODOS_INDICE.length} puntos`,
       Indice: IndiceModos, Cuerpo: CuerpoGuiaModos,
       puerta: {
-        pipeline: PIPELINE_LEAD_MAGNET, nota: 'pidió la guía Los Mods de Claude (PDF)', titulo: 'Descárgate la guía',
+        inmediato: true, pipeline: PIPELINE_LEAD_MAGNET, nota: 'pidió la guía Los Mods de Claude (PDF)', titulo: 'Descárgate la guía',
         texto: 'Gratis: tu nombre y tu correo y es tuya, con todos los prompts, junto con las webs de referencia y todos los hilos de AI para todo.', boton: 'Descargar',
       },
     },
@@ -94,7 +97,7 @@ export default {
       gancho: 'Mis 8 no negociables con Claude', kicker: `Guía en PDF · ${NN_PUNTOS.length} puntos`,
       Indice: IndiceNN, Cuerpo: CuerpoNoNegociables,
       puerta: {
-        pipeline: PIPELINE_LEAD_MAGNET, nota: 'pidió la guía Mis 8 no negociables (PDF)', titulo: 'Descárgate la guía',
+        inmediato: true, pipeline: PIPELINE_LEAD_MAGNET, nota: 'pidió la guía Mis 8 no negociables (PDF)', titulo: 'Descárgate la guía',
         texto: 'Gratis: tu nombre y tu correo y es tuya, junto con las webs de referencia y todos los hilos de AI para todo.', boton: 'Descargar',
       },
     },
@@ -143,6 +146,25 @@ export default {
   // Las listas de la puerta tienen que ser las mismas que las de la comunidad
   // en el servidor (api/_lib/comunidades.js); un test lo comprueba.
   puerta: {
+    // Desde el 22-10-2026, AI para todo es acceso CON APROBACIÓN: se pide
+    // nombre y correo y lo aprueba Alex a quien ya está en HELM Academy (el
+    // Skool). La puerta de `datos` de abajo se queda para los PDF (lead magnet),
+    // que se piden con `inmediato` y siguen abriéndose directos.
+    aprobacion: {
+      skool: SKOOL_URL,
+      kicker: 'acceso con aprobación',
+      titulo: 'Pide tu acceso',
+      texto: 'Primero únete a HELM Academy (es gratis). Déjanos tu nombre y tu correo y, en cuanto confirmemos que estás dentro, te abrimos AI para todo con ese mismo correo.',
+      boton: 'Pedir acceso',
+      legal: <>Usamos tus datos solo para darte acceso y enviarte contenido de AI para todo y de Silvestre AI. Puedes darte de baja cuando quieras. <a href="/privacidad" target="_blank" rel="noopener noreferrer">Privacidad</a></>,
+      pendiente: {
+        titulo: '¡Solicitud recibida!',
+        texto: 'Únete a HELM Academy (gratis) si aún no lo has hecho. En cuanto Alex confirme que estás dentro, abre AI para todo aquí con este mismo correo.',
+        skoolBoton: 'Unirme a HELM Academy',
+        comprobar: 'Ya me uní — abrir AI para todo',
+        aun: 'Todavía no está aprobado. Únete a HELM Academy y vuelve a probar en un rato.',
+      },
+    },
     datos: {
       kicker: 'gratis · una sola vez',
       titulo: 'Entra gratis',

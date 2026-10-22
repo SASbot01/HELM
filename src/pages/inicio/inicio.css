@@ -195,6 +195,60 @@
 .ini-btn.on small { color: rgba(var(--sobre-marca-rgb), 0.82); }
 .ini-btn.on:hover { background: linear-gradient(135deg, var(--marca-cima), var(--marca-alto)); border-color: transparent; }
 
+/* ── HELM Academy (Skool) — el primario ────────────────────────────────────
+   Tarjeta con el estilo de Skool: portada con la foto de Alex, la marca
+   encima y un botón amarillo «Unirse al grupo». Es blanca a propósito —así se
+   lee como lo que es, un grupo de Skool— y resalta sobre la bio oscura. */
+.ini-skool {
+  display: block; width: 100%;
+  border-radius: 16px; overflow: hidden;
+  background: #fff; color: #15171a; text-decoration: none;
+  border: 1px solid rgba(124, 58, 237, 0.35);
+  box-shadow: 0 16px 38px -16px rgba(124, 58, 237, 0.75);
+  transition: transform .16s cubic-bezier(.2,.8,.2,1), box-shadow .16s;
+}
+.ini-skool:hover { transform: translateY(-2px); box-shadow: 0 22px 46px -16px rgba(124, 58, 237, 0.9); }
+.ini-skool:active { transform: translateY(0); }
+
+.ini-skool-cover { position: relative; display: block; aspect-ratio: 16 / 7; background: #7c3aed; }
+.ini-skool-cover img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; display: block; }
+/* Tinte violeta de Skool sobre la foto, más denso abajo para que lea la marca. */
+.ini-skool-cover::after {
+  content: ""; position: absolute; inset: 0;
+  background:
+    linear-gradient(160deg, rgba(124,58,237,0.26), rgba(124,58,237,0) 44%),
+    linear-gradient(0deg, rgba(12,8,26,0.82), rgba(12,8,26,0) 56%);
+}
+.ini-skool-marca {
+  position: absolute; left: 12px; bottom: 10px; z-index: 1;
+  display: inline-flex; align-items: center; gap: 8px;
+  color: #fff; font-weight: 800; font-size: 15px; letter-spacing: .2px;
+  text-shadow: 0 1px 10px rgba(0,0,0,.5);
+}
+.ini-skool-ha {
+  display: inline-grid; place-items: center;
+  width: 26px; height: 26px; border-radius: 7px;
+  background: #7c3aed; color: #fff; font-size: 11px; font-weight: 800;
+  box-shadow: 0 2px 8px rgba(0,0,0,.3);
+}
+.ini-skool-cuerpo { display: flex; align-items: center; gap: 12px; padding: 13px 14px 14px; }
+.ini-skool-info { min-width: 0; flex: 1; }
+.ini-skool-info b { display: block; font-size: 15px; font-weight: 800; color: #15171a; }
+.ini-skool-info small { display: block; font-size: 11.5px; font-weight: 600; color: #6b7280; margin-top: 2px; }
+.ini-skool-cta {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px;
+  background: #fbcf4b; color: #1a1205; font-weight: 800; font-size: 13.5px;
+  padding: 10px 14px; border-radius: 10px;
+  box-shadow: 0 6px 16px -6px rgba(251, 207, 75, .9);
+  transition: background .16s;
+}
+.ini-skool:hover .ini-skool-cta { background: #ffd95e; }
+@media (max-width: 380px) {
+  .ini-skool-cuerpo { flex-direction: column; align-items: stretch; }
+  .ini-skool-cta { justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) { .ini-skool { transition: none; } }
+
 .ini-pie {
   margin-top: 10px;
   font-size: 11.5px;
