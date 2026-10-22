@@ -55,13 +55,27 @@ const MAX_FOTOGRAMA = 8 * 1024 * 1024
 const MAX_EJEMPLO = 6 * 1024 * 1024
 const RAIZ = fileURLToPath(new URL('..', import.meta.url))
 
-/** { tipo, buf } de una data URL de imagen, o null si no lo es o pasa de `max`. */
+// ¿Los primeros bytes son de verdad de una imagen de ese tipo? La etiqueta MIME
+// de la data URL la pone quien sube, así que no basta: sin esto, un perfil puede
+// colar bytes arbitrarios etiquetados como image/png y dejarlos servidos desde
+// el almacén público, o mandárselos a Replicate (que cuesta).
+function cabeceraCuadra(tipo, buf) {
+  if (tipo === 'image/jpeg') return buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff
+  if (tipo === 'image/png') return buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 && buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a
+  if (tipo === 'image/webp') return buf.length >= 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP'
+  return false
+}
+
+/** { tipo, buf } de una data URL de imagen, o null si no lo es, pasa de `max` o
+ *  los bytes no son de verdad una imagen de ese tipo. */
 export function imagenDeDataUrl(dataUrl, max) {
   const m = IMAGEN_DATA.exec(String(dataUrl || ''))
   if (!m) return null
   const buf = Buffer.from(m[2], 'base64')
   if (!buf.length || buf.length > max) return null
-  return { tipo: `image/${m[1]}`, buf }
+  const tipo = `image/${m[1]}`
+  if (!cabeceraCuadra(tipo, buf)) return null
+  return { tipo, buf }
 }
 const comoDataUrl = (tipo, buf) => `data:${tipo};base64,${buf.toString('base64')}`
 
@@ -82,6 +96,19 @@ async function guardaEjemplos(clientId, id, lista) {
   if (error) throw Object.assign(new Error('No se pudo guardar la lista de ejemplos: ' + error.message), { statusCode: 500 })
 }
 const publico = (e) => ({ id: e.id, nombre: e.nombre, url: e.url, creado: e.creado })
+
+// Subir y borrar ejemplos es leer la lista, tocarla y reescribirla: dos a la vez
+// (doble clic, dos pestañas) se pisarían y dejarían la imagen ya subida huérfana
+// en el almacén. api-server.mjs es un solo proceso, así que basta con ponerlas en
+// fila por perfil. (La tarea diaria no toca esta lista, así que no compite.)
+const colaEjemplos = new Map()
+function enColaEjemplos(clientId, fn) {
+  const antes = colaEjemplos.get(clientId) || Promise.resolve()
+  const p = antes.catch(() => {}).then(fn)
+  colaEjemplos.set(clientId, p)
+  p.catch(() => {}).finally(() => { if (colaEjemplos.get(clientId) === p) colaEjemplos.delete(clientId) })
+  return p
+}
 // Del CDN de Meta y de nada más: esto descarga lo que diga la Graph API, y una
 // dirección de otro sitio sería que algo ha ido muy mal.
 const CDN_META = /(^|\.)(cdninstagram\.com|fbcdn\.net)$/i
@@ -263,37 +290,43 @@ export default async function handler(req, res) {
       const img = imagenDeDataUrl(req.body?.imagen, MAX_EJEMPLO)
       if (!nombre) return res.status(400).json({ error: 'Ponle un nombre al ejemplo' })
       if (!img) return res.status(400).json({ error: 'La imagen tiene que ser JPG, PNG o WebP de menos de 6 MB' })
-      const { id, lista } = await ejemplosDe(clientId)
-      if (lista.length >= MAX_EJEMPLOS) return res.status(400).json({ error: `Como mucho ${MAX_EJEMPLOS} ejemplos: quita alguno antes` })
-      const nuevo = crypto.randomUUID()
-      const ruta = `${clientId}/portadas/ejemplos/${nuevo}.${img.tipo.split('/')[1].replace('jpeg', 'jpg')}`
-      const { error: errUp } = await supabase.storage.from('helm').upload(ruta, img.buf, { contentType: img.tipo, upsert: false, cacheControl: '31536000' })
-      if (errUp) return res.status(500).json({ error: 'No se pudo subir la imagen: ' + errUp.message })
-      const { data: pub } = supabase.storage.from('helm').getPublicUrl(ruta)
-      const ejemplo = { id: nuevo, nombre, ruta, url: pub?.publicUrl || '', creado: new Date().toISOString() }
-      try { await guardaEjemplos(clientId, id, [...lista, ejemplo]) } catch (err) { await supabase.storage.from('helm').remove([ruta]); throw err }
-      return res.status(200).json({ ejemplo: publico(ejemplo), ejemplos: [...lista, ejemplo].map(publico) })
+      return enColaEjemplos(clientId, async () => {
+        const { id, lista } = await ejemplosDe(clientId)
+        if (lista.length >= MAX_EJEMPLOS) return res.status(400).json({ error: `Como mucho ${MAX_EJEMPLOS} ejemplos: quita alguno antes` })
+        const nuevo = crypto.randomUUID()
+        const ruta = `${clientId}/portadas/ejemplos/${nuevo}.${img.tipo.split('/')[1].replace('jpeg', 'jpg')}`
+        const { error: errUp } = await supabase.storage.from('helm').upload(ruta, img.buf, { contentType: img.tipo, upsert: false, cacheControl: '31536000' })
+        if (errUp) return res.status(500).json({ error: 'No se pudo subir la imagen: ' + errUp.message })
+        const { data: pub } = supabase.storage.from('helm').getPublicUrl(ruta)
+        const ejemplo = { id: nuevo, nombre, ruta, url: pub?.publicUrl || '', creado: new Date().toISOString() }
+        try { await guardaEjemplos(clientId, id, [...lista, ejemplo]) } catch (err) { await supabase.storage.from('helm').remove([ruta]); throw err }
+        return res.status(200).json({ ejemplo: publico(ejemplo), ejemplos: [...lista, ejemplo].map(publico) })
+      })
     }
 
     // ── POST ?action=ejemplo-borrar ────────────────────────────────────────
     if (req.method === 'POST' && action === 'ejemplo-borrar') {
       const quitar = String(req.body?.id || '')
-      const { id, lista } = await ejemplosDe(clientId)
-      const fuera = lista.find(e => e.id === quitar)
-      if (!fuera) return res.status(404).json({ error: 'Ese ejemplo ya no está' })
-      const quedan = lista.filter(e => e.id !== quitar)
-      await guardaEjemplos(clientId, id, quedan)
-      if (String(fuera.ruta || '').startsWith(`${clientId}/portadas/ejemplos/`)) await supabase.storage.from('helm').remove([fuera.ruta])
-      return res.status(200).json({ ejemplos: quedan.map(publico) })
+      return enColaEjemplos(clientId, async () => {
+        const { id, lista } = await ejemplosDe(clientId)
+        const fuera = lista.find(e => e.id === quitar)
+        if (!fuera) return res.status(404).json({ error: 'Ese ejemplo ya no está' })
+        const quedan = lista.filter(e => e.id !== quitar)
+        await guardaEjemplos(clientId, id, quedan)
+        // Solo del propio namespace del perfil; el error del almacén no debe
+        // romper el borrado (la lista ya está sin él), pero sí quedar en el log.
+        if (String(fuera.ruta || '').startsWith(`${clientId}/portadas/ejemplos/`)) {
+          const { error: errDel } = await supabase.storage.from('helm').remove([fuera.ruta])
+          if (errDel) console.error('portadas: no se pudo borrar del almacén', fuera.ruta, errDel.message)
+        }
+        return res.status(200).json({ ejemplos: quedan.map(publico) })
+      })
     }
 
     // ── POST ?action=portada-ia ────────────────────────────────────────────
     // La portada entera con IA en un estilo, desde un fotograma real.
     if (req.method === 'POST' && action === 'portada-ia') {
       if (!hayClaveImagen()) return res.status(503).json({ error: 'Falta la clave de imagen (REPLICATE_API_TOKEN) en el servidor' })
-      // Cada una cuesta dinero en Replicate: un tope por perfil y hora.
-      const tope = rateLimit({ key: `portada-ia:${clientId}`, max: 30, windowMs: 3_600_000 })
-      if (!tope.ok) return res.status(429).json({ error: 'Has generado muchas portadas seguidas. Prueba dentro de un rato.', retryAfter: tope.retryAfter })
       const fotograma = imagenDeDataUrl(req.body?.fotograma, MAX_FOTOGRAMA)
       const titulo = String(req.body?.titulo || '').trim()
       const detalle = recorta(String(req.body?.detalle || '').trim(), MAX_DETALLE_IA)
@@ -329,6 +362,11 @@ export default async function handler(req, res) {
         tema = recorta(String(reel?.caption || '').split('\n')[0], 300)
       }
       const prompt = promptPortadaIa({ estilo, titulo, tema, detalle, imagenes: imagenes.length })
+      // Cada generación cuesta dinero en Replicate: un tope por perfil y hora.
+      // Se consume solo aquí, con la petición ya validada, para que las entradas
+      // mal formadas (400) no gasten el cupo.
+      const tope = rateLimit({ key: `portada-ia:${clientId}`, max: 30, windowMs: 3_600_000 })
+      if (!tope.ok) return res.status(429).json({ error: 'Has generado muchas portadas seguidas. Prueba dentro de un rato.', retryAfter: tope.retryAfter })
       try {
         const { dataUrl } = await generaPortadaIa({ prompt, imagenes })
         return res.status(200).json({ imagen: dataUrl, ia: true })

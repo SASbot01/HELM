@@ -7,7 +7,10 @@ import { existsSync } from 'node:fs'
 import { ESTILOS_IA, estiloIaPorClave, ejemploDe, referenciaDe, promptPortadaIa } from '../src/agents/portadas/estilosIa.js'
 
 const PERFIL = 'perfil-1'
-const JPG = `data:image/jpeg;base64,${Buffer.from('fotograma-de-prueba').toString('base64')}`
+// Un JPEG de verdad empieza por FF D8 FF; imagenDeDataUrl comprueba la cabecera.
+const JPG = `data:image/jpeg;base64,${Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('fotograma-de-prueba')]).toString('base64')}`
+// Bytes que NO son imagen aunque la etiqueta diga png.
+const FALSO_PNG = `data:image/png;base64,${Buffer.from('esto no es un png').toString('base64')}`
 
 describe('estilos', () => {
   it('claves únicas y cada estilo con su imagen de tarjeta y su referencia en public/', () => {
@@ -116,6 +119,7 @@ describe('portada-ia', () => {
     const casos = [
       [{ titulo: 'Hola', estilo: 'oro' }, /fotograma/],
       [{ fotograma: 'data:text/html;base64,PHNjcmlwdD4=', titulo: 'Hola', estilo: 'oro' }, /fotograma/],
+      [{ fotograma: FALSO_PNG, titulo: 'Hola', estilo: 'oro' }, /fotograma/],
       [{ fotograma: JPG, estilo: 'oro' }, /titular/],
       [{ fotograma: JPG, titulo: 'x'.repeat(61), estilo: 'oro' }, /60/],
       [{ fotograma: JPG, titulo: 'Hola', estilo: 'inventado' }, /estilo/],
@@ -174,6 +178,7 @@ describe('ejemplos subidos a mano', () => {
   it('sin nombre o sin una imagen de verdad, 400 y no se sube nada', async () => {
     expect((await llama({ action: 'ejemplo', body: { nombre: '', imagen: JPG } })).statusCode).toBe(400)
     expect((await llama({ action: 'ejemplo', body: { nombre: 'X', imagen: 'data:image/svg+xml;base64,PHN2Zz4=' } })).statusCode).toBe(400)
+    expect((await llama({ action: 'ejemplo', body: { nombre: 'X', imagen: FALSO_PNG } })).statusCode).toBe(400)
     expect(subidas).toHaveLength(0)
   })
 })
@@ -192,7 +197,7 @@ describe('generaPortadaIa', () => {
         creadas++
         const input = JSON.parse(opts.body).input
         expect(input).toMatchObject({ aspect_ratio: '9:16', image_input: ['data:image/jpeg;base64,QQ=='] })
-        if (creadas === 1) return { ok: false, status: 429, json: async () => ({ detail: 'throttled', retry_after: 1 }) }
+        if (creadas === 1) return { ok: false, status: 429, headers: { get: (h) => (h.toLowerCase() === 'retry-after' ? '1' : null) }, json: async () => ({ detail: 'throttled' }) }
         return { ok: true, status: 201, json: async () => ({ id: 'p1', status: 'succeeded', output: 'https://cdn/x.jpg' }) }
       }
       return { ok: true, headers: { get: () => 'image/jpeg' }, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer }

@@ -113,7 +113,10 @@ export async function generaPortadaIa({ prompt, imagenes, aspecto = '9:16' } = {
     })
     const cuerpo = await crear.json().catch(() => null)
     if (crear.status === 429 && intento < 2) {
-      await new Promise(r => setTimeout(r, (Math.min(Number(cuerpo?.retry_after) || 10, 30) + 1) * 1000))
+      // Replicate pide la espera en la cabecera Retry-After; el cuerpo es solo
+      // {detail:…}. Se respeta esa cabecera (acotada), y si no viene, 10 s.
+      const pide = Number(crear.headers.get('retry-after')) || Number(cuerpo?.retry_after) || 10
+      await new Promise(r => setTimeout(r, (Math.min(pide, 30) + 1) * 1000))
       continue
     }
     if (!crear.ok || !cuerpo) throw errorDeReplicate(crear.status, cuerpo)

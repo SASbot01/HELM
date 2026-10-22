@@ -207,6 +207,8 @@ function KitMarca({ clientId, marca, onGuardada }) {
 function Taller({ clientId, reel, marca, vecinos, onVolver }) {
   const lienzo = useRef(null)
   const video = useRef(null)
+  // Si el usuario ya eligió modo a mano, capacidad() no debe pisárselo al llegar.
+  const tocoModo = useRef(false)
   const [fuente, setFuente] = useState(reel ? 'video' : 'foto')
   const [imagen, setImagen] = useState(null)
   const [videoUrl, setVideoUrl] = useState('')
@@ -248,7 +250,7 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
       if (!vivo) return
       setHayIa(Boolean(d.fondoIa))
       setHayPortadaIa(Boolean(d.portadaIa))
-      if (d.portadaIa) setModo('ia')
+      if (d.portadaIa && !tocoModo.current) setModo('ia')
     }).catch(() => {})
     portadasApi.ejemplos(clientId).then(d => { if (vivo) setEjemplos(d.ejemplos || []) }).catch(() => {})
     return () => { vivo = false }
@@ -347,10 +349,13 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
 
   async function subirEjemplo(archivo, nombre) {
     setError('')
-    const img = await cargaImagen(URL.createObjectURL(archivo))
-    const d = await portadasApi.subirEjemplo(clientId, nombre, ejemploParaSubir(img))
-    setEjemplos(d.ejemplos || [])
-    if (d.ejemplo) setEstiloIa(`ej:${d.ejemplo.id}`)
+    const url = URL.createObjectURL(archivo)
+    try {
+      const img = await cargaImagen(url)
+      const d = await portadasApi.subirEjemplo(clientId, nombre, ejemploParaSubir(img))
+      setEjemplos(d.ejemplos || [])
+      if (d.ejemplo) setEstiloIa(`ej:${d.ejemplo.id}`)
+    } finally { URL.revokeObjectURL(url) }
   }
 
   async function borrarEjemplo(e) {
@@ -456,8 +461,8 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
 
         <div className="por-controles">
           <div className="por-modo" role="tablist" aria-label="Cómo hacer la portada">
-            <button type="button" role="tab" aria-selected={modo === 'ia'} className={modo === 'ia' ? 'on' : ''} onClick={() => setModo('ia')}><Sparkles size={14} /> Con IA</button>
-            <button type="button" role="tab" aria-selected={modo === 'serie'} className={modo === 'serie' ? 'on' : ''} onClick={() => setModo('serie')}><Palette size={14} /> Plantilla de la serie</button>
+            <button type="button" role="tab" aria-selected={modo === 'ia'} className={modo === 'ia' ? 'on' : ''} onClick={() => { tocoModo.current = true; setTexto(t => t.slice(0, MAX_TITULO_IA)); setModo('ia') }}><Sparkles size={14} /> Con IA</button>
+            <button type="button" role="tab" aria-selected={modo === 'serie'} className={modo === 'serie' ? 'on' : ''} onClick={() => { tocoModo.current = true; setModo('serie') }}><Palette size={14} /> Plantilla de la serie</button>
           </div>
 
           {modo === 'ia' && !hayPortadaIa && (
@@ -598,7 +603,7 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
           {modo === 'ia' && (
             <section>
               <h3>4 · Generar</h3>
-              <button type="button" className="ag-btn primario" onClick={generarPortada} disabled={generandoPortada || !hayPortadaIa || !imagen || !texto.trim()}>
+              <button type="button" className="ag-btn primario" onClick={generarPortada} disabled={generandoPortada || !hayPortadaIa || !imagen || !texto.trim() || texto.trim().length > MAX_TITULO_IA}>
                 {generandoPortada
                   ? <><Loader2 size={14} className="por-gira" /> Generando (unos 30 s)…</>
                   : <><Sparkles size={14} /> {versiones.length ? 'Otra versión' : 'Generar portada'}</>}
@@ -682,7 +687,7 @@ function EstilosIa({ elegido, onElegir, ejemplos, onSubir, onBorrar }) {
             <span className="por-estilo-libre"><Plus size={22} /></span>
             <b>Subir ejemplo</b>
             <small>Una portada que te guste</small>
-            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={ev => { setArchivo(ev.target.files?.[0] || null); setFallo('') }} />
+            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={ev => { setArchivo(ev.target.files?.[0] || null); setFallo(''); ev.target.value = '' }} />
           </label>
         </li>
       </ul>
