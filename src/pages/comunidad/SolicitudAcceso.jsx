@@ -60,13 +60,18 @@ export default function SolicitudAcceso({ cfg, onEntrar }) {
       <p className="aip-kicker"><Lock size={13} /> {a.kicker}</p>
       <h2>{a.titulo}</h2>
       <p>{a.texto}</p>
+      {a.skool && (
+        <a className="aip-skool-paso" href={a.skool}>
+          <span className="aip-skool-n">1</span> Únete a HELM Academy, gratis <ArrowRight size={15} />
+        </a>
+      )}
       <div className="aip-campos">
         <input aria-label="Nombre" placeholder="Tu nombre" required value={f.nombre} maxLength={80} autoComplete="given-name" onChange={pon('nombre')} />
         <input aria-label="Correo" type="email" placeholder="Tu correo" required value={f.email} maxLength={160} autoComplete="email" inputMode="email" onChange={pon('email')} />
         {/* La trampa: fuera de la vista y del teclado; solo la rellena un bot. */}
         <input className="aip-trampa" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" value={f.website} onChange={pon('website')} />
         <button className="aip-btn" disabled={fase === 'enviando' || !completo}>
-          {fase === 'enviando' ? 'Enviando…' : <>{a.boton} <ArrowRight size={18} /></>}
+          {fase === 'enviando' ? 'Enviando…' : <>{a.skool && <span className="aip-skool-n">2</span>} {a.boton} <ArrowRight size={18} /></>}
         </button>
       </div>
       {error && <p className="aip-error" role="alert">{error}</p>}

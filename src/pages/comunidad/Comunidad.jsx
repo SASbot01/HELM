@@ -232,6 +232,9 @@ function Hilo({ acceso, setAcceso }) {
   // su propia llave: así descargar una guía no salta la puerta de aprobación del
   // resto del contenido. En las comunidades sin aprobación, nada cambia.
   const separarPdf = Boolean(pdf) && Boolean(cfg.puerta?.aprobacion)
+  // El acceso del PDF (su propia llave). Hilo se remonta por slug (key en
+  // HiloRuta), así que el init se reejecuta al cambiar de hilo y lee la llave
+  // actual: quien ya descargó el PDF no vuelve a ver la puerta de descarga.
   const [accesoPdf, setAccesoPdf] = useState(() => (separarPdf ? accesoGuardado(`${cfg.llave}.pdf`) : null))
   const accesoHilo = separarPdf ? (acceso || accesoPdf) : acceso
   const capitulo = sk === 'guia' && tema === 'capitulos' ? cfg.capituloPorSlug(slug) : null
@@ -378,10 +381,14 @@ function Seccion(props) {
  *  o de otra sección, Hilo. */
 function HiloRuta(props) {
   const cfg = useComunidad()
-  const { seccion, slug } = useParams()
+  const { seccion, tema, slug } = useParams()
+  // La key remonta el hilo al cambiar de uno a otro dentro de la SPA (si no,
+  // React reutiliza la instancia): así el estado de cada hilo —incluido el
+  // acceso del PDF por su llave— se recalcula para el hilo que toca.
+  const clave = `${seccion}/${tema}/${slug}`
   const Propia = cfg.vistas?.hilo && Object.hasOwn(cfg.vistas.hilo, seccion) ? cfg.vistas.hilo[seccion] : null
-  if (Propia) return <Propia {...props} />
-  return seccion === 'news' && !esBreve(slug) ? <Articulo {...props} /> : <Hilo {...props} />
+  if (Propia) return <Propia key={clave} {...props} />
+  return seccion === 'news' && !esBreve(slug) ? <Articulo key={clave} {...props} /> : <Hilo key={clave} {...props} />
 }
 
 // La foto de la noticia original. Si no hay, o la web de origen no la deja
