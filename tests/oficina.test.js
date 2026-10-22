@@ -103,10 +103,12 @@ describe('oficina · estado', () => {
     expect(e._error).toBeTruthy()
   })
 
-  it('el editor sin su tabla dice que se está integrando, no peta', async () => {
+  it('el editor sin su tabla ofrece los estilos y avisa de que se está integrando, no peta', async () => {
     store.lanzar = 'helm_ediciones'
     const e = await estadoDe('c1', 'editor')
-    expect(e.falta[0].texto).toMatch(/integr/i)
+    expect(e.falta[0].texto).toMatch(/estilos de edición/i)
+    expect(e.falta[0].cta).toBe('abrir')
+    expect(e.falta.some(f => /integr/i.test(f.texto))).toBe(true)
   })
 })
 

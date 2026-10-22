@@ -4,10 +4,76 @@
 // enseñar el proceso en vivo: pulsas «Probar el proceso» (o entra un vídeo por
 // el conector de Claude o por Drive) y se ven los pasos que sigue el agente,
 // paso a paso, tal como quedan en el registro de ejecuciones.
-import { useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, Play, RefreshCw, ChevronRight, Plug, FolderSync } from 'lucide-react'
+//
+// Arriba, los ESTILOS DE EDICIÓN (2026-10-22): uno por cada perfil de cuyos
+// reels de ejemplo sale (./editor/estilos-referencia.js), con la portada de
+// esos reels para elegir a ojo. «Copiar prompt» ya funciona (para que Claude
+// lo monte por el conector); «Crear» se enciende cuando el motor esté dentro.
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { ArrowLeft, Play, RefreshCw, ChevronRight, Plug, FolderSync, Copy, Check, Wand2, ExternalLink } from 'lucide-react'
 import { agentsApi } from './api'
+import { ESTILOS_REFERENCIA } from './editor/estilos-referencia'
 import './editorReel.css'
+
+const portadaDe = (reel) => `/agentes/editor-estilos/${reel.shortcode}.jpg`
+const miles = (n) => (Number(n) || 0).toLocaleString('es-ES')
+
+// Copiar con el método de siempre si el navegador no deja usar el portapapeles.
+function copiaTexto(texto) {
+  const aMano = () => {
+    const t = document.createElement('textarea')
+    t.value = texto; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.top = '-1000px'
+    document.body.appendChild(t); t.select()
+    let ok = false
+    try { ok = document.execCommand('copy') } catch { ok = false }
+    t.remove()
+    return ok
+  }
+  try { if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(texto).then(() => true, aMano) } catch { /* abajo */ }
+  return Promise.resolve(aMano())
+}
+
+function EstiloEdicion({ e }) {
+  const [copiado, setCopiado] = useState(null)
+  const reloj = useRef(null)
+  useEffect(() => () => clearTimeout(reloj.current), [])
+  const [principal, ...otros] = e.reels
+  return (
+    <li className="ed-estilo">
+      <a className="ed-estilo-portada" href={principal.url} target="_blank" rel="noopener noreferrer" title="Ver el reel de ejemplo en Instagram">
+        <img src={portadaDe(principal)} alt={`Reel de ejemplo de @${e.nombre}`} loading="lazy" />
+        {otros.length > 0 && (
+          <span className="ed-estilo-mas">
+            {otros.map(r => <img key={r.shortcode} src={portadaDe(r)} alt="" loading="lazy" />)}
+          </span>
+        )}
+      </a>
+      <div className="ed-estilo-txt">
+        <b>@{e.nombre}</b>
+        <small>{e.nicho} · {e.idioma === 'es' ? 'en español' : 'en inglés'} · {e.reels.length} {e.reels.length === 1 ? 'reel' : 'reels'} de ejemplo</small>
+        <div className="ed-estilo-reels">
+          {e.reels.map(r => (
+            <a key={r.shortcode} href={r.url} target="_blank" rel="noopener noreferrer">
+              {miles(r.likes)} ♥ <ExternalLink size={11} />
+            </a>
+          ))}
+        </div>
+      </div>
+      <div className="ed-estilo-btns">
+        <button type="button" className="ag-btn sm" disabled title="Se activa cuando el motor de edición esté integrado">
+          <Wand2 size={13} /> Crear
+        </button>
+        <button
+          type="button" className="ag-btn primario sm"
+          onClick={() => copiaTexto(e.prompt).then(ok => { setCopiado(ok ? 'ok' : 'mal'); clearTimeout(reloj.current); reloj.current = setTimeout(() => setCopiado(null), 2000) })}
+        >
+          {copiado === 'ok' ? <><Check size={13} /> Copiado</> : <><Copy size={13} /> Copiar prompt</>}
+        </button>
+      </div>
+      {copiado === 'mal' && <small className="ag-error">Tu navegador no deja copiar: selecciónalo a mano en la ficha.</small>}
+    </li>
+  )
+}
 
 const ESTADO = {
   pendiente: { lb: 'En cola', t: 'espera' }, corriendo: { lb: 'Corriendo', t: 'vivo' },
@@ -60,6 +126,17 @@ export default function EditorReel({ clientId, client, onVolver }) {
           </p>
         </div>
       </header>
+
+      <section className="ed-estilos-sec" aria-labelledby="ed-estilos-titulo">
+        <h2 id="ed-estilos-titulo">Estilos de edición</h2>
+        <p className="ed-estilos-ayuda">
+          Cada estilo lleva el nombre del perfil de cuyos reels sale. Mira la portada de sus ejemplos y elige: «Copiar prompt» para que
+          Claude lo monte por el conector con ese estilo; «Crear» lo hará HELM solo en cuanto el motor de edición esté integrado.
+        </p>
+        <ul className="ed-estilos">
+          {ESTILOS_REFERENCIA.map(e => <EstiloEdicion key={e.clave} e={e} />)}
+        </ul>
+      </section>
 
       <section className="ed-vias">
         <div className="ed-via"><Plug size={16} /><div><b>Por el conector (MCP)</b><small>Lo edita Claude con tu suscripción, usando el manual guardado en la memoria de HELM.</small></div></div>

@@ -13,6 +13,7 @@
 // cómo se hace hoy. Nunca se enseña como hecho lo que no funciona.
 import { supabase } from '../lib/supabase.js'
 import { llmChat } from './llm.js'
+import { ESTILOS_REFERENCIA } from '../../src/agents/editor/estilos-referencia.js'
 
 // Qué es cada agente, del lado del servidor (no se fía del navegador para el
 // prompt). El texto de pantalla, más largo, vive en src/agents/agentes.js.
@@ -120,8 +121,16 @@ async function estadoEditor(clientId) {
       falta: filas.length ? [] : [{ texto: 'Sube un reel en bruto o deja uno en la carpeta de Drive y lo monta según tu manual.', cta: 'abrir' }],
     }
   } catch {
-    // La migración del editor todavía no está en este entorno.
-    return { haciendo: [], ultimos: [], falta: [{ texto: 'El motor de edición se está integrando. Muy pronto podrás subirle un vídeo aquí.' }] }
+    // La migración del editor todavía no está en este entorno: lo que ya hay
+    // son los estilos de edición, con la portada de sus reels y su prompt.
+    return {
+      haciendo: [],
+      ultimos: [],
+      falta: [
+        { texto: `${ESTILOS_REFERENCIA.length} estilos de edición listos: elige uno por la portada de sus reels de ejemplo y copia su prompt para que Claude lo monte por el conector.`, cta: 'abrir' },
+        { texto: 'El motor de edición se está integrando: muy pronto podrás subirle un vídeo aquí y que lo monte HELM solo.' },
+      ],
+    }
   }
 }
 

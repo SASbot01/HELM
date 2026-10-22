@@ -729,6 +729,15 @@ export const portadasApi = {
     apiFetch('/api/portadas?action=fondo-prompt', { method: 'POST', body: { clientId, mediaId, tema } }),
   fondoIa: (clientId, prompt) =>
     apiFetch('/api/portadas?action=fondo-ia', { method: 'POST', body: { clientId, prompt } }),
+  // Portada entera con IA en un estilo (estilos de src/agents/portadas/estilosIa.js
+  // o «ej:<id>» para un ejemplo subido). `fotograma`: data URL de la imagen real.
+  portadaIa: (clientId, { fotograma, titulo, estilo, detalle, mediaId }) =>
+    apiFetch('/api/portadas?action=portada-ia', { method: 'POST', body: { clientId, fotograma, titulo, estilo, detalle, mediaId } }),
+  ejemplos: (clientId) => apiFetch(`/api/portadas?action=ejemplos&clientId=${clientId}`),
+  subirEjemplo: (clientId, nombre, imagen) =>
+    apiFetch('/api/portadas?action=ejemplo', { method: 'POST', body: { clientId, nombre, imagen } }),
+  borrarEjemplo: (clientId, id) =>
+    apiFetch('/api/portadas?action=ejemplo-borrar', { method: 'POST', body: { clientId, id } }),
 }
 
 // Trial reels (api/trial-reels.js): variantes editadas de un reel propio para

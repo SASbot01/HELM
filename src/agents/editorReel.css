@@ -43,3 +43,22 @@
   .ed-run-cab { grid-template-columns: 18px 78px 1fr; }
   .ed-run-cab small { display: none; }
 }
+
+/* Estilos de edición (2026-10-22): una tarjeta por perfil de referencia. */
+.ed-estilos-sec { margin: 4px 0 18px; }
+.ed-estilos-sec h2 { margin: 0 0 4px; font-size: 17px; }
+.ed-estilos-ayuda { margin: 0 0 12px; color: var(--text-secondary); font-size: 13px; line-height: 1.5; max-width: 72ch; }
+.ed-estilos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 12px; }
+.ed-estilo { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--border); border-radius: 12px; padding: 8px; background: var(--bg-card); min-width: 0; }
+.ed-estilo-portada { position: relative; display: block; border-radius: 9px; overflow: hidden; aspect-ratio: 9 / 16; background: #0A0A0C; }
+.ed-estilo-portada > img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ed-estilo-mas { position: absolute; right: 6px; bottom: 6px; display: flex; gap: 4px; }
+.ed-estilo-mas img { width: 46px; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 5px; border: 2px solid rgba(255,255,255,.85); }
+.ed-estilo-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 0 2px; }
+.ed-estilo-txt b { font-size: 14.5px; }
+.ed-estilo-txt small { color: var(--text-muted); font-size: 12px; line-height: 1.4; }
+.ed-estilo-reels { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+.ed-estilo-reels a { font-size: 12px; color: var(--text-secondary); text-decoration: none; display: inline-flex; align-items: center; gap: 3px; }
+.ed-estilo-reels a:hover { color: var(--orange); }
+.ed-estilo-btns { display: grid; grid-template-columns: 1fr 1.4fr; gap: 6px; margin-top: auto; }
+.ed-estilo-btns .ag-btn { justify-content: center; }

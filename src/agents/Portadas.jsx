@@ -8,12 +8,20 @@
 //
 // Instagram no deja cambiar la portada por API una vez publicado: se descarga
 // y se pone en la app (Editar → Portada). Solo gasta créditos «Proponer textos».
+//
+// Dos modos (desde el 2026-10-22):
+//   · Con IA: eliges el fotograma, un estilo (con su portada de ejemplo, o uno
+//     de los ejemplos que el perfil ha subido a mano) y el titular, y la IA
+//     genera la portada entera conservando a la persona del fotograma
+//     (src/agents/portadas/estilosIa.js, api/portadas.js · portada-ia).
+//   · Plantilla de la serie: lo de siempre, compuesta aquí con el kit.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, Sparkles, Download, Upload, Film, Image as ImagenIcono, Check, AlertTriangle, Loader2, Palette } from 'lucide-react'
+import { ArrowLeft, Sparkles, Download, Upload, Film, Image as ImagenIcono, Check, AlertTriangle, Loader2, Palette, Plus, X, ExternalLink } from 'lucide-react'
 import { supabase } from '../utils/supabase'
 import { portadasApi } from '../helm/lib'
 import { PLANTILLAS, LETRAS, MARCA_POR_DEFECTO, normalizaMarca, comprobar, LIENZO, ZONA_CUADRICULA } from './portadas/reglas'
 import { maquetar, pintar } from './portadas/componer'
+import { ESTILOS_IA, ejemploDe, MAX_TITULO_IA, MAX_DETALLE_IA, MAX_NOMBRE_EJEMPLO } from './portadas/estilosIa'
 import '../fonts/barlow-condensed.css'
 import '../fonts/inter-tight.css'
 import './portadas.css'
@@ -22,6 +30,35 @@ const fecha = (t) => { try { return new Date(t).toLocaleDateString('es-ES', { da
 const miles = (n) => (Number(n) || 0).toLocaleString('es-ES')
 const slug = (s) => String(s || 'portada').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'portada'
 const esReel = (r) => String(r.producto || '').toUpperCase() === 'REELS' || String(r.tipo || '').toUpperCase() === 'VIDEO'
+
+// Una imagen (canvas, <img> o <video> copiado) en 9:16 rellenando el lienzo.
+function pintaCubriendo(ctx, img, ancho, alto) {
+  const w = img.videoWidth || img.naturalWidth || img.width
+  const h = img.videoHeight || img.naturalHeight || img.height
+  if (!w || !h) return
+  const esc = Math.max(ancho / w, alto / h)
+  ctx.drawImage(img, (ancho - w * esc) / 2, (alto - h * esc) / 2, w * esc, h * esc)
+}
+
+// El fotograma que se manda a la IA: 9:16, 720×1280 y en JPG (pesa poco y
+// basta para que conserve a la persona).
+function fotogramaParaIa(img) {
+  const c = document.createElement('canvas')
+  c.width = 720; c.height = 1280
+  pintaCubriendo(c.getContext('2d'), img, 720, 1280)
+  return c.toDataURL('image/jpeg', 0.88)
+}
+
+// Un ejemplo subido a mano, reducido para que no pase del tope de la API.
+function ejemploParaSubir(img) {
+  const w = img.naturalWidth || img.width
+  const h = img.naturalHeight || img.height
+  const esc = Math.min(1, 1920 / Math.max(w, h))
+  const c = document.createElement('canvas')
+  c.width = Math.round(w * esc); c.height = Math.round(h * esc)
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height)
+  return c.toDataURL('image/jpeg', 0.9)
+}
 
 function cargaImagen(src) {
   return new Promise((ok, mal) => {
@@ -194,10 +231,26 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
   const [pidiendoPrompt, setPidiendoPrompt] = useState(false)
   const [generandoIa, setGenerandoIa] = useState(false)
   const [fondoEsIa, setFondoEsIa] = useState(false)
+  // Portada entera con IA: el modo, el estilo, los ejemplos del perfil y las
+  // versiones generadas en esta sesión (la elegida es la que se ve y se baja).
+  const [modo, setModo] = useState('serie')
+  const [hayPortadaIa, setHayPortadaIa] = useState(false)
+  const [estiloIa, setEstiloIa] = useState('oro')
+  const [detalle, setDetalle] = useState('')
+  const [ejemplos, setEjemplos] = useState([])
+  const [versiones, setVersiones] = useState([])
+  const [elegida, setElegida] = useState(-1)
+  const [generandoPortada, setGenerandoPortada] = useState(false)
 
   useEffect(() => {
     let vivo = true
-    portadasApi.capacidad(clientId).then(d => { if (vivo) setHayIa(Boolean(d.fondoIa)) }).catch(() => {})
+    portadasApi.capacidad(clientId).then(d => {
+      if (!vivo) return
+      setHayIa(Boolean(d.fondoIa))
+      setHayPortadaIa(Boolean(d.portadaIa))
+      if (d.portadaIa) setModo('ia')
+    }).catch(() => {})
+    portadasApi.ejemplos(clientId).then(d => { if (vivo) setEjemplos(d.ejemplos || []) }).catch(() => {})
     return () => { vivo = false }
   }, [clientId])
 
@@ -277,8 +330,69 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
     setGenerandoIa(false)
   }
 
+  async function generarPortada() {
+    if (!imagen) { setError('Elige primero el fotograma (o sube una foto)'); return }
+    if (!texto.trim()) { setError('Escribe el titular'); return }
+    if (estiloIa === 'libre' && !detalle.trim()) { setError('Describe el estilo que quieres'); return }
+    setGenerandoPortada(true); setError('')
+    try {
+      const d = await portadasApi.portadaIa(clientId, {
+        fotograma: fotogramaParaIa(imagen), titulo: texto.trim(), estilo: estiloIa, detalle: detalle.trim(), mediaId: reel?.media_id,
+      })
+      const img = await cargaImagen(d.imagen)
+      setVersiones(v => { const n = [...v, { img, estilo: estiloIa }]; setElegida(n.length - 1); return n })
+    } catch (e) { setError(e.message) }
+    setGenerandoPortada(false)
+  }
+
+  async function subirEjemplo(archivo, nombre) {
+    setError('')
+    const img = await cargaImagen(URL.createObjectURL(archivo))
+    const d = await portadasApi.subirEjemplo(clientId, nombre, ejemploParaSubir(img))
+    setEjemplos(d.ejemplos || [])
+    if (d.ejemplo) setEstiloIa(`ej:${d.ejemplo.id}`)
+  }
+
+  async function borrarEjemplo(e) {
+    if (!window.confirm(`¿Quitar el ejemplo «${e.nombre}»?`)) return
+    setError('')
+    try {
+      const d = await portadasApi.borrarEjemplo(clientId, e.id)
+      setEjemplos(d.ejemplos || [])
+      if (estiloIa === `ej:${e.id}`) setEstiloIa('oro')
+    } catch (err) { setError(err.message) }
+  }
+
+  const portadaIa = modo === 'ia' && elegida >= 0 ? versiones[elegida]?.img : null
+
   // Componer: cada cambio vuelve a pintar el lienzo entero (es un instante).
+  // En modo IA se pinta la versión elegida (o el fotograma, mientras no hay).
   useEffect(() => {
+    if (modo !== 'ia') return undefined
+    let vivo = true
+    const c = lienzo.current
+    if (!c) return undefined
+    document.fonts.load('600 46px "Inter Tight"').catch(() => {}).then(() => {
+      if (!vivo) return
+      const ctx = c.getContext('2d', { willReadFrequently: true })
+      ctx.fillStyle = '#111'; ctx.fillRect(0, 0, LIENZO.ancho, LIENZO.alto)
+      const base = portadaIa || imagen
+      if (base) pintaCubriendo(ctx, base, LIENZO.ancho, LIENZO.alto)
+      if (!portadaIa) {
+        ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, LIENZO.alto / 2 - 90, LIENZO.ancho, 180)
+        ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = '600 46px "Inter Tight", system-ui, sans-serif'
+        ctx.fillText(base ? 'Elige estilo y pulsa Generar' : 'Elige el fotograma', LIENZO.ancho / 2, LIENZO.alto / 2 + 16)
+      }
+      const mini = document.createElement('canvas')
+      mini.width = 270; mini.height = 360
+      mini.getContext('2d').drawImage(c, 0, ZONA_CUADRICULA.y0, LIENZO.ancho, LIENZO.alto - 2 * ZONA_CUADRICULA.y0, 0, 0, 270, 360)
+      setPrevia(mini.toDataURL('image/jpeg', 0.8))
+    })
+    return () => { vivo = false }
+  }, [modo, portadaIa, imagen])
+
+  useEffect(() => {
+    if (modo === 'ia') return undefined
     let vivo = true
     const c = lienzo.current
     if (!c) return
@@ -297,7 +411,7 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
       setPrevia(mini.toDataURL('image/jpeg', 0.8))
     })
     return () => { vivo = false }
-  }, [imagen, encuadre, zoom, texto, resaltada, secundario, plantilla, marca])
+  }, [modo, imagen, encuadre, zoom, texto, resaltada, secundario, plantilla, marca])
 
   function descargar(tipo) {
     const c = lienzo.current
@@ -306,13 +420,15 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
       if (!b) return
       const a = document.createElement('a')
       a.href = URL.createObjectURL(b)
-      a.download = `portada-${slug(texto)}.${tipo === 'image/png' ? 'png' : 'jpg'}`
+      a.download = `portada-${slug(texto)}${modo === 'ia' ? '-ia' : ''}.${tipo === 'image/png' ? 'png' : 'jpg'}`
       document.body.appendChild(a); a.click(); a.remove()
       setTimeout(() => URL.revokeObjectURL(a.href), 2000)
     }, tipo, 0.92)
   }
 
-  const fallos = checks.filter(c => !c.ok).length
+  // Las comprobaciones del estudio miden la composición de la plantilla: en
+  // una portada con IA no aplican (ahí se avisa de revisar texto y cara).
+  const fallos = modo === 'serie' ? checks.filter(c => !c.ok).length : 0
   const palabras = useMemo(() => texto.split(/\s+/).filter(Boolean), [texto])
 
   return (
@@ -331,20 +447,33 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
         <div className="por-lienzo-col">
           <canvas ref={lienzo} width={LIENZO.ancho} height={LIENZO.alto} className="por-lienzo" aria-label="Vista previa de la portada" />
           <div className="por-descargas">
-            <button type="button" className="ag-btn primario" onClick={() => descargar('image/jpeg')} disabled={!imagen || !texto}><Download size={14} /> JPG</button>
-            <button type="button" className="ag-btn" onClick={() => descargar('image/png')} disabled={!imagen || !texto}><Download size={14} /> PNG</button>
+            <button type="button" className="ag-btn primario" onClick={() => descargar('image/jpeg')} disabled={modo === 'ia' ? !portadaIa : (!imagen || !texto)}><Download size={14} /> JPG</button>
+            <button type="button" className="ag-btn" onClick={() => descargar('image/png')} disabled={modo === 'ia' ? !portadaIa : (!imagen || !texto)}><Download size={14} /> PNG</button>
           </div>
+          {portadaIa && <p className="por-ia-badge"><Sparkles size={12} /> Portada generada con IA</p>}
           <small className="por-ayuda">1080×1920. Ponla en la app: el reel → Editar → Portada.</small>
         </div>
 
         <div className="por-controles">
+          <div className="por-modo" role="tablist" aria-label="Cómo hacer la portada">
+            <button type="button" role="tab" aria-selected={modo === 'ia'} className={modo === 'ia' ? 'on' : ''} onClick={() => setModo('ia')}><Sparkles size={14} /> Con IA</button>
+            <button type="button" role="tab" aria-selected={modo === 'serie'} className={modo === 'serie' ? 'on' : ''} onClick={() => setModo('serie')}><Palette size={14} /> Plantilla de la serie</button>
+          </div>
+
+          {modo === 'ia' && !hayPortadaIa && (
+            <p className="por-ayuda por-ia-falta">
+              <AlertTriangle size={14} /> Para generar portadas con IA hace falta la clave de imagen en el servidor
+              (<code>REPLICATE_API_TOKEN</code> en <code>.env.server</code>).
+            </p>
+          )}
+
           <section>
-            <h3>1 · Fondo</h3>
+            <h3>1 · {modo === 'ia' ? 'Fotograma' : 'Fondo'}</h3>
             <div className="por-pestanas" role="tablist">
               {reel && <button type="button" role="tab" aria-selected={fuente === 'video'} className={fuente === 'video' ? 'on' : ''} onClick={() => elegirFuente('video')}><Film size={14} /> Fotograma</button>}
               {reel && <button type="button" role="tab" aria-selected={fuente === 'actual'} className={fuente === 'actual' ? 'on' : ''} onClick={() => elegirFuente('actual')}><ImagenIcono size={14} /> Portada actual</button>}
               <button type="button" role="tab" aria-selected={fuente === 'foto'} className={fuente === 'foto' ? 'on' : ''} onClick={() => elegirFuente('foto')}><Upload size={14} /> Foto</button>
-              <button type="button" role="tab" aria-selected={fuente === 'ia'} className={fuente === 'ia' ? 'on' : ''} onClick={() => elegirFuente('ia')}><Sparkles size={14} /> Fondo IA</button>
+              {modo === 'serie' && <button type="button" role="tab" aria-selected={fuente === 'ia'} className={fuente === 'ia' ? 'on' : ''} onClick={() => elegirFuente('ia')}><Sparkles size={14} /> Fondo IA</button>}
             </div>
             {cargando && <p className="por-ayuda"><Loader2 size={14} className="por-gira" /> {cargando}</p>}
             {fuente === 'video' && videoUrl && (
@@ -366,7 +495,7 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
               </div>
             )}
             {fuente === 'foto' && <label className="por-subir"><Upload size={14} /> Elegir foto <input type="file" accept="image/*" onChange={subirFoto} /></label>}
-            {fuente === 'ia' && (
+            {modo === 'serie' && fuente === 'ia' && (
               !hayIa ? (
                 <p className="por-ayuda por-ia-falta">
                   <AlertTriangle size={14} /> Para generar el fondo con IA hace falta la clave de imagen en el servidor
@@ -395,12 +524,23 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
               )
             )}
             {fondoEsIa && <p className="por-ia-badge"><Sparkles size={12} /> Fondo generado con IA</p>}
-            <label>Encuadre vertical <input type="range" min="0" max="1" step="0.01" value={encuadre} onChange={e => setEncuadre(Number(e.target.value))} /></label>
-            <label>Zoom <input type="range" min="1" max="1.8" step="0.01" value={zoom} onChange={e => setZoom(Number(e.target.value))} /></label>
+            {modo === 'serie' && <label>Encuadre vertical <input type="range" min="0" max="1" step="0.01" value={encuadre} onChange={e => setEncuadre(Number(e.target.value))} /></label>}
+            {modo === 'serie' && <label>Zoom <input type="range" min="1" max="1.8" step="0.01" value={zoom} onChange={e => setZoom(Number(e.target.value))} /></label>}
+            {modo === 'ia' && <small className="por-ayuda">La IA conserva a la persona de este fotograma: elige uno en el que se te vea bien la cara.</small>}
           </section>
 
+          {modo === 'ia' && (
+            <section>
+              <h3>2 · Estilo</h3>
+              <EstilosIa
+                elegido={estiloIa} onElegir={setEstiloIa} ejemplos={ejemplos}
+                onSubir={subirEjemplo} onBorrar={borrarEjemplo}
+              />
+            </section>
+          )}
+
           <section>
-            <h3>2 · Texto</h3>
+            <h3>{modo === 'ia' ? '3' : '2'} · Texto</h3>
             {reel && (
               <button type="button" className="ag-btn sm" onClick={proponer} disabled={pidiendo}>
                 {pidiendo ? <><Loader2 size={13} className="por-gira" /> Pensando…</> : <><Sparkles size={13} /> Proponer textos</>}
@@ -419,33 +559,74 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
                 ))}
               </ul>
             )}
-            <label>Titular <input value={texto} maxLength={80} placeholder="2–6 palabras" onChange={e => setTexto(e.target.value)} /></label>
-            <label>Palabra resaltada
-              <select value={resaltada} onChange={e => setResaltada(e.target.value)}>
-                <option value="">Ninguna</option>
-                {palabras.map((p, i) => <option key={p + i} value={p}>{p}</option>)}
-              </select>
-            </label>
-            <label>Línea secundaria (opcional) <input value={secundario} maxLength={40} onChange={e => setSecundario(e.target.value)} /></label>
+            <label>Titular <input value={texto} maxLength={modo === 'ia' ? MAX_TITULO_IA : 80} placeholder="2–6 palabras" onChange={e => setTexto(e.target.value)} /></label>
+            {modo === 'serie' && (
+              <>
+                <label>Palabra resaltada
+                  <select value={resaltada} onChange={e => setResaltada(e.target.value)}>
+                    <option value="">Ninguna</option>
+                    {palabras.map((p, i) => <option key={p + i} value={p}>{p}</option>)}
+                  </select>
+                </label>
+                <label>Línea secundaria (opcional) <input value={secundario} maxLength={40} onChange={e => setSecundario(e.target.value)} /></label>
+              </>
+            )}
+            {modo === 'ia' && (
+              <label>{estiloIa === 'libre' ? 'Describe el estilo' : 'Detalles (opcional)'}
+                <textarea
+                  className="por-ia-prompt" rows={3} value={detalle} maxLength={MAX_DETALLE_IA}
+                  placeholder={estiloIa === 'libre'
+                    ? 'p. ej. fondo negro, título enorme en rojo con brillo, una flecha señalando un portátil'
+                    : 'p. ej. las apps que salen, el texto de la notificación, un color…'}
+                  onChange={e => setDetalle(e.target.value)}
+                />
+              </label>
+            )}
           </section>
 
-          <section>
-            <h3>3 · Plantilla</h3>
-            <div className="por-plantillas">
-              {PLANTILLAS.map(p => (
-                <button key={p.id} type="button" className={plantilla === p.id ? 'on' : ''} onClick={() => setPlantilla(p.id)} title={p.desc}>{p.nombre}</button>
-              ))}
-            </div>
-          </section>
+          {modo === 'serie' && (
+            <section>
+              <h3>3 · Plantilla</h3>
+              <div className="por-plantillas">
+                {PLANTILLAS.map(p => (
+                  <button key={p.id} type="button" className={plantilla === p.id ? 'on' : ''} onClick={() => setPlantilla(p.id)} title={p.desc}>{p.nombre}</button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {modo === 'ia' && (
+            <section>
+              <h3>4 · Generar</h3>
+              <button type="button" className="ag-btn primario" onClick={generarPortada} disabled={generandoPortada || !hayPortadaIa || !imagen || !texto.trim()}>
+                {generandoPortada
+                  ? <><Loader2 size={14} className="por-gira" /> Generando (unos 30 s)…</>
+                  : <><Sparkles size={14} /> {versiones.length ? 'Otra versión' : 'Generar portada'}</>}
+              </button>
+              {versiones.length > 0 && (
+                <div className="por-versiones" aria-label="Versiones generadas">
+                  {versiones.map((v, i) => (
+                    <button key={i} type="button" className={i === elegida ? 'on' : ''} onClick={() => setElegida(i)} aria-label={`Versión ${i + 1}`}>
+                      <img src={v.img.src} alt="" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              <small className="por-ayuda">
+                Revisa que el titular esté bien escrito y que la cara sea la tuya antes de publicarla. Es una imagen hecha con IA:
+                márcala como tal si Instagram te lo pide.
+              </small>
+            </section>
+          )}
 
           <section>
-            <h3>4 · Así se ve en tu perfil</h3>
+            <h3>{modo === 'ia' ? '5' : '4'} · Así se ve en tu perfil</h3>
             <div className="por-cuadricula" aria-label="La portada en la cuadrícula del perfil">
               {previa && <img src={previa} alt="Tu portada nueva" className="nueva" />}
               {vecinos.map(v => (v.thumb_url ? <img key={v.media_id} src={v.thumb_url} alt="" referrerPolicy="no-referrer" onError={e => { e.currentTarget.style.visibility = 'hidden' }} /> : <span key={v.media_id} />))}
             </div>
             <ul className="por-checks">
-              {checks.map((c, i) => (
+              {modo === 'serie' && checks.map((c, i) => (
                 <li key={i} className={c.ok ? 'ok' : 'mal'}>{c.ok ? <Check size={13} /> : <AlertTriangle size={13} />} {c.texto}</li>
               ))}
             </ul>
@@ -456,3 +637,76 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
     </div>
   )
 }
+
+// Los estilos de la portada con IA: los de serie (con su portada de ejemplo y
+// de quién sale) y los ejemplos que el perfil sube a mano, que quedan
+// guardados como un estilo más.
+function EstilosIa({ elegido, onElegir, ejemplos, onSubir, onBorrar }) {
+  const [archivo, setArchivo] = useState(null)
+  const [nombre, setNombre] = useState('')
+  const [subiendo, setSubiendo] = useState(false)
+  const [fallo, setFallo] = useState('')
+  async function subir() {
+    if (!archivo || !nombre.trim()) return
+    setSubiendo(true); setFallo('')
+    try { await onSubir(archivo, nombre.trim()); setArchivo(null); setNombre('') }
+    catch (e) { setFallo(e.message) }
+    setSubiendo(false)
+  }
+  return (
+    <>
+      <ul className="por-estilos">
+        {ESTILOS_IA.map(e => (
+          <li key={e.clave}>
+            <button type="button" className={'por-estilo' + (elegido === e.clave ? ' on' : '')} onClick={() => onElegir(e.clave)} title={e.desc}>
+              {e.clave === 'libre'
+                ? <span className="por-estilo-libre"><Sparkles size={22} /></span>
+                : <img src={ejemploDe(e)} alt="" loading="lazy" />}
+              <b>{e.nombre}</b>
+              <small>{e.origen ? `@${e.origen.perfil}` : e.clave === 'libre' ? 'Lo describes tú' : 'Estilo de la casa'}</small>
+            </button>
+          </li>
+        ))}
+        {ejemplos.map(e => (
+          <li key={e.id}>
+            <button type="button" className={'por-estilo' + (elegido === `ej:${e.id}` ? ' on' : '')} onClick={() => onElegir(`ej:${e.id}`)} title="Tu ejemplo">
+              <img src={e.url} alt="" loading="lazy" />
+              <b>{e.nombre}</b>
+              <small>Tu ejemplo</small>
+            </button>
+            <button type="button" className="por-estilo-quitar" onClick={() => onBorrar(e)} aria-label={`Quitar el ejemplo ${e.nombre}`}><X size={12} /></button>
+          </li>
+        ))}
+        <li>
+          <label className="por-estilo por-estilo-subir">
+            <span className="por-estilo-libre"><Plus size={22} /></span>
+            <b>Subir ejemplo</b>
+            <small>Una portada que te guste</small>
+            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={ev => { setArchivo(ev.target.files?.[0] || null); setFallo('') }} />
+          </label>
+        </li>
+      </ul>
+      {archivo && (
+        <div className="por-subir-ejemplo">
+          <small>{archivo.name}</small>
+          <input value={nombre} maxLength={MAX_NOMBRE_EJEMPLO} placeholder="Nombre del estilo (p. ej. Dorado Mercury)" onChange={ev => setNombre(ev.target.value)} />
+          <button type="button" className="ag-btn primario sm" onClick={subir} disabled={subiendo || !nombre.trim()}>
+            {subiendo ? <><Loader2 size={13} className="por-gira" /> Subiendo…</> : 'Guardar ejemplo'}
+          </button>
+          <button type="button" className="ag-btn sm" onClick={() => { setArchivo(null); setNombre('') }}>Cancelar</button>
+        </div>
+      )}
+      {fallo && <p className="ag-error">{fallo}</p>}
+      {(() => {
+        const e = ESTILOS_IA.find(x => x.clave === elegido)
+        return e ? (
+          <p className="por-ayuda">
+            {e.desc}
+            {e.origen && <> · <a href={e.origen.reel} target="_blank" rel="noopener noreferrer">ver el reel de @{e.origen.perfil} <ExternalLink size={11} /></a></>}
+          </p>
+        ) : null
+      })()}
+    </>
+  )
+}
+
