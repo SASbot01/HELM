@@ -10,6 +10,7 @@
 // api/_lib/comunidades.js: nunca de la petición.
 import { supabase } from './lib/supabase.js'
 import { applyCors, requireSuperAdmin } from './_lib/auth.js'
+import { puedeVerPerfil } from './_lib/access.js'
 import { comunidadPorClave } from './_lib/comunidades.js'
 import { hayCorreo, enviarCorreo } from './_lib/correo.js'
 
@@ -33,9 +34,12 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end()
 
   try {
-    await requireSuperAdmin(req)
+    const auth = await requireSuperAdmin(req)
     const clave = String(req.query.comunidad || 'aiparatodo')
     const { clientId, c } = await comunidadYperfil(clave)
+    // Que el perfil de la comunidad sea de la agencia de quien pregunta: un
+    // superadmin de otra agencia no puede ver ni tocar sus leads.
+    if (!(await puedeVerPerfil(auth, clientId))) throw yerro(403, 'Ese perfil no es de tu agencia')
     const action = req.query.action
 
     // Las solicitudes que esperan tu visto bueno.
@@ -49,6 +53,9 @@ export default async function handler(req, res) {
       const accesos = (data || []).map(r => ({
         id: r.id, nombre: r.name || '', email: r.email || '',
         solicitado: r.custom_fields?.[clave]?.solicitado || r.updated_at || null,
+        // ¿Pasó por el formulario de HELM Academy (se fue al Skool)? Es lo que
+        // Alex cruza para aprobar: si se apuntó, lo acepta.
+        enSkool: Boolean(r.custom_fields?.school),
       }))
       return res.status(200).json({ accesos })
     }

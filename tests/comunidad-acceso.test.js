@@ -21,30 +21,36 @@ describe('accesoDe', () => {
     expect(accesoDe(AIPT)).toBeNull()
   })
 
-  it('el de la llave actual manda', () => {
-    almacen.set('s4sf.aiparatodo.v3', JSON.stringify({ pago: true }))
-    almacen.set('s4sf.aiparatodo.v2', JSON.stringify({ id: 'x', nombre: 'Viejo' }))
-    expect(accesoDe(AIPT)).toEqual({ pago: true })
+  it('el de la llave actual (v4) manda', () => {
+    almacen.set('s4sf.aiparatodo.v4', JSON.stringify({ id: 'a', nombre: 'Ok' }))
+    almacen.set('s4sf.aiparatodo.v3', JSON.stringify({ id: 'x', nombre: 'Viejo' }))
+    expect(accesoDe(AIPT)).toEqual({ id: 'a', nombre: 'Ok' })
   })
 
-  it('quien dejó sus datos con v2 (o sin versión) entra y pasa a v3', () => {
+  it('desde la aprobación (v4) las llaves antiguas YA NO abren: toda la audiencia vuelve a pedir acceso', () => {
+    // Antes v2/v3/sin versión migraban a la nueva. Al activar la aprobación se
+    // cortó (llavesAntiguas: []) para que todos pasen por la solicitud.
+    almacen.set('s4sf.aiparatodo.v3', JSON.stringify({ pago: true }))
     almacen.set('s4sf.aiparatodo.v2', JSON.stringify({ id: 'f', nombre: 'Eva' }))
-    expect(accesoDe(AIPT)).toEqual({ id: 'f', nombre: 'Eva' })
-    expect(JSON.parse(almacen.get('s4sf.aiparatodo.v3'))).toEqual({ id: 'f', nombre: 'Eva' })
-    almacen.clear()
     almacen.set('s4sf.aiparatodo', JSON.stringify({ nombre: 'Luis' }))
-    expect(accesoDe(AIPT)).toEqual({ nombre: 'Luis' })
+    expect(accesoDe(AIPT)).toBeNull()
+    expect(almacen.has('s4sf.aiparatodo.v4')).toBe(false)
+  })
+
+  it('la migración de llaves antiguas sigue viva para quien la use', () => {
+    const cfg = { llave: 'x.new', llavesAntiguas: ['x.old'] }
+    almacen.set('x.old', JSON.stringify({ id: 'f', nombre: 'Eva' }))
+    expect(accesoDe(cfg)).toEqual({ id: 'f', nombre: 'Eva' })
+    expect(JSON.parse(almacen.get('x.new'))).toEqual({ id: 'f', nombre: 'Eva' })
   })
 
   it('lo roto o lo que no es un objeto no abre nada', () => {
-    almacen.set('s4sf.aiparatodo.v2', '{roto')
-    almacen.set('s4sf.aiparatodo', JSON.stringify('si'))
+    almacen.set('s4sf.aiparatodo.v4', '{roto')
     expect(accesoDe(AIPT)).toBeNull()
   })
 
   it('las llaves de AI para todo no abren Filmmaking para todo', () => {
-    almacen.set('s4sf.aiparatodo.v2', JSON.stringify({ nombre: 'Eva' }))
-    almacen.set('s4sf.aiparatodo.v3', JSON.stringify({ nombre: 'Eva' }))
+    almacen.set('s4sf.aiparatodo.v4', JSON.stringify({ nombre: 'Eva' }))
     expect(accesoDe(FILM)).toBeNull()
   })
 })

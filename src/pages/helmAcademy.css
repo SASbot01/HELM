@@ -1,0 +1,62 @@
+/* HELM Academy — el formulario de entrada al Skool (/helm-academy). Estilo de
+   Skool: violeta y botón amarillo, sobre fondo oscuro. */
+.ha {
+  min-height: 100dvh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 32px 16px;
+  background: radial-gradient(120% 90% at 50% 0%, #1a1026 0%, #0b0810 60%, #070509 100%);
+  color: #f3f1f8;
+  font-family: 'Inter Tight', system-ui, sans-serif;
+}
+.ha-card {
+  width: 100%; max-width: 440px;
+  background: rgba(22, 17, 32, 0.72);
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  border-radius: 20px;
+  padding: 26px 24px 22px;
+  box-shadow: 0 30px 70px -30px rgba(124, 58, 237, 0.6);
+}
+.ha-cab { display: flex; align-items: center; gap: 11px; margin-bottom: 20px; }
+.ha-logo {
+  display: inline-grid; place-items: center; flex-shrink: 0;
+  width: 42px; height: 42px; border-radius: 11px;
+  background: #7c3aed; color: #fff; font-weight: 800; font-size: 15px;
+  box-shadow: 0 6px 16px -4px rgba(124, 58, 237, 0.8);
+}
+.ha-cab b { display: block; font-size: 16px; font-weight: 800; }
+.ha-cab small { display: block; font-size: 12px; color: #a99fc0; margin-top: 1px; }
+
+.ha-card h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; margin: 0; }
+.ha-lead { margin: 6px 0 20px; color: #b7aecb; font-size: 14px; }
+
+.ha-form { display: flex; flex-direction: column; gap: 11px; }
+.ha-fila { display: grid; grid-template-columns: 90px 1fr; gap: 11px; }
+.ha-form input {
+  width: 100%; padding: 13px 14px;
+  background: rgba(10, 7, 16, 0.7);
+  border: 1px solid rgba(124, 58, 237, 0.28);
+  border-radius: 12px;
+  color: #f3f1f8; font: inherit; font-size: 15px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.ha-form input::placeholder { color: #776c90; }
+.ha-form input:focus { outline: none; border-color: #9b6dff; box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.22); }
+.ha-trampa { position: absolute !important; left: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+.ha-btn {
+  margin-top: 5px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 14px 18px; border: none; border-radius: 12px;
+  background: #fbcf4b; color: #1a1205;
+  font: inherit; font-weight: 800; font-size: 15px; cursor: pointer;
+  box-shadow: 0 10px 24px -10px rgba(251, 207, 75, 0.9);
+  transition: background .15s, transform .12s;
+}
+.ha-btn:hover:not(:disabled) { background: #ffd95e; transform: translateY(-1px); }
+.ha-btn:disabled { opacity: 0.55; cursor: default; }
+
+.ha-error { margin: 2px 0 0; color: #ff8d8d; font-size: 13px; }
+.ha-legal { margin: 16px 0 0; font-size: 11.5px; line-height: 1.6; color: #8a7fa3; }
+.ha-legal a { color: #b79bff; }
+
+@media (prefers-reduced-motion: reduce) { .ha-btn { transition: none; } }

@@ -31,9 +31,14 @@ export default function AccesosRecibidos({ accesos, fallo, onCambio }) {
     }
   }
 
-  function copiar(url) {
-    try { navigator.clipboard?.writeText(url) } catch { /* sin portapapeles */ }
-    setCopiado(true); setTimeout(() => setCopiado(false), 1500)
+  async function copiar(url) {
+    // Solo decimos «Copiado» si de verdad se copió; el enlace queda visible
+    // debajo para seleccionarlo a mano si el portapapeles no está disponible.
+    try {
+      if (!navigator.clipboard?.writeText) return
+      await navigator.clipboard.writeText(url)
+      setCopiado(true); setTimeout(() => setCopiado(false), 1500)
+    } catch { /* queda el enlace a la vista */ }
   }
 
   const lista = accesos || []
@@ -52,9 +57,12 @@ export default function AccesosRecibidos({ accesos, fallo, onCambio }) {
               : 'Pásale este enlace para entrar con su correo:'}
           </span>
           {!hecho.correo?.enviado && hecho.url && (
-            <button type="button" className="helm-btn sm" onClick={() => copiar(hecho.url)}>
-              {copiado ? <><Check size={13} /> Copiado</> : <><Copy size={13} /> Copiar enlace</>}
-            </button>
+            <span className="helm-acc-enlace">
+              <input readOnly value={hecho.url} onFocus={(e) => e.target.select()} />
+              <button type="button" className="helm-btn sm" onClick={() => copiar(hecho.url)}>
+                {copiado ? <><Check size={13} /> Copiado</> : <><Copy size={13} /> Copiar</>}
+              </button>
+            </span>
           )}
         </div>
       )}
@@ -68,6 +76,9 @@ export default function AccesosRecibidos({ accesos, fallo, onCambio }) {
               <div className="helm-acc-quien">
                 <b>{a.nombre || a.email}</b>
                 <small>{a.email}{a.solicitado ? ` · pidió el ${fecha(a.solicitado)}` : ''}</small>
+                <span className={`helm-acc-skool${a.enSkool ? ' on' : ''}`}>
+                  {a.enSkool ? '✓ se apuntó a HELM Academy' : '— no está en el formulario'}
+                </span>
               </div>
               <div className="helm-acc-acciones">
                 <button type="button" className="helm-btn sm" disabled={obrando === a.id} onClick={() => decidir(a, 'aprobar')}>

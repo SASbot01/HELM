@@ -31,7 +31,7 @@ import { useCabeceraPublica } from '../inicio/cabecera.js'
 import { track } from '../inicio/socio/track.js'
 import { origen } from '../inicio/socio/origen.js'
 import {
-  ComunidadCtx, useComunidad, seccionPorClave, temaNombre, accesoDe, useNoticias, useArticulos,
+  ComunidadCtx, useComunidad, seccionPorClave, temaNombre, accesoDe, accesoGuardado, useNoticias, useArticulos,
   useArticulo, fechaCorta, fechaLarga, recorta, esBreve, sinComillas, ahoraMadrid, edicionAhora, EDICION,
 } from './datos.js'
 import { IndiceCapitulo, CuerpoCapitulo } from './bloques.jsx'
@@ -228,6 +228,12 @@ function Hilo({ acceso, setAcceso }) {
   const noticias = recibidas === 'error' ? [] : recibidas
   const { hash } = useLocation()
   const pdf = cfg.pdfs.find(p => sk === p.hilo.seccion && tema === p.hilo.tema && slug === p.hilo.slug) || null
+  // Los PDF (lead magnet) de una comunidad con aprobación abren SOLO el PDF, con
+  // su propia llave: así descargar una guía no salta la puerta de aprobación del
+  // resto del contenido. En las comunidades sin aprobación, nada cambia.
+  const separarPdf = Boolean(pdf) && Boolean(cfg.puerta?.aprobacion)
+  const [accesoPdf, setAccesoPdf] = useState(() => (separarPdf ? accesoGuardado(`${cfg.llave}.pdf`) : null))
+  const accesoHilo = separarPdf ? (acceso || accesoPdf) : acceso
   const capitulo = sk === 'guia' && tema === 'capitulos' ? cfg.capituloPorSlug(slug) : null
   const post = cfg.posts && sk === cfg.posts.seccion ? cfg.posts.porSlug(slug) : null
   const noticia = esNews ? (noticias || []).find(n => n.slug === slug && n.tema === tema) : null
@@ -235,11 +241,11 @@ function Hilo({ acceso, setAcceso }) {
   // Un hilo con bloques (Operaciones, Recursos) se lee igual que un capítulo.
   const texto = capitulo?.texto || (!esNews && h?.bloques ? h : null)
 
-  useEffect(() => { if (h && acceso) track('vista_pagina', { pagina: `${cfg.clave}-hilo`, seccion: sk, slug }) }, [h, acceso, sk, slug, cfg.clave])
+  useEffect(() => { if (h && accesoHilo) track('vista_pagina', { pagina: `${cfg.clave}-hilo`, seccion: sk, slug }) }, [h, accesoHilo, sk, slug, cfg.clave])
   // Un enlace con #apartado abierto en frío: cuando se monta el hilo (la página
   // va en su propio archivo), ScrollToTop ya buscó el ancla y no la encontró.
   // Las anclas son ASCII (ver ancla()), así que no hace falta decodificar.
-  useEffect(() => { if (acceso && hash) document.getElementById(hash.slice(1))?.scrollIntoView() }, [acceso, slug, hash])
+  useEffect(() => { if (accesoHilo && hash) document.getElementById(hash.slice(1))?.scrollIntoView() }, [accesoHilo, slug, hash])
   if (esNews && recibidas === null) return <main className="aip-main aip-post"><p className="aip-sub">Cargando…</p></main>
   if (esNews && recibidas === 'error') return <main className="aip-main aip-post"><p className="aip-sub">No se ha podido cargar la noticia. Prueba a recargar la página en un momento.</p></main>
   if (!s || !h) return <Navigate to={`${cfg.ruta}/${sk || ''}`} replace />
@@ -247,7 +253,7 @@ function Hilo({ acceso, setAcceso }) {
 
   // La puerta: en las guías en PDF, la suya (su embudo, su texto).
   const puerta = pdf
-    ? <Puerta setAcceso={setAcceso} {...pdf.puerta} />
+    ? <Puerta setAcceso={separarPdf ? setAccesoPdf : setAcceso} llave={separarPdf ? `${cfg.llave}.pdf` : undefined} {...pdf.puerta} />
     : <Puerta setAcceso={setAcceso} pipeline={cfg.crm.embudoComunidad} nota={`entró por ${sk}/${slug}`} />
 
   let kicker = t?.nombre
@@ -284,14 +290,14 @@ function Hilo({ acceso, setAcceso }) {
       </header>
 
       {/* Lo que se ve antes de entrar: el índice, para saber qué hay dentro. */}
-      {!acceso && texto && <IndiceCapitulo c={texto} />}
-      {!acceso && PdfIndice && <PdfIndice pdf={pdf} />}
+      {!accesoHilo && texto && <IndiceCapitulo c={texto} />}
+      {!accesoHilo && PdfIndice && <PdfIndice pdf={pdf} />}
 
-      {!acceso ? puerta
+      {!accesoHilo ? puerta
         : post ? <CuerpoPost p={post} />
           : texto ? <CuerpoCapitulo c={texto} />
             : noticia ? <CuerpoNoticia n={noticia} />
-              : PdfCuerpo ? <PdfCuerpo acceso={acceso} pdf={pdf} />
+              : PdfCuerpo ? <PdfCuerpo acceso={accesoHilo} pdf={pdf} />
                 : (
                   <section className="aip-card aip-pronto-card">
                     <p>Este {sk === 'guia' ? 'capítulo' : 'hilo'} se publica pronto. Te avisamos al correo que dejaste.</p>

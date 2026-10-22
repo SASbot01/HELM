@@ -30,7 +30,6 @@ import './inicio/inicio.css'
 const HANDLE = 'silvesttre.ia'
 const YOUTUBE = 'https://www.youtube.com/@silvesttre-ai'
 const INSTAGRAM = `https://www.instagram.com/${HANDLE}`
-const SKOOL = 'https://www.skool.com/helm-academy-4887/about'
 const TITULO = 'Alex Silvestre — Aprende a dirigir la IA, no solo a usarla'
 const DESCRIPCION = 'IA aplicada en español, sin humo y con datos. Entra gratis en AI para todo.'
 
@@ -83,14 +82,12 @@ export default function Clase() {
         <div className="ini-sep">Empieza aquí</div>
 
         <div className="ini-botones">
-          {/* El primario: HELM Academy en Skool, con el estilo de Skool
-              (portada violeta + «Unirse al grupo» amarillo). Es la puerta
-              nueva: se entra aquí antes que a AI para todo. */}
-          <a
+          {/* El primario: HELM Academy, con el estilo de Skool (portada violeta
+              + «Unirse al grupo» amarillo). Lleva al formulario de entrada
+              (/helm-academy), que recoge los datos y redirige al Skool. */}
+          <Link
             className="ini-skool"
-            href={SKOOL}
-            target="_blank"
-            rel="noopener noreferrer"
+            to="/helm-academy"
             onClick={() => track('clic_cta', { donde: 'bio-skool' })}
           >
             <span className="ini-skool-cover">
@@ -104,7 +101,7 @@ export default function Clase() {
               </span>
               <span className="ini-skool-cta">Unirse al grupo <ArrowUpRight size={16} /></span>
             </span>
-          </a>
+          </Link>
 
           {/* AI para todo se queda, pero ahora pide acceso y lo apruebas tú. */}
           <Link className="ini-btn" to="/aiparatodo" onClick={() => track('clic_cta', { donde: 'bio-aiparatodo' })}>

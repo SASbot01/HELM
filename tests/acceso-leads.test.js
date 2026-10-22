@@ -103,10 +103,29 @@ describe('comprobar-acceso', () => {
     expect((await verifyJwt(r.body.id)).sub).toBe('c9')
   })
 
-  it('pendiente no da ficha; desconocido responde "no"', async () => {
+  it('no distingue pendiente de desconocido (no deja sondear el CRM)', async () => {
     existente = { id: 'c8', custom_fields: { aiparatodo: { acceso: 'pendiente' } } }
     expect((await pide('comprobar-acceso', { comunidad: 'aiparatodo', email: 'p@example.com' })).body).toEqual({ estado: 'pendiente' })
     existente = null
-    expect((await pide('comprobar-acceso', { comunidad: 'aiparatodo', email: 'nadie@example.com' })).body).toEqual({ estado: 'no' })
+    expect((await pide('comprobar-acceso', { comunidad: 'aiparatodo', email: 'nadie@example.com' })).body).toEqual({ estado: 'pendiente' })
+  })
+})
+
+describe('school (formulario de HELM Academy)', () => {
+  it('guarda el lead en silvestre con sus datos y responde ok', async () => {
+    const r = await pide('school', { nombre: 'Noa', email: 'noa@example.com', dedico: 'diseño', edad: '28', residencia: 'Lorca', telefono: '600111222' })
+    expect(r.statusCode).toBe(200)
+    expect(r.body).toEqual({ ok: true })
+    const [fila] = inserts()
+    expect(fila.client_id).toBe('id-de-silvestre')
+    expect(fila.phone).toBe('600111222')
+    expect(fila.source).toBe('HELM Academy')
+    expect(fila.custom_fields.school).toMatchObject({ dedico: 'diseño', edad: '28', residencia: 'Lorca', telefono: '600111222' })
+  })
+
+  it('la trampa y el correo malo se rechazan', async () => {
+    expect((await pide('school', { nombre: 'Bot', email: 'b@b.com', website: 'x', dedico: 'x', edad: '1', residencia: 'x', telefono: '1' })).statusCode).toBe(400)
+    expect((await pide('school', { nombre: 'X', email: 'nop' })).statusCode).toBe(400)
+    expect(inserts()).toHaveLength(0)
   })
 })

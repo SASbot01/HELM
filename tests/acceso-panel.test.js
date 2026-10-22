@@ -24,7 +24,9 @@ function consulta(tabla) {
   return q
 }
 vi.mock('../api/lib/supabase.js', () => ({ supabase: { from: (t) => consulta(t) } }))
-vi.mock('../api/_lib/auth.js', () => ({ applyCors: () => {}, requireSuperAdmin: vi.fn(async () => ({ superadmin: true })) }))
+vi.mock('../api/_lib/auth.js', () => ({ applyCors: () => {}, requireSuperAdmin: vi.fn(async () => ({ superadmin: true, agenciaId: 'ag-1' })) }))
+const puedeVerPerfil = vi.hoisted(() => vi.fn(async () => true))
+vi.mock('../api/_lib/access.js', () => ({ puedeVerPerfil }))
 const enviarCorreo = vi.hoisted(() => vi.fn(async () => ({ enviado: true })))
 let conCorreo = false
 vi.mock('../api/_lib/correo.js', () => ({ hayCorreo: () => conCorreo, enviarCorreo }))
@@ -45,14 +47,26 @@ const pide = async ({ method = 'GET', action, body } = {}) => {
   return res
 }
 
-beforeEach(() => { lista = []; fila = null; ops.length = 0; conCorreo = false; enviarCorreo.mockClear() })
+beforeEach(() => { lista = []; fila = null; ops.length = 0; conCorreo = false; enviarCorreo.mockClear(); puedeVerPerfil.mockClear(); puedeVerPerfil.mockResolvedValue(true) })
 
 describe('pendientes', () => {
-  it('lista las solicitudes con nombre, correo y fecha', async () => {
-    lista = [{ id: 'c1', name: 'Marta', email: 'marta@example.com', custom_fields: { aiparatodo: { acceso: 'pendiente', solicitado: '2026-10-22T09:00:00Z' } }, updated_at: '2026-10-22T09:00:00Z' }]
+  it('lista las solicitudes con nombre, correo, fecha y si se apuntó al Skool', async () => {
+    lista = [
+      { id: 'c1', name: 'Marta', email: 'marta@example.com', custom_fields: { aiparatodo: { acceso: 'pendiente', solicitado: '2026-10-22T09:00:00Z' }, school: { apuntado: 'x' } }, updated_at: '2026-10-22T09:00:00Z' },
+      { id: 'c2', name: 'Leo', email: 'leo@example.com', custom_fields: { aiparatodo: { acceso: 'pendiente', solicitado: '2026-10-22T08:00:00Z' } }, updated_at: '2026-10-22T08:00:00Z' },
+    ]
     const r = await pide({ action: 'pendientes' })
     expect(r.statusCode).toBe(200)
-    expect(r.body.accesos).toEqual([{ id: 'c1', nombre: 'Marta', email: 'marta@example.com', solicitado: '2026-10-22T09:00:00Z' }])
+    expect(r.body.accesos).toEqual([
+      { id: 'c1', nombre: 'Marta', email: 'marta@example.com', solicitado: '2026-10-22T09:00:00Z', enSkool: true },
+      { id: 'c2', nombre: 'Leo', email: 'leo@example.com', solicitado: '2026-10-22T08:00:00Z', enSkool: false },
+    ])
+  })
+
+  it('un superadmin de otra agencia no puede: 403', async () => {
+    puedeVerPerfil.mockResolvedValueOnce(false)
+    const r = await pide({ action: 'pendientes' })
+    expect(r.statusCode).toBe(403)
   })
 })
 

@@ -40,6 +40,7 @@ const PERFIL_SLUG = 'silvestre'
 
 const PIPELINE_INICIO = 'Página de inicio'
 const PIPELINE_LEAD_MAGNET = 'Lead magnet'
+const PIPELINE_SCHOOL = 'School'
 const ETAPA_ENTRADA = 'lead_nuevo'
 
 // Las líneas que el navegador puede pedir que se añadan a la ficha. Son fijas:
@@ -399,6 +400,55 @@ async function miembro(b, { ip } = {}) {
   return { id: await ficha(clientId, await crear(fila)) }
 }
 
+// ── HELM Academy (Skool): el formulario de entrada ──────────────────────────
+// Antes de ir al Skool, la gente pasa por un formulario (nombre, correo, a qué
+// se dedica, edad, dónde vive, teléfono). Se guarda en el CRM de silvestre, en
+// el embudo «School», y después el navegador redirige al Skool. Así Alex sabe
+// quién se ha apuntado y puede cruzarlo con las solicitudes de /accesos.
+async function school(b, { ip } = {}) {
+  if (txt(b.website, 200)) throw fallo(400, 'No se ha podido enviar')
+  const correo = correoDe(b.email)
+  const nombre = txt(b.nombre, 80)
+  if (!nombre) throw fallo(400, 'Dinos cómo te llamas')
+  const extra = {
+    dedico: txt(b.dedico, 120),
+    edad: txt(b.edad, 12),
+    residencia: txt(b.residencia, 120),
+    telefono: txt(b.telefono, 40),
+    apuntado: ahora(),
+  }
+  const clientId = await perfil('silvestre')
+  const linea = ['HELM Academy · se apuntó', extra.dedico && `dedica: ${extra.dedico}`, extra.residencia && `de ${extra.residencia}`, extra.edad && `${extra.edad} años`].filter(Boolean).join(' · ')
+  const previo = await buscar(clientId, correo, 'id, name, notes, phone, custom_fields')
+
+  if (previo) {
+    await actualizar(previo.id, {
+      ...(previo.name ? {} : { name: nombre }),
+      ...(previo.phone || !extra.telefono ? {} : { phone: extra.telefono }),
+      notes: sumaNota(previo.notes, linea),
+      custom_fields: { ...(previo.custom_fields || {}), school: { ...(previo.custom_fields?.school || {}), ...extra } },
+      last_activity_at: ahora(), updated_at: ahora(),
+    })
+    return { ok: true }
+  }
+  if (!rateLimit({ key: `school:${ip || 'anon'}`, max: ALTAS_POR_IP_HORA, windowMs: 3_600_000 }).ok) {
+    throw fallo(429, 'Ahora mismo hay muchas altas. Prueba en un rato.')
+  }
+  cuentaAlta('school')
+  const pipeline = await embudo(clientId, PIPELINE_SCHOOL)
+  const etapa = pipeline.etapas[0]?.key || 'apuntado'
+  await crear({
+    client_id: clientId, name: nombre, email: correo,
+    ...(extra.telefono ? { phone: extra.telefono } : {}),
+    source: 'HELM Academy', notes: linea,
+    pipeline_id: pipeline.id, status: etapa,
+    utm_source: 'helm-academy', utm_medium: 'skool',
+    custom_fields: { school: extra },
+    last_activity_at: ahora(), updated_at: ahora(),
+  })
+  return { ok: true }
+}
+
 // ── AI para todo: acceso con aprobación ─────────────────────────────────────
 // Desde el 22-10-2026 el acceso a AI para todo no es automático: se solicita
 // (nombre y correo) y lo aprueba Alex a quien ya está en HELM Academy (el
@@ -468,10 +518,11 @@ async function comprobarAcceso(b) {
   const correo = correoDe(b.email)
   const clientId = await perfil(c.perfil)
   const previo = await buscar(clientId, correo, 'id, custom_fields')
-  const estado = estadoAcceso(previo, c.clave)
-  if (estado === 'aprobado') return { estado: 'aprobado', id: await ficha(clientId, previo.id) }
-  if (estado === 'pendiente') return { estado: 'pendiente' }
-  return { estado: 'no' }
+  if (estadoAcceso(previo, c.clave) === 'aprobado') return { estado: 'aprobado', id: await ficha(clientId, previo.id) }
+  // No se distingue 'pendiente' de 'no lo pidió nunca': responder distinto
+  // dejaría sondear qué correos están en el CRM. Mientras no esté aprobado, para
+  // quien pregunta es 'pendiente'.
+  return { estado: 'pendiente' }
 }
 
 // ── Primer paso del diagnóstico y del formulario de valor ───────────────────
@@ -629,7 +680,7 @@ async function nota(b) {
   return { ok: true }
 }
 
-const ACCIONES = { masterclass, socio, miembro, puerta, completar, nota, 'solicitar-acceso': solicitarAcceso, 'comprobar-acceso': comprobarAcceso }
+const ACCIONES = { masterclass, socio, miembro, puerta, completar, nota, school, 'solicitar-acceso': solicitarAcceso, 'comprobar-acceso': comprobarAcceso }
 
 export default async function handler(req, res) {
   applyCors(req, res)

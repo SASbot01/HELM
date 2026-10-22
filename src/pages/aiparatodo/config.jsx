@@ -27,7 +27,8 @@ import { PanelWebs, FichaWeb, VitrinaWebs } from './Webs.jsx'
 import { PREMIADAS } from './webs.js'
 
 // HELM Academy (Skool): la comunidad a la que se entra antes de AI para todo.
-const SKOOL_URL = 'https://www.skool.com/helm-academy-4887/about'
+// Lo usa el formulario de /helm-academy para redirigir allí tras recoger los datos.
+export const SKOOL_URL = 'https://www.skool.com/helm-academy-4887/about'
 
 const COBRO_ACTIVO = false
 const COBRO = {
@@ -51,8 +52,12 @@ export default {
   // quien entró por ?pago=ok sigue dentro. Quien dejó sus datos cuando era
   // gratis los tiene en v2 (6-11 oct) o en la llave sin versión (hasta el 6):
   // también valen, y se pasan a v3 la primera vez (datos.js · accesoDe).
-  llave: 's4sf.aiparatodo.v3',
-  llavesAntiguas: ['s4sf.aiparatodo.v2', 's4sf.aiparatodo'],
+  // v4: desde el 22-10-2026 el acceso es con aprobación (antes gratis o de
+  // pago). Se corta con las anteriores a propósito: toda la audiencia del
+  // periodo gratuito vuelve a pasar por la solicitud, que es lo que se quiere
+  // (que pasen primero por HELM Academy). No hereda de llaves antiguas.
+  llave: 's4sf.aiparatodo.v4',
+  llavesAntiguas: [],
   privacidad: '/privacidad',
   cabecera: {
     titulo: 'AI para todo — IA sin humo, de Alex Silvestre',
@@ -151,15 +156,17 @@ export default {
     // Skool). La puerta de `datos` de abajo se queda para los PDF (lead magnet),
     // que se piden con `inmediato` y siguen abriéndose directos.
     aprobacion: {
-      skool: SKOOL_URL,
+      // El «únete» lleva al formulario de HELM Academy (/helm-academy), que
+      // recoge los datos y redirige al Skool. Alex aprueba a quien aparezca allí.
+      skool: '/helm-academy',
       kicker: 'acceso con aprobación',
       titulo: 'Pide tu acceso',
-      texto: 'Primero únete a HELM Academy (es gratis). Déjanos tu nombre y tu correo y, en cuanto confirmemos que estás dentro, te abrimos AI para todo con ese mismo correo.',
+      texto: 'Déjanos tu nombre y tu correo. Le damos acceso a quien ya está en HELM Academy (es gratis): únete si aún no lo has hecho y pídelo aquí.',
       boton: 'Pedir acceso',
       legal: <>Usamos tus datos solo para darte acceso y enviarte contenido de AI para todo y de Silvestre AI. Puedes darte de baja cuando quieras. <a href="/privacidad" target="_blank" rel="noopener noreferrer">Privacidad</a></>,
       pendiente: {
         titulo: '¡Solicitud recibida!',
-        texto: 'Únete a HELM Academy (gratis) si aún no lo has hecho. En cuanto Alex confirme que estás dentro, abre AI para todo aquí con este mismo correo.',
+        texto: 'Si aún no estás en HELM Academy, únete (es gratis). En cuanto Alex lo confirme, abre AI para todo aquí con este mismo correo.',
         skoolBoton: 'Unirme a HELM Academy',
         comprobar: 'Ya me uní — abrir AI para todo',
         aun: 'Todavía no está aprobado. Únete a HELM Academy y vuelve a probar en un rato.',
