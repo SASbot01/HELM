@@ -126,6 +126,31 @@ const SOLO_PLATAFORMA = new Set([
   'reel-borrar', 'reel-reintentar', 'memoria', 'memoria-guardar', 'memoria-borrar', 'estado',
 ])
 
+// Los creadores «Propio» son el contenido del propio cliente: sus vídeos de
+// Drive, transcritos frase a frase. El resto del corpus (creadores públicos de
+// referencia) lo consulta cualquier agencia; uno «Propio» solo la plataforma y
+// la agencia que lo tiene asignado a alguno de sus perfiles. Sin esto, el
+// administrador de cualquier agencia (los alumnos que se registran lo son) leía
+// las transcripciones de los vídeos de clientes ajenos y podía asignárselas a su
+// perfil para leerlas también por el MCP.
+const esPrivada = (i) => String(i?.categoria || '').trim().toLowerCase() === 'propio'
+
+/** Los creadores que ve una sesión con estos perfiles visibles: un Set de ids,
+ *  o null si los ve todos (la plataforma). */
+export async function identidadesVisibles(visibles) {
+  if (!visibles) return null
+  const [todas, mias] = await Promise.all([
+    supabase.from('agent_identities').select('id, categoria'),
+    visibles.length
+      ? supabase.from('agent_identity_clients').select('identity_id').in('client_id', visibles)
+      : Promise.resolve({ data: [], error: null }),
+  ])
+  if (todas.error) throw todas.error
+  if (mias.error) throw mias.error
+  const asignadas = new Set((mias.data || []).map(r => r.identity_id))
+  return new Set((todas.data || []).filter(i => !esPrivada(i) || asignadas.has(i.id)).map(i => i.id))
+}
+
 // Filas que se tocan por su id: la acción vale si la fila es de un perfil tuyo.
 const FILA_DE = {
   'equipo-guion': 'helm_content_calendar',
@@ -170,8 +195,9 @@ async function handler(req, res) {
       const { data, error } = await supabase
         .from('agent_identities').select('*, agent_reels(estado, metricas)').order('categoria').order('nombre')
       if (error) throw error
+      const vis = await identidadesVisibles(visibles)
       // El mismo resumen por creador que ve un perfil (api/agentes-perfil.js).
-      const identidades = (data || []).map(({ agent_reels: rs = [], ...i }) => ({
+      const identidades = (data || []).filter(i => !vis || vis.has(i.id)).map(({ agent_reels: rs = [], ...i }) => ({
         ...i,
         reels: rs.length,
         analizados: rs.filter(r => r.estado === 'etiquetado').length,
@@ -187,7 +213,8 @@ async function handler(req, res) {
       const { data: identidad, error } = await supabase
         .from('agent_identities').select('id').eq('slug', slug).maybeSingle()
       if (error) throw error
-      if (!identidad) return res.status(404).json({ error: 'Ese creador no existe' })
+      const vis = await identidadesVisibles(visibles)
+      if (!identidad || (vis && !vis.has(identidad.id))) return res.status(404).json({ error: 'Ese creador no existe' })
       return res.status(200).json(await fichaDe(identidad.id, ve))
     }
 
@@ -230,7 +257,16 @@ async function handler(req, res) {
         .select('id, identity_id, url, fuente, cuenta, publicado_en, caption, metricas, etiquetas, estado, error, duracion_s, created_at')
         .order('created_at', { ascending: false })
         .limit(500)
-      if (identityId) q = q.eq('identity_id', identityId)
+      const vis = await identidadesVisibles(visibles)
+      if (identityId) {
+        if (vis && !vis.has(identityId)) return res.status(404).json({ error: 'Ese creador no existe' })
+        q = q.eq('identity_id', identityId)
+      } else if (vis) {
+        // Sin creador: solo los reels de creadores que puede ver (los que no
+        // tienen creador, de la plataforma).
+        if (!vis.size) return res.status(200).json({ reels: [] })
+        q = q.in('identity_id', [...vis])
+      }
       const { data, error } = await q
       if (error) throw error
       return res.status(200).json({ reels: data || [] })
@@ -244,7 +280,11 @@ async function handler(req, res) {
       const { data, error } = await supabase
         .from('agent_reels').select('*').eq('id', id).maybeSingle()
       if (error) throw error
-      if (!data) return res.status(404).json({ error: 'Ese reel no existe' })
+      const vis = await identidadesVisibles(visibles)
+      // Un reel sin creador o de un creador que no ve, como si no existiera.
+      if (!data || (vis && !(data.identity_id && vis.has(data.identity_id)))) {
+        return res.status(404).json({ error: 'Ese reel no existe' })
+      }
       return res.status(200).json({ reel: data })
     }
 
@@ -346,7 +386,20 @@ async function handler(req, res) {
     case 'perfil-creadores-guardar': {
       const b = req.body || {}
       if (!b.clientId) return res.status(400).json({ error: 'Falta el perfil' })
-      const ids = [...new Set((Array.isArray(b.identityIds) ? b.identityIds : []).map(String))]
+      let ids = [...new Set((Array.isArray(b.identityIds) ? b.identityIds : []).map(String))]
+      if (visibles) {
+        // Un creador «Propio» solo se asigna si ya era de este perfil (es el
+        // suyo): el de otro cliente no se puede coger.
+        const [cats, ya] = await Promise.all([
+          ids.length ? supabase.from('agent_identities').select('id, categoria').in('id', ids) : Promise.resolve({ data: [], error: null }),
+          supabase.from('agent_identity_clients').select('identity_id').eq('client_id', b.clientId),
+        ])
+        if (cats.error) throw cats.error
+        if (ya.error) throw ya.error
+        const suyas = new Set((ya.data || []).map(r => r.identity_id))
+        const validas = new Set((cats.data || []).filter(i => !esPrivada(i) || suyas.has(i.id)).map(i => i.id))
+        ids = ids.filter(id => validas.has(id))
+      }
       const { error: e1 } = await supabase
         .from('agent_identity_clients').delete().eq('client_id', b.clientId)
       if (e1) throw e1
@@ -363,6 +416,8 @@ async function handler(req, res) {
     case 'identidad-perfiles': {
       const identityId = String(req.query?.identityId || '')
       if (!identityId) return res.status(400).json({ error: 'Falta el creador' })
+      const vis = await identidadesVisibles(visibles)
+      if (vis && !vis.has(identityId)) return res.status(404).json({ error: 'Ese creador no existe' })
       const [perfiles, asignados] = await Promise.all([
         supabase.from('clients').select('id, slug, name').order('name'),
         supabase.from('agent_identity_clients').select('client_id').eq('identity_id', identityId),
@@ -378,6 +433,8 @@ async function handler(req, res) {
     case 'identidad-perfiles-guardar': {
       const b = req.body || {}
       if (!b.identityId) return res.status(400).json({ error: 'Falta el creador' })
+      const vis = await identidadesVisibles(visibles)
+      if (vis && !vis.has(String(b.identityId))) return res.status(404).json({ error: 'Ese creador no existe' })
       // Solo se tocan las asignaciones a perfiles tuyos: las de otras agencias
       // a ese mismo creador se quedan como están.
       const ids = [...new Set((Array.isArray(b.clientIds) ? b.clientIds : []).map(String))].filter(ve)
