@@ -82,7 +82,7 @@ export default {
     seccion: 'skills',
     porSlug: postPorSlug,
     Cuerpo: CuerpoPost,
-    kicker: (p) => ` · ${p.skills.length} ${p.tipo === 'repo' ? 'apartados' : 'skills'} · ${p.lectura}`,
+    kicker: (p) => ` · ${p.skills.length} ${p.tipo === 'repo' || p.tipo === 'guia' ? 'apartados' : 'skills'} · ${p.lectura}`,
   },
   TrasHilo,
 

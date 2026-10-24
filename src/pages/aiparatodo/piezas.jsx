@@ -240,7 +240,7 @@ export function CuerpoPost({ p }) {
           <p className="aip-skill-n"><span>{s.n}</span> {s.clave}</p>
           <h2>{s.titular}</h2>
           <p className="aip-historia">{s.historia}</p>
-          <h3>Qué puedes hacer</h3>
+          <h3>{s.puedesTitulo || 'Qué puedes hacer'}</h3>
           <ul className="aip-puedes">{s.puedes.map(x => <li key={x}>{x}</li>)}</ul>
           {/* Cuando la herramienta ya tiene un hilo propio, el enlace a ese hilo. */}
           {s.hilo && (
@@ -255,6 +255,18 @@ export function CuerpoPost({ p }) {
                 <small>{s.oficial === false ? `De la comunidad · ${s.autor}` : 'Skill oficial de Anthropic'}{s.licencia ? ` · ${s.licencia}` : ''}</small>
               </div>
               <a className="aip-btn sec pequeno" href={s.github} target="_blank" rel="noopener noreferrer">Ver en GitHub <ArrowRight size={14} /></a>
+            </div>
+          )}
+
+          {/* Para lo que no es un repo (una API, un servicio): su documentación oficial. */}
+          {s.web && (
+            <div className="aip-repo">
+              <ExternalLink size={16} />
+              <div>
+                <code>{s.web.nombre}</code>
+                {s.web.detalle && <small>{s.web.detalle}</small>}
+              </div>
+              <a className="aip-btn sec pequeno" href={s.web.url} target="_blank" rel="noopener noreferrer">{s.web.boton || 'Abrir'} <ArrowRight size={14} /></a>
             </div>
           )}
 
@@ -284,7 +296,7 @@ export function CuerpoPost({ p }) {
       <section className="aip-card aip-resumen">
         <h2>Resumen rápido</h2>
         <table>
-          <thead><tr><th>#</th><th>{p.tipo === 'mcp' ? 'Qué' : p.tipo === 'repo' ? 'Apartado' : 'Skill'}</th><th>Para qué</th></tr></thead>
+          <thead><tr><th>#</th><th>{p.tipo === 'mcp' ? 'Qué' : p.tipo === 'repo' || p.tipo === 'guia' ? 'Apartado' : 'Skill'}</th><th>Para qué</th></tr></thead>
           <tbody>
             {p.skills.map(s => <tr key={s.clave}><td>{s.n}</td><td>{s.github ? <a href={s.github} target="_blank" rel="noopener noreferrer">{s.nombre}</a> : s.nombre}</td><td>{s.corto}</td></tr>)}
           </tbody>
