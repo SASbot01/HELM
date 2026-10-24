@@ -27,6 +27,16 @@ const ESQ = {
 }
 
 describe('validaArgs', () => {
+  it('un "__proto__" en los argumentos no se cuela ni cambia el prototipo', () => {
+    // JSON.parse crea "__proto__" como propiedad propia, igual que el MCP.
+    const args = JSON.parse('{"perfil":"hugo","__proto__":{"prueba":true},"constructor":{"x":1}}')
+    const r = validaArgs(ESQ, args)
+    expect(r.errores).toEqual([])
+    expect(r.args.prueba).toBeUndefined()
+    expect(Object.getPrototypeOf(r.args)).toBe(Object.prototype)
+    expect(r.avisos.join(' ')).toMatch(/__proto__/)
+  })
+
   it('deja pasar lo que vale, tal cual', () => {
     const args = { perfil: 'hugo', limite: 10, detalle: 'resumen', guiones: [{ fecha: '2026-10-14', titulo: 'T', tipo: 'venta' }] }
     const r = validaArgs(ESQ, args)

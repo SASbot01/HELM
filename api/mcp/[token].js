@@ -291,7 +291,7 @@ async function identidadDe(nombre) {
   // puede quedar. Por nombre, solo si es de uno.
   const ident = await porSlug('agent_identities', '*', tal)
   if (ident) return ident
-  const todas = await todasLasFilas(() => supabase.from('agent_identities').select('*').order('nombre'))
+  const todas = await todasLasFilas(() => supabase.from('agent_identities').select('*').order('id'))
   const n = tal.toLowerCase()
   const asi = todas.filter(i => String(i.nombre || '').toLowerCase() === n)
   if (asi.length > 1) throw new Error(`Hay ${asi.length} creadores que se llaman "${nombre}": usa su slug (${asi.map(i => i.slug).join(', ')}).`)
@@ -313,7 +313,7 @@ async function perfilDe(nombre, fijo) {
   const c = await porSlug('clients', 'id, slug, name', tal)
   if (c) return c
   const n = tal.toLowerCase()
-  const asi = (await todasLasFilas(() => supabase.from('clients').select('id, slug, name').order('name')))
+  const asi = (await todasLasFilas(() => supabase.from('clients').select('id, slug, name').order('id')))
     .filter(x => String(x.name || '').toLowerCase() === n)
   if (asi.length > 1) throw new Error(`Hay ${asi.length} perfiles que se llaman "${nombre}": usa su slug (${asi.map(x => x.slug).join(', ')}).`)
   if (!asi.length) throw new Error(`No hay ningún perfil "${nombre}" en HELM.`)
@@ -805,10 +805,11 @@ const HERRAMIENTAS = {
     const en = ident ? `${ident.nombre}${suya ? ' (solo para tu agencia)' : ''}` : 'memoria global'
     const ver = comprobar('corpus', ident ? { identidad: ident.slug, limite: 1 } : { limite: 1 },
       ident ? 'Sale en "memoria" de la primera página.' : 'Sale en "memoria_global" de la primera página, con cualquier identidad o perfil.')
-    // Una nota idéntica no se guarda dos veces.
-    let q = supabase.from('agent_memory').select('id').limit(1)
-    q = suya ? q.eq('client_id', suya).eq('clave', clave)
-      : (ident ? q.eq('identity_id', ident.id) : q.eq('ambito', 'global')).eq('contenido', texto).is('client_id', null)
+    // Una nota idéntica no se guarda dos veces: la de una agencia, en ninguno
+    // de sus perfiles (se leen juntas).
+    let q = supabase.from('agent_memory').select('id').eq('contenido', texto).limit(1)
+    q = suya ? q.eq('identity_id', ident.id).in('client_id', await fijo.notas())
+      : (ident ? q.eq('identity_id', ident.id) : q.eq('ambito', 'global')).is('client_id', null)
     const { data: ya, error: e0 } = await q
     if (e0) throw e0
     if (ya?.length) return { guardado: true, ya_estaba: true, id: ya[0].id, en, hecho: `La nota ya estaba en ${en}; no se duplica.`, comprobar: ver }

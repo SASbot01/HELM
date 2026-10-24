@@ -25,6 +25,7 @@ import { supabase } from './lib/supabase.js'
 import { wrap } from './_lib/auth.js'
 import { puedeVerPerfil, perfilesVisibles } from './_lib/access.js'
 import { todasLasFilas } from './_lib/filas.js'
+import { esPropio } from './_lib/creadores.js'
 import { fichaDe } from './agentes-perfil.js'
 import { resumenDrive } from './_lib/ingesta.js'
 import { getIgConfig } from './_lib/instagram.js'
@@ -134,9 +135,9 @@ const SOLO_PLATAFORMA = new Set([
 // administrador de cualquier agencia (los alumnos que se registran lo son) leía
 // las transcripciones de los vídeos de clientes ajenos y podía asignárselas a su
 // perfil para leerlas también por el MCP.
-// Es privado si es de tipo «Propio» o si tiene vídeos de Drive, aunque alguien
-// le haya cambiado el tipo: lo que se transcribe de Drive es siempre de un cliente.
-const esPropio = (i) => String(i?.categoria || '').trim().toLowerCase() === 'propio'
+// Es privado si es de tipo «Propio» (esPropio) o si tiene vídeos de Drive,
+// aunque alguien le haya cambiado el tipo: lo que se transcribe de Drive es
+// siempre de un cliente.
 
 /** Todos los creadores (ids), cuáles son privados y cuáles son «Propio» de
  *  tipo. Por páginas: si se cortara en 1000, un privado podría pasar por público. */
@@ -160,7 +161,7 @@ export async function identidadesVisibles(visibles) {
   const [{ todas, privadas }, mias] = await Promise.all([
     creadoresPrivados(),
     visibles.length
-      ? todasLasFilas(() => supabase.from('agent_identity_clients').select('identity_id').in('client_id', visibles).order('identity_id'))
+      ? todasLasFilas(() => supabase.from('agent_identity_clients').select('identity_id').in('client_id', visibles).order('identity_id').order('client_id'))
       : [],
   ])
   const asignadas = new Set(mias.map(r => r.identity_id))
@@ -537,8 +538,10 @@ async function handler(req, res) {
     // ── Memoria a largo plazo ─────────────────────────────────────────────
     case 'memoria': {
       const q = String(req.query?.q || '').trim()
-      // Las notas del equipo de un perfil van aparte (acción 'equipo').
-      let sel = supabase.from('agent_memory').select('*').is('client_id', null)
+      // Las notas del equipo de un perfil van aparte (acción 'equipo'). Las de
+      // creador que guarda una agencia por el MCP llevan su perfil pero salen
+      // aquí, para poder revisarlas y borrarlas.
+      let sel = supabase.from('agent_memory').select('*, clients(slug, name)').or('client_id.is.null,tipo.eq.creador')
         .order('updated_at', { ascending: false }).limit(300)
       if (q) sel = sel.ilike('contenido', `%${q}%`)
       const { data, error } = await sel
@@ -597,7 +600,7 @@ async function handler(req, res) {
         supabase.from('agent_jobs').select('payload, estado, created_at').eq('tipo', 'equipo')
           .in('estado', ['pendiente', 'corriendo']).eq('payload->>clientId', clientId),
         supabase.from('agent_memory').select('id, clave, agente, tipo, para_agente, estado, contenido, updated_at')
-          .eq('client_id', clientId).order('updated_at', { ascending: false }).limit(200),
+          .eq('client_id', clientId).neq('tipo', 'creador').order('updated_at', { ascending: false }).limit(200),
         supabase.from('helm_content_calendar').select('id, date, title, body, tipo, created_at')
           .eq('client_id', clientId).eq('revision', 'borrador').order('date'),
         supabase.from('agent_identity_clients').select('identity_id', { count: 'exact', head: true }).eq('client_id', clientId),

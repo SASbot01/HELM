@@ -20,6 +20,8 @@ function semilla() {
     { id: 'p-real', slug: 'detras-de-camra', name: 'Detrás de Cámara', agencia_id: 'ag-alex', active: true },
     { id: 'p-falso', slug: 'DETRAS-DE-CAMRA', name: 'Mi perfil', agencia_id: 'ag-alumno', active: true },
     { id: 'p-otra', slug: 'otra', name: 'Otra', agencia_id: 'ag-otra', active: true },
+    // Otro perfil de la agencia de Alex: lo que guarda uno, lo lee el otro.
+    { id: 'p-real-2', slug: 'enformaconhugo', name: 'Hugo', agencia_id: 'ag-alex', active: true },
   ]
   db.agent_identities = [
     { id: 'i-real', nombre: 'Propio DDC', slug: 'propio-ddc', categoria: 'Propio', descripcion: '', activa: true },
@@ -33,6 +35,7 @@ function semilla() {
     { identity_id: 'i-suyo', client_id: 'p-falso' },
     { identity_id: 'i-trampa', client_id: 'p-falso' },
     { identity_id: 'i-suyo', client_id: 'p-otra' },
+    { identity_id: 'i-suyo', client_id: 'p-real-2' },
   ]
   db.agent_reels = []
   db.agent_memory = [{ id: 'm-plataforma', ambito: 'identidad', identity_id: 'i-suyo', client_id: null, clave: '', contenido: 'nota de la plataforma', updated_at: '2026-10-01' }]
@@ -131,6 +134,13 @@ describe('MCP · las notas de creador de una agencia son solo suyas', () => {
     expect(notasDe(otra.datos)).toEqual(['nota de la plataforma'])
     const op = await ejecutaHerramienta('corpus', { identidad: 'referente' }, { operador: true })
     expect(notasDe(JSON.parse(op.texto))).toEqual(['nota de la plataforma'])
+  })
+
+  it('una nota repetida desde otro perfil de la misma agencia no se duplica', async () => {
+    await comoAgencia('ag-alex', 'guardar_memoria', { perfil: 'detras-de-camra', identidad: 'referente', contenido: 'la misma' })
+    const x = await comoAgencia('ag-alex', 'guardar_memoria', { perfil: 'enformaconhugo', identidad: 'referente', contenido: 'la misma' })
+    expect(x.datos.ya_estaba).toBe(true)
+    expect(db.agent_memory.filter(n => n.contenido === 'la misma')).toHaveLength(1)
   })
 
   it('lo que guarda la agencia de la plataforma lo lee el operador, pero no otra agencia', async () => {

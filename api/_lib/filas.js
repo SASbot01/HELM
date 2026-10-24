@@ -4,7 +4,9 @@
 const PASO = 1000
 
 /** Todas las filas de una consulta. `hacer` crea la consulta de cero en cada
- *  página (un builder de Supabase no se puede reutilizar) y debe llevar orden. */
+ *  página (un builder de Supabase no se puede reutilizar) y debe ordenar por
+ *  algo único (el id): con un orden con empates, entre páginas una fila podría
+ *  salir dos veces o ninguna. */
 export async function todasLasFilas(hacer) {
   const filas = []
   for (let desde = 0; ; desde += PASO) {
