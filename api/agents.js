@@ -540,13 +540,21 @@ async function handler(req, res) {
       const q = String(req.query?.q || '').trim()
       // Las notas del equipo de un perfil van aparte (acción 'equipo'). Las de
       // creador que guarda una agencia por el MCP llevan su perfil pero salen
-      // aquí, para poder revisarlas y borrarlas.
-      let sel = supabase.from('agent_memory').select('*, clients(slug, name)').or('client_id.is.null,tipo.eq.creador')
-        .order('updated_at', { ascending: false }).limit(300)
-      if (q) sel = sel.ilike('contenido', `%${q}%`)
-      const { data, error } = await sel
-      if (error) throw error
-      return res.status(200).json({ memoria: data || [] })
+      // aquí, para poder revisarlas y borrarlas; con su propio tope, para que
+      // no desplacen a las de la plataforma.
+      const lee = (sel) => {
+        sel = sel.order('updated_at', { ascending: false }).limit(300)
+        return q ? sel.ilike('contenido', `%${q}%`) : sel
+      }
+      const [comunes, deAgencias] = await Promise.all([
+        lee(supabase.from('agent_memory').select('*').is('client_id', null)),
+        lee(supabase.from('agent_memory').select('*, clients(slug, name)').eq('tipo', 'creador')),
+      ])
+      if (comunes.error) throw comunes.error
+      if (deAgencias.error) throw deAgencias.error
+      const memoria = [...(comunes.data || []), ...(deAgencias.data || [])]
+        .sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))
+      return res.status(200).json({ memoria })
     }
 
     case 'memoria-guardar': {

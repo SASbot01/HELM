@@ -806,10 +806,11 @@ const HERRAMIENTAS = {
     const ver = comprobar('corpus', ident ? { identidad: ident.slug, limite: 1 } : { limite: 1 },
       ident ? 'Sale en "memoria" de la primera página.' : 'Sale en "memoria_global" de la primera página, con cualquier identidad o perfil.')
     // Una nota idéntica no se guarda dos veces: la de una agencia, en ninguno
-    // de sus perfiles (se leen juntas).
-    let q = supabase.from('agent_memory').select('id').eq('contenido', texto).limit(1)
-    q = suya ? q.eq('identity_id', ident.id).in('client_id', await fijo.notas())
-      : (ident ? q.eq('identity_id', ident.id) : q.eq('ambito', 'global')).is('client_id', null)
+    // de sus perfiles (se leen juntas). Por la clave, que lleva el creador y el
+    // hash del texto: el texto entero no cabría en la URL.
+    let q = supabase.from('agent_memory').select('id').limit(1)
+    q = suya ? q.eq('clave', clave).in('client_id', await fijo.notas())
+      : (ident ? q.eq('identity_id', ident.id) : q.eq('ambito', 'global')).eq('contenido', texto).is('client_id', null)
     const { data: ya, error: e0 } = await q
     if (e0) throw e0
     if (ya?.length) return { guardado: true, ya_estaba: true, id: ya[0].id, en, hecho: `La nota ya estaba en ${en}; no se duplica.`, comprobar: ver }
