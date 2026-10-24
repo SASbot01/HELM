@@ -15,12 +15,15 @@ function semilla() {
     // tiene vídeos de Drive (alguien le cambió el tipo).
     { id: 'prop-espacios', nombre: 'otro cliente', slug: 'otro-cliente', categoria: ' Propio ' },
     { id: 'drive-sin-tipo', nombre: 'cliente drive', slug: 'cliente-drive', categoria: 'IA y tecnología' },
+    // Público, pero se le coló un vídeo de Drive: privado, y aun así se suelta.
+    { id: 'pub-con-drive', nombre: 'referente del alumno', slug: 'referente-alumno', categoria: 'Filmmaking' },
   ]
   db.agent_reels = [
     { id: 'r-pub', identity_id: 'pub-1', transcripcion: 'público' },
     { id: 'r-prop', identity_id: 'prop-silvestre', fuente: 'drive', transcripcion: 'vídeo privado de un cliente' },
     { id: 'r-alumno', identity_id: 'prop-alumno', fuente: 'drive', transcripcion: 'vídeo del alumno' },
     { id: 'r-drive', identity_id: 'drive-sin-tipo', fuente: 'drive', transcripcion: 'vídeo de Drive de otro' },
+    { id: 'r-colado', identity_id: 'pub-con-drive', fuente: 'drive', transcripcion: 'vídeo colado' },
     { id: 'r-huerfano', identity_id: null, transcripcion: 'sin creador' },
   ]
   // prop-silvestre es de un perfil de la agencia de Alex; prop-alumno, del alumno.
@@ -29,6 +32,7 @@ function semilla() {
     { identity_id: 'prop-alumno', client_id: 'perfil-alumno' },
     { identity_id: 'prop-espacios', client_id: 'perfil-silvestre' },
     { identity_id: 'drive-sin-tipo', client_id: 'perfil-silvestre' },
+    { identity_id: 'pub-con-drive', client_id: 'perfil-alumno' },
   ]
   db.clients = [
     { id: 'perfil-silvestre', slug: 'silvestre', name: 'Silvestre' },
@@ -46,8 +50,15 @@ function consulta(tabla) {
     select() { return q },
     order() { return q },
     limit() { return q },
+    range() { return q },
     eq(c, v) { filtros.push(r => r[c] === v); return q },
     in(c, vs) { filtros.push(r => vs.includes(r[c])); return q },
+    // not(c, 'is', null) y not(c, 'in', '(a,b)'), como PostgREST.
+    not(c, op, v) {
+      if (op === 'is') filtros.push(r => r[c] !== v)
+      else if (op === 'in') { const vs = String(v).slice(1, -1).split(','); filtros.push(r => !vs.includes(r[c])) }
+      return q
+    },
     delete() { op = 'delete'; return q },
     insert(rs) { op = 'insert'; filas = rs; return q },
     maybeSingle() { return Promise.resolve({ data: (db[tabla] || []).filter(r => filtros.every(f => f(r)))[0] || null, error: null }) },
@@ -92,12 +103,12 @@ beforeEach(semilla)
 describe('creadores «Propio» entre agencias', () => {
   it('la plataforma los ve todos', async () => {
     const r = await pide(PLATAFORMA, 'identidades')
-    expect(r.body.identidades.map(i => i.id).sort()).toEqual(['drive-sin-tipo', 'prop-alumno', 'prop-espacios', 'prop-silvestre', 'pub-1'])
+    expect(r.body.identidades.map(i => i.id).sort()).toEqual(['drive-sin-tipo', 'prop-alumno', 'prop-espacios', 'prop-silvestre', 'pub-1', 'pub-con-drive'])
   })
 
   it('una agencia ve los públicos y su «Propio», nunca el de otro cliente', async () => {
     const r = await pide(ALUMNO, 'identidades')
-    expect(r.body.identidades.map(i => i.id).sort()).toEqual(['prop-alumno', 'pub-1'])
+    expect(r.body.identidades.map(i => i.id).sort()).toEqual(['prop-alumno', 'pub-1', 'pub-con-drive'])
   })
 
   it('no puede abrir la ficha, la lista de reels ni un reel de un «Propio» ajeno', async () => {
@@ -109,7 +120,7 @@ describe('creadores «Propio» entre agencias', () => {
 
   it('sin creador, la lista de reels no trae los privados ajenos ni los huérfanos', async () => {
     const r = await pide(ALUMNO, 'reels')
-    expect(r.body.reels.map(x => x.id).sort()).toEqual(['r-alumno', 'r-pub'])
+    expect(r.body.reels.map(x => x.id).sort()).toEqual(['r-alumno', 'r-colado', 'r-pub'])
   })
 
   it('«Propio» con espacios o con vídeos de Drive también es privado', async () => {
@@ -129,8 +140,8 @@ describe('creadores «Propio» entre agencias', () => {
   it('un creador que no existe da 404 y no se asigna', async () => {
     expect((await pide(ALUMNO, 'identidad-ficha', { query: { slug: 'no-existe' } })).statusCode).toBe(404)
     expect((await pide(ALUMNO, 'reels', { query: { identityId: 'no-existe' } })).statusCode).toBe(404)
-    const r = await pide(ALUMNO, 'perfil-creadores-guardar', { body: { clientId: 'perfil-alumno', identityIds: ['no-existe', 'pub-1', 'prop-alumno'] } })
-    expect(r.body.identityIds.sort()).toEqual(['prop-alumno', 'pub-1'])
+    const r = await pide(ALUMNO, 'perfil-creadores-guardar', { body: { clientId: 'perfil-alumno', identityIds: ['no-existe', 'pub-1', 'prop-alumno', 'pub-con-drive'] } })
+    expect(r.body.identityIds.sort()).toEqual(['prop-alumno', 'pub-1', 'pub-con-drive'])
   })
 
   it('sí puede leer lo público y lo suyo', async () => {
@@ -140,10 +151,10 @@ describe('creadores «Propio» entre agencias', () => {
   })
 
   it('no puede asignarse el «Propio» de otro cliente (se descarta), sí los públicos y el suyo', async () => {
-    const r = await pide(ALUMNO, 'perfil-creadores-guardar', { body: { clientId: 'perfil-alumno', identityIds: ['pub-1', 'prop-silvestre', 'prop-alumno'] } })
-    expect(r.body.identityIds.sort()).toEqual(['prop-alumno', 'pub-1'])
+    const r = await pide(ALUMNO, 'perfil-creadores-guardar', { body: { clientId: 'perfil-alumno', identityIds: ['pub-1', 'prop-silvestre', 'prop-alumno', 'pub-con-drive'] } })
+    expect(r.body.identityIds.sort()).toEqual(['prop-alumno', 'pub-1', 'pub-con-drive'])
     const deAlumno = db.agent_identity_clients.filter(a => a.client_id === 'perfil-alumno').map(a => a.identity_id).sort()
-    expect(deAlumno).toEqual(['prop-alumno', 'pub-1'])
+    expect(deAlumno).toEqual(['prop-alumno', 'pub-1', 'pub-con-drive'])
     // Y la asignación de Silvestre sigue intacta.
     expect(db.agent_identity_clients).toContainEqual({ identity_id: 'prop-silvestre', client_id: 'perfil-silvestre' })
   })
@@ -151,7 +162,7 @@ describe('creadores «Propio» entre agencias', () => {
   it('tampoco puede asignar un «Propio» ajeno desde la ficha del creador', async () => {
     const r = await pide(ALUMNO, 'identidad-perfiles-guardar', { body: { identityId: 'prop-silvestre', clientIds: ['perfil-alumno'] } })
     expect(r.statusCode).toBe(404)
-    expect(db.agent_identity_clients.filter(a => a.client_id === 'perfil-alumno')).toEqual([{ identity_id: 'prop-alumno', client_id: 'perfil-alumno' }])
+    expect(db.agent_identity_clients.filter(a => a.client_id === 'perfil-alumno').map(a => a.identity_id).sort()).toEqual(['prop-alumno', 'pub-con-drive'])
   })
 
   it('puede pasar su «Propio» a otro perfil de SU agencia, y luego quitarlo del primero', async () => {
@@ -175,6 +186,12 @@ describe('creadores «Propio» entre agencias', () => {
     const r = await pide(ALUMNO, 'identidad-perfiles-guardar', { body: { identityId: 'prop-alumno', clientIds: ['perfil-alumno-2'] } })
     expect(r.body.clientIds).toEqual(['perfil-alumno-2'])
     expect(deCreador('prop-alumno')).toEqual(['perfil-alumno-2'])
+  })
+
+  it('un público con un vídeo de Drive colado sí se suelta (no se queda pegado)', async () => {
+    const r = await pide(ALUMNO, 'perfil-creadores-guardar', { body: { clientId: 'perfil-alumno', identityIds: ['prop-alumno'] } })
+    expect(r.body.identityIds).toEqual(['prop-alumno'])
+    expect(deCreador('pub-con-drive')).toEqual([])
   })
 
   it('un público sí se puede quitar del todo', async () => {

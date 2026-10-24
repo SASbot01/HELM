@@ -125,7 +125,7 @@ export async function fichaDe(identityId, visible = () => true) {
     supabase.from('agent_reels')
       .select('id, url, caption, metricas, etiquetas, frases, transcripcion, estado, error, publicado_en, created_at')
       .eq('identity_id', identityId).limit(500),
-    supabase.from('agent_memory').select('id, contenido, updated_at')
+    supabase.from('agent_memory').select('id, contenido, updated_at, client_id, clients(agencia_id)')
       .eq('identity_id', identityId).order('updated_at', { ascending: false }),
     supabase.from('agent_identity_clients').select('client_id, clients(slug, name, agencia_id)').eq('identity_id', identityId),
   ])
@@ -135,7 +135,10 @@ export async function fichaDe(identityId, visible = () => true) {
   return {
     identidad: ident.data,
     reels: (reels.data || []).sort((a, b) => vistas(b) - vistas(a)),
-    memoria: memoria.data || [],
+    // Las notas sin perfil son de la plataforma; las que escribió una agencia
+    // por el MCP llevan su perfil y solo las ve esa agencia.
+    memoria: (memoria.data || []).filter(m => !m.client_id || visible(m.client_id, m.clients?.agencia_id))
+      .map(({ id, contenido, updated_at }) => ({ id, contenido, updated_at })),
     perfiles: (perfiles.data || []).filter(p => p.clients && visible(p.client_id, p.clients.agencia_id))
       .map(({ clients: { slug, name } }) => ({ slug, name })),
   }

@@ -24,6 +24,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { supabase } from './lib/supabase.js'
 import { wrap } from './_lib/auth.js'
 import { puedeVerPerfil, perfilesVisibles } from './_lib/access.js'
+import { todasLasFilas } from './_lib/filas.js'
 import { fichaDe } from './agentes-perfil.js'
 import { resumenDrive } from './_lib/ingesta.js'
 import { getIgConfig } from './_lib/instagram.js'
@@ -133,22 +134,22 @@ const SOLO_PLATAFORMA = new Set([
 // administrador de cualquier agencia (los alumnos que se registran lo son) leía
 // las transcripciones de los vídeos de clientes ajenos y podía asignárselas a su
 // perfil para leerlas también por el MCP.
-// Es «Propio» por su tipo o porque tiene vídeos de Drive, aunque alguien le
-// haya cambiado el tipo: lo que se transcribe de Drive es siempre de un cliente.
+// Es privado si es de tipo «Propio» o si tiene vídeos de Drive, aunque alguien
+// le haya cambiado el tipo: lo que se transcribe de Drive es siempre de un cliente.
 const esPropio = (i) => String(i?.categoria || '').trim().toLowerCase() === 'propio'
 
-/** Todos los creadores (ids) y cuáles son privados. */
+/** Todos los creadores (ids), cuáles son privados y cuáles son «Propio» de
+ *  tipo. Por páginas: si se cortara en 1000, un privado podría pasar por público. */
 async function creadoresPrivados() {
   const [todas, drive] = await Promise.all([
-    supabase.from('agent_identities').select('id, categoria'),
-    supabase.from('agent_reels').select('identity_id').eq('fuente', 'drive'),
+    todasLasFilas(() => supabase.from('agent_identities').select('id, categoria').order('id')),
+    todasLasFilas(() => supabase.from('agent_reels').select('identity_id').eq('fuente', 'drive').order('id')),
   ])
-  if (todas.error) throw todas.error
-  if (drive.error) throw drive.error
-  const conDrive = new Set((drive.data || []).map(r => r.identity_id).filter(Boolean))
+  const conDrive = new Set(drive.map(r => r.identity_id).filter(Boolean))
   return {
-    todas: (todas.data || []).map(i => i.id),
-    privadas: new Set((todas.data || []).filter(i => esPropio(i) || conDrive.has(i.id)).map(i => i.id)),
+    todas: todas.map(i => i.id),
+    privadas: new Set(todas.filter(i => esPropio(i) || conDrive.has(i.id)).map(i => i.id)),
+    propias: new Set(todas.filter(esPropio).map(i => i.id)),
   }
 }
 
@@ -159,16 +160,17 @@ export async function identidadesVisibles(visibles) {
   const [{ todas, privadas }, mias] = await Promise.all([
     creadoresPrivados(),
     visibles.length
-      ? supabase.from('agent_identity_clients').select('identity_id').in('client_id', visibles)
-      : Promise.resolve({ data: [], error: null }),
+      ? todasLasFilas(() => supabase.from('agent_identity_clients').select('identity_id').in('client_id', visibles).order('identity_id'))
+      : [],
   ])
-  if (mias.error) throw mias.error
-  const asignadas = new Set((mias.data || []).map(r => r.identity_id))
+  const asignadas = new Set(mias.map(r => r.identity_id))
   return new Set(todas.filter(id => !privadas.has(id) || asignadas.has(id)))
 }
 
-/** De estos creadores privados, los que solo tiene este perfil: si se los
- *  quita, nadie fuera de la plataforma podría volver a verlos ni asignarlos. */
+/** De estos «Propio», los que solo tiene este perfil: si se los quita, nadie
+ *  fuera de la plataforma podría volver a verlos ni asignarlos. Solo los de
+ *  tipo «Propio»: uno público al que se le coló un vídeo de Drive sí se suelta
+ *  (lo recupera la plataforma), en vez de quedarse pegado al perfil. */
 async function soloDeEste(clientId, ids) {
   if (!ids.length) return []
   const { data, error } = await supabase.from('agent_identity_clients').select('identity_id, client_id').in('identity_id', ids)
@@ -290,8 +292,13 @@ async function handler(req, res) {
       } else if (vis) {
         // Sin creador: solo los reels de creadores que puede ver (los que no
         // tienen creador, de la plataforma).
+        // Se excluyen los privados ajenos en vez de listar los visibles: con
+        // muchos creadores esa lista no cabría en la URL.
         if (!vis.size) return res.status(200).json({ reels: [] })
-        q = q.in('identity_id', [...vis])
+        const { privadas } = await creadoresPrivados()
+        const ocultos = [...privadas].filter(id => !vis.has(id))
+        q = q.not('identity_id', 'is', null)
+        if (ocultos.length) q = q.not('identity_id', 'in', `(${ocultos.join(',')})`)
       }
       const { data, error } = await q
       if (error) throw error
@@ -416,7 +423,7 @@ async function handler(req, res) {
       if (visibles) {
         // Un creador «Propio» solo se asigna si ya es de algún perfil de tu
         // agencia: el de otro cliente no se puede coger (se descarta).
-        const [vis, { privadas }, ya] = await Promise.all([
+        const [vis, { propias }, ya] = await Promise.all([
           identidadesVisibles(visibles),
           creadoresPrivados(),
           supabase.from('agent_identity_clients').select('identity_id').eq('client_id', b.clientId),
@@ -424,7 +431,7 @@ async function handler(req, res) {
         if (ya.error) throw ya.error
         ids = ids.filter(id => vis.has(id))
         // Y el «Propio» que solo tiene este perfil no se suelta: se queda.
-        const quitados = (ya.data || []).map(r => r.identity_id).filter(id => privadas.has(id) && !ids.includes(id))
+        const quitados = (ya.data || []).map(r => r.identity_id).filter(id => propias.has(id) && !ids.includes(id))
         ids.push(...await soloDeEste(b.clientId, quitados))
       }
       const { error: e1 } = await supabase
@@ -468,12 +475,12 @@ async function handler(req, res) {
       if (visibles && !ids.length) {
         // Un «Propio» sin ningún perfil ya no lo vería nadie más que la
         // plataforma: si solo lo tienen perfiles tuyos, alguno se lo queda.
-        const [{ privadas }, usos] = await Promise.all([
+        const [{ propias }, usos] = await Promise.all([
           creadoresPrivados(),
           supabase.from('agent_identity_clients').select('client_id').eq('identity_id', b.identityId),
         ])
         if (usos.error) throw usos.error
-        if (privadas.has(String(b.identityId)) && !(usos.data || []).some(r => !ve(r.client_id))) {
+        if (propias.has(String(b.identityId)) && !(usos.data || []).some(r => !ve(r.client_id))) {
           return res.status(409).json({ error: 'Es el contenido propio de un perfil: tiene que quedarse en alguno' })
         }
       }
