@@ -21,7 +21,7 @@ import { NN_PORTADA_3D, NN_PUNTOS } from './noNegociables.js'
 import { MODOS_HILO, MODOS_PORTADA_3D, MODOS_GANCHO, MODOS_INDICE } from './guiaModos.js'
 import { PIPELINE_COMUNIDAD, PIPELINE_LEAD_MAGNET } from './crm.js'
 import {
-  Fondo, BloqueHelm, TrasHilo, IndiceNN, CuerpoNoNegociables, IndiceModos, CuerpoGuiaModos, CuerpoPost,
+  Fondo, TrasHilo, IndiceNN, CuerpoNoNegociables, IndiceModos, CuerpoGuiaModos, CuerpoPost,
 } from './piezas.jsx'
 import { PanelWebs, FichaWeb, VitrinaWebs } from './Webs.jsx'
 import { PREMIADAS } from './webs.js'
@@ -118,7 +118,7 @@ export default {
         nombre y tu correo una vez y se te abre todo.
       </>
     ),
-    despues: <><VitrinaWebs /><BloqueHelm donde="portada" /></>,
+    despues: <VitrinaWebs />,
   },
   textos: {
     navCta: 'Sigue al creador',
