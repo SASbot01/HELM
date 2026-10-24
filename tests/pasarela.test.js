@@ -247,3 +247,23 @@ describe('sesión · accesos de equipo revalidados', () => {
     await expect(validateAuth(await conToken({ sub: 't5', role: 'client', clientId: 'p1' }))).resolves.toBeTruthy()
   })
 })
+
+describe('pasarela · el slug de un perfil', () => {
+  // El MCP busca el perfil por slug: con mayúsculas o espacios, un alumno se
+  // hacía pasar por el perfil de otra agencia.
+  it('un perfil nuevo solo se crea con un slug válido', async () => {
+    for (const slug of ['DETRAS-DE-CAMRA', 'detras-de-camra ', ' x', 'con espacio', '', undefined, 'agents']) {
+      await expect(pide({ auth: AGENCIA, metodo: 'POST', tabla: 'clients', cuerpo: cuerpo({ name: 'Nuevo', slug }) }))
+        .rejects.toMatchObject({ statusCode: 403 })
+    }
+  })
+
+  it('una agencia no cambia el slug de su perfil; la plataforma sí', async () => {
+    await expect(pide({ auth: AGENCIA, metodo: 'PATCH', tabla: 'clients', cuerpo: cuerpo({ slug: 'otro' }) }))
+      .rejects.toMatchObject({ statusCode: 403 })
+    await expect(pide({ auth: AGENCIA, metodo: 'PATCH', tabla: 'clients', cuerpo: cuerpo({ name: 'Otro nombre' }) }))
+      .resolves.toBeTruthy()
+    await expect(pide({ auth: { ...PLATAFORMA, agenciaId: 'ag-plat' }, ids: null, metodo: 'PATCH', tabla: 'clients', cuerpo: cuerpo({ slug: 'otro' }) }))
+      .resolves.toBeTruthy()
+  })
+})

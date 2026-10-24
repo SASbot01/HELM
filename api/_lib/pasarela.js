@@ -31,6 +31,7 @@
 import { supabase } from '../lib/supabase.js'
 import { validateAuth } from './auth.js'
 import { perfilesVisibles, olvidarVisibles } from './access.js'
+import { SLUG_RE, RUTAS_DE_LA_WEB } from '../../src/helm/perfilNuevo.js'
 
 const BASE = () => process.env.SUPABASE_URL || 'http://localhost:54321'
 const CLAVE = () => process.env.SUPABASE_SERVICE_KEY || ''
@@ -224,10 +225,17 @@ export async function recortaTabla({ auth, ids, metodo, tabla, query, cuerpo, pr
 
   // Perfiles nuevos: nacen en la agencia de quien los crea. Y nadie mueve un
   // perfil de agencia desde aquí.
+  // El slug es la llave del perfil fuera del panel (su web, el MCP): solo
+  // minúsculas, números y guiones, y no se cambia. Con mayúsculas o espacios,
+  // `DETRAS-DE-CAMRA` se leía como el perfil de otra agencia.
   if (tabla === 'clients') {
     for (const f of filas) {
       if ('agencia_id' in f && !auth.plataforma) throw prohibido('Un perfil no se cambia de agencia')
       if (metodo === 'POST') f.agencia_id = auth.agenciaId
+      if (!auth.plataforma && metodo === 'PATCH' && 'slug' in f) throw prohibido('La URL de un perfil no se cambia')
+      if (!auth.plataforma && metodo === 'POST' && (!SLUG_RE.test(String(f.slug ?? '')) || RUTAS_DE_LA_WEB.has(f.slug))) {
+        throw prohibido('URL inválida: usa a-z, 0-9 y guiones (3-40)')
+      }
     }
     if (metodo === 'POST' && !auth.agenciaId) throw prohibido('Tu cuenta no tiene agencia')
   }

@@ -133,22 +133,48 @@ const SOLO_PLATAFORMA = new Set([
 // administrador de cualquier agencia (los alumnos que se registran lo son) leía
 // las transcripciones de los vídeos de clientes ajenos y podía asignárselas a su
 // perfil para leerlas también por el MCP.
-const esPrivada = (i) => String(i?.categoria || '').trim().toLowerCase() === 'propio'
+// Es «Propio» por su tipo o porque tiene vídeos de Drive, aunque alguien le
+// haya cambiado el tipo: lo que se transcribe de Drive es siempre de un cliente.
+const esPropio = (i) => String(i?.categoria || '').trim().toLowerCase() === 'propio'
+
+/** Todos los creadores (ids) y cuáles son privados. */
+async function creadoresPrivados() {
+  const [todas, drive] = await Promise.all([
+    supabase.from('agent_identities').select('id, categoria'),
+    supabase.from('agent_reels').select('identity_id').eq('fuente', 'drive'),
+  ])
+  if (todas.error) throw todas.error
+  if (drive.error) throw drive.error
+  const conDrive = new Set((drive.data || []).map(r => r.identity_id).filter(Boolean))
+  return {
+    todas: (todas.data || []).map(i => i.id),
+    privadas: new Set((todas.data || []).filter(i => esPropio(i) || conDrive.has(i.id)).map(i => i.id)),
+  }
+}
 
 /** Los creadores que ve una sesión con estos perfiles visibles: un Set de ids,
  *  o null si los ve todos (la plataforma). */
 export async function identidadesVisibles(visibles) {
   if (!visibles) return null
-  const [todas, mias] = await Promise.all([
-    supabase.from('agent_identities').select('id, categoria'),
+  const [{ todas, privadas }, mias] = await Promise.all([
+    creadoresPrivados(),
     visibles.length
       ? supabase.from('agent_identity_clients').select('identity_id').in('client_id', visibles)
       : Promise.resolve({ data: [], error: null }),
   ])
-  if (todas.error) throw todas.error
   if (mias.error) throw mias.error
   const asignadas = new Set((mias.data || []).map(r => r.identity_id))
-  return new Set((todas.data || []).filter(i => !esPrivada(i) || asignadas.has(i.id)).map(i => i.id))
+  return new Set(todas.filter(id => !privadas.has(id) || asignadas.has(id)))
+}
+
+/** De estos creadores privados, los que solo tiene este perfil: si se los
+ *  quita, nadie fuera de la plataforma podría volver a verlos ni asignarlos. */
+async function soloDeEste(clientId, ids) {
+  if (!ids.length) return []
+  const { data, error } = await supabase.from('agent_identity_clients').select('identity_id, client_id').in('identity_id', ids)
+  if (error) throw error
+  const enOtro = new Set((data || []).filter(r => r.client_id !== clientId).map(r => r.identity_id))
+  return ids.filter(id => !enOtro.has(id))
 }
 
 // Filas que se tocan por su id: la acción vale si la fila es de un perfil tuyo.
@@ -388,17 +414,18 @@ async function handler(req, res) {
       if (!b.clientId) return res.status(400).json({ error: 'Falta el perfil' })
       let ids = [...new Set((Array.isArray(b.identityIds) ? b.identityIds : []).map(String))]
       if (visibles) {
-        // Un creador «Propio» solo se asigna si ya era de este perfil (es el
-        // suyo): el de otro cliente no se puede coger.
-        const [cats, ya] = await Promise.all([
-          ids.length ? supabase.from('agent_identities').select('id, categoria').in('id', ids) : Promise.resolve({ data: [], error: null }),
+        // Un creador «Propio» solo se asigna si ya es de algún perfil de tu
+        // agencia: el de otro cliente no se puede coger (se descarta).
+        const [vis, { privadas }, ya] = await Promise.all([
+          identidadesVisibles(visibles),
+          creadoresPrivados(),
           supabase.from('agent_identity_clients').select('identity_id').eq('client_id', b.clientId),
         ])
-        if (cats.error) throw cats.error
         if (ya.error) throw ya.error
-        const suyas = new Set((ya.data || []).map(r => r.identity_id))
-        const validas = new Set((cats.data || []).filter(i => !esPrivada(i) || suyas.has(i.id)).map(i => i.id))
-        ids = ids.filter(id => validas.has(id))
+        ids = ids.filter(id => vis.has(id))
+        // Y el «Propio» que solo tiene este perfil no se suelta: se queda.
+        const quitados = (ya.data || []).map(r => r.identity_id).filter(id => privadas.has(id) && !ids.includes(id))
+        ids.push(...await soloDeEste(b.clientId, quitados))
       }
       const { error: e1 } = await supabase
         .from('agent_identity_clients').delete().eq('client_id', b.clientId)
@@ -438,6 +465,18 @@ async function handler(req, res) {
       // Solo se tocan las asignaciones a perfiles tuyos: las de otras agencias
       // a ese mismo creador se quedan como están.
       const ids = [...new Set((Array.isArray(b.clientIds) ? b.clientIds : []).map(String))].filter(ve)
+      if (visibles && !ids.length) {
+        // Un «Propio» sin ningún perfil ya no lo vería nadie más que la
+        // plataforma: si solo lo tienen perfiles tuyos, alguno se lo queda.
+        const [{ privadas }, usos] = await Promise.all([
+          creadoresPrivados(),
+          supabase.from('agent_identity_clients').select('client_id').eq('identity_id', b.identityId),
+        ])
+        if (usos.error) throw usos.error
+        if (privadas.has(String(b.identityId)) && !(usos.data || []).some(r => !ve(r.client_id))) {
+          return res.status(409).json({ error: 'Es el contenido propio de un perfil: tiene que quedarse en alguno' })
+        }
+      }
       let borra = supabase.from('agent_identity_clients').delete().eq('identity_id', b.identityId)
       if (visibles) borra = borra.in('client_id', visibles.length ? visibles : ['00000000-0000-0000-0000-000000000000'])
       const { error: e1 } = await borra

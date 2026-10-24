@@ -252,7 +252,9 @@ async function identidadDe(nombre) {
   if (!n) return null
   const { data, error } = await supabase.from('agent_identities').select('*')
   if (error) throw error
-  const ident = (data || []).find(i => i.slug === n || i.nombre.toLowerCase() === n)
+  // Primero el slug, que es único: un creador que se llamara como el slug de
+  // otro no se lo puede quedar.
+  const ident = (data || []).find(i => i.slug === n) || (data || []).find(i => i.nombre.toLowerCase() === n)
   if (!ident) {
     throw new Error(`No hay ninguna identidad "${nombre}". Las que hay: ${(data || []).map(i => i.nombre).join(', ') || 'ninguna'}`)
   }
@@ -261,13 +263,17 @@ async function identidadDe(nombre) {
 
 // El perfil de HELM por slug o nombre, igual de tolerante que identidadDe.
 async function perfilDe(nombre) {
-  const n = String(nombre || '').trim().toLowerCase()
+  const tal = String(nombre || '')
+  const n = tal.trim().toLowerCase()
+  if (!n) throw new Error('Di qué perfil.')
   const { data, error } = await supabase.from('clients').select('id, slug, name')
   if (error) throw error
-  // Primero el slug, que es único; el nombre solo si no hay slug que case. Al
-  // revés, otra agencia que llamara a su perfil como el slug de uno ajeno se
-  // quedaría con lo que el enlace de ese perfil lee y escribe.
-  const c = (data || []).find(x => x.slug === n)
+  // Primero el slug tal cual (el enlace de un perfil pasa el suyo), luego en
+  // minúsculas y el nombre solo si no hay slug que case. Al revés, otra agencia
+  // que llamara a su perfil como el slug de uno ajeno (o lo escribiera en
+  // mayúsculas) se quedaría con lo que el enlace de ese perfil lee y escribe.
+  const c = (data || []).find(x => x.slug === tal)
+    || (data || []).find(x => x.slug === n)
     || (data || []).find(x => String(x.name || '').toLowerCase() === n)
   if (!c) throw new Error(`No hay ningún perfil "${nombre}" en HELM.`)
   return c
@@ -354,7 +360,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const HERRAMIENTAS = {
   async identidades({ perfil, tipo } = {}) {
     const [ids, reels, suyos] = await Promise.all([
-      supabase.from('agent_identities').select('nombre, slug, categoria, descripcion, activa').order('nombre'),
+      supabase.from('agent_identities').select('id, nombre, slug, categoria, descripcion, activa').order('nombre'),
       supabase.from('agent_reels').select('identity_id, agent_identities(slug)'),
       perfil ? perfilDe(perfil).then(c => asignadosDe(c.id)) : null,
     ])
@@ -366,8 +372,11 @@ const HERRAMIENTAS = {
       cuenta[slug] = (cuenta[slug] || 0) + 1
     }
     const t = String(tipo || '').trim().toLowerCase()
+    // Los del perfil, por id: por nombre, un creador suyo que se llamara como
+    // el slug de otro colaba a ese otro en la lista.
+    const deEste = suyos && new Set(suyos.map(i => i.id))
     const lista = (ids.data || [])
-      .filter(i => !suyos || esDe(suyos, i.slug))
+      .filter(i => !deEste || deEste.has(i.id))
       .filter(i => !t || (i.categoria || '').toLowerCase() === t)
     if (t && !lista.length) {
       const hay = [...new Set((ids.data || []).map(i => i.categoria).filter(Boolean))]
@@ -799,7 +808,8 @@ async function alcanceDe(dado) {
 function perfilDeAgencia(a, pedido) {
   const n = String(pedido || '').trim().toLowerCase()
   return n
-    ? a.perfiles.find(x => x.slug === n) || a.perfiles.find(x => String(x.name || '').toLowerCase() === n) || null
+    ? a.perfiles.find(x => x.slug === pedido) || a.perfiles.find(x => x.slug === n)
+      || a.perfiles.find(x => String(x.name || '').toLowerCase() === n) || null
     : a.perfiles.length === 1 ? a.perfiles[0] : null
 }
 
@@ -831,13 +841,16 @@ async function asignadosDe(clientId) {
   if (error) throw error
   return (data || []).map(r => r.agent_identities).filter(Boolean)
 }
-const esDe = (lista, nombre) => {
+// El de la lista, por slug antes que por nombre: a la herramienta se le pasa su
+// slug, no lo que escribió Claude, para que no se resuelva a otro creador.
+const unoDe = (lista, nombre) => {
   const n = String(nombre || '').trim().toLowerCase()
-  return lista.some(i => i.slug === n || i.nombre.toLowerCase() === n)
+  return n ? lista.find(i => i.slug === n) || lista.find(i => i.nombre.toLowerCase() === n) || null : null
 }
 
 async function llamaComoCliente(nombre, args, a) {
   if (!DEL_CLIENTE.includes(nombre)) throw new Error('Esa herramienta no está disponible con este enlace.')
+  if (!a.clientId || !a.slug) throw new Error('Este enlace no tiene perfil.')
   const mios = await asignadosDe(a.clientId)
   const x = { ...args, perfil: a.slug }
 
@@ -847,18 +860,19 @@ async function llamaComoCliente(nombre, args, a) {
     // Un creador suyo por nombre; si no, todos los de su perfil. Nunca "tipo":
     // sería leer creadores que no son suyos.
     const opciones = { limite: x.limite, cursor: x.cursor, detalle: x.detalle }
-    if (x.identidad && esDe(mios, x.identidad)) return HERRAMIENTAS.corpus({ identidad: x.identidad, ...opciones })
+    const ident = unoDe(mios, x.identidad)
+    if (ident) return HERRAMIENTAS.corpus({ identidad: ident.slug, ...opciones })
     if (x.identidad) throw new Error(`"${x.identidad}" no es uno de los creadores de ${a.nombre}. Los suyos: ${mios.map(i => i.nombre).join(', ') || 'ninguno'}.`)
     return HERRAMIENTAS.corpus({ perfil: a.slug, ...opciones })
   }
   if (nombre === 'guardar_memoria') {
-    if (!x.identidad || !esDe(mios, x.identidad)) {
+    const ident = unoDe(mios, x.identidad)
+    if (!ident) {
       throw new Error(`Di en qué creador guardarlo: ${mios.map(i => i.nombre).join(', ')}.`)
     }
     // La memoria de un creador la leen todos los perfiles que lo usan. Si
     // alguno es de otra agencia, escribir aquí sería escribir en lo que lee
     // esa otra agencia: entonces solo la cambia la plataforma.
-    const ident = mios.find(i => esDe([i], x.identidad))
     const [mia, { data: usos, error }] = await Promise.all([
       agenciaDe(a.clientId),
       supabase.from('agent_identity_clients').select('clients(agencia_id)').eq('identity_id', ident.id),
@@ -867,7 +881,7 @@ async function llamaComoCliente(nombre, args, a) {
     if (!mia || (usos || []).some(u => u.clients?.agencia_id !== mia)) {
       throw new Error(`"${ident.nombre}" lo usan también perfiles de otras agencias: su memoria solo la cambia la plataforma.`)
     }
-    return HERRAMIENTAS.guardar_memoria(x)
+    return HERRAMIENTAS.guardar_memoria({ ...x, identidad: ident.slug })
   }
   return HERRAMIENTAS[nombre](x)
 }
