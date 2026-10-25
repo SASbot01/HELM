@@ -5,6 +5,9 @@
 //   /aiparatodo/webs/<sector>/<slug>    la ficha: las dos capturas, su estilo,
 //                                       qué copiar y el prompt
 //
+// Un sector puede traer además recursos (listados, artículos, código): no son
+// webs, así que no llevan captura ni prompt, solo su enlace.
+//
 // Las portadas se ven sin dejar nada, para elegir por el estilo. Copiar el
 // prompt y entrar en la web pasan por la puerta de la comunidad (nombre,
 // correo y a qué te dedicas, gratis y una sola vez), igual que leer un hilo.
@@ -18,6 +21,7 @@ import { useComunidad } from '../comunidad/datos.js'
 import Puerta from '../comunidad/Puerta.jsx'
 import {
   WEBS, SECTORES, NIVELES, webPorSlug, websDe, sectorDe, numeroDe, promptDe, imagenDe, anfitrion, FUENTES, CAPTURAS_FECHA,
+  CAPTURAS_FECHA_PRODUCTO, ELEGIDAS,
 } from './webs.js'
 import './webs.css'
 
@@ -121,9 +125,44 @@ function BotonVisitar({ w, pequeno = false }) {
   )
 }
 
-// La ventana de la puerta: se abre al pulsar «Copiar prompt» o «Ver la web»
-// sin acceso. Cuando se deja los datos, en la misma ventana sale lo pedido.
+function BotonRecurso({ r, pequeno = false }) {
+  const cfg = useComunidad()
+  return (
+    <a
+      className={`aip-btn${pequeno ? ' sec pequeno' : ''}`} href={r.url} target="_blank" rel="noopener noreferrer"
+      onClick={() => track('clic_cta', { donde: `${cfg.cta}-web-recurso`, recurso: r.clave })}
+    >
+      Abrir <ExternalLink size={14} />
+    </a>
+  )
+}
+
+// Los recursos de un sector: lo que no es una web pero ayuda a hacerla.
+function Recursos({ s, acceso, pide }) {
+  return (
+    <div className="aipw-recursos">
+      <h3>Para hacerlo tú</h3>
+      <ul>
+        {s.recursos.map(r => (
+          <li key={r.clave}>
+            <span className="aipw-recurso-tipo">{r.tipo}</span>
+            <b>{r.nombre}</b>
+            <p>{r.desc}</p>
+            {acceso
+              ? <BotonRecurso r={r} pequeno />
+              : <button type="button" className="aip-btn sec pequeno" onClick={() => pide(r, 'recurso')}>Abrir <ExternalLink size={14} /></button>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+// La ventana de la puerta: se abre al pulsar «Copiar prompt», «Ver la web» o
+// un recurso sin acceso. Cuando se deja los datos, en la misma ventana sale lo
+// pedido. Un recurso (accion 'recurso') no tiene ficha ni prompt: solo su enlace.
 function Ventana({ w, accion, acceso, setAcceso, cerrar }) {
+  const recurso = accion === 'recurso'
   const cfg = useComunidad()
   const caja = useRef(null)
   useEffect(() => {
@@ -140,23 +179,32 @@ function Ventana({ w, accion, acceso, setAcceso, cerrar }) {
   }, [])
   return (
     <div className="aipw-velo" onMouseDown={(e) => { if (e.target === e.currentTarget) cerrar() }}>
-      <div className="aipw-ventana" role="dialog" aria-modal="true" aria-label={`${w.nombre}: ${accion === 'prompt' ? 'el prompt' : 'la web'}`} ref={caja}>
+      <div className="aipw-ventana" role="dialog" aria-modal="true" aria-label={`${w.nombre}: ${accion === 'prompt' ? 'el prompt' : recurso ? 'el recurso' : 'la web'}`} ref={caja}>
         <button type="button" className="aipw-cerrar" onClick={cerrar} aria-label="Cerrar"><X size={18} /></button>
         {!acceso ? (
           <Puerta
-            setAcceso={setAcceso} pipeline={cfg.crm.embudoComunidad} nota={`entró por webs/${w.slug}`}
-            titulo={accion === 'prompt' ? `El prompt de ${w.nombre}, gratis` : `Entra a ver ${w.nombre}`}
+            setAcceso={setAcceso} pipeline={cfg.crm.embudoComunidad} nota={`entró por webs/${recurso ? `recurso/${w.clave}` : w.slug}`}
+            titulo={accion === 'prompt' ? `El prompt de ${w.nombre}, gratis` : recurso ? `Abre «${w.nombre}»` : `Entra a ver ${w.nombre}`}
             texto={`Tu nombre y tu correo, una sola vez, y se abren las ${WEBS.length} webs con su prompt, los hilos de skills, la guía de Claude y el diario.`}
           />
         ) : (
           <div className="aipw-ventana-listo">
             <p className="aip-kicker"><Check size={13} /> Ya tienes acceso a todo</p>
             <h2>{w.nombre}</h2>
-            {accion === 'prompt' ? <BloquePrompt w={w} /> : <p>Ábrela en otra pestaña y vuelve aquí a por su prompt cuando quieras.</p>}
-            <div className="aipw-acciones">
-              <BotonVisitar w={w} />
-              <Link className="aip-btn sec" to={`${cfg.ruta}/webs/${w.sector}/${w.slug}`} onClick={cerrar}>Ver la ficha <ArrowRight size={14} /></Link>
-            </div>
+            {recurso ? (
+              <>
+                <p>{w.desc}</p>
+                <div className="aipw-acciones"><BotonRecurso r={w} /></div>
+              </>
+            ) : (
+              <>
+                {accion === 'prompt' ? <BloquePrompt w={w} /> : <p>Ábrela en otra pestaña y vuelve aquí a por su prompt cuando quieras.</p>}
+                <div className="aipw-acciones">
+                  <BotonVisitar w={w} />
+                  <Link className="aip-btn sec" to={`${cfg.ruta}/webs/${w.sector}/${w.slug}`} onClick={cerrar}>Ver la ficha <ArrowRight size={14} /></Link>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -212,7 +260,7 @@ export function PanelWebs({ acceso, setAcceso }) {
   const cerrar = useCallback(() => setPedido(null), [])
   useEffect(() => { track('vista_pagina', { pagina: `${cfg.clave}-webs`, tema }) }, [cfg.clave, tema])
   if (tema && !sector) return <Navigate to={`${cfg.ruta}/webs`} replace />
-  const pide = (w, accion) => { setPedido({ w, accion }); track('clic_cta', { donde: `${cfg.cta}-web-puerta`, web: w.slug, accion }) }
+  const pide = (w, accion) => { setPedido({ w, accion }); track('clic_cta', { donde: `${cfg.cta}-web-puerta`, web: w.slug || w.clave, accion }) }
   const grupos = sector ? [sector] : SECTORES
 
   return (
@@ -253,6 +301,7 @@ export function PanelWebs({ acceso, setAcceso }) {
           <div className="aipw-rejilla">
             {websDe(s.key).map(w => <TarjetaWeb key={w.slug} w={w} acceso={acceso} pide={pide} />)}
           </div>
+          {s.recursos?.length > 0 && <Recursos s={s} acceso={acceso} pide={pide} />}
         </section>
       ))}
 
@@ -272,9 +321,10 @@ function Pie() {
     <section className="aipw-pie">
       <p className="aipw-regla"><b>Referencia no es copia.</b> Se toma el estilo y la forma de mover las cosas. Los textos, fotos y logos de estas webs tienen dueño.</p>
       <p>
-        Solo entran webs con un premio verificado en Awwwards o CSS Design Awards, con fecha y estudio, salvo la de GTA VI, que es
-        una elección propia y va marcada así. Las capturas son de las webs originales, hechas
-        el {CAPTURAS_FECHA}; pueden haber cambiado desde entonces.
+        Solo entran webs con un premio verificado en Awwwards o CSS Design Awards, con fecha y estudio, salvo las que son
+        una elección propia y van marcadas así ({ELEGIDAS.map(w => w.nombre).join(' y ')}). Las capturas son de las webs
+        originales, hechas el {CAPTURAS_FECHA} (las de páginas de producto, el {CAPTURAS_FECHA_PRODUCTO}); pueden haber
+        cambiado desde entonces.
       </p>
       <p className="aipw-fuentes">
         Fuentes: {FUENTES.map((f, i) => <span key={f.url}>{i > 0 && ' · '}<a href={f.url} target="_blank" rel="noopener noreferrer">{f.nombre}</a></span>)}
@@ -373,7 +423,7 @@ export function VitrinaWebs() {
       <div className="aipw-vitrina-txt">
         <p className="aip-kicker">Nuevo · gratis</p>
         <h3>{WEBS.length} webs de referencia para tu IA</h3>
-        <p>Premiadas en Awwwards y CSS Design Awards, más la de GTA VI. Ve su portada antes de entrar y copia el prompt de cada una.</p>
+        <p>Premiadas en Awwwards y CSS Design Awards, más {ELEGIDAS.length} elegidas por Alex. Ve su portada antes de entrar y copia el prompt de cada una.</p>
         <span className="aip-btn pequeno">Ver las webs <ArrowRight size={14} /></span>
       </div>
       <div className="aipw-vitrina-fotos" aria-hidden="true">

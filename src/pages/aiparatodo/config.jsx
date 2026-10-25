@@ -24,7 +24,7 @@ import {
   Fondo, TrasHilo, IndiceNN, CuerpoNoNegociables, IndiceModos, CuerpoGuiaModos, CuerpoPost,
 } from './piezas.jsx'
 import { PanelWebs, FichaWeb, VitrinaWebs } from './Webs.jsx'
-import { PREMIADAS } from './webs.js'
+import { PREMIADAS, ELEGIDAS } from './webs.js'
 
 // HELM Academy (Skool): la comunidad a la que se entra antes de AI para todo.
 // Lo usa el formulario de /helm-academy para redirigir allí tras recoger los datos.
@@ -61,7 +61,7 @@ export default {
   privacidad: '/privacidad',
   cabecera: {
     titulo: 'AI para todo — IA sin humo, de Alex Silvestre',
-    descripcion: `${PREMIADAS} webs premiadas (y la de GTA VI) con su prompt, skills para Claude, noticias de cada día y la guía completa de Claude, con los 7 tipos de agentes. Gratis y en español.`,
+    descripcion: `${PREMIADAS} webs premiadas (y ${ELEGIDAS.length} elegidas por Alex) con su prompt, skills para Claude, noticias de cada día y la guía completa de Claude, con los 7 tipos de agentes. Gratis y en español.`,
     imagen: '/inicio/og.jpg', colorBarra: '#050203',
   },
   Fondo,

@@ -11,10 +11,18 @@
 // ocultaron, nunca se aceptaron. El estilo, la paleta, la letra y «qué copiar»
 // se escribieron mirando esas capturas.
 //
+// El 25-10-2026 entró el sector «Páginas de producto» (enlaces que pasó Alex):
+// iyO y The Watch, con premio comprobado en su ficha de Awwwards, y EVANLITE,
+// solo nominada, como elección suya. Capturas de ese día, con la misma
+// herramienta y el mismo tamaño; el sector trae además recursos (un listado,
+// un artículo, un repo y un tutorial) que no son webs y no llevan prompt.
+//
 // El prompt de cada web (promptDe) se arma aquí con todo eso: lo que se copia
 // es el estilo, nunca los textos, fotos, logos ni colores de marca.
 
 export const CAPTURAS_FECHA = '20 de octubre de 2026'
+// Las del sector de producto, más tarde.
+export const CAPTURAS_FECHA_PRODUCTO = '25 de octubre de 2026'
 // Sube al cambiar las capturas, para que el navegador no enseñe las viejas.
 const VERSION_CAPTURAS = '1'
 
@@ -52,6 +60,34 @@ export const SECTORES = [
     key: 'taller', nombre: 'Mecánico y taller',
     desc: 'El sector más vacío. Solo hay un taller real con premio reciente; la segunda es un fabricante de pintura, útil por estética.',
     secciones: 'portada, servicios, trabajos hechos, cómo trabajamos, opiniones y pedir presupuesto',
+  },
+  {
+    key: 'producto', nombre: 'Páginas de producto',
+    desc: 'Cómo enseñar un producto: en 3D, girando o despiezado al hacer scroll, o en una ficha de tienda bien resuelta. Debajo, recursos para hacer el efecto tú.',
+    secciones: 'portada con el producto, el producto por dentro (despiece o detalles), características, especificaciones, opiniones y comprar',
+    // No son webs: no llevan captura ni prompt. Comprobados el 25-10-2026.
+    recursos: [
+      {
+        clave: 'nominadas-3d', tipo: 'Listado', nombre: 'Awwwards · Webs nominadas con 3D',
+        url: 'https://www.awwwards.com/inspiration_search/3d/',
+        desc: 'La galería de Awwwards con las webs nominadas que llevan la etiqueta 3D, cada una con su captura, su estudio y su premio. Para ver de un vistazo cómo resuelven otros el 3D de producto y abrir la web real desde la tarjeta.',
+      },
+      {
+        clave: 'utsubo-threejs-2026', tipo: 'Artículo', nombre: 'Utsubo · Las 8 mejores webs con Three.js de 2026',
+        url: 'https://www.utsubo.com/blog/best-threejs-websites-2026',
+        desc: 'Ocho webs 3D en vivo elegidas por el estudio Utsubo (actualizado en septiembre de 2026). De cada una explica la idea que la hace especial y qué se puede copiar, como un solo producto en 3D con peso al hacer scroll o una sala 3D por producto.',
+      },
+      {
+        clave: 'exploded-lens', tipo: 'Código', nombre: 'Exploded Lens: un objetivo de cámara que se despieza al hacer scroll',
+        url: 'https://github.com/wonjyou/exploded-lens',
+        desc: 'Repositorio con una página hecha con Three.js en la que el objetivo 3D de una cámara se separa en nueve piezas con su nombre al bajar, y se monta al subir. No tiene demo en vivo: se abre en tu ordenador, y su README explica cómo cambiar las piezas, los textos y poner tu propio modelo 3D.',
+      },
+      {
+        clave: 'setproduct-airpods', tipo: 'Tutorial', nombre: 'Setproduct · El efecto 3D de los AirPods al hacer scroll',
+        url: 'https://www.setproduct.com/blog/how-to-3d-animate-scroll',
+        desc: 'Tutorial paso a paso (2022) del truco de la página de los AirPods Pro: un lienzo fijo que pinta un fotograma distinto según cuánto bajas. Tu producto gira o se abre sin montar 3D de verdad; avisa de lo que pesa y de qué hacer en el móvil.',
+      },
+    ],
   },
 ]
 
@@ -553,11 +589,61 @@ export const WEBS = [
     tipografia: "Palo seco geométrica, grande y fina, para los textos destacados y el menú; cifras gigantes en letra tipo máquina de escribir, y etiquetas pequeñas en mayúsculas moradas.",
     copiar: ["Abre con vídeo a pantalla completa en primer plano y botón para saltar.", "Usa fondo negro con cifras enormes y etiquetas pequeñas en un color de acento.", "Pon botones en forma de píldora, solo con borde fino y una flecha."],
   },
+  {
+    slug: "iyo",
+    sector: "producto",
+    nombre: "iyO One",
+    url: "https://www.iyo.ai/iyo-one",
+    nivel: "sotd",
+    insignias: [["sotd", "SOTD abr 2026"]],
+    premio: "Awwwards web del día, 2 de abril de 2026 (7,68)",
+    meta: "Matteo Donini, Federico y Enrico Deiana · Web de producto de un auricular con IA",
+    porque: "La vista despiezada: al bajar, el auricular se separa en sus piezas y se ve lo que lleva dentro, sin dejar de ser una tienda elegante.",
+    prueba: "https://www.awwwards.com/sites/iyo",
+    estilo: "Toda la página va sobre un fondo casi negro. Arriba, en el centro, flota un menú en forma de píldora gris con el logo, un botón claro de «Pre-order», un botón de puntos y la cesta. La portada es solo el nombre del producto, enorme y en blanco, con una etiqueta diminuta encima y una frase gris debajo. Alrededor hay arcos finos concéntricos que salen de un gran disco oscuro que asoma por abajo. Al bajar, el auricular aparece despiezado en tres piezas separadas en fila: la carcasa negra con contactos dorados, el interior transparente con una placa naranja y azul, y la punta de silicona gris. Detrás, unas partículas lilas dibujan ondas suaves.",
+    paleta: ["#101010", "#323438", "#E6E6E7", "#686898", "#CE8D32"],
+    tipografia: "Palo seco moderna y apretada, en blanco y muy grande para el nombre del producto. La misma letra, más fina y en gris, para la frase de debajo. Etiquetas diminutas en mayúsculas y grises con letra de máquina de escribir, como «IYO INTRODUCES» o «DETAILS».",
+    copiar: ["Enseña tu producto despiezado: sus piezas separadas en fila sobre un fondo casi negro.", "Pon el menú en una píldora gris flotante centrada arriba, con un único botón claro para comprar.", "Abre con el nombre enorme en blanco, una etiqueta diminuta en mayúsculas encima y arcos finos alrededor."],
+    pies: ["Al entrar en la página del iyO One", "Más abajo: el auricular despiezado en 3D"],
+  },
+  {
+    slug: "the-watch",
+    sector: "producto",
+    nombre: "The Watch · FS 60P",
+    url: "https://thewatch.60fps.fr/",
+    nivel: "sotd",
+    insignias: [["sotd", "SOTD ago 2026"]],
+    premio: "Awwwards web del día, 17 de agosto de 2026 (7,59)",
+    meta: "60fps · Página de producto de un reloj de lujo",
+    porque: "Cómo enseñar un solo producto en 3D a pantalla completa: el reloj gira al hacer scroll y los titulares enormes juegan con él.",
+    prueba: "https://www.awwwards.com/sites/the-watch",
+    estilo: "Portada casi blanca con una mancha de gris plata difuminada arriba a la derecha y, flotando en el centro, un reloj de acero en 3D fotorrealista. Detrás, a todo lo ancho, el nombre del modelo en letras negras gigantes («FS 60P»), con el reloj metido en el hueco del medio y tapando el borde del «6». Alrededor hay un círculo de líneas finísimas partido en sectores, como la esfera de un cronómetro, con un tramo del borde en negro. Abajo a la izquierda, un rótulo diminuto («Color · Silver Steel») y, a su lado, «MODEL» en gris encima de «146GR» en negro, a tamaño mediano. Al bajar, el reloj se pone de lado y enseña la pulsera mientras varias frases enormes en mayúsculas se montan en capas: unas en negro («THE TIMELESS AUTOMATIC») y otras en gris claro medio transparente («FS—60P», «60MM»).",
+    paleta: ["#EDECEA", "#D4D4D2", "#8E8E8E", "#4A4A4A", "#0A0A0A"],
+    tipografia: "Palo seco geométrica ancha y limpia, en mayúsculas y a tamaño enorme para el nombre del modelo y los titulares. Siempre lleva el mismo grosor y las capas salen de cambiar el color: negro o gris oscuro delante, gris claro casi transparente detrás. «MODEL 146GR» va en la misma letra, a tamaño medio. Los datos diminutos («Color», «Silver Steel») van en una palo seco corriente, en minúsculas.",
+    copiar: ["Pon el producto en 3D flotando en el centro y deja que su nombre gigante pase por detrás, medio tapado por él.", "Mantén toda la web en una gama de grises y plata sobre fondo casi blanco, para que destaque solo el producto.", "Al hacer scroll, gira el producto y encadena titulares enormes en mayúsculas, unos en negro y otros en gris casi transparente."],
+  },
+  {
+    slug: "evanlite",
+    sector: "producto",
+    nombre: "EVANLITE · Delta 50",
+    url: "https://evanlite.com/collections/road/products/delta-50",
+    nivel: "eleccion",
+    insignias: [["eleccion", "Elección de Alex"]],
+    premio: "Sin premio de web verificado: en Awwwards solo aparece como nominada (28 de abril de 2026, Nethype), con su ficha de producto en Awwwards Inspiration. La elige Alex como referencia de página de producto.",
+    meta: "Nethype · Tienda de ruedas de carbono (ficha de producto)",
+    porque: "Una ficha de producto de tienda bien resuelta, sin 3D: el producto recortado sobre gris, una tarjeta de compra limpia con un solo botón verde y secciones negras con fotos del taller que cuentan la calidad.",
+    estilo: "Arriba hay una franja verde apagado con el mismo texto repetido en fila y, debajo, una cabecera negra con el logotipo blanco y el menú en mayúsculas espaciadas. La portada es la propia ficha del producto. A la izquierda hay una columna de miniaturas y en el centro las dos ruedas de carbono, recortadas sobre un fondo gris muy claro. A la derecha va una tarjeta blanca con una etiqueta verde de «nuevo modelo», el nombre en negrita, el precio, cuatro datos en lista, dos muestras de color y un botón verde ancho para configurar y pedir. Al bajar, la página pasa a fondo negro con un carrusel de fotos grandes del taller (una llanta en el banco de medida con relojes comparadores, una mano midiendo un radio). Cada foto lleva un título corto en mayúsculas y un párrafo debajo, y una barra fina marca por dónde va el carrusel.",
+    paleta: ["#F4F4F4", "#000000", "#4C4B50", "#408267", "#11A34B"],
+    tipografia: "Palo seco geométrica muy gruesa en mayúsculas para el nombre del producto y los títulos de sección, con un rótulo pequeño y espaciado encima. Para la lista de datos, los párrafos y los botones, una palo seco neutra; los botones y el menú van en mayúsculas espaciadas.",
+    copiar: ["Enseña el producto recortado sobre un gris muy claro, con las miniaturas en columna a la izquierda y la tarjeta de compra a la derecha.", "Resume el producto en cuatro datos en lista y deja un único botón ancho de color vivo para comprar.", "Cuenta la calidad en una sección negra con fotos grandes del taller en carrusel, cada una con un título corto en mayúsculas."],
+    pies: ["La ficha del producto, al entrar", "Más abajo: las características, en negro con fotos del taller"],
+  },
 ]
 
 const porSlug = new Map(WEBS.map(w => [w.slug, w]))
-// Las que tienen premio (GTA VI va aparte, como elección propia).
+// Las que tienen premio y las que eligió Alex sin premio (GTA VI, EVANLITE).
 export const PREMIADAS = WEBS.filter(w => w.nivel !== 'eleccion').length
+export const ELEGIDAS = WEBS.filter(w => w.nivel === 'eleccion')
 export const webPorSlug = (slug) => porSlug.get(String(slug)) || null
 export const sectorDe = (k) => SECTORES.find(s => s.key === k) || null
 export const websDe = (sector) => WEBS.filter(w => w.sector === sector)

@@ -17,7 +17,7 @@
 // ~/.claude/skills. Comprobado contra los repos el 29/09/2026.
 
 import { MODOS_HILO } from './guiaModos.js'
-import { SECTORES, WEBS_HILOS, PREMIADAS } from './webs.js'
+import { SECTORES, WEBS_HILOS, PREMIADAS, ELEGIDAS } from './webs.js'
 
 export const FUNDADOR = {
   nombre: 'Alex Silvestre',
@@ -36,7 +36,7 @@ export const FUNDADOR = {
 export const SECCIONES = [
   {
     key: 'webs', titulo: 'Webs de referencia', corto: 'Webs',
-    desc: `${PREMIADAS} webs premiadas y la de GTA VI, con su portada a la vista y un prompt para que tu IA te haga la tuya con su estilo.`,
+    desc: `${PREMIADAS} webs premiadas y ${ELEGIDAS.length} elegidas por Alex, con su portada a la vista y un prompt para que tu IA te haga la tuya con su estilo.`,
     temas: SECTORES,
     pie: (n) => `${n} webs · cada una con su prompt`,
   },
