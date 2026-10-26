@@ -41,8 +41,10 @@ const PERFIL_SLUG = 'silvestre'
 const PIPELINE_INICIO = 'Página de inicio'
 const PIPELINE_LEAD_MAGNET = 'Lead magnet'
 const PIPELINE_SCHOOL = 'School'
-// La etapa de School de quien pidió acceso a una comunidad (migración 111).
+// La etapa de School de quien pidió acceso a una comunidad (migración 111), y
+// la de quien ya lo tiene.
 const ETAPA_PIDIO_ACCESO = 'pidio_acceso'
+const ETAPA_ACCESO_DADO = 'acceso_dado'
 const ETAPA_ENTRADA = 'lead_nuevo'
 
 // Las líneas que el navegador puede pedir que se añadan a la ficha. Son fijas:
@@ -419,36 +421,49 @@ async function school(b, { ip } = {}) {
     telefono: txt(b.telefono, 40),
     apuntado: ahora(),
   }
-  const clientId = await perfil('silvestre')
+  const c = comunidadPorClave('aiparatodo')
+  const clientId = await perfil(c.perfil)
   const linea = ['HELM Academy · se apuntó', extra.dedico && `dedica: ${extra.dedico}`, extra.residencia && `de ${extra.residencia}`, extra.edad && `${extra.edad} años`].filter(Boolean).join(' · ')
-  const previo = await buscar(clientId, correo, 'id, name, notes, phone, custom_fields')
+  const previo = await buscar(clientId, correo, 'id, name, notes, phone, custom_fields, pipeline_id, status')
+  // Apuntarse a HELM Academy da el acceso a AI para todo al momento (Alex,
+  // 27-oct): para entrar basta con poner este mismo correo. Sin solicitud ni
+  // aprobación. La ficha va en la respuesta para abrirlo ya en este navegador.
+  const acceso = (antes) => ({ ...(antes || {}), acceso: 'aprobado', aprobado_at: antes?.aprobado_at || ahora(), via: antes?.via || 'helm-academy' })
+  const [school, inicio] = await Promise.all([embudo(clientId, PIPELINE_SCHOOL), embudo(clientId, PIPELINE_INICIO)])
+  const etapa = school.etapas.some(s => s.key === ETAPA_ACCESO_DADO) ? ETAPA_ACCESO_DADO : school.etapas[0]?.key || 'apuntado'
 
   if (previo) {
+    // A School · «Acceso dado» si venía de School, de la página de inicio o de
+    // ningún embudo; uno de otro embudo (un cliente) se queda donde está.
+    const mover = school.id && (!previo.pipeline_id || previo.pipeline_id === inicio.id || previo.pipeline_id === school.id)
     await actualizar(previo.id, {
       ...(previo.name ? {} : { name: nombre }),
       ...(previo.phone || !extra.telefono ? {} : { phone: extra.telefono }),
       notes: sumaNota(previo.notes, linea),
-      custom_fields: { ...(previo.custom_fields || {}), school: { ...(previo.custom_fields?.school || {}), ...extra } },
+      custom_fields: {
+        ...(previo.custom_fields || {}),
+        school: { ...(previo.custom_fields?.school || {}), ...extra },
+        [c.clave]: acceso(previo.custom_fields?.[c.clave]),
+      },
+      ...(mover ? { pipeline_id: school.id, status: etapa } : {}),
       last_activity_at: ahora(), updated_at: ahora(),
     })
-    return { ok: true }
+    return { ok: true, id: await ficha(clientId, previo.id) }
   }
   if (!rateLimit({ key: `school:${ip || 'anon'}`, max: ALTAS_POR_IP_HORA, windowMs: 3_600_000 }).ok) {
     throw fallo(429, 'Ahora mismo hay muchas altas. Prueba en un rato.')
   }
   cuentaAlta('school')
-  const pipeline = await embudo(clientId, PIPELINE_SCHOOL)
-  const etapa = pipeline.etapas[0]?.key || 'apuntado'
-  await crear({
+  const id = await crear({
     client_id: clientId, name: nombre, email: correo,
     ...(extra.telefono ? { phone: extra.telefono } : {}),
     source: 'HELM Academy', notes: linea,
-    pipeline_id: pipeline.id, status: etapa,
+    pipeline_id: school.id, status: etapa,
     utm_source: 'helm-academy', utm_medium: 'skool',
-    custom_fields: { school: extra },
+    custom_fields: { school: extra, [c.clave]: acceso(null) },
     last_activity_at: ahora(), updated_at: ahora(),
   })
-  return { ok: true }
+  return { ok: true, id: await ficha(clientId, id) }
 }
 
 // ── AI para todo: acceso con aprobación ─────────────────────────────────────

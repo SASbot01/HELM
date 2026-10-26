@@ -19,18 +19,19 @@ import { ArrowRight, Lock } from 'lucide-react'
 import { track } from '../inicio/socio/track.js'
 import { accesoGuardado, useComunidad } from './datos.js'
 import { altaMiembro } from './crm.js'
-import SolicitudAcceso from './SolicitudAcceso.jsx'
+import EntradaPorCorreo from './EntradaPorCorreo.jsx'
 
 export default function Puerta({ setAcceso, pipeline, nota, titulo, texto, boton, inmediato, llave }) {
   const cfg = useComunidad()
   const llaveAcc = llave || cfg.llave
   const [lead, setLead] = useState(() => (cfg.cobro && cfg.puerta?.datos ? accesoGuardado(`${cfg.llave}.datos`) : null))
-  // Acceso con aprobación (AI para todo): se pide (nombre y correo) y lo aprueba
-  // el dueño. Solo el contenido general; los PDF (lead magnet) pasan `inmediato`
-  // con su propia llave (`${cfg.llave}.pdf`) y abren solo el PDF, no el resto.
+  // AI para todo: se entra con el correo con el que se rellenó el formulario de
+  // HELM Academy, que da el acceso. Solo el contenido general; los PDF (lead
+  // magnet) pasan `inmediato` con su propia llave (`${cfg.llave}.pdf`) y abren
+  // solo el PDF, no el resto.
   if (cfg.puerta?.aprobacion && !inmediato && !cfg.cobro) {
     return (
-      <SolicitudAcceso
+      <EntradaPorCorreo
         cfg={cfg}
         onEntrar={({ id, nombre }) => {
           const acc = { id: id || null, nombre, at: new Date().toISOString() }

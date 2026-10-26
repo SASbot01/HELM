@@ -145,15 +145,39 @@ describe('comprobar-acceso', () => {
 })
 
 describe('school (formulario de HELM Academy)', () => {
-  it('guarda el lead en silvestre con sus datos y responde ok', async () => {
+  it('guarda el lead en silvestre con sus datos, con el acceso a AI para todo ya dado, y devuelve su ficha', async () => {
     const r = await pide('school', { nombre: 'Noa', email: 'noa@example.com', dedico: 'diseño', edad: '28', residencia: 'Lorca', telefono: '600111222' })
     expect(r.statusCode).toBe(200)
-    expect(r.body).toEqual({ ok: true })
+    expect(r.body.ok).toBe(true)
+    expect(await verifyJwt(r.body.id)).toMatchObject({ kind: 'lead', sub: 'contacto-nuevo' })
     const [fila] = inserts()
     expect(fila.client_id).toBe('id-de-silvestre')
     expect(fila.phone).toBe('600111222')
     expect(fila.source).toBe('HELM Academy')
     expect(fila.custom_fields.school).toMatchObject({ dedico: 'diseño', edad: '28', residencia: 'Lorca', telefono: '600111222' })
+    expect(fila.custom_fields.aiparatodo).toMatchObject({ acceso: 'aprobado', via: 'helm-academy' })
+    expect(fila).toMatchObject({ pipeline_id: 'id-de-silvestre/School', status: 'acceso_dado' })
+  })
+
+  it('quien ya estaba: le da el acceso; a School solo si venía de la página de inicio, de ningún embudo o de School', async () => {
+    existente = { id: 'c1', name: 'Noa', custom_fields: { aiparatodo: { acceso: 'pendiente' } }, pipeline_id: 'id-de-silvestre/Página de inicio', status: 'lead_nuevo' }
+    const r = await pide('school', { nombre: 'Noa', email: 'noa@example.com', dedico: 'diseño', edad: '28', residencia: 'Lorca', telefono: '600111222' })
+    expect(await verifyJwt(r.body.id)).toMatchObject({ sub: 'c1' })
+    expect(updates()[0]).toMatchObject({ pipeline_id: 'id-de-silvestre/School', status: 'acceso_dado' })
+    expect(updates()[0].custom_fields.aiparatodo.acceso).toBe('aprobado')
+    ops.length = 0
+    existente = { id: 'c2', name: 'Cliente', custom_fields: {}, pipeline_id: 'id-de-silvestre/Lead magnet', status: 'cliente' }
+    await pide('school', { nombre: 'Cliente', email: 'cli@example.com', dedico: 'x', edad: '40', residencia: 'Murcia', telefono: '600' })
+    const u = updates()[0]
+    expect(u.custom_fields.aiparatodo.acceso).toBe('aprobado')
+    expect(u).not.toHaveProperty('pipeline_id')
+  })
+
+  it('después, «comprobar-acceso» con ese correo abre AI para todo', async () => {
+    existente = { id: 'c3', name: 'Noa', custom_fields: { aiparatodo: { acceso: 'aprobado', via: 'helm-academy' } } }
+    const r = await pide('comprobar-acceso', { comunidad: 'aiparatodo', email: 'noa@example.com' })
+    expect(r.body.estado).toBe('aprobado')
+    expect(await verifyJwt(r.body.id)).toMatchObject({ sub: 'c3' })
   })
 
   it('la trampa y el correo malo se rechazan', async () => {

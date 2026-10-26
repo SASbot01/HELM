@@ -3,15 +3,16 @@
 // El formulario de entrada al Skool: antes de ir a la comunidad, la persona
 // deja sus datos (nombre, correo, a qué se dedica, edad, dónde vive, teléfono).
 // Se guardan en el CRM de Silvestre AI (embudo «School», api/leads · school) y
-// después se la redirige al Skool. Así Alex sabe quién se apuntó y puede
-// cruzarlo con las solicitudes de /accesos para dar acceso a AI para todo.
+// después se la redirige al Skool. Apuntarse da el acceso a AI para todo al
+// momento: aquí ya se deja abierto en este navegador, y en cualquier otro basta
+// con poner el mismo correo.
 import { useEffect, useState } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { pideLead } from './leads.js'
 import { origen } from './inicio/socio/origen.js'
 import { track } from './inicio/socio/track.js'
 import { useCabeceraPublica } from './inicio/cabecera.js'
-import { SKOOL_URL } from './aiparatodo/config.jsx'
+import AIPT, { SKOOL_URL } from './aiparatodo/config.jsx'
 import './helmAcademy.css'
 
 export default function HelmAcademy() {
@@ -33,12 +34,16 @@ export default function HelmAcademy() {
     if (!completo || estado === 'enviando') return
     setEstado('enviando'); setError(null)
     try {
-      await pideLead('school', {
+      const r = await pideLead('school', {
         nombre: f.nombre.trim(), email: f.email.trim(), dedico: f.dedico.trim(),
         edad: f.edad.trim(), residencia: f.residencia.trim(), telefono: f.telefono.trim(),
         website: f.website, origen: origen(),
       })
       track('lead', { donde: 'helm-academy' })
+      // AI para todo, ya abierto en este navegador (la misma llave que la puerta).
+      if (r?.id) {
+        try { localStorage.setItem(AIPT.llave, JSON.stringify({ id: r.id, nombre: f.nombre.trim(), at: new Date().toISOString() })) } catch { /* incógnito */ }
+      }
       // Al Skool. (replace: que el "atrás" del navegador no vuelva al formulario.)
       window.location.replace(SKOOL_URL)
     } catch (err) {

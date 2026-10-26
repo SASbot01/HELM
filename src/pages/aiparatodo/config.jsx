@@ -156,21 +156,18 @@ export default {
     // Skool). La puerta de `datos` de abajo se queda para los PDF (lead magnet),
     // que se piden con `inmediato` y siguen abriéndose directos.
     aprobacion: {
-      // El «únete» lleva al formulario de HELM Academy (/helm-academy), que
-      // recoge los datos y redirige al Skool. Alex aprueba a quien aparezca allí.
+      // Se entra con el correo con el que se rellenó el formulario de HELM
+      // Academy (/helm-academy), que da el acceso al momento (27-oct-2026). Sin
+      // nombre, sin solicitud y sin aprobación a mano.
       skool: '/helm-academy',
-      kicker: 'acceso con aprobación',
-      titulo: 'Pide tu acceso',
-      texto: 'Déjanos tu nombre y tu correo. Le damos acceso a quien ya está en HELM Academy (es gratis): únete si aún no lo has hecho y pídelo aquí.',
-      boton: 'Pedir acceso',
-      legal: <>Usamos tus datos solo para darte acceso y enviarte contenido de AI para todo y de Silvestre AI. Puedes darte de baja cuando quieras. <a href="/privacidad" target="_blank" rel="noopener noreferrer">Privacidad</a></>,
-      pendiente: {
-        titulo: '¡Solicitud recibida!',
-        texto: 'Si aún no estás en HELM Academy, únete (es gratis). En cuanto Alex lo confirme, abre AI para todo aquí con este mismo correo.',
-        skoolBoton: 'Unirme a HELM Academy',
-        comprobar: 'Ya me uní — abrir AI para todo',
-        aun: 'Todavía no está aprobado. Únete a HELM Academy y vuelve a probar en un rato.',
-      },
+      kicker: 'entra con tu correo',
+      titulo: 'Entra con tu correo',
+      texto: 'Pon el correo con el que te apuntaste a HELM Academy y se abre todo AI para todo.',
+      boton: 'Entrar',
+      skoolEnlace: '¿Aún no estás en HELM Academy? Apúntate gratis',
+      noEsta: 'Ese correo no está en HELM Academy. Apúntate gratis con él (es un minuto) y vuelve a entrar aquí.',
+      skoolBoton: 'Apuntarme gratis',
+      legal: <>Solo comprobamos tu correo para abrirte el contenido. <a href="/privacidad" target="_blank" rel="noopener noreferrer">Privacidad</a></>,
     },
     datos: {
       kicker: 'gratis · una sola vez',
