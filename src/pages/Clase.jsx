@@ -68,7 +68,7 @@ export default function Clase() {
                 de «skool», como en una portada de estudio. */}
             <img
               className="bio-foto"
-              src="/inicio/alex-sinfondo.webp"
+              src="/inicio/alex-sinfondo.webp?v=2"
               alt=""
               width="900" height="792"
               fetchPriority="high"
