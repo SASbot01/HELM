@@ -65,18 +65,23 @@ export default async function handler(req, res) {
       const id = String(req.body?.id || '')
       if (!id) throw yerro(400, 'Falta el id')
       const { data: fila, error } = await supabase.from('crm_contacts')
-        .select('id, name, email, custom_fields').eq('id', id).eq('client_id', clientId).maybeSingle()
+        .select('id, name, email, custom_fields, pipeline_id').eq('id', id).eq('client_id', clientId).maybeSingle()
       if (error) throw error
       if (!fila) throw yerro(404, 'Esa solicitud ya no está')
 
       const estado = action === 'aprobar' ? 'aprobado' : 'rechazado'
       const campo = { ...(fila.custom_fields?.[clave] || {}), acceso: estado, [`${estado}_at`]: ahora() }
       // Aprobado, pasa a School · «Acceso dado» si el perfil tiene ese embudo:
-      // así el CRM dice a quién se le dio acceso sin mirar cada ficha.
-      const { data: school } = estado === 'aprobado'
-        ? await supabase.from('crm_pipelines').select('id, stages').eq('client_id', clientId).eq('name', 'School').maybeSingle()
-        : { data: null }
-      const aSchool = school && (Array.isArray(school.stages) ? school.stages : []).some(s => s.key === 'acceso_dado')
+      // así el CRM dice a quién se le dio acceso sin mirar cada ficha. Solo si
+      // venía de School, de la página de inicio o de ningún embudo: a un
+      // contacto de otro embudo (un cliente, un lead magnet) no se le mueve.
+      const { data: embudos } = estado === 'aprobado'
+        ? await supabase.from('crm_pipelines').select('id, name, stages').eq('client_id', clientId).in('name', ['School', 'Página de inicio'])
+        : { data: [] }
+      const school = (embudos || []).find(p => p.name === 'School')
+      const inicio = (embudos || []).find(p => p.name === 'Página de inicio')
+      const desdeAqui = !fila.pipeline_id || fila.pipeline_id === school?.id || fila.pipeline_id === inicio?.id
+      const aSchool = school && desdeAqui && (Array.isArray(school.stages) ? school.stages : []).some(s => s.key === 'acceso_dado')
         ? { pipeline_id: school.id, status: 'acceso_dado' } : {}
       const { error: e2 } = await supabase.from('crm_contacts')
         .update({ custom_fields: { ...(fila.custom_fields || {}), [clave]: campo }, ...aSchool, updated_at: ahora() })

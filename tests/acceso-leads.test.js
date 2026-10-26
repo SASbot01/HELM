@@ -22,7 +22,12 @@ function consulta(tabla) {
     maybeSingle() {
       const v = Object.fromEntries(q.filtros)
       if (tabla === 'clients') return Promise.resolve({ data: { id: `id-de-${v.slug}`, active: true }, error: null })
-      if (tabla === 'crm_pipelines') return Promise.resolve({ data: { id: `${v.client_id}/${v.name}`, stages: [{ key: 'lead_nuevo' }] }, error: null })
+      if (tabla === 'crm_pipelines') {
+        const stages = v.name === 'School'
+          ? [{ key: 'apuntado' }, { key: 'en_skool' }, { key: 'pidio_acceso' }, { key: 'acceso_dado' }]
+          : [{ key: 'lead_nuevo' }]
+        return Promise.resolve({ data: { id: `${v.client_id}/${v.name}`, stages }, error: null })
+      }
       return Promise.resolve({ data: null, error: null })
     },
     then(ok) { return Promise.resolve({ data: tabla === 'crm_contacts' && existente ? [existente] : [], error: null }).then(ok) },
@@ -55,6 +60,34 @@ const inserts = () => ops.filter(o => o.op === 'insert' && o.tabla === 'crm_cont
 const updates = () => ops.filter(o => o.op === 'update' && o.tabla === 'crm_contacts').map(o => o.cambios)
 
 beforeEach(() => { ops.length = 0; existente = null; notificar.mockClear() })
+
+describe('solicitar-acceso · a qué embudo va', () => {
+  const pideAcceso = () => pide('solicitar-acceso', { comunidad: 'aiparatodo', nombre: 'Marta', email: 'marta@example.com' })
+
+  it('nuevo: entra en School, en «Pidió acceso»', async () => {
+    await pideAcceso()
+    expect(inserts()[0]).toMatchObject({ pipeline_id: 'id-de-silvestre/School', status: 'pidio_acceso' })
+  })
+
+  it('ya estaba en la página de inicio (o en ningún embudo): pasa a School · «Pidió acceso»', async () => {
+    existente = { id: 'c1', name: 'Marta', custom_fields: {}, pipeline_id: 'id-de-silvestre/Página de inicio', status: 'lead_nuevo' }
+    await pideAcceso()
+    expect(updates()[0]).toMatchObject({ pipeline_id: 'id-de-silvestre/School', status: 'pidio_acceso' })
+    ops.length = 0
+    existente = { id: 'c2', name: 'Marta', custom_fields: {}, pipeline_id: null, status: null }
+    await pideAcceso()
+    expect(updates()[0]).toMatchObject({ pipeline_id: 'id-de-silvestre/School', status: 'pidio_acceso' })
+  })
+
+  it('de otro embudo (un lead magnet, un cliente): se apunta la solicitud pero no se mueve', async () => {
+    existente = { id: 'c3', name: 'Marta', custom_fields: {}, pipeline_id: 'id-de-silvestre/Lead magnet', status: 'cliente' }
+    await pideAcceso()
+    const u = updates()[0]
+    expect(u.custom_fields.aiparatodo.acceso).toBe('pendiente')
+    expect(u).not.toHaveProperty('pipeline_id')
+    expect(u).not.toHaveProperty('status')
+  })
+})
 
 describe('solicitar-acceso', () => {
   it('nuevo: queda pendiente en silvestre, no da ficha y avisa a Alex', async () => {

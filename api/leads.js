@@ -41,6 +41,8 @@ const PERFIL_SLUG = 'silvestre'
 const PIPELINE_INICIO = 'Página de inicio'
 const PIPELINE_LEAD_MAGNET = 'Lead magnet'
 const PIPELINE_SCHOOL = 'School'
+// La etapa de School de quien pidió acceso a una comunidad (migración 111).
+const ETAPA_PIDIO_ACCESO = 'pidio_acceso'
 const ETAPA_ENTRADA = 'lead_nuevo'
 
 // Las líneas que el navegador puede pedir que se añadan a la ficha. Son fijas:
@@ -467,7 +469,7 @@ async function solicitarAcceso(b, { ip } = {}) {
   if (!nombre) throw fallo(400, 'Dinos cómo te llamas')
 
   const clientId = await perfil(c.perfil)
-  const previo = await buscar(clientId, correo, 'id, name, notes, custom_fields')
+  const previo = await buscar(clientId, correo, 'id, name, notes, custom_fields, pipeline_id, status')
   // Si ya está aprobado, entra directo: volver a pedir acceso no lo echa.
   if (estadoAcceso(previo, c.clave) === 'aprobado') {
     return { estado: 'aprobado', id: await ficha(clientId, previo.id) }
@@ -477,10 +479,20 @@ async function solicitarAcceso(b, { ip } = {}) {
   const datos = { ...(previo?.custom_fields?.[c.clave] || {}), acceso: 'pendiente', solicitado: ahora() }
   const linea = `${c.nombre} · pidió acceso`
 
+  // La solicitud va a School, el embudo de HELM Academy (Alex: «no vienen de la
+  // página de inicio»), en «Pidió acceso». Un contacto que ya estaba solo se
+  // mueve si venía de la página de inicio, de ningún embudo o del propio School:
+  // uno de otro embudo (un cliente, un lead magnet) se queda donde está.
+  const [school, inicio] = await Promise.all([embudo(clientId, PIPELINE_SCHOOL), embudo(clientId, PIPELINE_INICIO)])
+  const etapaSchool = school.etapas.some(s => s.key === ETAPA_PIDIO_ACCESO) ? ETAPA_PIDIO_ACCESO : school.etapas[0]?.key || 'apuntado'
+
   if (previo) {
+    const mover = school.id && previo.status !== 'acceso_dado'
+      && (!previo.pipeline_id || previo.pipeline_id === inicio.id || previo.pipeline_id === school.id)
     await actualizar(previo.id, {
       custom_fields: { ...(previo.custom_fields || {}), [c.clave]: datos },
       notes: sumaNota(previo.notes, linea),
+      ...(mover ? { pipeline_id: school.id, status: etapaSchool } : {}),
       last_activity_at: ahora(), updated_at: ahora(),
     })
   } else {
@@ -488,13 +500,10 @@ async function solicitarAcceso(b, { ip } = {}) {
       throw fallo(429, 'Ahora mismo hay muchas solicitudes. Prueba en un rato.')
     }
     cuentaAlta(c.clave)
-    // A School, el embudo de HELM Academy, que es de donde sale el acceso (Alex:
-    // «no vienen de la página de inicio»). Si el perfil no lo tiene, a la
-    // página de inicio, como antes.
-    const school = await embudo(clientId, PIPELINE_SCHOOL)
-    const pipeline = school.id ? school : await embudo(clientId, PIPELINE_INICIO)
+    // Sin School en el perfil, a la página de inicio, como antes.
+    const pipeline = school.id ? school : inicio
     const etapa = school.id
-      ? school.etapas[0]?.key || 'apuntado'
+      ? etapaSchool
       : pipeline.etapas.find(s => s.key === ETAPA_ENTRADA)?.key || pipeline.etapas[0]?.key || ETAPA_ENTRADA
     await crear({
       client_id: clientId, name: nombre || correo.split('@')[0], email: correo,

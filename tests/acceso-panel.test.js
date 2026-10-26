@@ -6,22 +6,26 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 let lista = []        // lo que devuelve la consulta de pendientes
 let fila = null       // el contacto que se aprueba/rechaza
 let school = null     // el embudo School del perfil, si lo tiene
+let inicio = null     // el de la página de inicio
 const ops = []
 function consulta(tabla) {
   const q = {
     tabla, filtros: [],
     select() { return q },
     eq(c, v) { q.filtros.push([c, v]); return q },
+    in(c, v) { q.filtros.push([c, v]); return q },
     filter(c, op, v) { q.filtros.push([c, op, v]); return q },
     order() { return q }, limit() { return q },
     update(cambios) { ops.push({ op: 'update', tabla, cambios }); return q },
     maybeSingle() {
       if (tabla === 'clients') return Promise.resolve({ data: { id: 'id-silvestre' }, error: null })
       if (tabla === 'crm_contacts') return Promise.resolve({ data: fila, error: null })
-      if (tabla === 'crm_pipelines') return Promise.resolve({ data: school, error: null })
       return Promise.resolve({ data: null, error: null })
     },
-    then(ok) { return Promise.resolve({ data: tabla === 'crm_contacts' ? lista : [], error: null }).then(ok) },
+    then(ok) {
+      const data = tabla === 'crm_contacts' ? lista : tabla === 'crm_pipelines' ? [school, inicio].filter(Boolean) : []
+      return Promise.resolve({ data, error: null }).then(ok)
+    },
   }
   return q
 }
@@ -49,7 +53,7 @@ const pide = async ({ method = 'GET', action, body } = {}) => {
   return res
 }
 
-beforeEach(() => { lista = []; fila = null; school = null; ops.length = 0; conCorreo = false; enviarCorreo.mockClear(); puedeVerPerfil.mockClear(); puedeVerPerfil.mockResolvedValue(true) })
+beforeEach(() => { lista = []; fila = null; school = null; inicio = null; ops.length = 0; conCorreo = false; enviarCorreo.mockClear(); puedeVerPerfil.mockClear(); puedeVerPerfil.mockResolvedValue(true) })
 
 describe('pendientes', () => {
   it('lista las solicitudes con nombre, correo, fecha y si se apuntó al Skool', async () => {
@@ -102,8 +106,9 @@ describe('aprobar y rechazar', () => {
   })
 
   it('aprobado, pasa a School · «Acceso dado» si el perfil tiene ese embudo; rechazado, no se mueve', async () => {
-    school = { id: 'p-school', stages: [{ key: 'apuntado' }, { key: 'acceso_dado' }] }
-    fila = { id: 'c4', name: 'Bilal', email: 'b@example.com', custom_fields: { aiparatodo: { acceso: 'pendiente' } } }
+    school = { id: 'p-school', name: 'School', stages: [{ key: 'apuntado' }, { key: 'acceso_dado' }] }
+    inicio = { id: 'p-inicio', name: 'Página de inicio', stages: [{ key: 'lead_nuevo' }] }
+    fila = { id: 'c4', name: 'Bilal', email: 'b@example.com', pipeline_id: 'p-inicio', custom_fields: { aiparatodo: { acceso: 'pendiente' } } }
     await pide({ method: 'POST', action: 'aprobar', body: { id: 'c4' } })
     expect(ops.find(o => o.op === 'update').cambios).toMatchObject({ pipeline_id: 'p-school', status: 'acceso_dado' })
     ops.length = 0
@@ -115,10 +120,19 @@ describe('aprobar y rechazar', () => {
     fila = { id: 'c5', name: 'Y', email: 'y@example.com', custom_fields: {} }
     await pide({ method: 'POST', action: 'aprobar', body: { id: 'c5' } })
     expect(ops.find(o => o.op === 'update').cambios).not.toHaveProperty('pipeline_id')
-    school = { id: 'p-otro', stages: [{ key: 'apuntado' }] }
+    school = { id: 'p-otro', name: 'School', stages: [{ key: 'apuntado' }] }
     ops.length = 0
     await pide({ method: 'POST', action: 'aprobar', body: { id: 'c5' } })
     expect(ops.find(o => o.op === 'update').cambios).not.toHaveProperty('pipeline_id')
+  })
+
+  it('a un contacto de otro embudo (un cliente, un lead magnet) no se le mueve al aprobar', async () => {
+    school = { id: 'p-school', name: 'School', stages: [{ key: 'acceso_dado' }] }
+    fila = { id: 'c6', name: 'Cliente', email: 'c@example.com', pipeline_id: 'p-ventas', custom_fields: {} }
+    await pide({ method: 'POST', action: 'aprobar', body: { id: 'c6' } })
+    const u = ops.find(o => o.op === 'update').cambios
+    expect(u.custom_fields.aiparatodo.acceso).toBe('aprobado')
+    expect(u).not.toHaveProperty('pipeline_id')
   })
 
   it('sin id, 400; si ya no está, 404', async () => {

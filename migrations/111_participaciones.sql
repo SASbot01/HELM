@@ -6,7 +6,12 @@
 -- cada cobro en su mes, sin copiar filas: lo calcula api/participaciones.js a
 -- partir de las ventas reales del perfil de origen.
 --
--- Solo el servidor la toca (SECRETAS en api/_lib/pasarela.js). Idempotente.
+-- Solo el servidor la toca (SECRETAS en api/_lib/pasarela.js). Idempotente:
+-- relanzarla no pisa un porcentaje cambiado ni reactiva una desactivada.
+--
+-- Además: la etapa «Pidió acceso» en el embudo School de silvestre, donde
+-- entran las solicitudes de acceso a AI para todo (api/leads.js) hasta que se
+-- aprueban («Acceso dado», api/accesos.js).
 
 begin;
 
@@ -31,6 +36,28 @@ from (values
 ) as x(beneficiario, origen, pct, nota)
 join clients b on b.slug = x.beneficiario
 join clients o on o.slug = x.origen
-on conflict (client_id, origen_id) do update set porcentaje = excluded.porcentaje, nota = excluded.nota, activa = true;
+on conflict (client_id, origen_id) do nothing;
+
+alter table helm_participaciones enable row level security;
+revoke all on helm_participaciones from anon, authenticated;
+
+-- «Pidió acceso», justo antes de «Acceso dado».
+update crm_pipelines p
+set stages = (
+  select jsonb_agg(e order by o)
+  from (
+    select e, i * 10 as o
+    from jsonb_array_elements(p.stages) with ordinality as t(e, i)
+    union all
+    select jsonb_build_object('key', 'pidio_acceso', 'color', '#F59E0B', 'label', 'Pidió acceso',
+      'description', 'Pidió acceso a AI para todo con su nombre y su correo. Se aprueba en Perfiles → Accesos cuando está en el Skool.'),
+      (select i * 10 - 5 from jsonb_array_elements(p.stages) with ordinality as t(e, i) where e->>'key' = 'acceso_dado')
+  ) x
+)
+from clients c
+where p.client_id = c.id and c.slug = 'silvestre' and p.name = 'School'
+  and jsonb_typeof(p.stages) = 'array'
+  and exists (select 1 from jsonb_array_elements(p.stages) e where e->>'key' = 'acceso_dado')
+  and not exists (select 1 from jsonb_array_elements(p.stages) e where e->>'key' = 'pidio_acceso');
 
 commit;

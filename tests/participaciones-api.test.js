@@ -1,6 +1,7 @@
-// api/participaciones.js: la parte de las ventas de otro perfil que se lleva
-// este. Solo con acceso al perfil que cobra la parte, solo de perfiles de su
-// misma agencia y solo las participaciones activas. Sin red ni base.
+// api/participaciones.js: las ventas de otro perfil de las que este se lleva una
+// parte (el porcentaje lo aplica el panel, src/helm/participaciones.js). Solo
+// con acceso al perfil que cobra la parte, solo de perfiles de su misma agencia
+// que quien mira puede ver él mismo, y solo las activas. Sin red ni base.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const db = {}
@@ -36,9 +37,11 @@ function consulta(tabla) {
 }
 vi.mock('../api/lib/supabase.js', () => ({ supabase: { from: (t) => consulta(t) } }))
 vi.mock('../api/_lib/auth.js', () => ({ applyCors: () => {} }))
-const acceso = vi.hoisted(() => ({ puede: true }))
+// Quién mira: la plataforma (lo ve todo) o un miembro del equipo de silvestre.
+const sesion = vi.hoisted(() => ({ puede: true, ve: null }))
 vi.mock('../api/_lib/access.js', () => ({
-  requireProfileAccess: async () => { if (!acceso.puede) throw Object.assign(new Error('No tienes acceso a este perfil'), { statusCode: 403 }); return {} },
+  requireProfileAccess: async () => { if (!sesion.puede) throw Object.assign(new Error('No tienes acceso a este perfil'), { statusCode: 403 }); return {} },
+  puedeVerPerfil: async (_auth, id) => !sesion.ve || sesion.ve.includes(id),
   agenciaDe: async (id) => db.clients.find(c => c.id === id)?.agencia_id || null,
 }))
 
@@ -50,16 +53,17 @@ async function pide(query) {
   return res
 }
 
-beforeEach(() => { semilla(); acceso.puede = true })
+beforeEach(() => { semilla(); sesion.puede = true; sesion.ve = null })
 
 describe('api/participaciones', () => {
-  it('devuelve la parte de cada perfil de su agencia, con los importes multiplicados', async () => {
+  it('devuelve las ventas de cada origen de su agencia, tal cual, con su porcentaje', async () => {
     const r = await pide({ clientId: 'silvestre' })
     expect(r.statusCode).toBe(200)
     const porOrigen = Object.fromEntries(r.body.participaciones.map(p => [p.origen.slug, p]))
     expect(Object.keys(porOrigen).sort()).toEqual(['detras-de-camra', 'web-seller'])
-    expect(porOrigen['detras-de-camra'].ventas[0]).toMatchObject({ client_name: 'Alexander', revenue: 413.7, cash_collected: 413.7, installment_amount: 68.95 })
-    expect(porOrigen['web-seller'].ventas[0]).toMatchObject({ client_name: 'Isabel', revenue: 162.5, cash_collected: 125, installment_amount: null })
+    expect(porOrigen['detras-de-camra']).toMatchObject({ porcentaje: 35, origen: { name: 'detras de camra' } })
+    expect(porOrigen['detras-de-camra'].ventas[0]).toMatchObject({ client_name: 'Alexander', revenue: 1182, installment_amount: 197 })
+    expect(porOrigen['web-seller'].porcentaje).toBe(50)
   })
 
   it('nunca lee ventas de un perfil de otra agencia ni de una participación inactiva', async () => {
@@ -69,10 +73,17 @@ describe('api/participaciones', () => {
     expect(r.body.participaciones.map(p => p.origen.slug)).not.toContain('viejo')
   })
 
+  it('un miembro del equipo de silvestre que no ve Detrás de Cámara no recibe sus ventas', async () => {
+    sesion.ve = ['silvestre']
+    const r = await pide({ clientId: 'silvestre' })
+    expect(r.statusCode).toBe(200)
+    expect(r.body.participaciones).toEqual([])
+  })
+
   it('sin acceso al perfil, 403; sin perfil, 400; un perfil sin participaciones, lista vacía', async () => {
-    acceso.puede = false
+    sesion.puede = false
     expect((await pide({ clientId: 'silvestre' })).statusCode).toBe(403)
-    acceso.puede = true
+    sesion.puede = true
     expect((await pide({})).statusCode).toBe(400)
     expect((await pide({ clientId: 'ddc' })).body).toEqual({ participaciones: [] })
   })

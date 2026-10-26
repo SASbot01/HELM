@@ -2,39 +2,20 @@
 // (migrations/111_participaciones.sql).
 //
 //   GET ?clientId=<quien cobra la parte>
-//     → { participaciones: [{ origen: { slug, name }, porcentaje,
-//          ventas: [las ventas del origen, con los importes ya multiplicados] }] }
+//     → { participaciones: [{ origen: { slug, name }, porcentaje, ventas: [las del origen, tal cual] }] }
 //
-// Las ventas salen con sus mismos campos (cliente, fechas, cuotas…) y los
-// importes por el porcentaje, para que el Informe las sume como las propias y
-// reparta cada cobro en su mes con ventasPorCobro. Solo se leen si los dos
-// perfiles son de la misma agencia: una participación mal puesta no puede abrir
-// las ventas de otra.
+// El Informe las reparte en cobros y les aplica el porcentaje
+// (src/helm/participaciones.js). Solo salen las de un origen de la misma
+// agencia y que quien mira puede ver él mismo: un miembro del equipo de
+// Silvestre con rol limitado no lee por aquí las ventas de Detrás de Cámara.
+// Una participación mal puesta tampoco abre las ventas de otra agencia.
 import { supabase } from './lib/supabase.js'
 import { applyCors } from './_lib/auth.js'
-import { requireProfileAccess, agenciaDe } from './_lib/access.js'
+import { requireProfileAccess, agenciaDe, puedeVerPerfil } from './_lib/access.js'
 import { todasLasFilas } from './_lib/filas.js'
 
 const CAMPOS = 'id, revenue, cash_collected, date, client_name, product, status, payment_type, notes, ' +
   'installments_total, installments_paid, installment_amount, plan_start, plan_end'
-const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100
-
-/** Una venta del origen convertida en la parte: importes por el porcentaje. */
-export function parteDe(venta, porcentaje, origen) {
-  const f = Number(porcentaje) / 100
-  const por = (x) => (x == null || x === '' ? x : r2(Number(x) * f))
-  return {
-    ...venta,
-    id: `part:${origen.slug}:${venta.id}`,
-    revenue: por(venta.revenue),
-    cash_collected: por(venta.cash_collected),
-    installment_amount: por(venta.installment_amount),
-    product: `${origen.name} · ${Number(porcentaje)} %`,
-    producto_origen: venta.product || '',
-    participacion: { origen: origen.slug, porcentaje: Number(porcentaje) },
-  }
-}
-
 export default async function handler(req, res) {
   applyCors(req, res)
   if (req.method === 'OPTIONS') return res.status(204).end()
@@ -42,7 +23,7 @@ export default async function handler(req, res) {
   try {
     const clientId = String(req.query?.clientId || '')
     if (!clientId) return res.status(400).json({ error: 'Falta el perfil' })
-    await requireProfileAccess(req, clientId)
+    const auth = await requireProfileAccess(req, clientId)
 
     const { data: filas, error } = await supabase.from('helm_participaciones')
       .select('origen_id, porcentaje').eq('client_id', clientId).eq('activa', true)
@@ -59,11 +40,12 @@ export default async function handler(req, res) {
     for (const p of filas || []) {
       const origen = porId.get(p.origen_id)
       if (!origen || !mia || (await agenciaDe(p.origen_id)) !== mia) continue
+      if (!(await puedeVerPerfil(auth, p.origen_id))) continue
       const ventas = await todasLasFilas(() => supabase.from('sales').select(CAMPOS).eq('client_id', p.origen_id).order('id'))
       participaciones.push({
         origen: { slug: origen.slug, name: origen.name },
         porcentaje: Number(p.porcentaje),
-        ventas: ventas.map(v => parteDe(v, p.porcentaje, origen)),
+        ventas,
       })
     }
     return res.status(200).json({ participaciones })

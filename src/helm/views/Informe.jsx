@@ -12,6 +12,7 @@ import { supabase, money, fmtDate, getOnboarding, onboardingApi, isSaleCancelled
 import { Kpi, Panel, Empty } from '../ui'
 import { seccionDelProducto } from '../producto'
 import { mensualidadesVivas, hoyLocal, ventasPorCobro, esVentaNueva } from '../cobrosPrevistos'
+import { partesDe } from '../participaciones'
 
 // Las fechas AAAA-MM-DD sin pasar por la hora local (en Latinoamérica,
 // new Date('2026-11-05') cae el día 4).
@@ -108,6 +109,7 @@ function desdeISO(periodo) {
 
 export default function Informe({ clientId, onNavigate }) {
   const [sales, setSales] = useState(null)
+  const [partes, setPartes] = useState({ ventas: [], cobros: [] })
   const [finance, setFinance] = useState([])
   const [contacts, setContacts] = useState(0)
   const [periodoKey, setPeriodoKey] = useState('mes')
@@ -133,18 +135,21 @@ export default function Informe({ clientId, onNavigate }) {
       participacionesApi.de(clientId).catch(() => ({ participaciones: [] })),
     ]).then(([s, f, c, p]) => {
       if (!alive) return
-      const partes = (p?.participaciones || []).flatMap(x => x.ventas || [])
-      setSales([...(s.data || []), ...partes].filter(r => !isSaleCancelled(r)))
+      setSales((s.data || []).filter(r => !isSaleCancelled(r)))
+      setPartes(partesDe(p?.participaciones, { esCancelada: isSaleCancelled }))
       setFinance(f.data || [])
       setContacts(c.count || 0)
     })
     return () => { alive = false }
   }, [clientId])
 
+  // Las propias y la parte de otros perfiles, enteras (planes y mensualidades).
+  const todasLasVentas = useMemo(() => [...(sales || []), ...partes.ventas], [sales, partes])
+
   const programas = useMemo(() => {
-    const set = new Set((sales || []).map(s => (s.product || '').trim()).filter(Boolean))
+    const set = new Set(todasLasVentas.map(s => (s.product || '').trim()).filter(Boolean))
     return [...set].sort((a, b) => a.localeCompare(b))
-  }, [sales])
+  }, [todasLasVentas])
 
   // Sin `if (!sales) return null` dentro del useMemo: el compilador de React no
   // puede preservar la memoización con una salida temprana. El estado "cargando"
@@ -155,7 +160,8 @@ export default function Informe({ clientId, onNavigate }) {
     const desde = desdeISO(periodo)
     // Lo que se cuenta por fechas va por cobros: cada cuota de una mensualidad
     // en su mes, y no toda en el mes en que empezó (ventasPorCobro).
-    const todas = ventasPorCobro(sales || []).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+    // La parte de otros perfiles llega ya repartida en cobros (partesDe).
+    const todas = [...ventasPorCobro(sales || []), ...partes.cobros].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
     const enRango = (fecha) => !desde || (fecha || '') >= desde
     const filtradas = todas
       .filter(s => enRango(s.date))
@@ -190,7 +196,7 @@ export default function Informe({ clientId, onNavigate }) {
     // Un plan con cuotas pendientes sale empiece cuando empiece (uno de mayo
     // sigue cobrando en octubre); los ya cobrados, solo los del periodo.
     // Los planes y las mensualidades, enteros (sin partir por cobros).
-    const delPrograma = (sales || []).filter(s => programa === '__all__' || (s.product || '').trim() === programa)
+    const delPrograma = todasLasVentas.filter(s => programa === '__all__' || (s.product || '').trim() === programa)
     const planes = delPrograma
       .map(s => ({ ...s, pendientes: cuotasPendientes(s) }))
       .filter(s => s.pendientes != null && (s.pendientes > 0 || enRango(s.date)))
@@ -210,16 +216,21 @@ export default function Informe({ clientId, onNavigate }) {
       const o = (partesPorOrigen[s.product] ||= { nombre: s.product, porcentaje: s.participacion.porcentaje, cobrado: 0, clientes: {} })
       const cobro = Number(s.cash_collected) || 0
       o.cobrado += cobro
-      const cli = (s.client_name || 'Sin nombre').trim()
-      o.clientes[cli] = (o.clientes[cli] || 0) + cobro
+      // El mismo cliente aunque su nombre venga con otras mayúsculas.
+      const nombre = (s.client_name || 'Sin nombre').trim()
+      const k = nombre.toLowerCase()
+      o.clientes[k] ||= { nombre, cobrado: 0 }
+      o.clientes[k].cobrado += cobro
     }
-    const partes = Object.values(partesPorOrigen)
-      .map(o => ({ ...o, clientes: Object.entries(o.clientes).map(([nombre, cobrado]) => ({ nombre, cobrado })).sort((a, b) => b.cobrado - a.cobrado) }))
+    const tuParte = Object.values(partesPorOrigen)
+      .map(o => ({ ...o, clientes: Object.values(o.clientes).filter(c => c.cobrado > 0).sort((a, b) => b.cobrado - a.cobrado) }))
+      .filter(o => o.cobrado > 0)
       .sort((a, b) => b.cobrado - a.cobrado)
-    const deOtros = partes.reduce((a, o) => a + o.cobrado, 0)
+    const deOtros = tuParte.reduce((a, o) => a + o.cobrado, 0)
 
     const fin = finance.filter(e => enRango(e.date))
-    const ingresos = fin.filter(e => Number(e.amount) > 0).reduce((a, e) => a + Number(e.amount), 0)
+    // Como en Finanzas: la parte cobrada de otros perfiles es un ingreso más.
+    const ingresos = fin.filter(e => Number(e.amount) > 0).reduce((a, e) => a + Number(e.amount), 0) + deOtros
     const gastos = fin.filter(e => Number(e.amount) < 0).reduce((a, e) => a + Number(e.amount), 0)
 
     // Serie mes a mes para la gráfica de evolución. Se construye desde los
@@ -256,10 +267,10 @@ export default function Informe({ clientId, onNavigate }) {
       ticket: nuevas.length ? facturadoNuevas / nuevas.length : 0,
       balance: ingresos + gastos,
       planes, porCobrar, mensualidades, alMes,
-      tabla, partes, deOtros,
+      tabla, partes: tuParte, deOtros,
       recientes: filtradas.slice(0, 8),
     }
-  }, [sales, finance, periodo, programa])
+  }, [sales, partes, todasLasVentas, finance, periodo, programa])
 
   if (sales == null) return <Empty>Cargando…</Empty>
 
