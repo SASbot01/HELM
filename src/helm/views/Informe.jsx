@@ -109,7 +109,7 @@ function desdeISO(periodo) {
 
 export default function Informe({ clientId, onNavigate }) {
   const [sales, setSales] = useState(null)
-  const [partes, setPartes] = useState({ ventas: [], cobros: [] })
+  const [partes, setPartes] = useState({ ventas: [], cobros: [], fijos: [] })
   const [finance, setFinance] = useState([])
   const [contacts, setContacts] = useState(0)
   const [periodoKey, setPeriodoKey] = useState('mes')
@@ -204,7 +204,12 @@ export default function Informe({ clientId, onNavigate }) {
     // Y las mensualidades vivas (las de 197 € al mes…): no tienen nº de
     // cuotas, así que se cuentan los pagos y se dice cuándo toca el siguiente.
     const mensualidades = mensualidadesVivas(delPrograma, { hoy: hoyLocal(), esCancelada: isSaleCancelled })
+    // Las cantidades fijas al mes de otros perfiles (200 € de Hugo) son también
+    // ingreso recurrente: suman en «Mensualidades».
+    const fijos = programa === '__all__' ? partes.fijos : []
     const alMes = mensualidades.reduce((a, m) => a + (Number(m.venta.installment_amount) || 0), 0)
+      + fijos.reduce((a, f) => a + f.importe, 0)
+    const recurrentes = mensualidades.length + fijos.length
     const porCobrar = planes.reduce(
       (a, s) => a + (s.pendientes * (Number(s.installment_amount) || 0)), 0)
 
@@ -266,7 +271,7 @@ export default function Informe({ clientId, onNavigate }) {
       revenue, cash, ventas: nuevas.length, serie,
       ticket: nuevas.length ? facturadoNuevas / nuevas.length : 0,
       balance: ingresos + gastos,
-      planes, porCobrar, mensualidades, alMes,
+      planes, porCobrar, mensualidades, alMes, recurrentes,
       tabla, partes: tuParte, deOtros,
       recientes: filtradas.slice(0, 8),
     }
@@ -310,8 +315,8 @@ export default function Informe({ clientId, onNavigate }) {
         {d.planes.length > 0 && (
           <Kpi label="Pendiente en cuotas" value={money(d.porCobrar)} sub={`${d.planes.length} plan${d.planes.length === 1 ? '' : 'es'} de pago`} />
         )}
-        {d.mensualidades.length > 0 && (
-          <Kpi label="Mensualidades" value={`${money(d.alMes)}/mes`} sub={`${d.mensualidades.length} activa${d.mensualidades.length === 1 ? '' : 's'}`} />
+        {d.recurrentes > 0 && (
+          <Kpi label="Mensualidades" value={`${money(d.alMes)}/mes`} sub={`${d.recurrentes} activa${d.recurrentes === 1 ? '' : 's'}`} />
         )}
       </div>
 

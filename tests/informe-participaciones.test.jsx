@@ -11,7 +11,7 @@ globalThis.process.env.TZ = 'Europe/Madrid'
 vi.useFakeTimers({ toFake: ['Date'] })
 vi.setSystemTime(new Date('2026-10-20T15:00:00Z'))
 
-const { parteDe, partesDe, movimientosDe } = await import('../src/helm/participaciones.js')
+const { parteDe, partesDe, movimientosDe, cobrosFijos } = await import('../src/helm/participaciones.js')
 
 const PROPIAS = [
   { id: 'propia', client_name: 'Cliente de Silvestre', product: 'Consultoría', payment_type: 'Pago único', status: 'won', revenue: 500, cash_collected: 500, date: '2026-10-10' },
@@ -74,6 +74,19 @@ describe('src/helm/participaciones', () => {
     expect(deAlexander.every(c => c.cash_collected === 68.95)).toBe(true)
     expect(cobros.some(c => c.client_name === 'Anulada')).toBe(false)
     expect(ventas.find(v => v.client_name === 'Alexander Salgado').installment_amount).toBe(68.95)
+  })
+
+  it('una cantidad fija al mes: un cobro por mes, del mes de «desde» al actual', () => {
+    const hugo = { origen: { slug: 'enformaconhugo', name: 'enformaconhugo' }, importe_mensual: 200, desde: '2026-10-01' }
+    expect(cobrosFijos(hugo, '2026-10-26').map(c => [c.date, c.cash_collected])).toEqual([['2026-10-01', 200]])
+    expect(cobrosFijos(hugo, '2027-01-02').map(c => c.date)).toEqual(['2026-10-01', '2026-11-01', '2026-12-01', '2027-01-01'])
+    expect(cobrosFijos(hugo, '2026-09-30')).toEqual([])
+    const { fijos, cobros } = partesDe([hugo], { esCancelada, hoy: '2026-11-15' })
+    expect(fijos).toEqual([{ nombre: 'enformaconhugo', importe: 200 }])
+    expect(movimientosDe(cobros).map(m => [m.date, m.amount, m.description])).toEqual([
+      ['2026-10-01', 200, 'Tu parte fija · enformaconhugo · 200 € al mes'],
+      ['2026-11-01', 200, 'Tu parte fija · enformaconhugo · 200 € al mes'],
+    ])
   })
 
   it('movimientosDe: un ingreso por cada pago, con lo cobrado y quién lo pagó', () => {

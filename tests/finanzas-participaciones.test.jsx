@@ -7,6 +7,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, within, cleanup } from '@testing-library/react'
 
 globalThis.process.env.TZ = 'Europe/Madrid'
+vi.useFakeTimers({ toFake: ['Date'] })
+vi.setSystemTime(new Date('2026-10-26T10:00:00Z'))
 
 const MOVIMIENTOS = [
   { id: 'm1', date: '2026-10-02', category: 'Gasto fijo', description: 'Servidor', amount: -40, person_name: '', contact_ids: [] },
@@ -18,6 +20,7 @@ const PARTICIPACIONES = [
   { origen: { slug: 'web-seller', name: 'web-seller' }, porcentaje: 50, ventas: [
     { id: 'i', client_name: 'Isabel Lozano', product: 'web', payment_type: 'Pago único', status: 'won', revenue: 325, cash_collected: 250, date: '2026-10-19' },
   ] },
+  { origen: { slug: 'enformaconhugo', name: 'enformaconhugo' }, importe_mensual: 200, desde: '2026-10-01' },
 ]
 
 vi.mock('../src/helm/lib', () => ({
@@ -50,8 +53,11 @@ describe('Finanzas · tu parte de otros perfiles', () => {
     expect(within(isabel).getByText('+125 €')).toBeTruthy()          // 50 % de 250 €
     // El movimiento guardado sigue con su papelera.
     expect(screen.getByText('Servidor').closest('tr').querySelector('.helm-x')).not.toBeNull()
-    expect(kpi('Ingresos').querySelector('.val').textContent).toBe('475 €')
-    expect(kpi('Ingresos').querySelector('.sub').textContent).toBe('475 € de tu parte de otros perfiles')
-    expect(kpi('Balance').querySelector('.val').textContent).toBe('435 €')
+    // Hugo: 200 € fijos de octubre.
+    const hugo = screen.getByText('Tu parte fija · enformaconhugo · 200 € al mes').closest('tr')
+    expect(within(hugo).getByText('+200 €')).toBeTruthy()
+    expect(kpi('Ingresos').querySelector('.val').textContent).toBe('675 €')
+    expect(kpi('Ingresos').querySelector('.sub').textContent).toBe('675 € de tu parte de otros perfiles')
+    expect(kpi('Balance').querySelector('.val').textContent).toBe('635 €')
   })
 })

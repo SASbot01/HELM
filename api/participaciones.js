@@ -2,7 +2,12 @@
 // (migrations/111_participaciones.sql).
 //
 //   GET ?clientId=<quien cobra la parte>
-//     → { participaciones: [{ origen: { slug, name }, porcentaje, ventas: [las del origen, tal cual] }] }
+//     → { participaciones: [{ origen: { slug, name }, porcentaje, ventas: [las del origen, tal cual] }
+//                         | { origen, importe_mensual, desde }] }
+//
+// Una participación es un porcentaje de las ventas del origen (menos las
+// `excluidas`, que van enteras al origen) o una cantidad fija al mes desde una
+// fecha (migración 112): esa no lee ninguna venta.
 //
 // El Informe las reparte en cobros y les aplica el porcentaje
 // (src/helm/participaciones.js). Solo salen las de un origen de la misma
@@ -26,7 +31,7 @@ export default async function handler(req, res) {
     const auth = await requireProfileAccess(req, clientId)
 
     const { data: filas, error } = await supabase.from('helm_participaciones')
-      .select('origen_id, porcentaje').eq('client_id', clientId).eq('activa', true)
+      .select('origen_id, porcentaje, importe_mensual, desde, excluidas').eq('client_id', clientId).eq('activa', true)
     if (error) throw error
     const ids = (filas || []).map(p => p.origen_id)
     const { data: perfiles, error: e2 } = ids.length
@@ -41,12 +46,14 @@ export default async function handler(req, res) {
       const origen = porId.get(p.origen_id)
       if (!origen || !mia || (await agenciaDe(p.origen_id)) !== mia) continue
       if (!(await puedeVerPerfil(auth, p.origen_id))) continue
+      const de = { slug: origen.slug, name: origen.name }
+      if (p.importe_mensual != null) {
+        participaciones.push({ origen: de, importe_mensual: Number(p.importe_mensual), desde: p.desde })
+        continue
+      }
+      const fuera = new Set(p.excluidas || [])
       const ventas = await todasLasFilas(() => supabase.from('sales').select(CAMPOS).eq('client_id', p.origen_id).order('id'))
-      participaciones.push({
-        origen: { slug: origen.slug, name: origen.name },
-        porcentaje: Number(p.porcentaje),
-        ventas,
-      })
+      participaciones.push({ origen: de, porcentaje: Number(p.porcentaje), ventas: ventas.filter(v => !fuera.has(v.id)) })
     }
     return res.status(200).json({ participaciones })
   } catch (e) {
