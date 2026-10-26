@@ -71,8 +71,15 @@ export default async function handler(req, res) {
 
       const estado = action === 'aprobar' ? 'aprobado' : 'rechazado'
       const campo = { ...(fila.custom_fields?.[clave] || {}), acceso: estado, [`${estado}_at`]: ahora() }
+      // Aprobado, pasa a School · «Acceso dado» si el perfil tiene ese embudo:
+      // así el CRM dice a quién se le dio acceso sin mirar cada ficha.
+      const { data: school } = estado === 'aprobado'
+        ? await supabase.from('crm_pipelines').select('id, stages').eq('client_id', clientId).eq('name', 'School').maybeSingle()
+        : { data: null }
+      const aSchool = school && (Array.isArray(school.stages) ? school.stages : []).some(s => s.key === 'acceso_dado')
+        ? { pipeline_id: school.id, status: 'acceso_dado' } : {}
       const { error: e2 } = await supabase.from('crm_contacts')
-        .update({ custom_fields: { ...(fila.custom_fields || {}), [clave]: campo }, updated_at: ahora() })
+        .update({ custom_fields: { ...(fila.custom_fields || {}), [clave]: campo }, ...aSchool, updated_at: ahora() })
         .eq('id', id).eq('client_id', clientId)
       if (e2) throw e2
 

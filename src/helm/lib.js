@@ -572,6 +572,11 @@ export const altasApi = {
 // Accesos con aprobación (AI para todo): las solicitudes pendientes y su visto
 // bueno. Solo superadmin (api/accesos.js lo exige). Al aprobar, la persona entra
 // en la web con su mismo correo; si hay correo saliente, además se le avisa.
+// La parte de las ventas de otros perfiles que se lleva este (api/participaciones.js).
+export const participacionesApi = {
+  de: (clientId) => apiFetch(`/api/participaciones?clientId=${encodeURIComponent(clientId)}`),
+}
+
 export const accesosApi = {
   pendientes: (comunidad = 'aiparatodo') => apiFetch(`/api/accesos?action=pendientes&comunidad=${comunidad}`),
   aprobar: (id, comunidad = 'aiparatodo') => apiFetch(`/api/accesos?action=aprobar&comunidad=${comunidad}`, { method: 'POST', body: { id } }),

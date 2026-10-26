@@ -488,8 +488,14 @@ async function solicitarAcceso(b, { ip } = {}) {
       throw fallo(429, 'Ahora mismo hay muchas solicitudes. Prueba en un rato.')
     }
     cuentaAlta(c.clave)
-    const pipeline = await embudo(clientId, PIPELINE_INICIO)
-    const etapa = pipeline.etapas.find(s => s.key === ETAPA_ENTRADA)?.key || pipeline.etapas[0]?.key || ETAPA_ENTRADA
+    // A School, el embudo de HELM Academy, que es de donde sale el acceso (Alex:
+    // «no vienen de la página de inicio»). Si el perfil no lo tiene, a la
+    // página de inicio, como antes.
+    const school = await embudo(clientId, PIPELINE_SCHOOL)
+    const pipeline = school.id ? school : await embudo(clientId, PIPELINE_INICIO)
+    const etapa = school.id
+      ? school.etapas[0]?.key || 'apuntado'
+      : pipeline.etapas.find(s => s.key === ETAPA_ENTRADA)?.key || pipeline.etapas[0]?.key || ETAPA_ENTRADA
     await crear({
       client_id: clientId, name: nombre || correo.split('@')[0], email: correo,
       source: `${c.nombre} · acceso`, notes: linea,

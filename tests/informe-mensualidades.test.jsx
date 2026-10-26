@@ -37,6 +37,7 @@ vi.mock('../src/helm/lib', () => ({
   fmtDate: (d) => d,
   getOnboarding: vi.fn(async () => null),
   onboardingApi: { biblia: vi.fn(async () => null) },
+  participacionesApi: { de: vi.fn(async () => ({ participaciones: [] })) },
   isSaleCancelled: (r) => String(r?.status || '').toLowerCase() === 'cancelada',
   cuotasPendientes: (v) => (Number(v?.installments_total) ? Math.max(0, v.installments_total - (v.installments_paid || 0)) : null),
 }))

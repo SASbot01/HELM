@@ -1,8 +1,14 @@
 // HELM — Informe: qué se ha facturado, filtrable por periodo y por programa.
+//
+// Si el perfil se lleva una parte de lo que cobra otro (Silvestre AI: el 35 %
+// de Detrás de Cámara y el 50 % de web-seller, ver api/participaciones.js),
+// esas ventas entran con los importes ya multiplicados: suman en facturado,
+// cobrado, la gráfica y las mensualidades, cada cobro en su mes, pero no
+// cuentan como ventas propias (ni en «Ventas» ni en el ticket medio).
 import { useEffect, useMemo, useState } from 'react'
 import { Rocket, ArrowRight, X } from 'lucide-react'
 import { Evolucion, PorPrograma } from './informe/Graficas'
-import { supabase, money, fmtDate, getOnboarding, onboardingApi, isSaleCancelled, cuotasPendientes } from '../lib'
+import { supabase, money, fmtDate, getOnboarding, onboardingApi, isSaleCancelled, cuotasPendientes, participacionesApi } from '../lib'
 import { Kpi, Panel, Empty } from '../ui'
 import { seccionDelProducto } from '../producto'
 import { mensualidadesVivas, hoyLocal, ventasPorCobro, esVentaNueva } from '../cobrosPrevistos'
@@ -123,9 +129,12 @@ export default function Informe({ clientId, onNavigate }) {
       supabase.from('ceo_finance_entries')
         .select('amount, category, date').eq('client_id', clientId).limit(2000),
       supabase.from('crm_contacts').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
-    ]).then(([s, f, c]) => {
+      // Sin participaciones (o si falla) el informe sigue con lo propio.
+      participacionesApi.de(clientId).catch(() => ({ participaciones: [] })),
+    ]).then(([s, f, c, p]) => {
       if (!alive) return
-      setSales((s.data || []).filter(r => !isSaleCancelled(r)))
+      const partes = (p?.participaciones || []).flatMap(x => x.ventas || [])
+      setSales([...(s.data || []), ...partes].filter(r => !isSaleCancelled(r)))
       setFinance(f.data || [])
       setContacts(c.count || 0)
     })
@@ -155,8 +164,9 @@ export default function Informe({ clientId, onNavigate }) {
     const revenue = filtradas.reduce((a, r) => a + (Number(r.revenue) || 0), 0)
     const cash = filtradas.reduce((a, r) => a + (Number(r.cash_collected) || 0), 0)
     // Ventas y ticket medio: solo las ventas del periodo, no cada cobro (la
-    // renovación de octubre de una mensualidad de mayo no es una venta nueva).
-    const nuevas = filtradas.filter(esVentaNueva)
+    // renovación de octubre de una mensualidad de mayo no es una venta nueva),
+    // y solo las propias: la parte de las de otro perfil no es una venta tuya.
+    const nuevas = filtradas.filter(s => esVentaNueva(s) && !s.participacion)
     const facturadoNuevas = nuevas.reduce((a, r) => a + (Number(r.revenue) || 0), 0)
 
     // Desglose por programa (siempre sobre el periodo, ignorando el filtro de
@@ -166,7 +176,7 @@ export default function Informe({ clientId, onNavigate }) {
     for (const s of delPeriodo) {
       const k = (s.product || '').trim() || 'Sin programa'
       porPrograma[k] = porPrograma[k] || { unidades: 0, facturado: 0, cobrado: 0 }
-      if (esVentaNueva(s)) porPrograma[k].unidades++   // un cobro más de una venta no es otra venta
+      if (esVentaNueva(s) && !s.participacion) porPrograma[k].unidades++   // un cobro más de una venta no es otra venta
       porPrograma[k].facturado += Number(s.revenue) || 0
       porPrograma[k].cobrado += Number(s.cash_collected) || 0
     }
@@ -191,6 +201,22 @@ export default function Informe({ clientId, onNavigate }) {
     const alMes = mensualidades.reduce((a, m) => a + (Number(m.venta.installment_amount) || 0), 0)
     const porCobrar = planes.reduce(
       (a, s) => a + (s.pendientes * (Number(s.installment_amount) || 0)), 0)
+
+    // Tu parte de otros perfiles en el periodo: por perfil y, dentro, por
+    // cliente (lo que ha pagado cada uno y lo que te toca).
+    const partesPorOrigen = {}
+    for (const s of filtradas) {
+      if (!s.participacion) continue
+      const o = (partesPorOrigen[s.product] ||= { nombre: s.product, porcentaje: s.participacion.porcentaje, cobrado: 0, clientes: {} })
+      const cobro = Number(s.cash_collected) || 0
+      o.cobrado += cobro
+      const cli = (s.client_name || 'Sin nombre').trim()
+      o.clientes[cli] = (o.clientes[cli] || 0) + cobro
+    }
+    const partes = Object.values(partesPorOrigen)
+      .map(o => ({ ...o, clientes: Object.entries(o.clientes).map(([nombre, cobrado]) => ({ nombre, cobrado })).sort((a, b) => b.cobrado - a.cobrado) }))
+      .sort((a, b) => b.cobrado - a.cobrado)
+    const deOtros = partes.reduce((a, o) => a + o.cobrado, 0)
 
     const fin = finance.filter(e => enRango(e.date))
     const ingresos = fin.filter(e => Number(e.amount) > 0).reduce((a, e) => a + Number(e.amount), 0)
@@ -230,7 +256,7 @@ export default function Informe({ clientId, onNavigate }) {
       ticket: nuevas.length ? facturadoNuevas / nuevas.length : 0,
       balance: ingresos + gastos,
       planes, porCobrar, mensualidades, alMes,
-      tabla,
+      tabla, partes, deOtros,
       recientes: filtradas.slice(0, 8),
     }
   }, [sales, finance, periodo, programa])
@@ -265,6 +291,9 @@ export default function Informe({ clientId, onNavigate }) {
         <Kpi label="Facturado" value={money(d.revenue)} accent sub={sufijo} />
         <Kpi label="Cobrado" value={money(d.cash)} />
         <Kpi label="Ventas" value={d.ventas} sub={`ticket medio ${money(d.ticket)}`} />
+        {d.partes.length > 0 && (
+          <Kpi label="Tu parte de otros perfiles" value={money(d.deOtros)} sub={`cobrado · ${d.partes.map(o => o.nombre).join(' y ')}`} />
+        )}
         <Kpi label="Balance finanzas" value={money(d.balance)} sub="ingresos − gastos" />
         <Kpi label="Contactos CRM" value={contacts} sub="en pipeline" />
         {d.planes.length > 0 && (
@@ -323,6 +352,32 @@ export default function Informe({ clientId, onNavigate }) {
                     <td>Mensual</td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      )}
+
+      {d.partes.length > 0 && (
+        <Panel title={`Tu parte de otros perfiles · ${periodo.label.toLowerCase()}`}>
+          <div className="helm-tablewrap">
+            <table className="helm-table">
+              <thead><tr><th>Perfil</th><th>Cliente</th><th>Tu parte cobrada</th></tr></thead>
+              <tbody>
+                {d.partes.flatMap(o => [
+                  ...o.clientes.map(c => (
+                    <tr key={`${o.nombre}-${c.nombre}`}>
+                      <td>{o.nombre}</td>
+                      <td>{c.nombre}</td>
+                      <td className="helm-num">{money(c.cobrado)}</td>
+                    </tr>
+                  )),
+                  <tr key={`${o.nombre}-total`} className="active">
+                    <td><b>{o.nombre}</b></td>
+                    <td><b>Total</b></td>
+                    <td className="helm-num"><b>{money(o.cobrado)}</b></td>
+                  </tr>,
+                ])}
               </tbody>
             </table>
           </div>

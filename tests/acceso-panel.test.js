@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 let lista = []        // lo que devuelve la consulta de pendientes
 let fila = null       // el contacto que se aprueba/rechaza
+let school = null     // el embudo School del perfil, si lo tiene
 const ops = []
 function consulta(tabla) {
   const q = {
@@ -17,6 +18,7 @@ function consulta(tabla) {
     maybeSingle() {
       if (tabla === 'clients') return Promise.resolve({ data: { id: 'id-silvestre' }, error: null })
       if (tabla === 'crm_contacts') return Promise.resolve({ data: fila, error: null })
+      if (tabla === 'crm_pipelines') return Promise.resolve({ data: school, error: null })
       return Promise.resolve({ data: null, error: null })
     },
     then(ok) { return Promise.resolve({ data: tabla === 'crm_contacts' ? lista : [], error: null }).then(ok) },
@@ -47,7 +49,7 @@ const pide = async ({ method = 'GET', action, body } = {}) => {
   return res
 }
 
-beforeEach(() => { lista = []; fila = null; ops.length = 0; conCorreo = false; enviarCorreo.mockClear(); puedeVerPerfil.mockClear(); puedeVerPerfil.mockResolvedValue(true) })
+beforeEach(() => { lista = []; fila = null; school = null; ops.length = 0; conCorreo = false; enviarCorreo.mockClear(); puedeVerPerfil.mockClear(); puedeVerPerfil.mockResolvedValue(true) })
 
 describe('pendientes', () => {
   it('lista las solicitudes con nombre, correo, fecha y si se apuntó al Skool', async () => {
@@ -97,6 +99,26 @@ describe('aprobar y rechazar', () => {
     expect(r.body).toEqual({ ok: true, estado: 'rechazado' })
     expect(ops.find(o => o.op === 'update').cambios.custom_fields.aiparatodo.acceso).toBe('rechazado')
     expect(enviarCorreo).not.toHaveBeenCalled()
+  })
+
+  it('aprobado, pasa a School · «Acceso dado» si el perfil tiene ese embudo; rechazado, no se mueve', async () => {
+    school = { id: 'p-school', stages: [{ key: 'apuntado' }, { key: 'acceso_dado' }] }
+    fila = { id: 'c4', name: 'Bilal', email: 'b@example.com', custom_fields: { aiparatodo: { acceso: 'pendiente' } } }
+    await pide({ method: 'POST', action: 'aprobar', body: { id: 'c4' } })
+    expect(ops.find(o => o.op === 'update').cambios).toMatchObject({ pipeline_id: 'p-school', status: 'acceso_dado' })
+    ops.length = 0
+    await pide({ method: 'POST', action: 'rechazar', body: { id: 'c4' } })
+    expect(ops.find(o => o.op === 'update').cambios).not.toHaveProperty('pipeline_id')
+  })
+
+  it('sin embudo School (u otro sin «Acceso dado»), aprobar no toca el pipeline', async () => {
+    fila = { id: 'c5', name: 'Y', email: 'y@example.com', custom_fields: {} }
+    await pide({ method: 'POST', action: 'aprobar', body: { id: 'c5' } })
+    expect(ops.find(o => o.op === 'update').cambios).not.toHaveProperty('pipeline_id')
+    school = { id: 'p-otro', stages: [{ key: 'apuntado' }] }
+    ops.length = 0
+    await pide({ method: 'POST', action: 'aprobar', body: { id: 'c5' } })
+    expect(ops.find(o => o.op === 'update').cambios).not.toHaveProperty('pipeline_id')
   })
 
   it('sin id, 400; si ya no está, 404', async () => {

@@ -53,6 +53,8 @@ const SECRETAS = new Set([
   'helm_web_creator', 'helm_web_fabricacion',
   // La oficina de cada agente: el chat va por api/agente-oficina.js.
   'helm_agente_chat',
+  // Qué parte de las ventas de un perfil es de otro: solo por api/participaciones.js.
+  'helm_participaciones',
 ])
 
 // LISTA BLANCA: las únicas tablas que el panel toca por aquí (las que usa
