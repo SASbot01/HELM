@@ -15,7 +15,6 @@ import Onboarding from './views/Onboarding'
 import Agentes from './views/Agentes'
 import MiDia from './views/MiDia'
 import Noticias from './views/Noticias'
-import Avatar from './views/Avatar.jsx'
 import RadarView from './views/Radar.jsx'
 import Roadmap from './views/Roadmap.jsx'
 import Ads from './views/Ads.jsx'
@@ -44,10 +43,11 @@ import './theme.css'
 const PRIVADAS = { radar: 'silvestre' }
 
 const NAV = [
+  // El avatar de ventas (antes «Avatar del cliente», con entrada propia) vive
+  // ahora dentro del Informe, en su pestaña: es otra forma de mirar el negocio.
   { key: 'informe', tono: 'oro', label: 'Informe', icon: LayoutDashboard, title: 'Informe', sub: 'Resumen del negocio', C: Informe },
   { key: 'onboarding', tono: 'azul', label: 'Onboarding', icon: Rocket, title: 'Onboarding', sub: 'Alimenta a tu IA y trae tu sistema', C: Onboarding },
   { key: 'crm', tono: 'azul', label: 'CRM', icon: Users, title: 'CRM', sub: 'Tus contactos y pipeline', C: Crm },
-  { key: 'avatar', tono: 'azul', label: 'Avatar', icon: Target, title: 'Avatar del cliente', sub: 'Quién es tu cliente tipo, según tu CRM', C: Avatar },
   // Radar: privado, solo para el perfil silvestre (se gatea por slug en `puede`).
   { key: 'radar', tono: 'rojo', label: 'Radar', icon: Radar, title: 'Radar', sub: 'Tecnología e ideas nuevas para investigar', C: RadarView },
   { key: 'servicios', tono: 'oro', label: 'Servicios', icon: Package, title: 'Servicios', sub: 'El catálogo que lo conecta todo', C: Servicios },
@@ -68,16 +68,18 @@ const NAV = [
   // Mi día: los rituales diarios con la IA (priorizar, preparar reuniones,
   // cerrar el día). Va el primero de su rama: es lo que se abre cada mañana.
   { key: 'dia', tono: 'rojo', label: 'Mi día', icon: Sunrise, title: 'Mi día', sub: 'Tus rituales diarios con la IA', C: MiDia },
-  // Noticias: las tres del día de IA y ciberseguridad, que deja un agente antes
-  // de las 6:00. Nace apagada: solo la quiere quien hace contenido de eso.
+  // Noticias: las tres del día de IA y ciberseguridad. Al encenderla, su agente
+  // las busca cada mañana, salvo en los perfiles a demanda (brevesADemanda en
+  // api/_lib/noticias-perfiles.js), que solo buscan al pulsar «Buscar ahora».
+  // Nace apagada: solo la quiere quien hace contenido de eso.
   { key: 'noticias', tono: 'rojo', label: 'Noticias', icon: Newspaper, title: 'Noticias', sub: 'Las tres del día de IA y ciberseguridad', C: Noticias },
   { key: 'contenido', tono: 'rojo', label: 'Agentes', icon: Bot, title: 'Agentes', sub: 'Tus agentes de IA y los creadores que estudian', C: Agentes },
   // Roadmap semestral: el plan de contenido+ads a seis meses (mes → semana → día).
   // Fase 1: muestra la estructura compartida; la Fase 2 la rellena un agente por cliente.
   { key: 'roadmap', tono: 'rojo', label: 'Roadmap', icon: CalendarRange, title: 'Roadmap semestral', sub: 'El plan del negocio a seis meses', C: Roadmap },
   { key: 'ads', tono: 'rojo', label: 'Ads', icon: Megaphone, title: 'Ads', sub: 'Tus anuncios y su test de 5 días', C: Ads },
-  // Informe de contenido: lo que pasó con lo publicado. Nace apagada: sin
-  // Instagram conectado no tiene nada que enseñar.
+  // Informe de contenido: lo que pasó con lo publicado. Nace encendida en todos
+  // los perfiles: sin Instagram conectado enseña lo que trae y cómo pedirlo.
   { key: 'metricas', tono: 'rojo', label: 'Informe de contenido', icon: BarChart3, title: 'Informe de contenido', sub: 'Qué ha funcionado en Instagram y qué repetir', C: Metricas },
   { key: 'llamadas', tono: 'azul', label: 'Llamadas', icon: PhoneCall, title: 'Llamadas', sub: 'Tu agenda de Google, con lo que pasó en cada una', C: Llamadas },
   { key: 'enlaces', tono: 'rojo', label: 'Enlaces', icon: Link2, title: 'Enlaces', sub: 'Las URLs del negocio, a mano', C: Enlaces },
@@ -87,6 +89,14 @@ const NAV = [
   { key: 'secciones', tono: 'plata', label: 'Secciones', icon: Layers, title: 'Secciones', sub: 'Qué partes del panel usa este negocio', C: Secciones },
   { key: 'ajustes', tono: 'plata', label: 'Ajustes', icon: Settings, title: 'Ajustes', sub: 'Integraciones y IA de este perfil', C: Ajustes },
 ]
+
+// Lo que el negocio puede encender y apagar en Secciones: el menú y, detrás del
+// Informe, el avatar de ventas. El avatar no tiene recuadro propio (es una
+// pestaña del Informe), pero sigue siendo una sección normal: nace encendida, y
+// el negocio que lo apagó cuando tenía entrada en el menú tiene que poder
+// volver a encenderlo. Sin esto se quedaba apagado para siempre.
+const AVATAR = { key: 'avatar', tono: 'oro', label: 'Avatar de ventas', icon: Target, title: 'Avatar de ventas', sub: 'La pestaña del Informe con tu cliente tipo, sacado del CRM' }
+const CATALOGO = NAV.flatMap(n => (n.key === 'informe' ? [n, AVATAR] : [n]))
 
 // El menú no es una lista: es un esquema de tres ramas, y cada rama tiene su
 // color de borde. Ese mismo color tiñe la cabecera y los paneles de la sección
@@ -419,6 +429,14 @@ export default function HelmApp() {
     return permitidas.length ? permitidas : [NAV[0]]
   }, [puede])
 
+  // La pestaña «Avatar de ventas» del Informe se decide aquí, con la misma
+  // escalera que una sección del menú: que exista en este producto, que el
+  // negocio no la haya apagado y que el rol la tenga en Permisos (quien manda
+  // en todo la ve siempre, ver puedeVer). Ver el Informe no basta: al rol que
+  // se ha quedado sin nada se le deja el Informe de comodín (arriba), y eso no
+  // puede abrirle de paso un estudio que gasta créditos y retrata a los clientes.
+  const verAvatar = puede('avatar')
+
   // Ajustes se pinta abajo, junto a la cuenta, pero sigue estando en `coreNav`
   // para que la vista se resuelva igual: sacarlo de ahí haría que entrar por
   // /ajustes cayera en el Informe.
@@ -438,11 +456,14 @@ export default function HelmApp() {
   // /admin sin slug: el tablero de perfiles, sin menú ni cabecera.
   const eligiendo = !isClient && !urlSlug
 
+  // Se marca la sección que se está ENSEÑANDO (`current`), no la que se pidió
+  // (`view`): si `view` apunta a algo que ya no existe (un aviso viejo, una
+  // sección apagada) se abre la primera que sí, y el menú tiene que decir esa.
   const recuadro = (key, Icon, label, onClick, extra) => (
     <button
       type="button" key={key}
-      className={'helm-tile' + (view === key ? ' activa' : '')}
-      aria-current={view === key ? 'page' : undefined}
+      className={'helm-tile' + (current.key === key ? ' activa' : '')}
+      aria-current={current.key === key ? 'page' : undefined}
       onClick={onClick || (() => go(key))}
     >
       <Icon /><span>{label}{extra && <small>{extra}</small>}</span>
@@ -569,14 +590,14 @@ export default function HelmApp() {
               // es donde vive ahora todo.
               <Secciones
                 key={clientId} secciones={secciones}
-                catalogo={NAV.filter(n => seccionDelProducto(n.key))}
+                catalogo={CATALOGO.filter(n => seccionDelProducto(n.key))}
                 modulos={PLUGINS.filter(p => p.available && seccionDelProducto(p.key))}
                 onToggle={toggleSeccion} guardando={guardandoSecciones}
               />
             ) : current.key === 'secciones' ? (
               <Secciones
                 key={clientId} secciones={secciones}
-                catalogo={NAV.filter(n => seccionDelProducto(n.key))}
+                catalogo={CATALOGO.filter(n => seccionDelProducto(n.key))}
                 modulos={PLUGINS.filter(p => p.available && seccionDelProducto(p.key))}
                 onToggle={toggleSeccion} guardando={guardandoSecciones} />
             ) : (
@@ -586,6 +607,8 @@ export default function HelmApp() {
                 client={client}
                 onClientUpdate={onClientUpdate}
                 onNavigate={setView}
+                // Solo lo usa el Informe (ver verAvatar arriba).
+                verAvatar={verAvatar}
               />
             )}
           </div>

@@ -37,6 +37,14 @@ function resolveHandlerFile(pathname) {
 
 const MAX_CUERPO = 30 * 1024 * 1024
 
+// Lo que se lee como texto: JSON (también los *+json), formularios y text/*.
+// Lo demás (un fichero del portal de documentos, application/octet-stream) se
+// queda en bytes en req.rawBody y req.body va vacío: pasado a UTF-8 se rompía
+// cualquier byte que no fuera texto, y nadie lo lee de ahí (api/documentos.js y
+// los webhooks leen los bytes; /api/db ni pasa por aquí). Sin content-type, como
+// antes, texto.
+const ES_TEXTO = /^\s*(application\/(json|x-www-form-urlencoded|[\w.+-]+\+json)|text\/|;|$)/i
+
 function readBody(req) {
   return new Promise((resolve) => {
     const chunks = []
@@ -51,9 +59,9 @@ function readBody(req) {
       // El cuerpo tal cual llegó: las firmas de los webhooks (Stripe) se
       // calculan sobre estos bytes, no sobre el JSON vuelto a escribir.
       req.rawBody = Buffer.concat(chunks)
-      const raw = req.rawBody.toString('utf8')
       const ct = (req.headers['content-type'] || '')
-      if (!raw) return resolve(undefined)
+      if (!req.rawBody.length || !ES_TEXTO.test(ct)) return resolve(undefined)
+      const raw = req.rawBody.toString('utf8')
       if (ct.includes('application/json')) { try { return resolve(JSON.parse(raw)) } catch { return resolve(undefined) } }
       if (ct.includes('application/x-www-form-urlencoded')) return resolve(Object.fromEntries(new URLSearchParams(raw)))
       resolve(raw)

@@ -23,8 +23,8 @@ export const FUNDADOR = {
   nombre: 'Alex Silvestre',
   rol: 'Fundador de AI para todo',
   foto: '/inicio/alex.jpg',
-  instagram: 'https://www.instagram.com/silvesttre.ia',
-  handle: '@silvesttre.ia',
+  instagram: 'https://www.instagram.com/silvesttre.ai',
+  handle: '@silvesttre.ai',
   youtube: 'https://www.youtube.com/@silvesttre-ai',
 }
 
@@ -54,7 +54,7 @@ export const SECCIONES = [
     ],
   },
   {
-    key: 'news', titulo: 'News', desc: 'El diario de IA, tecnología y ciberseguridad: tres piezas al día, investigadas y contrastadas, y las breves de cada mañana.',
+    key: 'news', titulo: 'News', desc: 'El diario de IA, tecnología y ciberseguridad: tres piezas al día, investigadas y contrastadas, y breves cuando las haya.',
     // Los temas del diario (aip_articulos.tema). Las breves (helm_noticias) usan
     // 'ia' y 'ciberseguridad', que también están aquí.
     temas: [

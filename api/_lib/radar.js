@@ -5,9 +5,10 @@
 // (Hacker News, arXiv, Reddit, Product Hunt) más medios de IA, se queda con lo
 // emergente y lo convierte en ideas concretas para investigar, probar o contar.
 //
-// Corre en el worker (trabajo 'radar'): una pasada al día (miraRadar, 7:00 de
-// Madrid) y a petición desde la sección. No inventa enlaces: cada idea apunta a
-// algo que de verdad ha aparecido en esta pasada.
+// Corre en el worker (trabajo 'radar'), a petición desde la sección («Buscar
+// ahora»). La pasada diaria de las 7:00 (miraRadar) está apagada: se vuelve a
+// encender con RADAR_DIARIO=1. No inventa enlaces: cada idea apunta a algo que
+// de verdad ha aparecido en esta pasada.
 import { supabase } from '../lib/supabase.js'
 import { claudeTurno } from './anthropic.js'
 import { notificar } from './notificar.js'
@@ -195,8 +196,10 @@ export async function generaRadar(job) {
 }
 
 /** Lo que mira el worker: una pasada al día desde las 7:00 de Madrid, para el
- *  perfil silvestre (la sección es solo suya). */
+ *  perfil silvestre (la sección es solo suya). Solo con RADAR_DIARIO=1; si no,
+ *  el radar va a demanda y no hace nada aquí. */
 export async function miraRadar() {
+  if (process.env.RADAR_DIARIO !== '1') return   // a demanda; RADAR_DIARIO=1 vuelve a las 7:00
   if (minutosMadrid() < HORA) return
   const { data: perfil } = await supabase.from('clients').select('id').eq('slug', PERFIL).maybeSingle()
   if (!perfil) return

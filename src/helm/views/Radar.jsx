@@ -1,8 +1,9 @@
 // HELM — Radar: tecnología e ideas nuevas para investigar. Privado de silvestre.
 //
 // Un agente (api/_lib/radar.js) rastrea la red —Hacker News, arXiv, Reddit,
-// Product Hunt, blogs de IA— una vez al día y a petición, elige lo emergente y
-// lo convierte en ideas concretas para investigar, probar o contar.
+// Product Hunt, blogs de IA— cuando se pulsa «Buscar ahora» (la pasada diaria
+// de las 7:00 solo corre con RADAR_DIARIO=1), elige lo emergente y lo
+// convierte en ideas concretas para investigar, probar o contar.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Radar as RadarIcon, RefreshCw, Sparkles, ExternalLink, Lightbulb, FlaskConical, Wrench, Cpu, TrendingUp, Zap } from 'lucide-react'
 import { radarApi } from '../lib'
@@ -48,7 +49,7 @@ export default function Radar({ clientId }) {
   return (
     <div className="helm-radar">
       <header className="rd-cab">
-        <p className="rd-cab-sub">Rastreo de IA, modelos y herramientas en Hacker News, arXiv, Reddit, Product Hunt y blogs. Una pasada al día, a las 7:00.</p>
+        <p className="rd-cab-sub">Rastreo de IA, modelos y herramientas en Hacker News, arXiv, Reddit, Product Hunt y blogs, cada vez que pulsas «Buscar ahora».</p>
         <button className="rd-btn" onClick={buscar} disabled={datos.corriendo}>
           {datos.corriendo ? <><RefreshCw size={16} className="rd-gira" /> Rastreando…</> : <><RadarIcon size={16} /> Buscar ahora</>}
         </button>
@@ -64,7 +65,7 @@ export default function Radar({ clientId }) {
         <div className="rd-vacio">
           <RadarIcon size={40} />
           <h2>Pon el radar a buscar</h2>
-          <p>Rastrea dónde asoma lo nuevo antes que en la prensa y te deja tecnología, modelos e ideas para investigar o para contar. Cada mañana a las 7:00, y cuando lo pidas.</p>
+          <p>Rastrea dónde asoma lo nuevo antes que en la prensa y te deja tecnología, modelos e ideas para investigar o para contar. Cada vez que lo pidas.</p>
           <button className="rd-btn grande" onClick={buscar}><RadarIcon size={18} /> Buscar ahora</button>
         </div>
       )}

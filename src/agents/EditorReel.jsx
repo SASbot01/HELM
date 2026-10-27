@@ -2,15 +2,16 @@
 //
 // El motor de render está en construcción; lo que esta pantalla hace HOY es
 // enseñar el proceso en vivo: pulsas «Probar el proceso» (o entra un vídeo por
-// el conector de Claude o por Drive) y se ven los pasos que sigue el agente,
-// paso a paso, tal como quedan en el registro de ejecuciones.
+// el conector de Claude) y se ven los pasos que sigue el agente, paso a paso,
+// tal como quedan en el registro de ejecuciones. Por Drive no entra nada: la
+// vía del editor es el conector.
 //
 // Arriba, los ESTILOS DE EDICIÓN (2026-10-22): uno por cada perfil de cuyos
 // reels de ejemplo sale (./editor/estilos-referencia.js), con la portada de
 // esos reels para elegir a ojo. «Copiar prompt» ya funciona (para que Claude
 // lo monte por el conector); «Crear» se enciende cuando el motor esté dentro.
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { ArrowLeft, Play, RefreshCw, ChevronRight, Plug, FolderSync, Copy, Check, Wand2, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Play, RefreshCw, ChevronRight, Plug, Copy, Check, Wand2, ExternalLink } from 'lucide-react'
 import { agentsApi } from './api'
 import { ESTILOS_REFERENCIA } from './editor/estilos-referencia'
 import './editorReel.css'
@@ -120,9 +121,9 @@ export default function EditorReel({ clientId, client, onVolver }) {
           <button type="button" className="ag-volver" onClick={onVolver}><ArrowLeft size={14} strokeWidth={2.2} /> Agentes</button>
           <h1>Editor de reels <span className="ed-badge">En construcción</span></h1>
           <p>
-            Cuando entra un vídeo de {client?.name || 'este perfil'} —por el conector de Claude o por la carpeta de
-            Drive— el editor sigue tu manual paso a paso. Aquí se ve el proceso en vivo. El motor de render (ffmpeg y
-            composición) está en construcción.
+            Cuando entra un vídeo de {client?.name || 'este perfil'} por el conector de Claude, el editor sigue tu
+            manual paso a paso. Aquí se ve el proceso en vivo. El motor de render (ffmpeg y composición) está en
+            construcción.
           </p>
         </div>
       </header>
@@ -140,7 +141,6 @@ export default function EditorReel({ clientId, client, onVolver }) {
 
       <section className="ed-vias">
         <div className="ed-via"><Plug size={16} /><div><b>Por el conector (MCP)</b><small>Lo edita Claude con tu suscripción, usando el manual guardado en la memoria de HELM.</small></div></div>
-        <div className="ed-via"><FolderSync size={16} /><div><b>Por la carpeta de Drive</b><small>Lo hace HELM solo, como equipo de agentes.</small></div></div>
       </section>
 
       <div className="ed-acciones">

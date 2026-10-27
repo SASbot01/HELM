@@ -1,6 +1,10 @@
-// HELM — Ingesta de Drive: el calendario de guiones y las carpetas de cada
-// perfil en "HELM Contenido". Lo usan el worker (scripts/agents-worker.mjs),
-// el conector de Claude (api/mcp) y la pantalla del agente (api/agents.js).
+// HELM — Drive del contenido: el calendario de guiones y las carpetas de cada
+// perfil en "HELM Contenido". Ya nada vigila la Entrada ni empareja solo: el
+// vídeo se sube a "0 · Entrada" y Claude lo coloca por el conector.
+// Lo usan el conector de Claude (api/mcp: calendario y ordenar_video), las
+// fases del roadmap (api/agentes-perfil.js), el puesto del editor
+// (api/edicion.js) y el equipo de agentes (api/_lib/equipo.js, que también
+// corre en el worker: solo lee el calendario).
 //
 // La estructura de cada perfil es fija y se busca por nombre:
 //   Instagram / 0 · Entrada
@@ -22,7 +26,7 @@ export const FASES = {
 
 // ── Las carpetas de un perfil ───────────────────────────────────────────────
 // Se resuelven una vez por proceso: la estructura no cambia a menudo, y si
-// alguien la renombra basta con reiniciar el worker.
+// alguien la renombra basta con reiniciar helm-api (y el worker).
 const cache = new Map()
 
 export async function carpetasDe(clientId) {
@@ -76,44 +80,14 @@ export async function calendario(clientId, { desde, hasta } = {}) {
   }))
 }
 
-// ── Emparejar un vídeo con su guion ─────────────────────────────────────────
-// Por palabras en común entre lo que se dice en el vídeo y lo que pone el
-// guion. Sin modelo: un guion se lee en voz alta casi palabra por palabra, así
-// que las palabras largas coinciden de sobra, y esto no se equivoca "con
-// seguridad" como haría un modelo pequeño.
-const VACIAS = new Set(('para como pero porque cuando donde este esta esto estos estas tambien '
-  + 'muy mas menos todo todos toda todas que eso esa ese hay tiene tienes tengo hace hacer ser '
-  + 'estar sobre entre desde hasta cada otro otra otros otras mismo misma nada algo alguien').split(' '))
-
-const palabras = (t) => new Set(String(t || '').toLowerCase()
-  .normalize('NFD').replace(/[̀-ͯ]/g, '')
-  .split(/[^a-z0-9ñ]+/).filter(p => p.length > 3 && !VACIAS.has(p)))
-
-export function emparejar(transcripcion, guiones) {
-  const dichas = palabras(transcripcion)
-  if (dichas.size < 5) return null
-  const puntuados = guiones.map(g => {
-    const escritas = palabras(`${g.title} ${g.body || ''}`)
-    let comunes = 0
-    for (const p of dichas) if (escritas.has(p)) comunes++
-    return { g, nota: escritas.size ? comunes / Math.min(dichas.size, escritas.size) : 0 }
-  }).sort((a, b) => b.nota - a.nota)
-
-  const [primero, segundo] = puntuados
-  // Hace falta que se parezca de verdad y que no haya empate con otro guion:
-  // ante la duda, mejor no mover y que lo decida una persona.
-  if (!primero || primero.nota < 0.25) return null
-  if (segundo && primero.nota - segundo.nota < 0.08) return null
-  return primero
-}
-
 // ── Ordenar: el vídeo a la carpeta de su guion ──────────────────────────────
 
 const limpio = (s) => String(s || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 90)
 
 /**
  * Mete un vídeo de Entrada en la pieza de su guion (y la crea si no existe),
- * en "1 · Sin editar / <tipo>", y marca el guion como grabado.
+ * en "1 · Sin editar / <tipo>", y marca el guion como grabado. Sin guion va a
+ * la pieza "Sin guion · AAAA-MM-DD" del día, la misma para todos los de ese día.
  */
 export async function ordenar({ clientId, driveId, desde, guion, tipo }) {
   const c = await carpetasDe(clientId)
@@ -147,9 +121,13 @@ export async function enEntrada(clientId) {
   return (await hijos(c.entrada)).filter(h => h.mimeType !== CARPETA && h.mimeType.startsWith('video/'))
 }
 
-// ── Lo que enseña la pantalla del agente ────────────────────────────────────
+// ── Las fases del roadmap ───────────────────────────────────────────────────
 
-/** El calendario cercano y los últimos vídeos que han pasado por Entrada. */
+/**
+ * El calendario cercano (con la fase de cada guion) y los enlaces a su
+ * carpeta, para las fases del roadmap (api/agentes-perfil.js → fases). Los
+ * vídeos son las filas antiguas del automático, que ya no se escriben.
+ */
 export async function resumenDrive(clientId) {
   const c = await carpetasDe(clientId).catch(() => null)
   if (!c) return { conectado: false }

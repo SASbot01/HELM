@@ -80,7 +80,6 @@ vi.mock('../api/_lib/access.js', () => ({
   puedeVerPerfil: async (auth, id) => auth.plataforma || auth.perfiles.includes(id),
 }))
 vi.mock('../api/agentes-perfil.js', () => ({ fichaDe: async (id) => ({ ficha: id }) }))
-vi.mock('../api/_lib/ingesta.js', () => ({ resumenDrive: async () => ({}) }))
 vi.mock('../api/_lib/instagram.js', () => ({ getIgConfig: async () => null }))
 vi.mock('../api/_lib/equipo.js', () => ({ AGENTES: {}, AGENTES_LANZABLES: [], encolaAgente: async () => ({}), tokensDeHoy: async () => 0, flujoPiezas: () => [] }))
 
@@ -204,5 +203,17 @@ describe('creadores «Propio» entre agencias', () => {
   it('la plataforma puede asignar cualquiera', async () => {
     const r = await pide(PLATAFORMA, 'perfil-creadores-guardar', { body: { clientId: 'perfil-alumno', identityIds: ['prop-silvestre'] } })
     expect(r.body.identityIds).toEqual(['prop-silvestre'])
+  })
+})
+
+// El panel del «Calendario de guiones» (la Entrada de Drive de cada perfil) se
+// quitó: la acción ya no existe y no se lee nada de Drive desde aquí.
+describe('sin panel de Drive', () => {
+  it('la acción «drive» ya no existe, ni con perfil ni sin él', async () => {
+    for (const query of [{}, { clientId: 'perfil-alumno' }]) {
+      const r = await pide(PLATAFORMA, 'drive', { query })
+      expect(r.statusCode).toBe(400)
+      expect(r.body.error).toMatch(/Acción desconocida/)
+    }
   })
 })

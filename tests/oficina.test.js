@@ -40,6 +40,11 @@ describe('oficina · catálogo', () => {
     expect(AGENTES_OFICINA).toContain('portadas')
     expect(AGENTES_OFICINA).toContain('equipo')
   })
+
+  it('el «Calendario de guiones» (drive) ya no tiene oficina; el editor sí', () => {
+    expect(AGENTES_OFICINA).not.toContain('drive')
+    expect(AGENTES_OFICINA).toContain('editor')
+  })
 })
 
 describe('oficina · estado', () => {
@@ -109,6 +114,14 @@ describe('oficina · estado', () => {
     expect(e.falta[0].texto).toMatch(/estilos de edición/i)
     expect(e.falta[0].cta).toBe('abrir')
     expect(e.falta.some(f => /integr/i.test(f.texto))).toBe(true)
+  })
+
+  it('el editor sin vídeos pide uno por el conector, no por la carpeta de Drive', async () => {
+    store.tablas.helm_ediciones = { lista: [] }
+    const e = await estadoDe('c1', 'editor')
+    expect(e.falta[0].texto).toMatch(/conector de Claude/)
+    expect(e.falta[0].texto).not.toMatch(/Drive/)
+    expect(e.hace).not.toMatch(/Drive/)
   })
 })
 

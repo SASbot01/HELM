@@ -1,5 +1,10 @@
 // HELM — Informe: qué se ha facturado, filtrable por periodo y por programa.
 //
+// Dos pestañas: «Resumen» (todo lo de abajo) y «Avatar de ventas», el estudio
+// de a quién le vende de verdad el negocio, que antes tenía entrada propia en
+// el menú (views/Avatar.jsx). La segunda solo sale con `verAvatar`, que
+// calcula HelmApp con los permisos de verdad: ver el Informe no basta.
+//
 // Si el perfil se lleva una parte de lo que cobra otro (Silvestre AI: el 35 %
 // de Detrás de Cámara y el 50 % de web-seller, ver api/participaciones.js),
 // esas ventas entran con los importes ya multiplicados: suman en facturado,
@@ -9,10 +14,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Rocket, ArrowRight, X } from 'lucide-react'
 import { Evolucion, PorPrograma } from './informe/Graficas'
 import { supabase, money, fmtDate, getOnboarding, onboardingApi, isSaleCancelled, cuotasPendientes, participacionesApi } from '../lib'
-import { Kpi, Panel, Empty } from '../ui'
+import { Kpi, Panel, Empty, Tabs } from '../ui'
 import { seccionDelProducto } from '../producto'
 import { mensualidadesVivas, hoyLocal, ventasPorCobro, esVentaNueva } from '../cobrosPrevistos'
 import { partesDe } from '../participaciones'
+import Avatar from './Avatar.jsx'
 
 // Las fechas AAAA-MM-DD sin pasar por la hora local (en Latinoamérica,
 // new Date('2026-11-05') cae el día 4).
@@ -107,7 +113,44 @@ function desdeISO(periodo) {
   return new Date(Date.parse(`${hoy}T12:00:00Z`) - periodo.days * 86400000).toISOString().slice(0, 10)
 }
 
-export default function Informe({ clientId, onNavigate }) {
+const PESTANAS = [
+  { key: 'resumen', label: 'Resumen' },
+  { key: 'avatar', label: 'Avatar de ventas' },
+]
+
+export default function Informe({ clientId, onNavigate, verAvatar = false }) {
+  const [pestana, setPestana] = useState('resumen')
+
+  // Sin permiso para el avatar, el Informe es el de siempre, sin pestañas. Lo
+  // decide HelmApp (puede('avatar')): que exista en el producto —en un
+  // despacho y en el Scraper, no—, que el negocio no lo haya apagado y que tu
+  // rol lo tenga en Permisos. Si falta el prop, se queda fuera: la pestaña
+  // lanza un estudio que gasta créditos, y no se abre por omisión.
+  const enResumen = !verAvatar || pestana === 'resumen'
+
+  // La estructura es SIEMPRE la misma —el envoltorio y <Resumen/> en el mismo
+  // sitio del árbol—, y solo se añaden la fila de pestañas y el Avatar cuando
+  // verAvatar es verdadero. verAvatar lo calcula HelmApp y llega tarde (cuando
+  // cargan permisos y secciones): si al pasar de falso a verdadero cambiara la
+  // forma del árbol, React desmontaría el Resumen y lo volvería a pedir todo a
+  // la base. Al estar siempre en el índice 1, se conserva.
+  return (
+    <div className="helm-grid" style={{ gap: 20 }}>
+      {/* El envoltorio evita que la rejilla estire las pestañas a todo el ancho. */}
+      {verAvatar && <div><Tabs tabs={PESTANAS} value={pestana} onChange={setPestana} /></div>}
+      {/* El resumen se oculta en vez de desmontarse: al volver de la pestaña
+          del avatar siguen puestos el periodo y el programa, y no se vuelve a
+          pedir todo a la base. El avatar sí se monta solo al abrirlo, para no
+          gastar una petición en cada visita al Informe. */}
+      <div hidden={!enResumen}>
+        <Resumen clientId={clientId} onNavigate={onNavigate} />
+      </div>
+      {verAvatar && pestana === 'avatar' && <Avatar clientId={clientId} />}
+    </div>
+  )
+}
+
+function Resumen({ clientId, onNavigate }) {
   const [sales, setSales] = useState(null)
   const [partes, setPartes] = useState({ ventas: [], cobros: [], fijos: [] })
   const [finance, setFinance] = useState([])

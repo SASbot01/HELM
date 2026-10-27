@@ -1,6 +1,7 @@
 // HELM — Noticias: las tres noticias del día de cada perfil.
 //
-// Un agente que corre solo, una vez al día y por perfil:
+// Un agente por perfil, que corre cuando se pulsa «Buscar ahora» y, en los
+// perfiles que no están a demanda (brevesADemanda), además una vez al día:
 //
 //   1. lee las fuentes del perfil (RSS públicos: no hay ningún servicio de por
 //      medio ni se manda a nadie ningún dato del perfil). Cuáles son, de qué
@@ -21,7 +22,7 @@
 import { supabase } from '../lib/supabase.js'
 import { claudeTurno } from './anthropic.js'
 import { notificar } from './notificar.js'
-import { BREVES_POR_DEFECTO, brevesDe } from './noticias-perfiles.js'
+import { BREVES_POR_DEFECTO, brevesDe, brevesADemanda } from './noticias-perfiles.js'
 
 const CLAVE = () => process.env.AGENTS_ANTHROPIC_KEY || process.env.ANTHROPIC_API_KEY || ''
 const MODELO = process.env.NOTICIAS_MODELO || 'claude-sonnet-5'
@@ -241,14 +242,16 @@ export async function generaNoticias(job) {
 
 /** Lo que mira el worker cada minuto: desde las 5:30 de Madrid, un trabajo por
  *  cada perfil con la sección Noticias encendida, una vez al día (la clave
- *  lleva la fecha). */
+ *  lleva la fecha). Se salta los que van a demanda (brevesADemanda): esos solo
+ *  leen las fuentes cuando se pulsa «Buscar ahora». */
 export async function miraNoticias() {
   if (minutosMadrid() < HORA * 60 + MINUTO) return
-  const { data, error } = await supabase.from('helm_permissions').select('client_id, sections')
+  const { data, error } = await supabase.from('helm_permissions').select('client_id, sections, clients(slug)')
   if (error) throw error
   const hoy = diaMadrid()
   for (const p of data || []) {
     if (p.sections?.noticias !== true) continue
+    if (brevesADemanda(p.clients?.slug)) continue
     await encolaNoticias(p.client_id, { origen: 'horario', clave: `noticias:${p.client_id}:${hoy}` })
   }
 }

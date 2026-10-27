@@ -58,8 +58,8 @@ export const TEXTOS = {
     'c4.x3': 'Revisión del gancho',
 
     'c5.k': '05 — Roadmap',
-    'c5.t': 'Tú grabas. HELM lo ordena.',
-    'c5.p': 'Los guiones se colocan en el roadmap: un plan a seis meses, semana a semana, con el guion de cada día. Grabas, subes el vídeo a Drive y HELM lo transcribe, reconoce de qué guion es y lo mueve a su carpeta.',
+    'c5.t': 'Tú grabas. Claude lo coloca.',
+    'c5.p': 'Los guiones se colocan en el roadmap: un plan a seis meses, semana a semana, con el guion de cada día. Grabas, subes el vídeo a su carpeta de Drive y lo ordenas en su sitio con Claude por el conector.',
     'c5.x1': 'Plan a seis meses',
     'c5.x2': 'Google Drive',
 
@@ -86,8 +86,8 @@ export const TEXTOS = {
     'pasos.1.p': 'Te registras con el nombre de tu agencia y entras directo al panel, con créditos de bienvenida para probar la IA.',
     'pasos.2.t': 'Un perfil por cliente',
     'pasos.2.p': 'Cada cliente tiene su CRM, su onboarding y su equipo. Invitas a closers, setters o editores y cada uno ve solo lo suyo.',
-    'pasos.3.t': 'El contenido se mueve solo',
-    'pasos.3.p': 'Los agentes escriben los guiones a partir de creadores de referencia y los colocan en el roadmap. Tú grabas; el vídeo entra por Drive y HELM lo ordena.',
+    'pasos.3.t': 'Del guion al Drive, sin perder nada',
+    'pasos.3.p': 'Los agentes escriben los guiones a partir de creadores de referencia y los colocan en el roadmap. Tú grabas, subes el vídeo a Drive y lo ordenas en su sitio con Claude por el conector.',
     'pasos.4.t': 'Mide y ajusta',
     'pasos.4.p': 'El informe trae las métricas de Instagram y estudia qué tienen las piezas que funcionan, para decidir qué grabar la semana siguiente.',
 
@@ -233,8 +233,8 @@ export const TEXTOS = {
     'c4.x3': 'Hook review',
 
     'c5.k': '05 — Roadmap',
-    'c5.t': 'You record. HELM sorts it.',
-    'c5.p': 'Scripts are placed on the roadmap: a six-month plan, week by week, with the script for each day. You record, upload the video to Drive, and HELM transcribes it, recognises which script it belongs to and moves it to its folder.',
+    'c5.t': 'You record. Claude files it.',
+    'c5.p': 'Scripts are placed on the roadmap: a six-month plan, week by week, with the script for each day. You record, upload the video to its Drive folder, and file it in place with Claude through the connector.',
     'c5.x1': 'Six-month plan',
     'c5.x2': 'Google Drive',
 
@@ -261,8 +261,8 @@ export const TEXTOS = {
     'pasos.1.p': 'Sign up with your agency’s name and go straight into the panel, with welcome credits to try the AI.',
     'pasos.2.t': 'One profile per client',
     'pasos.2.p': 'Every client has their own CRM, onboarding and team. Invite closers, setters or editors, and each one only sees their part.',
-    'pasos.3.t': 'Content that moves on its own',
-    'pasos.3.p': 'The agents write scripts based on reference creators and place them on the roadmap. You record; the video comes in through Drive and HELM sorts it.',
+    'pasos.3.t': 'From script to Drive, nothing lost',
+    'pasos.3.p': 'The agents write scripts based on reference creators and place them on the roadmap. You record, upload the video to Drive and file it in place with Claude through the connector.',
     'pasos.4.t': 'Measure and adjust',
     'pasos.4.p': 'The report pulls in your Instagram metrics and studies what the winning pieces have in common, so you can decide what to record next week.',
 
@@ -407,8 +407,8 @@ export const TEXTOS = {
     'c4.x3': 'Hook-Check',
 
     'c5.k': '05 — Roadmap',
-    'c5.t': 'Du drehst. HELM sortiert.',
-    'c5.p': 'Die Skripte landen in der Roadmap: ein Plan über sechs Monate, Woche für Woche, mit dem Skript für jeden Tag. Du drehst, lädst das Video in Drive hoch, und HELM transkribiert es, erkennt, zu welchem Skript es gehört, und verschiebt es in den richtigen Ordner.',
+    'c5.t': 'Du drehst. Claude ordnet ein.',
+    'c5.p': 'Die Skripte landen in der Roadmap: ein Plan über sechs Monate, Woche für Woche, mit dem Skript für jeden Tag. Du drehst, lädst das Video in seinen Drive-Ordner hoch und ordnest es mit Claude über den Connector an seinen Platz ein.',
     'c5.x1': 'Plan über sechs Monate',
     'c5.x2': 'Google Drive',
 
@@ -435,8 +435,8 @@ export const TEXTOS = {
     'pasos.1.p': 'Du registrierst dich mit dem Namen deiner Agentur und landest direkt im Panel – mit Startguthaben, um die KI zu testen.',
     'pasos.2.t': 'Ein Profil pro Kunde',
     'pasos.2.p': 'Jeder Kunde hat sein eigenes CRM, Onboarding und Team. Du lädst Closer, Setter oder Cutter ein, und jeder sieht nur seinen Teil.',
-    'pasos.3.t': 'Content, der von selbst läuft',
-    'pasos.3.p': 'Die Agenten schreiben Skripte auf Basis von Vorbild-Creatorn und legen sie in die Roadmap. Du drehst; das Video kommt über Drive rein, und HELM sortiert es.',
+    'pasos.3.t': 'Vom Skript in den Drive, nichts geht verloren',
+    'pasos.3.p': 'Die Agenten schreiben Skripte auf Basis von Vorbild-Creatorn und legen sie in die Roadmap. Du drehst, lädst das Video in Drive hoch und ordnest es mit Claude über den Connector an seinen Platz ein.',
     'pasos.4.t': 'Messen und nachsteuern',
     'pasos.4.p': 'Der Bericht holt deine Instagram-Kennzahlen und analysiert, was die erfolgreichen Beiträge gemeinsam haben – so entscheidest du, was du nächste Woche drehst.',
 

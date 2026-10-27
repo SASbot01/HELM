@@ -21,7 +21,7 @@ import { rateLimit, getClientIp } from '../_lib/auth.js'
 import { anotar, contexto, enContexto } from '../_lib/contexto.js'
 import { agenciaDe } from '../_lib/access.js'
 import { anadeReels, hashUrl, esEnlace } from '../agents.js'
-import { calendario, ordenar, TIPOS, FASES } from '../_lib/ingesta.js'
+import { calendario, ordenar, enEntrada, carpetasDe, TIPOS, FASES } from '../_lib/ingesta.js'
 import { archivo as archivoDrive } from '../_lib/drive-helm.js'
 import { sincronizar as sincronizarIg } from '../instagram.js'
 import { informeIg } from '../_lib/instagram.js'
@@ -155,7 +155,7 @@ const TOOLS = [
   },
   {
     name: 'calendario',
-    description: `El calendario de guiones de un perfil de HELM: cada guion con su id, fecha, título, tipo (viralidad, conversión, autoridad, venta), el texto y en qué fase está (por grabar, sin editar, editado, publicado; la fase sale de la carpeta de Drive donde está la pieza). Incluye en "sin_ordenar" los vídeos que llegaron a "0 · Entrada" y no se supo de qué guion eran, para ordenarlos con "ordenar_video". Úsalo para "¿qué grabo esta semana?", "¿qué está listo para publicar?" o antes de programar guiones nuevos (para no repetir temas). Por defecto el texto de cada guion va recortado; con detalle="completo", entero. ${PAGINACION}`,
+    description: `El calendario de guiones de un perfil de HELM: cada guion con su id, fecha, título, tipo (viralidad, conversión, autoridad, venta), el texto y en qué fase está (por grabar, sin editar, editado, publicado; la fase sale de la carpeta de Drive donde está la pieza). Incluye en "sin_ordenar" los vídeos que hay ahora mismo en "0 · Entrada" de su Drive (con su id, nombre, cuándo llegó y, si se transcribió, lo que dice), para llevarlos a su carpeta con "ordenar_video"; si no se pudo mirar Drive, en su lugar viene "aviso_drive" con el motivo. Úsalo para "¿qué grabo esta semana?", "¿qué está listo para publicar?" o antes de programar guiones nuevos (para no repetir temas). Por defecto el texto de cada guion va recortado; con detalle="completo", entero. ${PAGINACION}`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -171,7 +171,7 @@ const TOOLS = [
   },
   {
     name: 'programar_guiones',
-    description: `Mete guiones en el calendario de un perfil (hasta 30 por llamada), o corrige uno pasando su id. Cada guion lleva su tipo, que decide su carpeta en Drive: cuando se grabe y se suba a "0 · Entrada", HELM lo reconocerá por lo que se dice y lo moverá solo a "1 · Sin editar / <tipo>". Escribe el guion completo, tal como se va a decir: es lo que permite reconocer el vídeo. Un guion con la misma fecha y el mismo título que uno que ya está en el calendario de ese perfil lo actualiza en vez de duplicarlo. ${ESCRITURA}`,
+    description: `Mete guiones en el calendario de un perfil (hasta 30 por llamada), o corrige uno pasando su id. Cada guion lleva su tipo, que decide su carpeta en Drive: cuando se grabe y se suba a "0 · Entrada", lo colocas en "1 · Sin editar / <tipo>" con "ordenar_video". Escribe el guion completo, tal como se va a decir. Un guion con la misma fecha y el mismo título que uno que ya está en el calendario de ese perfil lo actualiza en vez de duplicarlo. ${ESCRITURA}`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -199,17 +199,18 @@ const TOOLS = [
   },
   {
     name: 'ordenar_video',
-    description: `Coloca un vídeo que se quedó en "0 · Entrada" porque HELM no supo de qué guion era. Con guion_id va a la pieza de ese guion; sin guion, con el tipo, va a "1 · Sin editar / <tipo>" en una pieza nueva. Uno que ya está donde se pide no se vuelve a mover. ${ESCRITURA}`,
+    description: `Coloca en su carpeta un vídeo que está en "0 · Entrada" de Drive. Pasa el drive_id (el id del archivo, que sale en "calendario" → sin_ordenar): solo se puede ordenar un vídeo que esté en la Entrada de ESE perfil. Con guion_id va a la pieza de ese guion y lo marca grabado; si el nombre del archivo (o lo que dice) no deja claro de qué guion es, pregúntalo; no adivines. Sin guion, con el tipo, va a "1 · Sin editar / <tipo>", a la pieza "Sin guion · AAAA-MM-DD" de hoy (la misma para todos los que ordenes hoy; la crea si no existe). Uno que ya está en su "1 · Sin editar" no se vuelve a tocar. ${ESCRITURA}`,
     inputSchema: {
       type: 'object',
       properties: {
         perfil: PERFIL,
-        video_id: { type: 'string', description: 'El video_id que sale en "calendario" → sin_ordenar.' },
+        drive_id: { type: 'string', description: 'El id del archivo que está en "0 · Entrada" de su Drive, tal como sale en "calendario" → sin_ordenar ("video_id").' },
+        video_id: { type: 'string', description: 'Igual que drive_id, el nombre antiguo del campo; vale cualquiera de los dos.' },
         guion_id: { type: 'string', description: 'El id del guion (de "calendario") al que pertenece el vídeo.' },
         tipo: { type: 'string', enum: Object.keys(TIPOS), description: 'Solo si no es de ningún guion: a qué carpeta va.' },
         prueba: PRUEBA,
       },
-      required: ['perfil', 'video_id'],
+      required: ['perfil'],
     },
   },
   {
@@ -402,6 +403,25 @@ const comprobar = (herramienta, argumentos, nota) => ({ herramienta, argumentos,
 // espacios de más) en el mismo perfil es el mismo guion.
 const claveGuion = (fecha, titulo) => `${fecha}|${String(titulo || '').trim().replace(/\s+/g, ' ').toLowerCase()}`
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// Un id de archivo de Drive: letras, números, "_" y "-". Se mira antes de
+// preguntar a Drive, para que nada raro llegue a su URL.
+const DRIVE_ID = /^[A-Za-z0-9_-]{10,128}$/
+
+// Si un archivo ya está colocado en "1 · Sin editar" de ese perfil: dónde (p. ej.
+// "1 · Sin editar / Venta"), o null. Lo normal es que esté dentro de una pieza
+// "AAAA-MM-DD · Título" del tipo, así que se mira también el padre de su carpeta.
+async function yaEnSinEditar(padre, carpetas) {
+  if (!padre) return null
+  const tipos = Object.entries(carpetas.sinEditarTipo || {}).filter(([, id]) => id)
+  const dice = (id) => {
+    if (id === carpetas.sinEditar) return '1 · Sin editar'
+    const t = tipos.find(([, carpeta]) => carpeta === id)?.[0]
+    return t ? `1 · Sin editar / ${TIPOS[t]}` : null
+  }
+  if (dice(padre)) return dice(padre)
+  const abuelo = (await archivoDrive(padre).catch(() => null))?.parents?.[0]
+  return abuelo ? dice(abuelo) : null
+}
 
 const HERRAMIENTAS = {
   async identidades({ perfil, tipo, [FIJO]: fijo } = {}) {
@@ -635,10 +655,43 @@ const HERRAMIENTAS = {
     if (rango.desde > rango.hasta) throw new Error(`"desde" (${rango.desde}) es posterior a "hasta" (${rango.hasta}).`)
     const guiones = await calendario(c.id, rango)
     const pag = pagina(guiones, { cursor, limite })
-    const { data: sueltos, error } = await supabase.from('agent_drive_videos')
-      .select('drive_id, nombre, transcripcion, created_at').eq('client_id', c.id).eq('estado', 'sin_guion')
-    if (error) throw error
     const completo = detalle === 'completo'
+
+    // "sin_ordenar": lo que HAY AHORA en la "0 · Entrada" del perfil, mirado en
+    // vivo (ya no lo escribe ningún automático), para llevarlo a su carpeta con
+    // "ordenar_video". Las filas antiguas de agent_drive_videos (de cuando se
+    // emparejaba solo) no se listan aparte: solo completan con lo que se dice
+    // en el vídeo y cuándo llegó a los archivos que siguen en la Entrada; uno
+    // que ya salió de ella no se puede ordenar. Si Drive falla se dice, en vez
+    // de dar una lista vacía que parezca "no hay nada". Solo en la primera
+    // página: la Entrada se mira una vez.
+    let sinOrdenar = null
+    let avisoDrive = null
+    if (!cursor) {
+      let enLaEntrada = null
+      try { enLaEntrada = await enEntrada(c.id) } catch (e) {
+        avisoDrive = `No pude mirar la Entrada: ${String(e?.message || e).slice(0, 160)}`
+      }
+      if (enLaEntrada) {
+        const ids = enLaEntrada.map(f => f.id)
+        const viejas = ids.length
+          ? await supabase.from('agent_drive_videos')
+            .select('drive_id, transcripcion, created_at').eq('client_id', c.id).in('drive_id', ids)
+          : { data: [] }
+        if (viejas.error) throw viejas.error
+        const deAntes = new Map((viejas.data || []).map(v => [v.drive_id, v]))
+        sinOrdenar = enLaEntrada.map(f => {
+          const v = deAntes.get(f.id)
+          // Cuándo llegó: lo que apuntó el automático al verlo en la Entrada,
+          // si lo vio; si no, cuándo se creó el archivo en Drive.
+          return {
+            video_id: f.id, nombre: f.name, llego: v?.created_at || f.createdTime,
+            ...(v?.transcripcion ? { dice: recorta(v.transcripcion, completo ? 600 : 300) } : {}),
+          }
+        })
+      }
+    }
+
     return {
       perfil: c.slug,
       ...rango,
@@ -650,12 +703,8 @@ const HERRAMIENTAS = {
       hay_mas: pag.hay_mas,
       ...(pag.hay_mas ? { siguiente: pag.siguiente } : {}),
       ...(!completo && guiones.some(g => (g.body || '').length > 200) ? { nota: 'Guiones recortados: con detalle="completo" van enteros.' } : {}),
-      // Los vídeos sueltos van siempre, solo en la primera página.
-      ...(cursor ? {} : {
-        sin_ordenar: (sueltos || []).map(v => ({
-          video_id: v.drive_id, nombre: v.nombre, llego: v.created_at, dice: recorta(v.transcripcion, completo ? 600 : 300),
-        })),
-      }),
+      ...(sinOrdenar ? { sin_ordenar: sinOrdenar } : {}),
+      ...(avisoDrive ? { aviso_drive: avisoDrive } : {}),
     }
   },
 
@@ -723,12 +772,14 @@ const HERRAMIENTAS = {
     return { perfil: c.slug, programados: hechos, hecho: frase, comprobar: ver }
   },
 
-  async ordenar_video({ perfil, video_id, guion_id, tipo, prueba, [FIJO]: fijo }) {
+  async ordenar_video({ perfil, video_id, drive_id, guion_id, tipo, prueba, [FIJO]: fijo }) {
     const c = await perfilDe(perfil, fijo)
-    const { data: v, error } = await supabase.from('agent_drive_videos')
-      .select('drive_id, nombre, estado, destino, calendario_id').eq('drive_id', video_id).eq('client_id', c.id).maybeSingle()
-    if (error) throw error
-    if (!v) throw new Error(`El vídeo "${video_id}" no está entre los de ${c.slug}. Los video_id salen en "calendario" → sin_ordenar.`)
+    // drive_id y video_id son lo mismo (el id del archivo en Drive): vale
+    // cualquiera de los dos.
+    const fileId = String(drive_id || video_id || '').trim()
+    if (!fileId) throw new Error('Pasa drive_id (el id del archivo que está en "0 · Entrada" de Drive; sale en "calendario" → sin_ordenar).')
+    if (!DRIVE_ID.test(fileId)) throw new Error('drive_id no válido: es el id del archivo en Drive (letras, números, "_" y "-"), tal como sale en "calendario" → sin_ordenar.')
+
     let guion = null
     if (guion_id) {
       if (!UUID.test(guion_id)) throw new Error(`guion_id no válido: "${guion_id}". Es el id (uuid) que sale en "calendario".`)
@@ -739,25 +790,59 @@ const HERRAMIENTAS = {
       guion = r.data
     } else if (!TIPOS[tipo]) throw new Error(`Pasa guion_id (el id del guion, de "calendario") o, si no es de ningún guion, tipo: ${Object.keys(TIPOS).join(', ')}.`)
 
+    // Dónde está el archivo AHORA lo dice Drive, y manda sobre lo que apuntara
+    // una fila antigua del automático: solo se coloca un vídeo que esté en la
+    // "0 · Entrada" de ESTE perfil, para que nadie mueva algo de otro perfil ni
+    // saque un vídeo de otra fase. Uno que ya está en su "1 · Sin editar" se da
+    // por colocado.
+    const carpetas = await carpetasDe(c.id)
+    if (!carpetas) throw new Error(`El perfil ${c.slug} no tiene carpeta en HELM Contenido.`)
+    let meta
+    try {
+      meta = await archivoDrive(fileId)
+    } catch (e) {
+      if (e?.status === 404) throw new Error(`No encuentro el archivo "${fileId}" en Drive. Pasa el id que sale en "calendario" → sin_ordenar.`)
+      throw new Error(`No pude mirar el archivo en Drive (${String(e?.message || e).slice(0, 160)}). Prueba otra vez en un rato.`)
+    }
+    const padre = meta.parents?.[0]
+    const colocado = padre === carpetas.entrada ? null : await yaEnSinEditar(padre, carpetas)
+    // Sin el nombre del archivo: puede ser de otro perfil.
+    if (padre !== carpetas.entrada && !colocado) {
+      throw new Error(`Ese archivo no está en la "0 · Entrada" de ${c.slug}. Solo puedo colocar lo que esté en su Entrada: los ids salen en "calendario" → sin_ordenar.`)
+    }
+    const nombre = meta.name || fileId
+    if (meta.trashed) throw new Error(`"${nombre}" está en la papelera de Drive: recupéralo antes de ordenarlo.`)
+    if (!String(meta.mimeType || '').startsWith('video/')) throw new Error(`"${nombre}" no es un vídeo (${meta.mimeType || 'sin tipo'}): solo se ordenan vídeos.`)
+
     const t = guion?.tipo || tipo || 'autoridad'
     const destino = `1 · Sin editar / ${TIPOS[t]}`
     const ver = comprobar('calendario', { perfil: c.slug, ...(guion ? { desde: guion.date, hasta: guion.date } : {}) },
       guion ? 'El guion sale en fase "Sin editar" y el vídeo ya no está en sin_ordenar.' : 'El vídeo ya no está en sin_ordenar.')
-    // Si ya está donde se pide, no se mueve otra vez.
-    if (v.estado === 'ordenado' && v.destino === destino && (v.calendario_id || null) === (guion?.id || null)) {
-      return { video: v.nombre, video_id, ya_estaba: true, movido_a: v.destino, hecho: `"${v.nombre}" ya estaba en ${v.destino}; no se mueve.`, comprobar: ver }
+    if (colocado) {
+      const otro = colocado !== destino ? ` Pediste ${destino}: si va ahí, muévelo a mano en Drive.` : ''
+      return { video: nombre, video_id: fileId, ya_estaba: true, movido_a: colocado, hecho: `"${nombre}" ya está en ${colocado}; no se mueve.${otro}`, comprobar: ver }
     }
-    const adonde = guion ? `la pieza del guion ${guion.date} · ${guion.title} (${destino})` : `${destino}, en una pieza nueva`
-    if (prueba) return { prueba: true, video: v.nombre, video_id, iria_a: adonde, hecho: `Ensayo, nada movido. "${v.nombre}" iría a ${adonde}.`, comprobar: ver }
+    // Sin guion va a la pieza del día, la misma para todos los de ese día (ver
+    // ordenar en api/_lib/ingesta.js).
+    const adonde = guion
+      ? `la pieza del guion ${guion.date} · ${guion.title} (${destino})`
+      : `${destino}, en la pieza "Sin guion · ${new Date().toISOString().slice(0, 10)}"`
+    if (prueba) return { prueba: true, video: nombre, video_id: fileId, iria_a: adonde, hecho: `Ensayo, nada movido. "${nombre}" iría a ${adonde}.`, comprobar: ver }
 
-    const { parents = [] } = await archivoDrive(video_id)
-    const r = await ordenar({ clientId: c.id, driveId: video_id, desde: parents[0], guion, tipo })
-    await supabase.from('agent_drive_videos').update({
-      estado: 'ordenado', calendario_id: guion?.id || null, destino: r.destino, updated_at: new Date().toISOString(),
-    }).eq('drive_id', video_id)
+    // Solo una fila antigua se marca 'ordenado'; un archivo sin fila no deja
+    // rastro en agent_drive_videos (esa tabla ya no se escribe).
+    const { data: v, error } = await supabase.from('agent_drive_videos')
+      .select('drive_id').eq('drive_id', fileId).eq('client_id', c.id).maybeSingle()
+    if (error) throw error
+    const r = await ordenar({ clientId: c.id, driveId: fileId, desde: padre, guion, tipo })
+    if (v) {
+      await supabase.from('agent_drive_videos').update({
+        estado: 'ordenado', calendario_id: guion?.id || null, destino: r.destino, updated_at: new Date().toISOString(),
+      }).eq('drive_id', fileId).eq('client_id', c.id)
+    }
     return {
-      video: v.nombre, video_id, guion_id: guion?.id || null, movido_a: r.destino, pieza: r.pieza,
-      hecho: `"${v.nombre}" movido a ${adonde}.`, comprobar: ver,
+      video: nombre, video_id: fileId, guion_id: guion?.id || null, movido_a: r.destino, pieza: r.pieza,
+      hecho: `"${nombre}" movido a ${adonde}.`, comprobar: ver,
     }
   },
 
@@ -1066,8 +1151,8 @@ async function responde(msg, alcance) {
         instructions: (alcance.agenciaId
           ? `Conector de HELM de la agencia ${alcance.nombre}. Trabaja con los perfiles de sus clientes: empieza por "perfiles" para ver cuáles hay y sus creadores de referencia, y pasa siempre el argumento "perfil" (su slug) en las demás herramientas. Para escribir guiones de un perfil: lee su "corpus" (la memoria_global trae la guía de formatos de montaje), escribe con la voz de su creador "Propio" sin repetir temas que ya haya tratado, y guárdalos con "programar_guiones" (con su tipo). Su calendario, en "calendario"; lo que funciona en su Instagram, en "metricas". Lo que escribes queda en el registro del perfil (HELM → Agentes → Equipo).`
           : alcance.operador
-          ? 'Corpus de reels de referencia del Agent OS de HELM. Para analizar a un creador o escribir guiones con su estilo: "identidades" y luego "corpus" de esa identidad. Para escribir para una marca de HELM: "perfiles" y luego "corpus" con ese perfil. Los guiones se guardan con "programar_guiones" (con su tipo) y se consultan con "calendario"; al grabarlos y subirlos a "0 · Entrada" de su Drive, HELM los mueve solos a su carpeta. Para estudiar qué le funciona a un perfil en su propia cuenta de Instagram: "metricas". Las conclusiones que merezca la pena conservar, con "guardar_memoria". El etiquetado del "modelo local" es poco fiable: al analizar, corrige con "etiquetar_reels" las etiquetas que no encajen con el guion. Si piden un guion "en B-roll" o de un formato de montaje concreto, sigue la guía de formatos que viene en memoria_global. Pasa "perfil" también en las escrituras que no lo piden para que queden en el registro de ese perfil (HELM → Agentes → Equipo).'
-          : `Conector de contenido de ${alcance.nombre} en HELM (perfil "${alcance.slug}"). Sus creadores de referencia y su propio historial están en "corpus"; su calendario de guiones, en "calendario". Las visitas, guardados y retención de lo que ya ha publicado, en "metricas". Para escribir guiones: lee "corpus" (la memoria_global trae la guía de formatos de montaje, como el B-roll), escribe con la voz del creador "Propio" sin repetir temas que ya haya tratado, y guárdalos con "programar_guiones" (con su tipo). Al grabarlos y subirlos a "0 · Entrada" de su Drive, HELM los ordena solos. Lo que escribes queda en el registro del perfil (HELM → Agentes → Equipo).`)
+          ? 'Corpus de reels de referencia del Agent OS de HELM. Para analizar a un creador o escribir guiones con su estilo: "identidades" y luego "corpus" de esa identidad. Para escribir para una marca de HELM: "perfiles" y luego "corpus" con ese perfil. Los guiones se guardan con "programar_guiones" (con su tipo) y se consultan con "calendario"; al grabarlos, se suben a "0 · Entrada" de su Drive y se colocan en su carpeta con "ordenar_video". Para estudiar qué le funciona a un perfil en su propia cuenta de Instagram: "metricas". Las conclusiones que merezca la pena conservar, con "guardar_memoria". El etiquetado del "modelo local" es poco fiable: al analizar, corrige con "etiquetar_reels" las etiquetas que no encajen con el guion. Si piden un guion "en B-roll" o de un formato de montaje concreto, sigue la guía de formatos que viene en memoria_global. Pasa "perfil" también en las escrituras que no lo piden para que queden en el registro de ese perfil (HELM → Agentes → Equipo).'
+          : `Conector de contenido de ${alcance.nombre} en HELM (perfil "${alcance.slug}"). Sus creadores de referencia y su propio historial están en "corpus"; su calendario de guiones, en "calendario". Las visitas, guardados y retención de lo que ya ha publicado, en "metricas". Para escribir guiones: lee "corpus" (la memoria_global trae la guía de formatos de montaje, como el B-roll), escribe con la voz del creador "Propio" sin repetir temas que ya haya tratado, y guárdalos con "programar_guiones" (con su tipo). Al grabarlos, súbelos a "0 · Entrada" de su Drive y colócalos en su carpeta con "ordenar_video". Lo que escribes queda en el registro del perfil (HELM → Agentes → Equipo).`)
           + COMO_SE_USA,
       })
     }

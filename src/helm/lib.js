@@ -2,6 +2,7 @@
 import { supabase } from '../utils/supabase'
 import { esDeEsteProducto, productoActual } from './producto'
 import { SLUG_RE, slugify, RUTAS_DE_LA_WEB, filaPerfilNuevo, pipelineInicial } from './perfilNuevo'
+import { tipoDeArchivo, NO_ADMITIDO } from '../../api/_lib/almacen.js'
 
 export { supabase }
 
@@ -190,6 +191,10 @@ export async function uploadFile(clientId, folder, file) {
     throw new Error(`El archivo pesa más de ${MAX_UPLOAD_MB} MB`)
   }
   const path = `${clientId}/${folder}/${safeName(file.name)}`
+  // La misma lista que mira la pasarela (api/_lib/almacen.js), y sobre el
+  // mismo nombre que verá ella: lo que no va a entrar se avisa aquí, antes de
+  // mandar sus megas para nada.
+  if (!tipoDeArchivo(path)) throw new Error(NO_ADMITIDO)
   const { error } = await supabase.storage.from('helm').upload(path, file, {
     cacheControl: '3600', upsert: false, contentType: file.type || undefined,
   })
@@ -244,8 +249,11 @@ export const brandOf = (client) => ({
 // Sube el logo al bucket público. Se usa desde Ajustes (con perfil ya creado)
 // y desde el registro público, donde todavía no hay id: en ese caso cuelga de
 // `registro/` y se queda ahí, que es una carpeta y no un problema.
+//
+// SVG no: es XML, puede llevar script y el bucket se sirve desde nuestro
+// dominio. La pasarela (api/_lib/almacen.js) tampoco lo deja subir.
 export async function uploadLogo(file, clientId) {
-  if (!/^image\//.test(file.type || '')) throw new Error('El logo tiene que ser una imagen (PNG, JPG o SVG)')
+  if (!/^image\/(png|jpeg|webp)$/.test(file.type || '')) throw new Error('El logo tiene que ser PNG, JPG o WebP (SVG no)')
   if (file.size > MAX_LOGO_MB * 1024 * 1024) throw new Error(`El logo pesa más de ${MAX_LOGO_MB} MB`)
   const { url } = await uploadFile(clientId || 'registro', 'marca', file)
   return url
@@ -414,8 +422,8 @@ export const adsApi = {
   borrar: (clientId, id) => apiFetch(`/api/ads?action=borrar&clientId=${clientId}&id=${id}`, { method: 'DELETE' }),
 }
 
-// Contenido: marcar un guion como grabado (dispara la detección del vídeo en
-// Drive y lo archiva en su pieza) y leer en qué fase de Drive está cada guion.
+// Contenido: marcar un guion como grabado (solo lo marca: el vídeo ya no se
+// busca solo en Drive) y leer en qué fase de Drive está cada guion (Roadmap).
 export const contenidoApi = {
   grabar: (clientId, guionId, grabado = true) =>
     apiFetch(`/api/agentes-perfil?action=grabar&clientId=${clientId}`, { method: 'POST', body: { guionId, grabado } }),
@@ -606,7 +614,6 @@ export const creadoresApi = {
   lista: (clientId) => apiFetch(`/api/agentes-perfil?action=creadores&clientId=${clientId}`),
   ficha: (clientId, slug) =>
     apiFetch(`/api/agentes-perfil?action=ficha&clientId=${clientId}&slug=${encodeURIComponent(slug)}`),
-  drive: (clientId) => apiFetch(`/api/agentes-perfil?action=drive&clientId=${clientId}`),
 }
 
 // La oficina de un agente: su estado vivo y el chat con él.

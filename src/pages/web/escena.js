@@ -10,7 +10,7 @@
 //   0–1  atardecer dorado: la palabra HELM se abre sobre el timón
 //   2    vista general                     3  el perfil de Estudio Nova
 //   4    leads entrando al CRM             5  la mesa de los siete agentes
-//   6    roadmap + vídeo que se ordena     7  informe
+//   6    roadmap + vídeo que se coloca     7  informe
 //   8    Claude                            9–10  amanece: cierre
 import * as THREE from './3d/three.module.min.js'
 
@@ -477,7 +477,7 @@ export function montarEscena({ canvas, etiquetas, getT }) {
   guion.visible = false
   scene.add(guion)
 
-  // ── Capítulo 05: roadmap y vídeos que se ordenan en Drive ──────────────
+  // ── Capítulo 05: roadmap y el vídeo que se coloca en su carpeta de Drive ─
   const ROAD = V3(60, 9, -36)
   const roadmap = panel(24, 1600, 1000, (g, w, h) => {
     fondo(g, w, h)
@@ -781,7 +781,7 @@ export function montarEscena({ canvas, etiquetas, getT }) {
       guion.rotateZ(vg * 6)
     }
 
-    // capítulo 05: celdas del roadmap y el vídeo que se ordena
+    // capítulo 05: celdas del roadmap y el vídeo que se coloca en su carpeta
     const llenas = Math.floor(42 * smooth(6.0, 6.6, t) + 0.0001)
     celdaPos.forEach(([x, y], i) => {
       const k = i < llenas ? 1 : (i === llenas ? (42 * smooth(6.0, 6.6, t)) % 1 : 0)

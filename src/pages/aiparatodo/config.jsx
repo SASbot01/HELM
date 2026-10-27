@@ -122,7 +122,7 @@ export default {
   },
   textos: {
     navCta: 'Sigue al creador',
-    zonaNews: 'Tres piezas al día · y las breves',
+    zonaNews: 'Tres piezas al día · y breves cuando las haya',
     foroVacio: { titulo: 'Los primeros hilos están en camino', texto: 'Sigue a nuestro creador para enterarte cuando se abran.' },
     puertaArticulo: 'Gratis: tu nombre y tu correo, una sola vez, y se abren el diario entero, las webs de referencia con su prompt, los hilos de skills y la guía completa de Claude.',
   },
@@ -141,7 +141,7 @@ export default {
     sub: 'IA, tecnología y ciberseguridad. Tres piezas al día, a las 8:00, las 14:00 y las 20:00, investigadas en las fuentes originales y revisadas dato a dato.',
     vacio: {
       titulo: 'La primera edición está en la imprenta',
-      texto: 'Cada día salen tres: a las 8:00, las 14:00 y las 20:00. Mientras tanto, las breves de la mañana, aquí abajo.',
+      texto: 'Cada día salen tres: a las 8:00, las 14:00 y las 20:00. Si hay breves recientes, las tienes aquí abajo.',
     },
     ediciones: [{ clave: 'manana', desde: 0 }, { clave: 'mediodia', desde: 14 }, { clave: 'tarde', desde: 20 }],
     iconos: { ia: BrainCircuit, tecnologia: Cpu, ciberseguridad: ShieldAlert },

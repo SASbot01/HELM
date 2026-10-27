@@ -100,19 +100,15 @@ const log = (...a) => console.log(`[agents ${new Date().toISOString()}]`, ...a)
 // ── Cola ────────────────────────────────────────────────────────────────────
 
 async function coge() {
-  // Primero lo de Drive: es un vídeo grabado que alguien espera ver ordenado,
-  // mientras que etiquetar el corpus puede esperar. Sin esto, un vídeo nuevo
-  // se quedaría detrás de horas de reels por analizar.
   const pendientes = () => db.from('agent_jobs')
     .select('*')
     .eq('estado', 'pendiente')
     .lte('correr_tras', ahora())
     .order('created_at', { ascending: true })
     .limit(1)
-  let { data, error } = await pendientes().like('tipo', 'drive-%')
-  // Después, las noticias y el equipo de agentes: son pocos trabajos al día y
+  // Primero las noticias y el equipo de agentes: son pocos trabajos al día y
   // cortos, y lo de la mañana no puede esperar a que se vacíe la cola de reels.
-  if (!error && !data?.length) ({ data, error } = await pendientes().in('tipo', ['noticias', 'articulo', 'equipo', 'avatar', 'radar']))
+  let { data, error } = await pendientes().in('tipo', ['noticias', 'articulo', 'equipo', 'avatar', 'radar'])
   if (!error && !data?.length) ({ data, error } = await pendientes())
   if (error) { log('error leyendo la cola:', error.message); return null }
   const job = data?.[0]
@@ -154,11 +150,6 @@ async function fallo(job, err) {
       .update({ estado: 'error', error: msg, updated_at: ahora() })
       .eq('id', job.payload.reelId)
   }
-  if (agotado && job.payload?.driveId) {
-    await db.from('agent_drive_videos')
-      .update({ estado: 'error', error: msg, updated_at: ahora() })
-      .eq('drive_id', job.payload.driveId)
-  }
   log(`✗ ${job.tipo} (intento ${job.intentos}/${job.max_intentos}):`, msg)
 }
 
@@ -186,6 +177,11 @@ async function reelDe(id) {
 // yt-dlp saca el audio y, de paso, los metadatos que el sitio exponga. En
 // Instagram suele venir la descripción y a veces las vistas; si no vienen, se
 // rellenan a mano desde el panel. No se inventa nada.
+
+// Los reels pegados con un enlace de Drive se bajan con la cuenta de servicio.
+// La «0 · Entrada» ya no se vigila sola: ordenar lo grabado en Drive se hace
+// por el conector de Claude (api/mcp), no aquí.
+const { descargar: bajaDeDrive, archivo: archivoDrive } = await import('../api/_lib/drive-helm.js')
 
 async function descargar(job) {
   const reel = await reelDe(job.payload.reelId)
@@ -515,76 +511,6 @@ async function etiquetar(job) {
   log(`✓ etiquetado ${reel.id} (${quien}) — ${out.tema} / ${out.tipo_gancho}`)
 }
 
-// ── Ingesta de Drive ────────────────────────────────────────────────────────
-// Cada perfil con carpeta en "HELM Contenido" tiene su "0 · Entrada". Lo que
-// cae ahí se transcribe, se compara con los guiones del calendario y, si se
-// sabe de cuál es, va a su pieza en "1 · Sin editar / <tipo>". Si no se sabe,
-// se queda en Entrada y se apunta como "sin guion": mejor quieto que mal puesto.
-const { enEntrada, calendario, emparejar, ordenar } = await import('../api/_lib/ingesta.js')
-const { descargar: bajaDeDrive, archivo: archivoDrive } = await import('../api/_lib/drive-helm.js')
-
-const CADA_CUANTO_MIRAR_MS = 5 * 60_000
-let ultimaMirada = 0
-
-async function miraEntradas() {
-  ultimaMirada = Date.now()
-  const { data: perfiles } = await db.from('agent_drive_perfiles').select('client_id').eq('activa', true)
-  for (const { client_id } of perfiles || []) {
-    try {
-      for (const v of await enEntrada(client_id)) {
-        const { data: ya } = await db.from('agent_drive_videos').select('drive_id').eq('drive_id', v.id).maybeSingle()
-        if (ya) continue
-        await db.from('agent_drive_videos').insert({ drive_id: v.id, client_id, nombre: v.name })
-        await encola('drive-ingesta', { clientId: client_id, driveId: v.id }, `drive:${v.id}`)
-        log(`↓ nuevo en Entrada: ${v.name}`)
-      }
-    } catch (err) {
-      log(`no pude mirar la Entrada de ${client_id}:`, err.message)
-    }
-  }
-}
-
-const estadoVideo = (id, extra) =>
-  db.from('agent_drive_videos').update({ ...extra, updated_at: ahora() }).eq('drive_id', id)
-
-async function driveIngesta(job) {
-  const { clientId, driveId } = job.payload
-  const meta = await archivoDrive(driveId)
-  const desde = meta.parents?.[0]
-
-  // Transcribir solo el principio: para saber de qué guion es sobra, y un
-  // vídeo largo en CPU tardaría lo que dura.
-  const base = path.join(DIR_AUDIO, `drive-${driveId}`)
-  let texto = ''
-  try {
-    await bajaDeDrive(driveId, `${base}.video`)
-    await ejecuta('ffmpeg', ['-y', '-loglevel', 'error', '-i', `${base}.video`, '-t', '240', '-vn', '-ac', '1', '-ar', '16000', '-b:a', '48k', `${base}.mp3`])
-    const { stdout } = await ejecuta(PY, [TRANSCRIBE, `${base}.mp3`, MODELO_WHISPER], { maxBuffer: 50 * 1024 * 1024 })
-    texto = String(JSON.parse(stdout).texto || '').trim()
-  } finally {
-    await unlink(`${base}.video`).catch(() => {})
-    await unlink(`${base}.mp3`).catch(() => {})
-  }
-  await estadoVideo(driveId, { estado: 'transcrito', transcripcion: texto })
-
-  // Candidatos: los guiones de un mes atrás a dos adelante. Los ya grabados
-  // también, porque una pieza suele tener varias tomas.
-  const hoy = new Date()
-  const dia = (d) => new Date(hoy.getTime() + d * 86_400_000).toISOString().slice(0, 10)
-  const guiones = (await calendario(clientId, { desde: dia(-30), hasta: dia(60) }))
-    .filter(g => g.fase === 'por_grabar' || g.fase === 'sin_editar')
-  const par = emparejar(texto, guiones)
-
-  if (!par) {
-    await estadoVideo(driveId, { estado: 'sin_guion' })
-    log(`? ${meta.name}: no sé de qué guion es, se queda en Entrada`)
-    return
-  }
-  const r = await ordenar({ clientId, driveId, desde, guion: par.g })
-  await estadoVideo(driveId, { estado: 'ordenado', calendario_id: par.g.id, destino: `${r.destino} / ${par.g.date} · ${par.g.title}` })
-  log(`✓ ${meta.name} → ${par.g.date} · ${par.g.title} (${Math.round(par.nota * 100)}%)`)
-}
-
 // ── El estudio de contenido ─────────────────────────────────────────────────
 // Lo que antes había que pedirle a Claude a mano por el conector («analízame a
 // este creador»), lo hace el agente solo: cuando un creador junta reels nuevos
@@ -725,7 +651,9 @@ async function estudiar(job) {
 // cada perfil activo, y él reparte el trabajo de los demás.
 const { ejecutaAgente, miraAgenda, miraProgramador, miraVirales, cierraHuerfanas } = await import('../api/_lib/equipo.js')
 // Las tres noticias del día (api/_lib/noticias.js): desde las 5:30 de Madrid,
-// para los perfiles que tienen encendida la sección Noticias.
+// para los perfiles con la sección Noticias encendida, salvo los que van a
+// demanda (silvestre y estudio-nova): esos solo las buscan al pulsar «Buscar
+// ahora». La búsqueda a petición entra igual por el paso 'noticias'.
 const { generaNoticias, miraNoticias } = await import('../api/_lib/noticias.js')
 // El diario de cada comunidad (api/_lib/redaccion.js y noticias-perfiles.js), en
 // las ediciones de cada una, con la misma sección Noticias encendida.
@@ -749,7 +677,7 @@ let ultimaAgenda = 0
 
 // ── Bucle ───────────────────────────────────────────────────────────────────
 
-const PASOS = { descargar, transcribir, etiquetar, 'drive-ingesta': driveIngesta, estudiar, equipo: ejecutaAgente, noticias: generaNoticias, articulo: generaArticulo, avatar: generaAvatar, radar: generaRadar, metricas: sincronizaMetricas, 'ad-estudio': estudiaAd, 'web-estudio': generaEstudioWeb }
+const PASOS = { descargar, transcribir, etiquetar, estudiar, equipo: ejecutaAgente, noticias: generaNoticias, articulo: generaArticulo, avatar: generaAvatar, radar: generaRadar, metricas: sincronizaMetricas, 'ad-estudio': estudiaAd, 'web-estudio': generaEstudioWeb }
 
 let parando = false
 for (const s of ['SIGINT', 'SIGTERM']) {
@@ -770,7 +698,6 @@ async function bucle() {
   while (!parando) {
     let job = null
     try {
-      if (Date.now() - ultimaMirada > CADA_CUANTO_MIRAR_MS) await miraEntradas()
       if (Date.now() - ultimoEstudio > CADA_CUANTO_ESTUDIAR_MS) await miraEstudios()
       if (Date.now() - ultimaAgenda > CADA_CUANTO_AGENDA_MS) {
         ultimaAgenda = Date.now()

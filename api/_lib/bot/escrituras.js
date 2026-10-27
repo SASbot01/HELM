@@ -13,7 +13,6 @@
 // endpoints de agentes (api/agents.js, api/agentes-perfil.js).
 import { supabase } from '../../lib/supabase.js'
 import { encolaAgente, AGENTES_LANZABLES } from '../equipo.js'
-import { enEntrada } from '../ingesta.js'
 import { masMeses, aISO } from '../renovaciones.js'
 import {
   recorta, redondea, falla, fechaDe, UUID, exactoIlike, textoLibre,
@@ -574,7 +573,7 @@ export const ESCRITURAS = [
 
   {
     name: 'marcar_grabado',
-    description: 'Marca un guion del calendario como grabado (o lo desmarca) y, al marcarlo, revisa la carpeta «0 · Entrada» de Drive para archivar el vídeo en su pieza. Lo mismo que el botón «Grabado» del panel.',
+    description: 'Marca un guion del calendario como grabado (o lo desmarca). Solo eso: no mira Drive ni mueve vídeos. Lo mismo que el botón «Grabado» del panel.',
     perfil: 'si',
     tabla: 'helm_content_calendar',
     properties: {
@@ -597,7 +596,7 @@ export const ESCRITURAS = [
       return {
         resumen: desmarcar
           ? `Desmarcar como grabado «${recorta(g.title, 120)}» (${g.date}) en ${h.p.name}.`
-          : `Marcar como grabado «${recorta(g.title, 120)}» (${g.date}) en ${h.p.name} y revisar la Entrada de Drive para archivar el vídeo en su pieza.`,
+          : `Marcar como grabado «${recorta(g.title, 120)}» (${g.date}) en ${h.p.name}.`,
         // Como api/agentes-perfil.js (acción 'grabar').
         async aplicar() {
           const patch = desmarcar
@@ -605,24 +604,10 @@ export const ESCRITURAS = [
             : { grabado: true, grabado_at: g.grabado_at || ahora(), updated_at: ahora() }
           const { error: e } = await supabase.from('helm_content_calendar').update(patch).eq('id', g.id).eq('client_id', id)
           if (e) throw e
-          let detectando = 0
-          if (!desmarcar) {
-            try {
-              for (const v of await enEntrada(id)) {
-                const { data: ya } = await supabase.from('agent_drive_videos').select('drive_id').eq('drive_id', v.id).maybeSingle()
-                if (ya) continue
-                await supabase.from('agent_drive_videos').insert({ drive_id: v.id, client_id: id, nombre: v.name })
-                await supabase.from('agent_jobs').upsert(
-                  { tipo: 'drive-ingesta', payload: { clientId: id, driveId: v.id }, clave: `drive:${v.id}`, estado: 'pendiente', correr_tras: ahora() },
-                  { onConflict: 'clave', ignoreDuplicates: true })
-                detectando++
-              }
-            } catch { /* Drive puede no estar conectado: el guion queda grabado igual */ }
-          }
           return {
-            id: g.id, grabado: !desmarcar, detectando,
+            id: g.id, grabado: !desmarcar,
             ...(g.drive_carpeta_id ? { drive: `https://drive.google.com/drive/folders/${g.drive_carpeta_id}` } : {}),
-            hecho: desmarcar ? `«${g.title}» ya no figura como grabado.` : `«${g.title}» marcado como grabado${detectando ? `; ${detectando} vídeo${detectando > 1 ? 's' : ''} de la Entrada en camino a su pieza` : ''}.`,
+            hecho: desmarcar ? `«${g.title}» ya no figura como grabado.` : `«${g.title}» marcado como grabado.`,
             recurso: g.id,
           }
         },

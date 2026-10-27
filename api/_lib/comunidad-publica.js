@@ -2,8 +2,10 @@
 // noticias y el diario de la redacción de SU perfil.
 //
 //   GET ?action=noticias   → las noticias que el agente de noticias
-//                            (api/_lib/noticias.js) deja cada mañana en el
-//                            perfil, las de los últimos 30 días
+//                            (api/_lib/noticias.js) deja en el perfil, las de
+//                            los últimos 30 días. En los perfiles a demanda
+//                            (brevesADemanda) no hay pasada diaria: solo
+//                            buscan cuando se pulsa «Buscar ahora»
 //   GET ?action=articulos  → el diario: los artículos publicados por la
 //                            redacción (api/_lib/redaccion.js), sin el cuerpo
 //   GET ?action=articulo&slug=  → un artículo entero

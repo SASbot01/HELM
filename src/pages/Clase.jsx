@@ -24,7 +24,7 @@ import './inicio/inicio.css'
 import './inicio/bio.css'
 
 // Lo que se cambia cada dos por tres, junto y arriba: enlaces y handle.
-const HANDLE = 'silvesttre.ia'
+const HANDLE = 'silvesttre.ai'
 const YOUTUBE = 'https://www.youtube.com/@silvesttre-ai'
 const INSTAGRAM = `https://www.instagram.com/${HANDLE}`
 const TITULO = 'Alex Silvestre — Aprende a dirigir la IA, no solo a usarla'

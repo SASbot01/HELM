@@ -159,7 +159,10 @@ vi.mock('../api/_lib/equipo.js', () => ({
   encolaAgente: (...a) => encolaAgente(...a),
   tokensDeHoy: async () => 1234,
 }))
-vi.mock('../api/_lib/ingesta.js', () => ({ enEntrada: async () => [] }))
+// La Entrada de Drive ya no se mira al marcar un guion como grabado. Con un
+// vídeo esperando, si alguien vuelve a cablearlo, el test lo ve.
+const enEntrada = vi.fn(async () => [{ id: 'video-en-entrada', name: 'toma.mov' }])
+vi.mock('../api/_lib/ingesta.js', () => ({ enEntrada: (...a) => enEntrada(...a) }))
 
 const { resolverPerfil, herramientasBot, perfilesDeAgencia, sistemaBot, esAccionVacia, NO_SE_PUEDE } = await import('../api/_lib/bot-herramientas.js')
 const { resolverEtapa, hoyMadrid, aTexto, tapaSecretos, MAX_TEXTO } = await import('../api/_lib/bot/comun.js')
@@ -680,6 +683,17 @@ describe('herramientas', () => {
     const bien = await h('lanzar_agente').ejecutar({ perfil: 'DCC', agente: 'guionista' })
     expect(bien.ok).toBe(true)
     expect(encolaAgente).toHaveBeenCalledWith(expect.objectContaining({ clientId: P.ddc.id, agente: 'guionista', origen: 'telegram' }))
+  })
+
+  it('marcar_grabado solo marca: ni mira la Entrada de Drive ni encola nada', async () => {
+    const tarjeta = await h('marcar_grabado').describir({ perfil: 'DCC', guion_id: IDS.guion })
+    expect(tarjeta).not.toMatch(/Drive|Entrada/)
+    const r = await h('marcar_grabado').ejecutar({ perfil: 'DCC', guion_id: IDS.guion })
+    expect(r.ok).toBe(true)
+    expect(r.texto).not.toMatch(/Entrada|en camino/)
+    expect(tablas.helm_content_calendar[0].grabado).toBe(true)
+    expect(enEntrada).not.toHaveBeenCalled()
+    expect(ops.filter(o => ['agent_jobs', 'agent_drive_videos'].includes(o.tabla))).toHaveLength(0)
   })
 
   it('aprobar un borrador solo si sigue en borrador', async () => {

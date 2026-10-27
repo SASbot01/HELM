@@ -16,7 +16,6 @@ import { agentsApi } from '../../agents/api'
 import { AGENTES, DEPARTAMENTOS } from '../../agents/agentes'
 import { MenuAgentes, MenuDepartamentos, CreadoresGrid } from '../../agents/Piezas'
 import Ficha from '../../agents/Ficha'
-import PanelDrive from '../../agents/Drive'
 import Equipo from '../../agents/Equipo'
 import Oficina from '../../agents/Oficina'
 import EstudioInstagram from './EstudioInstagram'
@@ -31,7 +30,8 @@ import './estudioIg.css'
 const esAdmin = () => Boolean(localStorage.getItem('bw_superadmin'))
 
 export default function Agentes({ clientId, client }) {
-  // 'menu' → 'contenido' (→ el slug de un creador) o 'drive'. Sin rutas
+  // 'menu' → un departamento (dep:) → la oficina de un agente (of:) → su panel
+  // ('contenido' → el slug de un creador, 'editor', 'portadas'…). Sin rutas
   // propias: la sección vive dentro de /<perfil> y HELM ya lleva la suya.
   const [vista, setVista] = useState('menu')
   // El departamento por el que se entró: al salir de un agente se vuelve a él.
@@ -46,7 +46,6 @@ export default function Agentes({ clientId, client }) {
   useEffect(() => { cargar() }, [cargar])
 
   const cargarFicha = useCallback(() => creadoresApi.ficha(clientId, vista), [clientId, vista])
-  const cargarDrive = useCallback(() => creadoresApi.drive(clientId), [clientId])
 
   const visibles = AGENTES.filter(a => (!a.soloAdmin || esAdmin()) && (!a.soloPerfiles || a.soloPerfiles.includes(client?.slug)))
   const departamentos = DEPARTAMENTOS
@@ -144,23 +143,6 @@ export default function Agentes({ clientId, client }) {
           </div>
         </header>
         <Equipo clientId={clientId} />
-      </div>
-    )
-  }
-
-  if (vista === 'drive') {
-    return (
-      <div className="ag embebido">
-        <header className="ag-top dentro">
-          <div>
-            <button type="button" className="ag-volver" onClick={() => setVista('of:drive')}>
-              <ArrowLeft size={14} strokeWidth={2.2} /> Agentes
-            </button>
-            <h1>Calendario de guiones</h1>
-            <p>Los guiones de {client?.name || 'este perfil'} y en qué fase está cada uno. Lo que se sube a Drive se ordena solo.</p>
-          </div>
-        </header>
-        <PanelDrive cargar={cargarDrive} />
       </div>
     )
   }

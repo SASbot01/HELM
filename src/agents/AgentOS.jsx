@@ -16,7 +16,6 @@ import { Identidades, Memoria } from './Recursos'
 import { MenuAgentes } from './Piezas'
 import Ficha from './Ficha'
 import Corpus from './Corpus'
-import PanelDrive from './Drive'
 import Equipo from './Equipo'
 import './agentos.css'
 
@@ -58,7 +57,6 @@ export default function AgentOS() {
         <Route path="contenido/*" element={
           <AgenteContenido identidades={identidades} onCambio={cargaIdentidades} />
         } />
-        <Route path="drive" element={<AgenteDrive />} />
         <Route path="equipo" element={
           <Dentro titulo="Equipo de agentes" sub="El flujo entero: qué hace cada agente, por dónde va cada pieza, el registro de cada ejecución y lo que espera tu aprobación">
             <Equipo />
@@ -69,6 +67,8 @@ export default function AgentOS() {
         <Route path="identidades" element={<Navigate to="/agents/contenido" replace />} />
         <Route path="identidades/:slug" element={<RedirigeFicha />} />
         <Route path="memoria" element={<Navigate to="/agents/contenido/memoria" replace />} />
+        {/* El «Calendario de guiones» ya no es un agente: los guiones se ven en el Roadmap de cada perfil. */}
+        <Route path="drive" element={<Navigate to="/agents" replace />} />
         <Route path=":otro" element={<NoExiste />} />
       </Routes>
     </div>
@@ -176,39 +176,6 @@ function FichaRuta({ identidades }) {
       cargar={cargar} admin identidades={identidades}
       onVolver={() => navigate('/agents/contenido')} volverLabel="Creadores"
     />
-  )
-}
-
-// ── La ingesta de Drive: un perfil cada vez ─────────────────────────────────
-
-function AgenteDrive() {
-  const [perfiles, setPerfiles] = useState(null)
-  const [elegido, setElegido] = useState('')
-  useEffect(() => {
-    agentsApi.drivePerfiles().then(({ perfiles }) => {
-      setPerfiles(perfiles)
-      setElegido(p => p || perfiles[0]?.id || '')
-    }).catch(() => setPerfiles([]))
-  }, [])
-  const cargar = useCallback(() => agentsApi.drive(elegido), [elegido])
-
-  return (
-    <Dentro titulo="Calendario de guiones" sub="Los guiones de cada perfil día a día, y lo que va entrando en su Drive">
-      {!perfiles ? <p className="ag-vacio">Cargando…</p> : !perfiles.length
-        ? <p className="ag-vacio">Ningún perfil tiene carpeta en HELM Contenido.</p>
-        : (
-          <>
-            <nav className="ag-pestanas">
-              {perfiles.map(p => (
-                <button key={p.id} type="button" className={elegido === p.id ? 'active' : ''} onClick={() => setElegido(p.id)}>
-                  {p.nombre}
-                </button>
-              ))}
-            </nav>
-            {elegido && <PanelDrive key={elegido} cargar={cargar} />}
-          </>
-        )}
-    </Dentro>
   )
 }
 

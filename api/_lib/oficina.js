@@ -19,7 +19,6 @@ import { ESTILOS_REFERENCIA } from '../../src/agents/editor/estilos-referencia.j
 // prompt). El texto de pantalla, más largo, vive en src/agents/agentes.js.
 const QUE_HACE = {
   contenido: 'Guardas los creadores de referencia del perfil, sus reels transcritos y lo aprendido de ellos. Es de donde sale la estrategia y los guiones.',
-  drive: 'Vigilas la carpeta de Drive del perfil: transcribes cada vídeo nuevo, reconoces de qué guion es y lo ordenas. Llevas el calendario de guiones.',
   editor: 'Montas los reels en bruto según el manual de edición del perfil: formato, cortes, capturas reales y subtítulos.',
   estudio: 'Puntúas el gancho, revisas la caption, auditas el perfil y quitas el olor a IA. No publicas nada.',
   portadas: 'Compones la portada de cada reel en 1080×1920 con el fotograma real y el kit de la serie. La IA solo escribe los textos.',
@@ -30,7 +29,7 @@ const QUE_HACE = {
 }
 
 const NOMBRE = {
-  contenido: 'Agente de contenido', drive: 'Calendario de guiones', editor: 'Editor de reels',
+  contenido: 'Agente de contenido', editor: 'Editor de reels',
   estudio: 'Estudio de Instagram', portadas: 'Portadas', 'setter-ig': 'Setter de Instagram',
   'trial-reels': 'Trial reels', 'web-creator': 'Web Creator', equipo: 'Equipo de agentes',
 }
@@ -118,7 +117,7 @@ async function estadoEditor(clientId) {
     return {
       haciendo: enCurso ? [`Editando ${plural(enCurso, 'vídeo', 'vídeos')}`] : [],
       ultimos: listas ? [`${plural(listas, 'reel montado', 'reels montados')}`] : [],
-      falta: filas.length ? [] : [{ texto: 'Sube un reel en bruto o deja uno en la carpeta de Drive y lo monta según tu manual.', cta: 'abrir' }],
+      falta: filas.length ? [] : [{ texto: 'Sube un reel en bruto o pásaselo por el conector de Claude y lo monta según tu manual.', cta: 'abrir' }],
     }
   } catch {
     // La migración del editor todavía no está en este entorno: lo que ya hay
@@ -159,7 +158,7 @@ export async function estadoDe(clientId, agente) {
   const base = { hace: QUE_HACE[agente] || '', nombre: NOMBRE[agente] || agente, haciendo: [], ultimos: [], falta: [] }
   const fn = RESOLUTORES[agente]
   if (!fn) {
-    // Agentes sin señal de fondo propia (contenido, drive, portadas, estudio):
+    // Agentes sin señal de fondo propia (contenido, portadas, estudio):
     // la cabecera vive de «qué hace» + abrir el panel + hablar. No se inventa
     // actividad que no existe.
     return { ...base, falta: [{ texto: 'Abre el panel para ver y usar lo que tiene dentro.', cta: 'abrir' }] }

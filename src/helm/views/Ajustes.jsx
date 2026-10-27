@@ -1215,7 +1215,7 @@ function MarcaCard({ clientId, client, onClientUpdate }) {
               ? <img src={form.logo_url} alt="Logo" />
               : <div className="helm-marca-ph"><ImageIcon size={20} /></div>}
             <div className="helm-marca-logo-acts">
-              <input ref={fileRef} type="file" accept="image/*" hidden onChange={elegirLogo} />
+              <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={elegirLogo} />
               <button type="button" className="helm-btn sm" disabled={subiendo} onClick={() => fileRef.current?.click()}>
                 {subiendo ? 'Subiendo…' : form.logo_url ? 'Cambiar logo' : 'Subir logo'}
               </button>
@@ -1224,7 +1224,7 @@ function MarcaCard({ clientId, client, onClientUpdate }) {
                   <Trash2 size={13} /> Quitar
                 </button>
               )}
-              <small className="helm-settings-note">PNG, JPG o SVG · hasta {MAX_LOGO_MB} MB · cuadrado se ve mejor</small>
+              <small className="helm-settings-note">PNG, JPG o WebP (SVG no) · hasta {MAX_LOGO_MB} MB · cuadrado se ve mejor</small>
             </div>
           </div>
 

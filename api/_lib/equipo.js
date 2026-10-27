@@ -60,7 +60,7 @@ const MODELOS = {
   virales: process.env.AGENTS_MODELO_VIRALES || 'claude-sonnet-5',
 }
 
-// Agentes que se pueden LANZAR a mano (o por MCP/Drive) pero que no entran en el
+// Agentes que se pueden LANZAR a mano (o por el MCP) pero que no entran en el
 // reparto diario del director: el editor de reels es uno.
 export const AGENTES_LANZABLES = [...AGENTES, 'editor', 'programador', 'virales']
 
@@ -835,7 +835,7 @@ ${REGLAS_COMUNES}`,
   }
   if (avisar && escritos.length) {
     await notificar(supabase, clientId, {
-      tipo: 'agentes', destino: 'agentes',
+      tipo: 'agentes', destino: 'contenido',
       titulo: `${escritos.length} ${escritos.length === 1 ? 'guion nuevo' : 'guiones nuevos'} en borrador`,
       cuerpo: `${escritos.map(e => `${e.fecha} · ${e.titulo}`).join('\n')}\nRevísalos en Agentes → Equipo → Borradores.`,
     })
@@ -1107,7 +1107,7 @@ ${REGLAS_COMUNES}`,
   await ctx.log('Informe guardado en la memoria.')
   await notificar(supabase, clientId, {
     tipo: 'agentes', titulo: `Informe de la semana del ${desde}`,
-    cuerpo: `${texto.slice(0, 280)}…\nEntero en Agentes → Equipo → Memoria.`, destino: 'agentes',
+    cuerpo: `${texto.slice(0, 280)}…\nEntero en Agentes → Equipo → Memoria.`, destino: 'contenido',
   })
   await escribeMemoria(ctx, out)
   return String(out.hecho || 'Informe semanal escrito.').slice(0, 400)
@@ -1117,8 +1117,9 @@ ${REGLAS_COMUNES}`,
 // Sigue el manual de edición que Alex guardó en la memoria (agent_memory,
 // ambito 'editor'). El motor de render (ffmpeg/composición) está en
 // construcción; por ahora el agente ENSEÑA el proceso paso a paso, para verlo
-// en vivo. Se dispara a mano, por el conector de Claude (MCP) o por Drive: las
-// tres vías encolan este mismo trabajo y el proceso se ve igual en el Registro.
+// en vivo. Se dispara a mano o por el conector de Claude (MCP): las dos vías
+// encolan este mismo trabajo y el proceso se ve igual en el Registro. Por Drive
+// no entra nada: la carpeta no se vigila.
 const dormir = (ms) => new Promise(r => setTimeout(r, ms))
 const PASOS_EDITOR = [
   ['Inspeccionar', 'ffprobe: duración, resolución, fps, rotación y audio; hoja de fotogramas cada 3 s.'],
@@ -1134,7 +1135,7 @@ const PASOS_EDITOR = [
 ]
 
 async function editor(ctx) {
-  const video = ctx.encargo && /drive|https?:|\.mp4|\.mov|v[ií]deo|reel/i.test(ctx.encargo) ? ctx.encargo : null
+  const video = ctx.encargo && /https?:|\.mp4|\.mov|v[ií]deo|reel/i.test(ctx.encargo) ? ctx.encargo : null
   const { data: manual } = await supabase.from('agent_memory').select('contenido')
     .eq('ambito', 'editor').eq('clave', 'editor-reels').is('client_id', null).maybeSingle()
   await ctx.log(manual?.contenido
@@ -1142,7 +1143,7 @@ async function editor(ctx) {
     : 'No encontré el manual de edición en la memoria. Guárdalo para que lo siga.')
   await ctx.log(video
     ? `Vídeo recibido: ${String(video).slice(0, 200)}.`
-    : 'Prueba en seco: todavía sin vídeo. Te enseño el proceso que seguiré cuando entre uno (por el conector de Claude o por la carpeta de Drive).')
+    : 'Prueba en seco: todavía sin vídeo. Te enseño el proceso que seguiré cuando entre uno por el conector de Claude.')
   for (const [titulo, que] of PASOS_EDITOR) {
     await dormir(650)
     await ctx.log(`${titulo} — ${que}`)

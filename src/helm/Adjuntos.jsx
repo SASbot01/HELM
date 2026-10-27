@@ -127,7 +127,7 @@ export default function Adjuntos({ clientId, carpeta, value = [], onChange, acce
         </button>
       )}
       <small className="helm-field-hint">
-        Imágenes, vídeo o PDF · hasta {MAX_UPLOAD_MB} MB
+        Fotos, PDF, Office, texto, vídeo, audio o ZIP · hasta {MAX_UPLOAD_MB} MB
         {enlaces ? ' · o un enlace a Drive, Notion, Figma…' : ''}
       </small>
 

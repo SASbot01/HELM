@@ -27,7 +27,6 @@ import { puedeVerPerfil, perfilesVisibles } from './_lib/access.js'
 import { todasLasFilas } from './_lib/filas.js'
 import { esPropio } from './_lib/creadores.js'
 import { fichaDe } from './agentes-perfil.js'
-import { resumenDrive } from './_lib/ingesta.js'
 import { getIgConfig } from './_lib/instagram.js'
 import { AGENTES as AGENTES_EQUIPO, AGENTES_LANZABLES, encolaAgente, tokensDeHoy, flujoPiezas } from './_lib/equipo.js'
 
@@ -497,19 +496,6 @@ async function handler(req, res) {
       return res.status(200).json({ clientIds: ids })
     }
 
-    // ── Ingesta de Drive ──────────────────────────────────────────────────
-    // Los perfiles con carpeta en "HELM Contenido", o el detalle de uno.
-    case 'drive': {
-      const clientId = String(req.query?.clientId || '')
-      if (clientId) return res.status(200).json(await resumenDrive(clientId))
-      const { data, error } = await supabase.from('agent_drive_perfiles')
-        .select('client_id, carpeta_nombre, activa, clients(slug, name)')
-      if (error) throw error
-      return res.status(200).json({
-        perfiles: (data || []).filter(p => ve(p.client_id)).map(p => ({ id: p.client_id, slug: p.clients.slug, nombre: p.clients.name, carpeta: p.carpeta_nombre, activa: p.activa })),
-      })
-    }
-
     // ── El enlace del conector de Claude de un perfil ─────────────────────
     // Solo se guarda su hash; el enlace se enseña UNA vez, al generarlo.
     // Generar otro revoca el anterior (hay un índice único por perfil).
@@ -808,18 +794,14 @@ async function enCurso() {
   if (error) throw error
   const jobs = data || []
   const reelIds = [...new Set(jobs.map(j => j.payload?.reelId).filter(Boolean))]
-  const driveIds = [...new Set(jobs.map(j => j.payload?.driveId).filter(Boolean))]
-  const [reels, videos] = await Promise.all([
-    reelIds.length ? supabase.from('agent_reels').select('id, cuenta, caption, url').in('id', reelIds) : { data: [] },
-    driveIds.length ? supabase.from('agent_drive_videos').select('drive_id, nombre').in('drive_id', driveIds) : { data: [] },
-  ])
+  const reels = reelIds.length
+    ? await supabase.from('agent_reels').select('id, cuenta, caption, url').in('id', reelIds)
+    : { data: [] }
   const reel = new Map((reels.data || []).map(r => [r.id, r]))
-  const video = new Map((videos.data || []).map(v => [v.drive_id, v]))
   return jobs.map(j => {
     const r = reel.get(j.payload?.reelId)
-    const v = video.get(j.payload?.driveId)
     const que = r ? (r.cuenta ? `@${r.cuenta.replace(/^@/, '')}` : '') + (r.caption ? ` · ${r.caption.slice(0, 70)}` : '') || r.url
-      : v ? v.nombre : ''
+      : ''
     return { id: j.id, tipo: j.tipo, intentos: j.intentos, max_intentos: j.max_intentos, empezado_en: j.empezado_en, que }
   })
 }
