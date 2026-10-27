@@ -13,8 +13,16 @@
 //   POST ?action=ajuste { agenciaId, euros } → (plataforma) sumar o quitar a mano
 //   GET  ?action=agencias                    → (plataforma) todas, con saldo
 //
-// Las cuentas de pago son las de HELM (HELM_STRIPE_SECRET_KEY), no las de
-// Stripe que cada perfil conecta para sus ventas.
+// Las cuentas de pago son las de HELM, no las de Stripe que cada perfil conecta
+// para sus ventas. Desde el 27-oct-2026 los créditos van a una cuenta de Stripe
+// SOLO de HELM (HELM_CREDITOS_STRIPE_KEY y su webhook); mientras no esté, la
+// compartida de siempre (HELM_STRIPE_SECRET_KEY, que también usan los cobros
+// automáticos de los perfiles: por eso no se reutiliza para la nueva).
+//
+// Cada pago lleva su factura (la hace Stripe y la manda por correo) con el IVA
+// DENTRO del precio del pack: con HELM_CREDITOS_STRIPE_TAX=1 lo calcula Stripe
+// Tax (hay que activarlo en la cuenta antes, o Stripe rechaza la sesión); con
+// HELM_CREDITOS_TAX_RATE=txr_… se aplica ese tipo fijo (el 21 %, inclusivo).
 //
 // Un pago se suma UNA vez: se apunta con el id de la sesión de Stripe como
 // referencia única, y la vuelta del navegador y el webhook pueden llegar los
@@ -26,7 +34,27 @@ import { applyCors, requireSuperAdmin, requirePlataforma, writeAudit } from './_
 import { PACKS, CREDITOS_POR_EURO, BIENVENIDA_EUROS, sumarSaldo } from './_lib/creditos.js'
 
 const STRIPE = 'https://api.stripe.com/v1'
-const claveStripe = () => process.env.HELM_STRIPE_SECRET_KEY || ''
+const claveStripe = () => process.env.HELM_CREDITOS_STRIPE_KEY || process.env.HELM_STRIPE_SECRET_KEY || ''
+// Los dos secretos valen mientras se pasa de una cuenta a la otra.
+const secretosWebhook = () => [process.env.HELM_CREDITOS_STRIPE_WEBHOOK_SECRET, process.env.HELM_STRIPE_WEBHOOK_SECRET].filter(Boolean)
+// Marca de las sesiones de créditos: en la cuenta compartida llegan al webhook
+// los pagos de otros negocios, y alguno trae client_reference_id.
+const MARCA = 'creditos'
+
+/** Lo que se añade a la sesión para que salga la factura con el IVA dentro. */
+export function camposFactura(env = process.env) {
+  const f = {
+    customer_creation: 'always',
+    billing_address_collection: 'required',
+    'tax_id_collection[enabled]': 'true',
+    'invoice_creation[enabled]': 'true',
+    'invoice_creation[invoice_data][description]': 'Créditos de HELM para usar los agentes (editor de reels, portadas, estudios…).',
+    'line_items[0][price_data][tax_behavior]': 'inclusive',
+  }
+  if (env.HELM_CREDITOS_STRIPE_TAX === '1') f['automatic_tax[enabled]'] = 'true'
+  else if (/^txr_[A-Za-z0-9]+$/.test(env.HELM_CREDITOS_TAX_RATE || '')) f['line_items[0][tax_rates][0]'] = env.HELM_CREDITOS_TAX_RATE
+  return f
+}
 
 function falla(msg, code = 400) {
   const e = new Error(msg)
@@ -53,10 +81,13 @@ async function stripe(ruta, { method = 'GET', form } = {}) {
 async function acreditarSesion(sessionId) {
   if (!/^cs_[A-Za-z0-9_]+$/.test(String(sessionId || ''))) throw falla('Sesión de pago inválida')
   const s = await stripe(`/checkout/sessions/${sessionId}`)
-  const agenciaId = s.metadata?.agencia_id || s.client_reference_id
+  // Solo las sesiones que abrió HELM para créditos, con su agencia.
+  const agenciaId = s.metadata?.helm === MARCA ? s.metadata?.agencia_id : null
   if (s.payment_status !== 'paid' || !agenciaId) return { pagado: false }
-  // Lo que se suma es lo que se cobró, no lo que diga el pack que se pidió.
-  const euros = Number(s.amount_total || 0) / 100
+  // Lo que se suma es lo que se cobró, no lo que diga el pack que se pidió:
+  // el importe del pack (subtotal, con el IVA dentro); si un día el IVA fuera
+  // aparte, el total lo llevaría encima y no se convierte en créditos.
+  const euros = Number(s.amount_subtotal ?? s.amount_total ?? 0) / 100
   const saldo = await sumarSaldo(agenciaId, euros, { tipo: 'recarga', origen: 'stripe', referencia: s.id })
   return { pagado: true, nuevo: saldo != null, euros }
 }
@@ -88,12 +119,15 @@ export default async function handler(req, res) {
     if (accion === 'webhook') {
       // Sin secreto configurado no se procesa nada: cualquiera podría llamar.
       // (Aun con firma buena, el importe se le vuelve a pedir a Stripe.)
-      if (!firmaValida(req.rawBody, req.headers['stripe-signature'], process.env.HELM_STRIPE_WEBHOOK_SECRET)) {
+      if (!secretosWebhook().some(sec => firmaValida(req.rawBody, req.headers['stripe-signature'], sec))) {
         return res.status(400).json({ error: 'Firma inválida' })
       }
       const ev = req.body || {}
-      if (['checkout.session.completed', 'checkout.session.async_payment_succeeded'].includes(ev.type)) {
-        await acreditarSesion(ev.data?.object?.id)
+      // Los pagos de otros negocios de la cuenta compartida se ignoran (con 200,
+      // para que Stripe no los reintente).
+      if (['checkout.session.completed', 'checkout.session.async_payment_succeeded'].includes(ev.type)
+          && ev.data?.object?.metadata?.helm === MARCA) {
+        await acreditarSesion(ev.data.object.id)
       }
       return res.status(200).json({ received: true })
     }
@@ -166,6 +200,9 @@ export default async function handler(req, res) {
           mode: 'payment',
           client_reference_id: agenciaId,
           'metadata[agencia_id]': agenciaId,
+          'metadata[helm]': MARCA,
+          locale: 'es',
+          ...camposFactura(),
           ...(auth.email ? { customer_email: auth.email } : {}),
           'line_items[0][quantity]': '1',
           'line_items[0][price_data][currency]': 'eur',
