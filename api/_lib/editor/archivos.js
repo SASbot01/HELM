@@ -87,9 +87,15 @@ const extensionDelNombre = (nombre) => String(nombre || '').toLowerCase().match(
  * Uno de POR_TIPO; o sin tipo (el navegador no lo sabe), si el nombre acaba en
  * una de sus extensiones. Los bytes se miran después, al llegar.
  */
+export const NO_MOV = /^video\/(webm|x-matroska|matroska|x-msvideo|avi|mpeg|mp2t|ogg|x-flv|x-ms-wmv)$/
+
 export function tipoAdmitido(tipo, nombre = '') {
   const t = String(tipo || '').split(';')[0].trim().toLowerCase()
-  if (t) return Boolean(POR_TIPO[t])
+  if (POR_TIPO[t]) return true
+  // Un tipo de vídeo raro (video/x-quicktime…) con una extensión buena vale: el
+  // panel deja pasar lo mismo, y los bytes se miran igual al llegar. Los que se
+  // sabe que no son MP4/MOV (WebM, MKV, AVI, MPEG), no, se llamen como se llamen.
+  if (t && (!t.startsWith('video/') || NO_MOV.test(t))) return false
   return EXTENSIONES.has(extensionDelNombre(nombre))
 }
 

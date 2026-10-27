@@ -1522,6 +1522,8 @@ describe('api/editor: el vídeo en bruto, solo MP4/MOV y mirado por sus bytes', 
     expect(['video/mp4', 'video/quicktime', 'video/x-m4v', 'video/3gpp', 'video/3gpp2', 'video/mp4; codecs=avc1'].map(t => tipoAdmitido(t))).toEqual([true, true, true, true, true, true])
     expect(['video/webm', 'video/x-matroska', 'video/x-msvideo', 'application/x-mpegurl'].map(t => tipoAdmitido(t, 'a.mp4'))).toEqual([false, false, false, false])
     expect([tipoAdmitido('', 'a.MOV'), tipoAdmitido('', 'a.mkv'), tipoAdmitido('', 'sin-extension')]).toEqual([true, false, false])
+    // Un tipo de vídeo raro con extensión buena vale (los bytes deciden después); con otra extensión, no.
+    expect([tipoAdmitido('video/x-quicktime', 'a.mov'), tipoAdmitido('video/x-quicktime', 'a.avi'), tipoAdmitido('text/html', 'a.mp4')]).toEqual([true, false, false])
     expect(extensionDe('video/webm', 'a.webm')).toBe('mp4')
     expect(argumentosSonda('/d/o.mp4')).toEqual(['-v', 'error', '-f', 'mov', '-print_format', 'json', '-show_streams', '-show_format', '/d/o.mp4'])
     expect([formatoDe('/d/a.mp4'), formatoDe('/d/a.M4A'), formatoDe('/d/a.mp3'), formatoDe('/d/a.jpg'), formatoDe('/d/subida.part')])

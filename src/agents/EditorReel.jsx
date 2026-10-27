@@ -83,6 +83,8 @@ const ICONO = { subiendo: Upload, en_cola: Clock, transcribiendo: Loader2, monta
 // Solo lo que admite el servidor (MP4/MOV y familia: se comprueba por los bytes).
 const EXT_VIDEO = /\.(mp4|mov|m4v|3gp)$/i
 const TIPOS_VIDEO = ['video/mp4', 'video/quicktime', 'video/x-m4v', 'video/3gpp']
+// Los que se sabe que no son MP4/MOV, aunque el archivo se llame .mp4 (como el servidor).
+const NO_MOV = /^video\/(webm|x-matroska|matroska|x-msvideo|avi|mpeg|mp2t|ogg|x-flv|x-ms-wmv)$/
 const EN_IDIOMA = { es: 'en español', en: 'en inglés', pt: 'en portugués' }
 
 // Sin saldo, el panel abre la recarga (AvisoSinSaldo, en Creditos.jsx): con un
@@ -611,7 +613,7 @@ function Taller({ clientId, referencia, retomar, precios, onCerrar, onCreada, on
     const tipo = String(archivo.type || '')
     const pareceVideo = tipo.startsWith('video/') || (!tipo && EXT_VIDEO.test(archivo.name || ''))
     if (!pareceVideo) { setErrorVideo('Eso no es un vídeo. Sube el archivo tal cual sale del móvil (MP4 o MOV).'); return }
-    if (tipo && !TIPOS_VIDEO.includes(tipo) && !EXT_VIDEO.test(archivo.name || '')) { setErrorVideo('Ese formato de vídeo no vale: exporta a MP4 y vuelve a subirlo.'); return }
+    if (tipo && !TIPOS_VIDEO.includes(tipo) && (NO_MOV.test(tipo) || !EXT_VIDEO.test(archivo.name || ''))) { setErrorVideo('Ese formato de vídeo no vale: exporta a MP4 y vuelve a subirlo.'); return }
     if (!archivo.size) { setErrorVideo('Ese archivo está vacío.'); return }
     if (archivo.size > MAX_MB_SUBIDA * MB) { setErrorVideo(`El vídeo pesa ${mb(archivo.size)}: el máximo son ${MAX_MB_SUBIDA} MB.`); return }
     setLeyendo(true)

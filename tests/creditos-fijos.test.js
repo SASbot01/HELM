@@ -402,6 +402,18 @@ describe('exigirSaldo (los agentes de Claude)', () => {
     const casa = agencia({ saldo: 0, sinCobro: true })
     await expect(conAgencia(casa.id, () => exigirSaldo())).resolves.toBeUndefined()
   })
+
+  it('si no se puede mirar lo apartado (falta una columna, la base falla), Claude sigue con el saldo', async () => {
+    const a = agencia({ saldo: 5 })
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    db.fallas.helm_trial_reels = { code: '42703', message: 'column helm_trial_reels.precio_eur does not exist' }
+    await expect(conAgencia(a.id, () => exigirSaldo())).resolves.toBeUndefined()
+    db.fallas.helm_trial_reels = { code: 'XX000', message: 'la base no responde' }
+    await expect(conAgencia(a.id, () => exigirSaldo())).resolves.toBeUndefined()
+    expect(error).toHaveBeenCalled()
+    db.fallas.helm_trial_reels = null
+    error.mockRestore()
+  })
 })
 
 describe('cobrarFijo', () => {

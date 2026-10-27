@@ -136,8 +136,15 @@ export async function exigirSaldo() {
   const p = await quienPaga()
   if (!p) return
   const saldo = Number(p.agencia.saldo) || 0
-  // Sin saldo ni se mira lo apartado: no hace falta para decir que no.
-  const apartado = saldo > 0 ? await apartadoDeAgencia(p.agencia.id) : 0
+  // Sin saldo ni se mira lo apartado: no hace falta para decir que no. Si no
+  // se puede mirar (la base falla, o falta una columna de una migración), Claude
+  // sigue funcionando como antes de lo apartado: solo con el saldo.
+  let apartado = 0
+  if (saldo > 0) {
+    try { apartado = await apartadoDeAgencia(p.agencia.id) } catch (err) {
+      console.error('[creditos] no se pudo mirar lo apartado; se sigue con el saldo:', err?.message || err)
+    }
+  }
   const libre = Math.round((saldo - apartado) * 10_000) / 10_000
   if (libre <= 0) {
     const e = new Error(apartado > 0
@@ -211,8 +218,8 @@ const CADUCA_SUBIENDO_EDITOR = HORAS_SUBIDA * 3600_000
 const edadDe = (f) => Date.now() - new Date(f.updated_at || f.created_at || 0).getTime()
 // La tabla no existe todavía (falta su migración): nada puede estar apartado
 // en ella, y Claude no debe dejar de funcionar por eso.
-const sinTabla = (error) => ['42P01', 'PGRST205'].includes(error?.code)
-  || /relation .* does not exist|could not find the table/i.test(error?.message || '')
+const sinTabla = (error) => ['42P01', 'PGRST205', '42703', 'PGRST204'].includes(error?.code)
+  || /relation .* does not exist|could not find the table|column .* does not exist/i.test(error?.message || '')
 
 // Reservas en memoria de ESTE proceso (el api-server es uno solo), para lo que
 // no deja una fila en marcha mientras trabaja: una portada con IA tarda unos
