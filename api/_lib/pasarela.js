@@ -61,6 +61,8 @@ const SECRETAS = new Set([
   'helm_agente_chat',
   // Qué parte de las ventas de un perfil es de otro: solo por api/participaciones.js.
   'helm_participaciones',
+  // El estudio de contenido y la foto diaria de seguidores: solo por api/estudio-contenido.js.
+  'helm_ig_seguidores', 'helm_estudio_contenido',
 ])
 
 // LISTA BLANCA: las únicas tablas que el panel toca por aquí (las que usa

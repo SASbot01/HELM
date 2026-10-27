@@ -340,7 +340,14 @@ async function apiFetch(path, { method = 'GET', body } = {}) {
   if (r.status === 402 && typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('helm:sin-saldo', { detail: data?.error || null }))
   }
-  if (!r.ok) throw new Error(data?.error || `Error ${r.status}`)
+  if (!r.ok) {
+    // Dejamos el código de estado (y el `codigo` que mande el servidor) en el
+    // error para que la vista decida el mensaje sin adivinar por el texto.
+    const err = new Error(data?.error || `Error ${r.status}`)
+    err.status = r.status
+    if (data?.codigo) err.codigo = data.codigo
+    throw err
+  }
   return data
 }
 
@@ -442,6 +449,22 @@ export const instagramApi = {
     apiFetch('/api/instagram?action=sync', { method: 'POST', body: { clientId, limite } }),
   informe: (clientId, dias) =>
     apiFetch(`/api/instagram?action=informe&clientId=${clientId}${dias ? `&dias=${dias}` : ''}`),
+}
+
+// Estudio de contenido (api/estudio-contenido.js): el estudio de verdad del
+// Informe —diagnóstico, objetivos por etapas, plan, avatar de contenido y lo
+// aprendido de una semana a otra—. El cálculo de los datos y el trabajo de la
+// IA corren en el servidor; desde aquí solo se pide el último (con su historial
+// y la base del algoritmo), se encola uno nuevo y se abre uno viejo. `ahora`
+// puede devolver 402 (sin saldo, lo coge también el aviso global), 429 (más de
+// 3 al día), 409 (ya hay uno en curso) o 400 (sin Instagram): apiFetch deja el
+// status y el `codigo` del servidor en el error, y la vista decide el mensaje
+// por ellos (nunca por el texto).
+export const estudioContenidoApi = {
+  de: (clientId) => apiFetch(`/api/estudio-contenido?clientId=${clientId}`),
+  ahora: (clientId) => apiFetch(`/api/estudio-contenido?action=ahora&clientId=${clientId}`, { method: 'POST' }),
+  ver: (clientId, id) =>
+    apiFetch(`/api/estudio-contenido?action=ver&clientId=${clientId}&id=${encodeURIComponent(id)}`),
 }
 
 // Google (Calendar + Drive) por perfil. El refresh token se queda en el

@@ -89,9 +89,36 @@ async function enTandas(items, tam, fn) {
   return out
 }
 
-// Trae las últimas publicaciones con sus métricas y las guarda. La usan el
-// botón de sincronizar del panel y el analista del equipo de agentes
-// (api/_lib/equipo.js), que la llama antes de comparar reels.
+// El día de Madrid, que es el de la cuenta. Aquí y no importado de
+// api/_lib/equipo.js: equipo.js importa este archivo y sería circular.
+const fmtDiaMadrid = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' })
+
+/**
+ * La foto de los seguidores de hoy (día de Madrid) en helm_ig_seguidores.
+ * Instagram solo da el número del momento: sin guardarlo cada día no hay forma
+ * de saber a qué ritmo crece la cuenta, y el Estudio de contenido lo necesita
+ * para estimar cuándo llega al siguiente hito. Varias fotos el mismo día se
+ * pisan: queda la última. Solo con un número recién dado por Instagram: el de
+ * config.followers puede ser de hace días, y apuntarlo como de hoy dejaría el
+ * histórico plano. Nunca lanza: que falle la foto no tumba la sincronización
+ * ni la conexión.
+ */
+export async function guardaSeguidores(clientId, seguidores, d = new Date()) {
+  const n = Number(seguidores)
+  if (!clientId || seguidores == null || !Number.isFinite(n) || n < 0) return
+  try {
+    const { error } = await supabase.from('helm_ig_seguidores')
+      .upsert({ client_id: clientId, dia: fmtDiaMadrid.format(d), seguidores: Math.round(n) }, { onConflict: 'client_id,dia' })
+    if (error) throw error
+  } catch (e) {
+    console.warn(`[instagram] no se pudo guardar la foto de seguidores de ${clientId}:`, e?.message || e)
+  }
+}
+
+// Trae las últimas publicaciones con sus métricas y las guarda, y apunta la
+// foto de seguidores del día. La usan el botón de sincronizar del panel, la
+// sincronización del worker (api/_lib/metricas-ig.js) y el analista del equipo
+// de agentes (api/_lib/equipo.js), que la llama antes de comparar reels.
 export async function sincronizar(clientId, limite = LIMITE_POR_DEFECTO) {
   const { token, config } = await getToken(supabase, clientId)
 
@@ -114,11 +141,15 @@ export async function sincronizar(clientId, limite = LIMITE_POR_DEFECTO) {
     mediaCount: perfil.media_count ?? config.mediaCount ?? null,
     lastSyncAt: new Date().toISOString(),
   })
+  // Si getPerfil falló (va con .catch), lo de arriba es el número de antes: no es foto de hoy.
+  const followersFresco = perfil.followers_count != null
+  if (followersFresco) await guardaSeguidores(clientId, perfil.followers_count)
 
   return {
     sincronizadas: filas.length,
     username: perfil.username || config.username || null,
     followers: perfil.followers_count ?? config.followers ?? null,
+    followersFresco,
     lastSyncAt: new Date().toISOString(),
   }
 }
@@ -184,6 +215,8 @@ export default async function handler(req, res) {
           .then(() => ({ mensajes: true, mensajesError: null, mensajesDesde: new Date().toISOString() }))
           .catch(e => ({ mensajes: false, mensajesError: e.message || 'Meta no ha dejado activar los mensajes' })) : {}),
       })
+      // La primera foto de seguidores, si Instagram ha dado el número.
+      if (perfil.followers_count != null) await guardaSeguidores(payload.clientId, perfil.followers_count)
       await writeAudit({ clientId: payload.clientId, action: 'instagram.linked', req, metadata: { username: perfil.username || null, mensajes: Boolean(payload.mensajes) } })
       return volver(payload.slug, { instagram: 'ok' })
     } catch (err) {
@@ -278,6 +311,7 @@ export default async function handler(req, res) {
         followers: perfil.followers_count ?? null,
         mediaCount: perfil.media_count ?? null,
       })
+      if (perfil.followers_count != null) await guardaSeguidores(clientId, perfil.followers_count)
       await writeAudit({ clientId, action: 'instagram.linked', req, metadata: { username: perfil.username || null, manual: true } })
       return res.status(200).json({ linked: true, username: perfil.username || null, followers: perfil.followers_count ?? null })
     }

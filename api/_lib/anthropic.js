@@ -280,6 +280,8 @@ export async function claudePaso({ apiKey, model, system, messages, tools, maxTo
   if (res.stop_reason === 'refusal') {
     const e = new Error('Claude ha rechazado esta petición por sus filtros de seguridad. Reformúlala.')
     e.statusCode = 422
+    // Ya está cobrada: quien llama puede apuntar lo que costó (estudio de contenido).
+    e.usage = res.usage
     throw e
   }
   return res

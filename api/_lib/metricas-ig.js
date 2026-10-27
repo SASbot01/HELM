@@ -9,7 +9,10 @@
 // Corre dentro del worker (scripts/agents-worker.mjs) como trabajo de tipo
 // 'metricas'. Es idempotente por tramo (la clave lleva la fecha y el tramo) y no depende de
 // que el perfil tenga el equipo de agentes encendido: sincroniza toda cuenta
-// conectada, la use un agente o no.
+// conectada, la use un agente o no. De paso, `sincronizar` deja la foto de los
+// seguidores del día (helm_ig_seguidores), que es el histórico del Estudio de
+// contenido: la guarda api/instagram.js, igual que al pulsar «Sincronizar» y al
+// conectar la cuenta.
 import { supabase } from '../lib/supabase.js'
 import { sincronizar as sincronizarIg } from '../instagram.js'
 import { diaMadrid, horaMadrid } from './equipo.js'
@@ -60,8 +63,9 @@ export async function miraMetricas() {
 
 /**
  * El trabajo en sí: baja de Instagram las últimas piezas de un perfil y las
- * guarda en helm_ig_media (lo hace `sincronizar`, que arma su propio token y
- * usa el cliente service-role). Devuelve el parte para que quede en el log.
+ * guarda en helm_ig_media (lo hace `sincronizar`, que arma su propio token,
+ * usa el cliente service-role y apunta los seguidores del día). Devuelve el
+ * parte para que quede en el log.
  */
 export async function sincronizaMetricas(job) {
   const clientId = job?.payload?.clientId
