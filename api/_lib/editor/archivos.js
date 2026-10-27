@@ -1,12 +1,15 @@
 // HELM — Editor de reels: dónde vive cada archivo. Lo usan la API (que sube
 // el original) y el worker (que lo edita), los dos con la misma carpeta:
 //
-//   ${HELM_DATA_DIR}/editor/<id>/original.<ext>   lo que subió el usuario
+//   ${HELM_DATA_DIR}/editor/<id>/subida.part      mientras sube, trozo a trozo
+//   ${HELM_DATA_DIR}/editor/<id>/subida.json      { bytes, ext, tipo } que anunció
+//   ${HELM_DATA_DIR}/editor/<id>/original.<ext>   lo que subió el usuario, ya entero
 //   ${HELM_DATA_DIR}/editor/<id>/editado.mp4      lo que devuelve HELM
 //   (y mientras trabaja: voz.wav, subtitulos.ass, editado.mp4.part)
 //
 // Las rutas salen SIEMPRE del id (un uuid), nunca de lo que diga la fila ni
-// del nombre del archivo que subió el usuario. Todo se borra a los 7 días.
+// del nombre del archivo que subió el usuario. Todo se borra a los 7 días; una
+// subida que se quedó a medias, a las 6 horas.
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { DIAS_GUARDADO, MAX_MB_SUBIDA } from '../../../src/agents/editor/estilo.js'
@@ -34,6 +37,10 @@ export const rutaEditado = (id) => path.join(dirEdicion(id), 'editado.mp4')
 export const rutaVoz = (id) => path.join(dirEdicion(id), 'voz.wav')
 export const rutaAss = (id) => path.join(dirEdicion(id), 'subtitulos.ass')
 export const rutaOriginalCon = (id, ext) => path.join(dirEdicion(id), `original.${ext}`)
+export const rutaParcial = (id) => path.join(dirEdicion(id), 'subida.part')
+export const rutaSubida = (id) => path.join(dirEdicion(id), 'subida.json')
+// Una subida a medias que lleva esto sin recibir nada se da por perdida.
+export const HORAS_SUBIDA = 6
 
 // Lo que graba un móvil (y poco más). La extensión es solo para quien mire la
 // carpeta: ffprobe lee el contenido, no el nombre.
@@ -67,10 +74,13 @@ export async function borraEdicion(id) {
 
 /**
  * Borra las ediciones cuyo archivo más nuevo tenga más de `dias` días (el
- * original y el editado van juntos). Devuelve cuántas carpetas ha quitado.
+ * original y el editado van juntos) y las subidas a medias (con subida.part)
+ * que lleven más de `horasSubida` horas sin recibir un trozo. Devuelve
+ * cuántas carpetas ha quitado.
  */
-export async function limpiaEdiciones(dias = DIAS_GUARDADO) {
-  const limite = Date.now() - dias * 86_400_000
+export async function limpiaEdiciones(dias = DIAS_GUARDADO, horasSubida = HORAS_SUBIDA) {
+  const limiteGuardado = Date.now() - dias * 86_400_000
+  const limiteSubida = Date.now() - horasSubida * 3_600_000
   let nombres = []
   try { nombres = await fsp.readdir(CARPETA_EDITOR()) } catch { return 0 }
   let borradas = 0
@@ -83,6 +93,7 @@ export async function limpiaEdiciones(dias = DIAS_GUARDADO) {
       for (const x of dentro) {
         try { reciente = Math.max(reciente, (await fsp.stat(path.join(dir, x))).mtimeMs) } catch { /* ya no está */ }
       }
+      const limite = dentro.includes('subida.part') ? limiteSubida : limiteGuardado
       if (reciente < limite) { await fsp.rm(dir, { recursive: true, force: true }); borradas++ }
     } catch { /* ya no está */ }
   }
