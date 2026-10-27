@@ -8,9 +8,9 @@
 //   GET  ?action=imagen    &clientId=&mediaId= → la portada actual
 //   GET  ?action=capacidad &clientId=          → ¿se puede generar fondo con IA?
 //   POST ?action=fondo-prompt { clientId, mediaId?, tema? } → un prompt de fondo (gasta créditos)
-//   POST ?action=fondo-ia     { clientId, prompt }          → genera el fondo con IA (gasta en Replicate)
+//   POST ?action=fondo-ia     { clientId, prompt }          → genera el fondo con IA (40 créditos)
 //   POST ?action=portada-ia   { clientId, fotograma, titulo, estilo, detalle?, mediaId? }
-//                                                           → la portada ENTERA con IA en un estilo (Replicate)
+//                                                           → la portada ENTERA con IA en un estilo (40 créditos)
 //   GET  ?action=ejemplos     &clientId=                    → las portadas de ejemplo que subió el perfil
 //   POST ?action=ejemplo      { clientId, nombre, imagen }  → subir una (se usa como estilo)
 //   POST ?action=ejemplo-borrar { clientId, id }            → quitarla
@@ -28,6 +28,15 @@
 // portada entera en el estilo elegido, a partir de un FOTOGRAMA REAL del reel
 // y conservando a la persona tal cual (src/agents/portadas/estilosIa.js). El
 // titular lo escribe la IA dentro de la imagen; el panel avisa de revisarlo.
+//
+// Desde el 2026-10-27 cada imagen generada (portada-ia y fondo-ia) cuesta a
+// PRECIO FIJO: 0,40 € de saldo (PRECIOS_FIJOS['portada-ia'], src/helm/
+// precios.js). Antes de llamar a Replicate se mira que llegue (402 si no) y se
+// cobra SOLO si Replicate ha devuelto la imagen, con una referencia nueva por
+// petición (`portada:<uuid>`). La agencia de la casa (sin_cobro) y un perfil
+// sin agencia no pagan. El fotograma puede salir de un reel, de un vídeo que
+// el usuario abre en su navegador (no se sube: el fotograma se saca allí) o de
+// una foto.
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
@@ -40,6 +49,7 @@ import { llmChat } from './_lib/llm.js'
 import { getToken, getMediaUrls } from './_lib/instagram.js'
 import { fetchPublico } from './_lib/web.js'
 import { generaFondo, generaPortadaIa, hayClaveImagen } from './_lib/imagen.js'
+import { exigirImporte, cobrarFijo, PRECIOS_FIJOS } from './_lib/creditos.js'
 import {
   estiloIaPorClave, referenciaDe, promptPortadaIa, MAX_TITULO_IA, MAX_DETALLE_IA, MAX_EJEMPLOS, MAX_NOMBRE_EJEMPLO,
 } from '../src/agents/portadas/estilosIa.js'
@@ -114,6 +124,51 @@ function enColaEjemplos(clientId, fn) {
 const CDN_META = /(^|\.)(cdninstagram\.com|fbcdn\.net)$/i
 const MAX_VIDEO = 200 * 1024 * 1024
 const MAX_IMAGEN = 20 * 1024 * 1024
+
+// Lo que cuesta cada imagen generada, en euros de saldo, y lo que nos cuesta a
+// nosotros en Replicate, en dólares (para el margen de la plataforma;
+// aproximado: lo que cobra Replicate por imagen de nano-banana-pro y de
+// Ideogram v3 turbo, que se puede afinar por entorno).
+const PRECIO_IMAGEN = PRECIOS_FIJOS['portada-ia']
+const COSTE_USD = {
+  'portada-ia': Number(process.env.PORTADAS_IA_COSTE_USD || 0.15),
+  'fondo-ia': Number(process.env.PORTADAS_FONDO_COSTE_USD || 0.03),
+}
+// Cada generación tarda unos 30 s y se cobra al acabar: lo que se está
+// generando ahora mismo, por agencia, ya está «apartado» (exigirImporte ·
+// pendiente). Si no, con 40 créditos se lanzan diez a la vez. El api-server es
+// un solo proceso: con esto basta.
+const enVuelo = new Map() // agenciaId -> euros
+const aparta = (agenciaId, euros) => enVuelo.set(agenciaId, (enVuelo.get(agenciaId) || 0) + euros)
+function suelta(agenciaId, euros) {
+  const queda = Math.round(((enVuelo.get(agenciaId) || 0) - euros) * 100) / 100
+  if (queda > 0) enVuelo.set(agenciaId, queda)
+  else enVuelo.delete(agenciaId)
+}
+
+/**
+ * Genera una imagen cobrándola: mira el saldo (lanza 402 si no llega, con lo
+ * que ya se está generando en la agencia apartado), llama a `genera` y, SOLO
+ * si devuelve la imagen, la cobra con una referencia nueva. Devuelve lo que
+ * devuelva `genera` más { cobrado (euros, 0 si no paga), saldo (o null) }.
+ */
+export async function generaCobrando(clientId, concepto, genera) {
+  let agencia = null
+  const { paga } = await exigirImporte(clientId, PRECIO_IMAGEN, {
+    pendiente: ({ agenciaId }) => { agencia = agenciaId; return enVuelo.get(agenciaId) || 0 },
+  })
+  if (paga && agencia) aparta(agencia, PRECIO_IMAGEN)
+  try {
+    const r = await genera()
+    if (!paga) return { ...r, cobrado: 0, saldo: null }
+    const saldo = await cobrarFijo(clientId, PRECIO_IMAGEN, {
+      concepto, referencia: `portada:${crypto.randomUUID()}`, origen: 'panel', costeUsd: COSTE_USD[concepto] || 0,
+    })
+    return { ...r, cobrado: saldo == null ? 0 : PRECIO_IMAGEN, saldo }
+  } finally {
+    if (paga && agencia) suelta(agencia, PRECIO_IMAGEN)
+  }
+}
 
 const REGLAS = `Diseñas el TEXTO de portadas de reels de Instagram en español de España para cuentas de negocio y creadores. La portada no da alcance: convierte en el perfil y en Explorar, cuando alguien decide si seguir la cuenta y qué otro vídeo ver. Se ve recortada a 3:4 en la cuadrícula, pequeña (unos 130 px de ancho en el móvil).
 
@@ -238,7 +293,7 @@ export default async function handler(req, res) {
     }
 
     // ── POST ?action=textos ────────────────────────────────────────────────
-    // Lo único que gasta: Claude lee el reel y la Biblia y propone 3 textos.
+    // Gasta por tokens: Claude lee el reel y la Biblia y propone 3 textos.
     if (req.method === 'POST' && action === 'textos') {
       const mediaId = String(req.body?.mediaId || '')
       const { data: reel } = await supabase.from('helm_ig_media')
@@ -361,15 +416,21 @@ export default async function handler(req, res) {
           .select('caption').eq('client_id', clientId).eq('media_id', mediaId).maybeSingle()
         tema = recorta(String(reel?.caption || '').split('\n')[0], 300)
       }
-      const prompt = promptPortadaIa({ estilo, titulo, tema, detalle, imagenes: imagenes.length })
+      // Los estilos «de marca» van con los colores del kit de la serie.
+      let colores = null
+      if (estilo.usaMarca) {
+        const { marca } = await marcaDe(clientId)
+        colores = [marca.colorPrincipal, marca.colorResalte].filter(Boolean)
+      }
+      const prompt = promptPortadaIa({ estilo, titulo, tema, detalle, imagenes: imagenes.length, colores })
       // Cada generación cuesta dinero en Replicate: un tope por perfil y hora.
       // Se consume solo aquí, con la petición ya validada, para que las entradas
       // mal formadas (400) no gasten el cupo.
       const tope = rateLimit({ key: `portada-ia:${clientId}`, max: 30, windowMs: 3_600_000 })
       if (!tope.ok) return res.status(429).json({ error: 'Has generado muchas portadas seguidas. Prueba dentro de un rato.', retryAfter: tope.retryAfter })
       try {
-        const { dataUrl } = await generaPortadaIa({ prompt, imagenes })
-        return res.status(200).json({ imagen: dataUrl, ia: true })
+        const { dataUrl, cobrado, saldo } = await generaCobrando(clientId, 'portada-ia', () => generaPortadaIa({ prompt, imagenes }))
+        return res.status(200).json({ imagen: dataUrl, ia: true, cobrado, saldo })
       } catch (err) {
         return res.status(err.statusCode || 502).json({ error: err.message || 'No se pudo generar la portada' })
       }
@@ -405,13 +466,18 @@ export default async function handler(req, res) {
     }
 
     // ── POST ?action=fondo-ia ──────────────────────────────────────────────
-    // Genera el fondo con Ideogram (gasta en Replicate). Sin clave → 503 claro.
+    // Genera el fondo con Ideogram (cuesta en Replicate y se cobra como una
+    // portada: 40 créditos, solo si sale). Sin clave → 503 claro.
     if (req.method === 'POST' && action === 'fondo-ia') {
+      if (!hayClaveImagen()) return res.status(503).json({ error: 'Falta la clave de imagen (REPLICATE_API_TOKEN) en el servidor' })
       const prompt = recorta(String(req.body?.prompt || '').trim(), 1500)
       if (!prompt) return res.status(400).json({ error: 'Escribe la descripción del fondo' })
+      // Como la portada: cuesta en Replicate, tope por perfil y hora.
+      const tope = rateLimit({ key: `fondo-ia:${clientId}`, max: 30, windowMs: 3_600_000 })
+      if (!tope.ok) return res.status(429).json({ error: 'Has generado muchos fondos seguidos. Prueba dentro de un rato.', retryAfter: tope.retryAfter })
       try {
-        const { dataUrl } = await generaFondo({ prompt, aspecto: '9:16' })
-        return res.status(200).json({ imagen: dataUrl, ia: true })
+        const { dataUrl, cobrado, saldo } = await generaCobrando(clientId, 'fondo-ia', () => generaFondo({ prompt, aspecto: '9:16' }))
+        return res.status(200).json({ imagen: dataUrl, ia: true, cobrado, saldo })
       } catch (err) {
         return res.status(err.statusCode || 502).json({ error: err.message || 'No se pudo generar el fondo' })
       }
@@ -436,7 +502,7 @@ export default async function handler(req, res) {
 
     return res.status(405).json({ error: 'Method not allowed' })
   } catch (err) {
-    console.error('[portadas]', err)
+    if (!err?.statusCode || err.statusCode >= 500) console.error('[portadas]', err)
     if (res.headersSent) return undefined
     return res.status(err.statusCode || 500).json({ error: err.message || 'Error' })
   }

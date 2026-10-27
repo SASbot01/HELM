@@ -19,7 +19,7 @@ import { ESTILOS_REFERENCIA } from '../../src/agents/editor/estilos-referencia.j
 // prompt). El texto de pantalla, más largo, vive en src/agents/agentes.js.
 const QUE_HACE = {
   contenido: 'Guardas los creadores de referencia del perfil, sus reels transcritos y lo aprendido de ellos. Es de donde sale la estrategia y los guiones.',
-  editor: 'Montas los reels en bruto según el manual de edición del perfil: formato, cortes, capturas reales y subtítulos.',
+  editor: 'Editas los reels en bruto que te suben en tu panel: eligen uno de tus 30 estilos, suben el vídeo (y, si quieren, imágenes, clips, logo y música) y ven el precio antes de empezar. Quitas las tomas repetidas, las muletillas y los silencios y devuelves el MP4 a 1080×1920 con subtítulos palabra a palabra. Se cobra un precio fijo por vídeo y solo si sale bien. No publicas nada.',
   estudio: 'Puntúas el gancho, revisas la caption, auditas el perfil y quitas el olor a IA. No publicas nada.',
   portadas: 'Compones la portada de cada reel en 1080×1920 con el fotograma real y el kit de la serie. La IA solo escribe los textos.',
   'setter-ig': 'Contestas los DM de Instagram, cualificas a cada lead y lo llevas a la llamada. Cada uno entra en el CRM.',
@@ -105,6 +105,10 @@ async function estadoSetter(clientId) {
   return { haciendo, ultimos, falta }
 }
 
+// Una subida que lleva este rato sin recibir un trozo (cada trozo toca
+// updated_at, api/editor.js) se ha quedado a medias: ya no está «subiendo».
+const SUBIDA_PARADA_MS = 15 * 60_000
+
 async function estadoEditor(clientId) {
   try {
     const { data, error } = await supabase
@@ -112,22 +116,35 @@ async function estadoEditor(clientId) {
       .order('updated_at', { ascending: false }).limit(20)
     if (error) throw error
     const filas = data || []
-    const enCurso = filas.filter(f => f.estado === 'corriendo' || f.estado === 'en_cola').length
+    // Los estados de helm_ediciones (EN_MARCHA en src/agents/editor/estilo.js).
+    const editando = filas.filter(f => ['en_cola', 'transcribiendo', 'montando'].includes(f.estado)).length
+    const parada = (f) => Date.now() - new Date(f.updated_at || 0).getTime() > SUBIDA_PARADA_MS
+    const subiendo = filas.filter(f => f.estado === 'subiendo' && !parada(f)).length
+    const aMedias = filas.filter(f => f.estado === 'subiendo' && parada(f)).length
     const listas = filas.filter(f => f.estado === 'listo').length
+    const errores = filas.filter(f => f.estado === 'error').length
+    const haciendo = [
+      editando ? `Editando ${plural(editando, 'vídeo', 'vídeos')}` : null,
+      subiendo ? `Recibiendo ${plural(subiendo, 'vídeo', 'vídeos')}` : null,
+    ].filter(Boolean)
+    const falta = []
+    if (aMedias) falta.push({ texto: `${plural(aMedias, 'vídeo se quedó', 'vídeos se quedaron')} a medias de subir: entra y sigue desde donde iba.`, cta: 'abrir' })
+    if (errores) falta.push({ texto: `${plural(errores, 'vídeo', 'vídeos')} con error (no se ha cobrado)`, cta: 'abrir' })
+    if (!filas.length) falta.push({ texto: `Elige uno de los ${ESTILOS_REFERENCIA.length} estilos de edición, sube tu vídeo en bruto y ves el precio antes de empezar.`, cta: 'abrir' })
     return {
-      haciendo: enCurso ? [`Editando ${plural(enCurso, 'vídeo', 'vídeos')}`] : [],
+      haciendo,
       ultimos: listas ? [`${plural(listas, 'reel montado', 'reels montados')}`] : [],
-      falta: filas.length ? [] : [{ texto: 'Sube un reel en bruto o pásaselo por el conector de Claude y lo monta según tu manual.', cta: 'abrir' }],
+      falta,
     }
   } catch {
-    // La migración del editor todavía no está en este entorno: lo que ya hay
-    // son los estilos de edición, con la portada de sus reels y su prompt.
+    // No se ha podido leer la tabla (una caída, o la migración 114 aún no está
+    // en este entorno): no se inventa nada, y los estilos siguen ahí.
     return {
       haciendo: [],
       ultimos: [],
       falta: [
-        { texto: `${ESTILOS_REFERENCIA.length} estilos de edición listos: elige uno por la portada de sus reels de ejemplo y copia su prompt para que Claude lo monte por el conector.`, cta: 'abrir' },
-        { texto: 'El motor de edición se está integrando: muy pronto podrás subirle un vídeo aquí y que lo monte HELM solo.' },
+        { texto: `${ESTILOS_REFERENCIA.length} estilos de edición listos: elige uno y sube tu vídeo, o copia su prompt para que Claude lo monte por el conector.`, cta: 'abrir' },
+        { texto: 'No he podido leer tus vídeos ahora mismo. Vuelve a mirar en un momento.' },
       ],
     }
   }

@@ -21,6 +21,7 @@ import { spawn } from 'node:child_process'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { fetchPublico } from './web.js'
+import { limpiaSubidas } from './subida-trozos.js'
 import { normalizaAjustes, tramos, reencuadre, LIENZO, FPS } from '../../src/agents/trialreels/reglas.js'
 
 export { normalizaAjustes, tramos, reencuadre }
@@ -50,6 +51,68 @@ const seguro = (t) => String(t || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64)
 export const rutaSalida = (id) => path.join(CARPETA(), `${seguro(id)}.mp4`)
 export const rutaGancho = (id) => path.join(CARPETA(), `${seguro(id)}.gancho.png`)
 export const rutaFuente = (clientId, mediaId) => path.join(CARPETA(), 'fuentes', `${seguro(clientId)}-${seguro(mediaId)}.mp4`)
+// Los vídeos que sube el usuario: mientras llegan, en su carpeta de subidas
+// (subida.part, api/_lib/subida-trozos.js); enteros, junto a las fuentes de
+// Instagram, con «subido» en el nombre para que nunca choquen con un media_id
+// (que es solo cifras). Se borran a los 7 días, como todo lo de aquí.
+export const CARPETA_SUBIDAS = () => path.join(CARPETA(), 'subidas')
+export const dirSubidaFuente = (fuenteId) => path.join(CARPETA_SUBIDAS(), seguro(fuenteId))
+export const rutaFuenteSubida = (clientId, fuenteId) => path.join(CARPETA(), 'fuentes', `${seguro(clientId)}-subido-${seguro(fuenteId)}.mp4`)
+
+/**
+ * Los vídeos subidos que un perfil tiene ahora en el disco (los de sus 7 días):
+ * { videos, bytes }. Lo que hay de verdad, no lo que diga la tabla: para el tope
+ * de lo guardado por perfil (api/trial-reels.js).
+ */
+export async function guardadoDelPerfil(clientId, dias = DIAS_GUARDADO) {
+  const dir = path.join(CARPETA(), 'fuentes')
+  const prefijo = `${seguro(clientId)}-subido-`
+  const limite = Date.now() - dias * 86_400_000
+  let nombres = []
+  try { nombres = await fsp.readdir(dir) } catch { return { videos: 0, bytes: 0 } }
+  let videos = 0
+  let bytes = 0
+  for (const n of nombres) {
+    if (!n.startsWith(prefijo) || !n.endsWith('.mp4')) continue
+    try {
+      const st = await fsp.stat(path.join(dir, n))
+      if (st.isFile() && st.mtimeMs >= limite) { videos++; bytes += st.size }
+    } catch { /* ya no está */ }
+  }
+  return { videos, bytes }
+}
+// Lo que tiene que quedar libre en el disco después de recibir un trozo
+// (HELM_TRIAL_MIN_LIBRE_MB, 2 GB por defecto: el disco es el mismo que el del
+// Editor de reels y el de los montajes).
+export const minLibreTrial = () => {
+  const mb = Number(process.env.HELM_TRIAL_MIN_LIBRE_MB)
+  return (Number.isFinite(mb) && mb >= 0 ? mb : 2048) * 1024 * 1024
+}
+
+// Las cajas con las que puede empezar un MOV sin «ftyp»: los QuickTime de antes
+// y algunas cámaras empiezan por «wide», «free» o «skip» (relleno) o directamente
+// por «moov» o «mdat». El demuxer mov de ffmpeg las reconoce igual (95–100 de
+// 100) y ninguna lista (HLS, concat) puede empezar así: esas son texto desde el
+// byte 0, y aquí los 4 primeros son el tamaño de la caja.
+const CAJAS_SIN_FTYP = new Set(['moov', 'mdat', 'wide', 'free', 'skip'])
+
+/**
+ * ¿Estos primeros bytes son de un MP4/MOV/3GP (una caja de ISO BMFF)? Lo que
+ * suba el usuario solo se le pasa a ffmpeg si lo es: el tipo y la extensión los
+ * pone el navegador, y ffmpeg adivina el formato por el contenido (una lista
+ * HLS o un concat disfrazados de .mp4 le harían abrir otros archivos o URLs).
+ * Con «ftyp» (o una de CAJAS_SIN_FTYP) en el byte 4, ffmpeg lo reconoce como
+ * MP4/MOV (es la firma que mejor puntúa) y no como una de esas listas.
+ */
+export function esVideoIsoBmff(buf) {
+  if (!buf || buf.length < 12) return false
+  const tam = buf.readUInt32BE(0)
+  const caja = buf.toString('latin1', 4, 8)
+  if (caja === 'ftyp') return tam === 1 || (tam >= 16 && tam <= 4096)
+  if (!CAJAS_SIN_FTYP.has(caja)) return false
+  // 1: el tamaño va en 64 bits; 0: hasta el final del archivo (solo «mdat»).
+  return tam === 1 || tam >= 8 || (tam === 0 && caja === 'mdat')
+}
 
 // ── El color: cuatro preajustes de eq, retoques pequeños ───────────────────
 // gamma_r y gamma_b mueven los canales rojo y azul sin tocar la luz: así se
@@ -256,9 +319,13 @@ export async function descargaFuente(url, destino, { max = MAX_VIDEO } = {}) {
   return { bytes: total }
 }
 
-/** Borra lo que lleve más de 7 días en la carpeta (y en la de fuentes). */
+/**
+ * Borra lo que lleve más de 7 días en la carpeta (y en la de fuentes, también
+ * los vídeos subidos), y las subidas que se quedaron a medias.
+ */
 export async function limpiaViejos(dias = DIAS_GUARDADO) {
   const limite = Date.now() - dias * 86_400_000
+  await limpiaSubidas(CARPETA_SUBIDAS()).catch(() => 0)
   for (const dir of [CARPETA(), path.join(CARPETA(), 'fuentes')]) {
     let nombres = []
     try { nombres = await fsp.readdir(dir) } catch { continue }

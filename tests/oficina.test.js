@@ -108,20 +108,37 @@ describe('oficina · estado', () => {
     expect(e._error).toBeTruthy()
   })
 
-  it('el editor sin su tabla ofrece los estilos y avisa de que se está integrando, no peta', async () => {
+  it('el editor sin su tabla ofrece los estilos y no dice que está «integrándose», no peta', async () => {
     store.lanzar = 'helm_ediciones'
     const e = await estadoDe('c1', 'editor')
     expect(e.falta[0].texto).toMatch(/estilos de edición/i)
     expect(e.falta[0].cta).toBe('abrir')
-    expect(e.falta.some(f => /integr/i.test(f.texto))).toBe(true)
+    expect(e.falta.some(f => /integr|muy pronto|construcción/i.test(f.texto))).toBe(false)
   })
 
-  it('el editor sin vídeos pide uno por el conector, no por la carpeta de Drive', async () => {
+  it('el editor sin vídeos pide elegir un estilo y subir uno en el panel, no por Drive ni por un manual', async () => {
     store.tablas.helm_ediciones = { lista: [] }
     const e = await estadoDe('c1', 'editor')
-    expect(e.falta[0].texto).toMatch(/conector de Claude/)
-    expect(e.falta[0].texto).not.toMatch(/Drive/)
-    expect(e.hace).not.toMatch(/Drive/)
+    expect(e.falta[0].texto).toMatch(/sube tu vídeo en bruto/)
+    expect(e.falta[0].texto).toMatch(/precio/)
+    expect(e.falta[0].cta).toBe('abrir')
+    expect(`${e.hace} ${e.falta[0].texto}`).not.toMatch(/Drive|manual/)
+  })
+
+  it('el editor cuenta lo que edita, lo que recibe, lo que se quedó a medias y los errores', async () => {
+    const hace = (min) => new Date(Date.now() - min * 60_000).toISOString()
+    store.tablas.helm_ediciones = { lista: [
+      { estado: 'en_cola', updated_at: hace(1) }, { estado: 'transcribiendo', updated_at: hace(1) }, { estado: 'montando', updated_at: hace(2) },
+      { estado: 'subiendo', updated_at: hace(1) }, { estado: 'subiendo', updated_at: hace(90) },
+      { estado: 'listo', updated_at: hace(300) }, { estado: 'error', updated_at: hace(400) },
+    ] }
+    const e = await estadoDe('c1', 'editor')
+    expect(e.haciendo).toEqual(['Editando 3 vídeos', 'Recibiendo 1 vídeo'])
+    expect(e.ultimos).toEqual(['1 reel montado'])
+    expect(e.falta.map(f => f.texto)).toEqual([
+      '1 vídeo se quedó a medias de subir: entra y sigue desde donde iba.',
+      '1 vídeo con error (no se ha cobrado)',
+    ])
   })
 })
 

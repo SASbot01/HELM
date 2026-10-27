@@ -93,6 +93,25 @@
 .tr-opciones b { font-size: 15px; }
 .tr-opciones span { color: var(--text-secondary); font-size: 12.5px; line-height: 1.4; }
 
+/* Subir un vídeo propio: el botón (un label con el input escondido), la
+   línea de cómo va y su barra. */
+.tr-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 12px 0 4px; }
+.tr-acciones .tr-ayuda { flex: 1 1 260px; margin: 0; }
+.tr-root label.tr-subir { flex-direction: row; align-items: center; gap: 6px; color: inherit; font-size: 14px; cursor: pointer; position: relative; }
+.tr-subir input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.tr-subir:focus-within { outline: 2px solid var(--orange); outline-offset: 2px; }
+.tr-subida { display: flex; align-items: center; gap: 10px; border: 1px solid var(--tr-borde); border-radius: 10px; padding: 10px 12px; margin: 10px 0; background: var(--bg-card); }
+.tr-subida.error { border-color: var(--danger, #ef4444); }
+.tr-subida.lista { border-color: var(--success, #22c55e); }
+.tr-subida-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.tr-subida-txt b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-subida-txt small { color: var(--text-muted); font-size: 12px; }
+.tr-barra { display: block; height: 6px; border-radius: 999px; background: rgba(128,128,128,.18); overflow: hidden; }
+.tr-barra i { display: block; height: 100%; background: var(--orange); transition: width .3s ease; }
+.tr-precio { font-weight: 500; opacity: .85; }
+.tr-root textarea { font: inherit; font-size: 14px; color: var(--text); background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px); padding: 9px 10px; width: 100%; box-sizing: border-box; resize: vertical; }
+
 @media (max-width: 760px) {
   .tr-taller { grid-template-columns: 1fr; }
   .tr-col-previa { position: static; max-width: 340px; margin: 0 auto; width: 100%; }

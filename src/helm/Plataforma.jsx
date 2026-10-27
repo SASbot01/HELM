@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, RotateCw, Search, ArrowUpRight, Trash2 } from 'lucide-react'
 import { plataformaApi, creditosApi, usersApi } from './lib'
+import { CONCEPTOS } from './precios'
 import { useHelmTheme } from './theme'
 import { Kpi, Panel, Drawer, Field, Input, FormNote, Empty } from './ui'
 import './plataforma.css'
@@ -272,7 +273,7 @@ function Agencia({ fila, onClose, onCambio }) {
               <div className="pl-barras pl-barras--fino">
                 {d.porModelo.map(o => (
                   <div key={o.clave}>
-                    <span>{o.clave}</span>
+                    <span>{CONCEPTOS[o.clave] || o.clave}</span>
                     <i style={{ '--w': `${(o.consumo / max(d.porModelo)) * 100}%` }} />
                     <b>{num(o.consumo)} cr</b>
                   </div>
@@ -305,7 +306,7 @@ function Agencia({ fila, onClose, onCambio }) {
                   <span>{TIPO[m.tipo] || m.tipo}{m.origen ? ` · ${ORIGEN[m.origen] || m.origen}` : ''}{m.perfil ? ` · ${m.perfil}` : ''}</span>
                   <small>
                     {new Date(m.fecha).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}
-                    {m.modelo ? ` · ${m.modelo}` : ''}{m.tokens ? ` · ${num(m.tokens)} tokens` : ''}
+                    {m.modelo ? ` · ${CONCEPTOS[m.modelo] ? `${CONCEPTOS[m.modelo]} (precio fijo)` : m.modelo}` : ''}{m.tokens ? ` · ${num(m.tokens)} tokens` : ''}
                     {m.costeEuros != null ? ` · nos cuesta ${eur(m.costeEuros)}` : ''}
                   </small>
                   <b className={m.creditos < 0 ? 'resta' : ''}>{m.creditos > 0 ? '+' : ''}{num(m.creditos)}</b>

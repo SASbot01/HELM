@@ -1,6 +1,8 @@
--- 110 — Editor de reels: el vídeo en bruto entra y sale editado (api/editor.js).
+-- 114 — Editor de reels: el vídeo en bruto entra y sale editado (api/editor.js).
+-- (Era la 110 en feat/editor-reels; la 110 de la rama principal es otra.)
 --
--- El usuario sube un talking-head grabado con el móvil, tal cual. El worker
+-- El usuario sube un talking-head grabado con el móvil, tal cual (y, si
+-- quiere, imágenes o clips de apoyo, su logo y una música). El worker
 -- (scripts/agents-worker.mjs, trabajo `editor-render`) lo transcribe palabra
 -- a palabra con Whisper, quita las tomas repetidas, las muletillas sueltas y
 -- los silencios largos, lo encuadra a 1080×1920 con punch-in, le quema los
@@ -15,6 +17,17 @@
 --                             el peso del MP4 editado. Los archivos viven en
 --                             HELM_DATA_DIR/editor/<id>/ y se borran a los 7
 --                             días; la fila se queda como historial.
+--                             Y lo de cobrar (1,50 € por bloque de 3 min
+--                             empezado del vídeo en bruto, src/helm/precios.js):
+--                             `precio_eur` lo que cuesta (con la duración del
+--                             navegador al crear y la de ffprobe al lanzar:
+--                             `duracion_s`), `cobrado_eur` lo cobrado al acabar
+--                             bien (0 si no paga; vacío = aún no o falló el
+--                             apunte). `estilo_ref` es el estilo de referencia
+--                             elegido (ESTILOS_REFERENCIA) y `recursos` lo que
+--                             subió: [{ id, tipo: broll|logo|musica, clase,
+--                             ext, nombre, bytes, ancho, alto, duracion, giro,
+--                             palabra }], los archivos en <id>/recursos/.
 --   · helm_estilos_edicion  → los estilos: uno global (client_id null,
 --                             «Estilo HELM») y el de cada perfil que lo haya
 --                             cambiado en el panel «Estilo».
@@ -50,6 +63,16 @@ create table if not exists helm_ediciones (
 create index if not exists helm_ediciones_cliente_idx
   on helm_ediciones (client_id, created_at desc);
 
+-- Lo de cobrar y los recursos (si la tabla ya existía sin ellos).
+alter table helm_ediciones add column if not exists estilo_ref text;
+alter table helm_ediciones add column if not exists recursos jsonb not null default '[]'::jsonb;
+alter table helm_ediciones add column if not exists precio_eur numeric(10,2);
+alter table helm_ediciones add column if not exists cobrado_eur numeric(10,2);
+alter table helm_ediciones add column if not exists duracion_s numeric;
+-- Lo que tiene a medias cada perfil (el tope de 2, y lo apartado del saldo).
+create index if not exists helm_ediciones_estado_idx
+  on helm_ediciones (client_id, estado);
+
 create table if not exists helm_estilos_edicion (
   id uuid primary key default gen_random_uuid(),
   -- null = global (el de partida de todos los perfiles).
@@ -72,7 +95,9 @@ select null, 'Estilo HELM', '{
   "zoom": true, "zoomCada": 4, "zoomFactor": 1.08,
   "pausaFrase": 0.6, "silencioMax": 0.4, "silencioDeja": 0.12,
   "quitarTomas": true, "similitudTomas": 0.6, "quitarMuletillas": true,
-  "volumen": -16
+  "volumen": -16,
+  "recursosModo": "corte", "recursoDuracion": 2.5, "musicaVolumen": 0.12,
+  "logoPosicion": "arriba-der"
 }'::jsonb
 where not exists (select 1 from helm_estilos_edicion where client_id is null and nombre = 'Estilo HELM');
 

@@ -37,12 +37,17 @@ function resolveHandlerFile(pathname) {
 
 const MAX_CUERPO = 30 * 1024 * 1024
 
-// La subida del Editor de reels (api/editor.js?action=subir) es un vídeo en
-// crudo de cientos de MB: no se lee aquí (ni cabe en MAX_CUERPO ni en
-// memoria); el handler recibe la petición sin tocar y la escribe a disco según
-// llega, con su propio tope.
+// Las subidas en crudo (un vídeo entero, un trozo de 32 MB de uno o un recurso
+// del Editor de reels: el archivo es el cuerpo, no JSON): no se leen aquí (no
+// caben en MAX_CUERPO ni en memoria, y pasadas por readBody se pierde el
+// stream); el handler recibe la petición sin tocar y la escribe a disco según
+// llega, con su propio tope (api/_lib/subida-trozos.js).
+const EN_CRUDO = {
+  '/api/editor': ['subir', 'trozo', 'recurso'],
+  '/api/trial-reels': ['trozo'],
+}
 const subidaEnCrudo = (pathname, query) =>
-  pathname.replace(/\/+$/, '') === '/api/editor' && query.action === 'subir'
+  (EN_CRUDO[pathname.replace(/\/+$/, '')] || []).includes(query.action)
 
 // Lo que se lee como texto: JSON (también los *+json), formularios y text/*.
 // Lo demás (un fichero del portal de documentos, application/octet-stream) se
@@ -123,3 +128,9 @@ async function atiende(req, res) {
 }
 
 server.listen(PORT, '127.0.0.1', () => console.log(`[api] listening on 127.0.0.1:${PORT} -> ${API_ROOT}`))
+
+// Trial reels limpia su disco (7 días) y reintenta los cobros sin apuntar cada
+// hora (api/trial-reels.js · mantenimiento): se carga ya, aunque nadie abra el
+// agente. Con la misma URL que usa atiende(), para que sea el mismo módulo.
+import(pathToFileURL(path.join(API_ROOT, 'trial-reels.js')).href)
+  .catch(e => console.error('[api] no pude cargar trial-reels:', e?.message || e))

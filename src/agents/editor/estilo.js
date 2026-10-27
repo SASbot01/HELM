@@ -8,6 +8,16 @@
 // hay «punch-in» (el zoom que salta cada pocos segundos) y cómo de agresivo es
 // el corte (qué cuenta como silencio y como toma repetida). Cada valor tiene
 // su tope: fuera de él, el reel deja de verse bien en Instagram.
+//
+// Y cómo entran los recursos que sube el usuario junto al vídeo: las
+// imágenes y clips de apoyo (a pantalla completa o en la mitad de arriba con la
+// persona abajo, y cuánto dura cada uno), la música (a qué volumen bajo la voz)
+// y el logo (en qué esquina, o ninguna).
+//
+// Uso:
+//   import { normalizaEstilo, ESTILO_POR_DEFECTO, MODOS_RECURSOS, POSICIONES_LOGO } from './editor/estilo'
+//   const estilo = normalizaEstilo({ recursosModo: 'arriba', musicaVolumen: 0.2 })  // siempre válido
+//   Object.entries(MODOS_RECURSOS)  // [['corte', 'Pantalla completa'], …] para un selector
 
 export const LIENZO = { ancho: 1080, alto: 1920 }
 export const FPS = 30
@@ -30,7 +40,28 @@ export const RANGOS_ESTILO = {
   silencioDeja: { min: 0.05, max: 0.4, paso: 0.01 },
   similitudTomas: { min: 0.5, max: 0.95, paso: 0.05 },
   volumen: { min: -20, max: -12, paso: 0.5 },
+  recursoDuracion: { min: 1.5, max: 5, paso: 0.5 },
+  musicaVolumen: { min: 0, max: 0.5, paso: 0.01 },
 }
+
+// Cómo entran las imágenes y clips de apoyo (broll). Las claves son lo que se
+// guarda; el texto, lo que se enseña.
+export const MODOS_RECURSOS = Object.freeze({
+  // Tapan el vídeo entero (1080×1920, recortado al centro) mientras duran.
+  corte: 'Pantalla completa',
+  // En la mitad de arriba, con la persona en la de abajo (estilo Kallaway).
+  arriba: 'Arriba, con la persona abajo',
+})
+
+// Dónde va el logo, encima de todo el vídeo (dentro de los márgenes seguros
+// de Instagram).
+export const POSICIONES_LOGO = Object.freeze({
+  'arriba-izq': 'Arriba a la izquierda',
+  'arriba-der': 'Arriba a la derecha',
+  'abajo-izq': 'Abajo a la izquierda',
+  'abajo-der': 'Abajo a la derecha',
+  ninguna: 'Sin logo',
+})
 
 export const ESTILO_POR_DEFECTO = Object.freeze({
   // Subtítulos (quemados en el vídeo, palabra a palabra)
@@ -60,6 +91,14 @@ export const ESTILO_POR_DEFECTO = Object.freeze({
   quitarMuletillas: true,
   // Volumen de la voz al final (LUFS integrados; Instagram anda por -14/-16).
   volumen: -16,
+  // Recursos que sube el usuario: cada imagen o clip de apoyo dura
+  // `recursoDuracion` s y entra según `recursosModo`.
+  recursosModo: 'corte',
+  recursoDuracion: 2.5,
+  // La música va en bucle debajo de la voz a este volumen (0 = muda, 0,5 =
+  // la mitad), y baja más mientras se habla.
+  musicaVolumen: 0.12,
+  logoPosicion: 'arriba-der',
 })
 
 const COLOR = /^#[0-9a-f]{6}$/i
@@ -74,6 +113,7 @@ const numero = (v, rango, defecto, d = 2) => {
 }
 const color = (v, defecto) => (typeof v === 'string' && COLOR.test(v.trim()) ? v.trim().toUpperCase() : defecto)
 const si = (v, defecto) => (typeof v === 'boolean' ? v : defecto)
+const opcion = (v, opciones, defecto) => (typeof v === 'string' && Object.hasOwn(opciones, v.trim()) ? v.trim() : defecto)
 
 /**
  * El estilo saneado: cada valor dentro de su tope, los colores en #RRGGBB y lo
@@ -106,6 +146,10 @@ export function normalizaEstilo(entrada = {}, base = ESTILO_POR_DEFECTO) {
     similitudTomas: numero(e.similitudTomas, R.similitudTomas, b.similitudTomas),
     quitarMuletillas: si(e.quitarMuletillas, b.quitarMuletillas),
     volumen: numero(e.volumen, R.volumen, b.volumen, 1),
+    recursosModo: opcion(e.recursosModo, MODOS_RECURSOS, b.recursosModo),
+    recursoDuracion: numero(e.recursoDuracion, R.recursoDuracion, b.recursoDuracion, 1),
+    musicaVolumen: numero(e.musicaVolumen, R.musicaVolumen, b.musicaVolumen),
+    logoPosicion: opcion(e.logoPosicion, POSICIONES_LOGO, b.logoPosicion),
   }
 }
 

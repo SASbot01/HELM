@@ -6,6 +6,7 @@ import {
   normalizaMarca, normalizaOpciones, primeraCifra, contraste, tintaSobre, comprobar, MARCA_POR_DEFECTO, ZONA_CUADRICULA,
 } from '../src/agents/portadas/reglas.js'
 import { ajusta, maquetar } from '../src/agents/portadas/componer.js'
+import { tamanoFotograma, capturador } from '../src/agents/portadas/fotograma.js'
 
 // Una letra de mentira: cada carácter mide medio cuerpo.
 const medir = (t, tam) => String(t).length * tam * 0.5
@@ -192,5 +193,46 @@ describe('api/portadas', () => {
   it('extraeJson aguanta texto alrededor', () => {
     expect(extraeJson('bla {"a":1} bla')).toEqual({ a: 1 })
     expect(extraeJson('nada')).toBe(null)
+  })
+})
+
+// El fotograma de un vídeo propio (Portadas y Trial reels): reducido a lo que
+// cubre 1080×1920 y con dos lienzos que se turnan (un 4K del móvil agotaba la
+// memoria de canvas de iOS). Sin canvas: lienzos de mentira.
+describe('fotograma', () => {
+  it('tamanoFotograma: lo más pequeño que siga cubriendo 1080×1920, nunca más grande que el vídeo', () => {
+    expect(tamanoFotograma(2160, 3840)).toEqual({ ancho: 1080, alto: 1920 })       // 4K vertical
+    expect(tamanoFotograma(3840, 2160)).toEqual({ ancho: 3413, alto: 1920 })       // 4K apaisado: el alto manda
+    expect(tamanoFotograma(720, 1280)).toEqual({ ancho: 720, alto: 1280 })         // más pequeño: tal cual
+    expect(tamanoFotograma(1080, 1920)).toEqual({ ancho: 1080, alto: 1920 })
+    expect(tamanoFotograma(0, 1920)).toBeNull()
+    expect(tamanoFotograma(undefined, undefined)).toBeNull()
+  })
+
+  it('capturador: reduce, turna dos lienzos (cada captura es otro objeto) y sin contexto devuelve null', () => {
+    const dibujos = []
+    let sinMemoria = false
+    const creados = []
+    const crea = () => {
+      const c = { width: 300, height: 150, getContext: () => (sinMemoria ? null : { drawImage: (...a) => dibujos.push([c, ...a]) }) }
+      creados.push(c)
+      return c
+    }
+    const captura = capturador(crea)
+    const video = { videoWidth: 2160, videoHeight: 3840 }
+    const a = captura(video)
+    const b = captura(video)
+    const c = captura(video)
+    expect(creados).toHaveLength(2)
+    expect(a).not.toBe(b)
+    expect(c).toBe(a)
+    expect([a.width, a.height]).toEqual([1080, 1920])
+    expect(dibujos[0].slice(1)).toEqual([video, 0, 0, 1080, 1920])
+    // Aún sin imagen (el vídeo no ha cargado): nada.
+    expect(captura({ videoWidth: 0, videoHeight: 0 })).toBeNull()
+    // El navegador sin memoria de canvas: null, y quien llama se queda con el de antes.
+    sinMemoria = true
+    expect(captura(video)).toBeNull()
+    expect(dibujos).toHaveLength(3)
   })
 })

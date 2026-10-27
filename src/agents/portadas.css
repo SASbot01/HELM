@@ -130,3 +130,49 @@
 .por-versiones button { flex: 0 0 72px; padding: 0; border: 2px solid transparent; border-radius: 8px; background: none; cursor: pointer; overflow: hidden; }
 .por-versiones button.on { border-color: var(--orange); }
 .por-versiones img { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; display: block; }
+
+/* Un vídeo propio: se abre aquí, no se sube. */
+.por-video-propio { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.por-video-propio small { flex: 1 1 100%; }
+.por-precio { font-weight: 500; opacity: .85; }
+.por-saldo { display: block; }
+
+/* La vista previa con CSS de los estilos sin imagen (portadas/VistaEstilo.jsx).
+   El tamaño de la letra va en cqw: la tarjeta mide lo que mida la columna. */
+.por-vista { position: relative; display: block; width: 100%; aspect-ratio: 9 / 16; border-radius: 7px; overflow: hidden; container-type: inline-size; }
+.por-vista-titular { position: absolute; left: 8%; right: 8%; z-index: 3; font-size: 12cqw; line-height: .98; letter-spacing: -0.01em; text-wrap: balance; overflow-wrap: anywhere; }
+.por-vista-arriba .por-vista-titular { top: 11%; }
+.por-vista-centro .por-vista-titular { top: 44%; transform: translateY(-50%); }
+.por-vista-abajo .por-vista-titular { bottom: 16%; }
+.por-vista-linea.caja { padding: .06em .22em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.por-vista-titular .res { color: var(--resalte); }
+.por-vista-titular .grande { display: block; font-size: 2.6em; line-height: .9; }
+.por-vista-comillas { display: block; color: var(--resalte); font-size: 2.2em; line-height: .6; margin-bottom: .05em; }
+/* La persona: una silueta neutra (cabeza y hombros), nunca una cara. */
+.por-vista-persona { position: absolute; bottom: 0; width: 48%; height: 44%; z-index: 2; }
+.por-vista-persona::before { content: ''; position: absolute; left: 50%; top: 0; width: 46%; aspect-ratio: 1; transform: translateX(-50%); border-radius: 50%; background: var(--silueta); }
+.por-vista-persona::after { content: ''; position: absolute; left: 50%; bottom: 0; width: 100%; height: 56%; transform: translateX(-50%); border-radius: 48% 48% 0 0; background: var(--silueta); }
+.por-vista-persona.derecha { right: 0; }
+.por-vista-persona.izquierda { left: 0; }
+.por-vista-persona.centro { left: 26%; }
+.por-vista-persona.abajo { left: 20%; width: 60%; height: 46%; }
+.por-vista-persona.pequena { right: 8%; width: 28%; height: 24%; }
+.por-vista-persona.dos-a { left: 2%; width: 44%; height: 40%; }
+.por-vista-persona.dos-b { right: 2%; width: 44%; height: 40%; }
+.por-vista-adorno { position: absolute; z-index: 1; pointer-events: none; }
+.por-vista-adorno.flechas { left: 46%; top: 52%; width: 44%; height: 20%; }
+.por-vista-adorno.flechas i { position: absolute; left: 0; top: 0; font-style: normal; font-size: 22cqw; color: #FF2D2D; transform: rotate(150deg); line-height: 1; }
+.por-vista-adorno.flechas b { position: absolute; right: 0; bottom: 0; width: 46%; aspect-ratio: 1; border: 1.6cqw solid #FF2D2D; border-radius: 50%; }
+.por-vista-adorno.pantalla { left: 7%; top: 44%; width: 46%; height: 20%; border-radius: 5%; border: 1.4cqw solid var(--resalte); background: rgba(255,255,255,.12); display: flex; flex-direction: column; justify-content: center; gap: 9%; padding: 0 8%; transform: rotate(-4deg); }
+.por-vista-adorno.pantalla i { display: block; height: 9%; border-radius: 3px; background: var(--resalte); opacity: .7; }
+.por-vista-adorno.pantalla i:nth-child(2) { width: 70%; opacity: .45; }
+.por-vista-adorno.pantalla i:nth-child(3) { width: 45%; opacity: .3; }
+.por-vista-adorno.pizarra { left: 8%; top: 42%; width: 40%; height: 22%; background: rgba(255,255,255,.55); border-radius: 6%; }
+.por-vista-adorno.pizarra i { position: absolute; inset: 14% 18%; clip-path: polygon(50% 0, 100% 100%, 0 100%); background: repeating-linear-gradient(180deg, var(--resalte) 0 30%, transparent 30% 35%); opacity: .8; }
+.por-vista-adorno.antes-despues { left: 0; right: 0; bottom: 4%; display: flex; justify-content: space-around; align-items: center; color: #fff; font: 800 6cqw/1 "Inter Tight", system-ui, sans-serif; z-index: 3; }
+.por-vista-adorno.antes-despues i { font-style: normal; font-size: 12cqw; color: var(--resalte); }
+.por-vista-adorno.mitad { left: 0; right: 0; top: 0; height: 50%; background: radial-gradient(circle at 50% 58%, color-mix(in srgb, var(--resalte) 70%, transparent) 0 22%, transparent 48%), linear-gradient(180deg, rgba(255,255,255,.08), rgba(0,0,0,.25)); border-bottom: .8cqw solid rgba(255,255,255,.35); }
+.por-vista-adorno.escena { inset: 0; background: radial-gradient(circle at 20% 70%, rgba(255,255,255,.10) 0 18%, transparent 30%), radial-gradient(circle at 85% 30%, rgba(255,255,255,.08) 0 14%, transparent 26%); }
+.por-vista-adorno.foco { right: 6%; top: 46%; width: 44%; aspect-ratio: 1; border-radius: 50%; border: 2cqw solid var(--resalte); background: radial-gradient(circle, rgba(255,255,255,.35) 0 30%, transparent 32%); }
+.por-vista-adorno.comillas { display: none; }
+.por-estilo-para { display: block; margin-top: 4px; }

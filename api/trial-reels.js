@@ -2,17 +2,39 @@
 // probar la idea como «Reel de prueba» de Instagram.
 //
 //   GET  ?action=lista   &clientId=                 → las variantes del perfil (las 30 últimas)
+//                                                     y sus vídeos subidos (`fuentes`)
 //   POST ?action=ganchos { clientId, mediaId }      → 3 ganchos de texto (gasta créditos)
-//   POST ?action=crear   { clientId, mediaId, variantes: [{ ajustes, ganchoPng }] }
+//        ó           { clientId, texto }            → lo mismo para un vídeo subido: de qué va
+//   POST ?action=fuente  { clientId, nombre, bytes, tipo, duracion? }
+//                                                   → empieza la subida de un vídeo propio: { fuenteId }
+//   POST ?action=trozo   &clientId=&id=&offset=     → un trozo, en crudo (api/_lib/subida-trozos.js);
+//                                                     el último lo cierra y lo sondea: { …, fuente }
+//   GET  ?action=trozo   &clientId=&id=             → { recibidos, estado }, para seguir una subida cortada
+//                                                     con el mismo id (o empezar otra si falló)
+//   GET  ?action=fuente-video &clientId=&id=        → el vídeo subido, para la vista previa
+//   POST ?action=borrar-fuente { clientId, id }     → quitarlo (y su archivo); también para cancelar una subida
+//   POST ?action=crear   { clientId, mediaId | fuenteId, variantes: [{ ajustes, ganchoPng }] }
 //                                                   → hasta 3 variantes en cola; devuelve sus ids
 //   GET  ?action=estado  &clientId=&id=             → cómo va una
 //   GET  ?action=descarga&clientId=&id=             → el MP4, como adjunto
 //   POST ?action=borrar  { clientId, id }           → quitarla (y su archivo)
 //
-// El vídeo de partida SOLO sale de la cuenta de Instagram conectada del perfil:
-// un reel que esté en helm_ig_media de ESE perfil, pedido a Meta con SU token
-// (getMediaUrls) y bajado solo del CDN de Meta. Aquí no se suben archivos ni
-// se bajan reels de otros: el agente trabaja con el contenido del cliente.
+// Cada hora, aunque nadie abra el agente (scripts/api-server.mjs carga este
+// módulo al arrancar), mantenimiento() borra lo que pasa de 7 días y vuelve a
+// probar los cobros que no llegaron a apuntarse.
+//
+// El vídeo de partida sale de la cuenta de Instagram conectada del perfil (un
+// reel que esté en helm_ig_media de ESE perfil, pedido a Meta con SU token y
+// bajado solo del CDN de Meta) o, desde el 27-oct, de un MP4/MOV que sube el
+// propio usuario desde su ordenador o su móvil (helm_trial_fuentes, migración
+// 115). Lo subido se comprueba por sus bytes (esVideoIsoBmff y ffprobe), no por
+// el nombre ni el tipo que diga el navegador, y se borra a los 7 días.
+//
+// Cobra a PRECIO FIJO (src/helm/precios.js): 0,30 € por variante. Antes de
+// crear se mira que llegue el saldo (402 si no, contando lo que la agencia ya
+// tiene en cola sin cobrar); cada variante se cobra SOLO cuando sale bien, con
+// la referencia `trial:<id>` (nunca dos veces). La agencia de la casa
+// (sin_cobro) y un perfil sin agencia no pagan.
 //
 // El montaje lo hace ffmpeg en este servidor (api/_lib/variantes.js), de uno
 // en uno; el gancho lo compone el navegador con el kit de Portadas
@@ -24,19 +46,24 @@ import fsp from 'node:fs/promises'
 import { pipeline } from 'node:stream/promises'
 import { supabase } from './lib/supabase.js'
 import { applyCors, rateLimit, getClientIp } from './_lib/auth.js'
-import { requireProfileAccess } from './_lib/access.js'
+import { requireProfileAccess, agenciaDe } from './_lib/access.js'
 import { enContexto } from './_lib/contexto.js'
 import { llmChat } from './_lib/llm.js'
 import { getToken, getMediaUrls } from './_lib/instagram.js'
+import { exigirImporte, cobrarFijo, cobradoYa, quienPagaPerfil, PRECIOS_FIJOS } from './_lib/creditos.js'
+import { recibeTrozo, recibidosDe, cierraSubida, contestaError, rutaParte } from './_lib/subida-trozos.js'
 import {
-  normalizaAjustes, procesaVariante, descargaFuente, limpiaViejos, encola, enCola, quitaDeCola, colaUsa, largoCola,
-  rutaSalida, rutaGancho, rutaFuente, CARPETA, MAX_VIDEO, DIAS_GUARDADO,
+  normalizaAjustes, procesaVariante, descargaFuente, limpiaViejos, encola, enCola, quitaDeCola, colaUsa, largoCola, sondea,
+  rutaSalida, rutaGancho, rutaFuente, rutaFuenteSubida, dirSubidaFuente, minLibreTrial, esVideoIsoBmff, guardadoDelPerfil,
+  CARPETA, MAX_VIDEO, MAX_DURACION_FUENTE, DIAS_GUARDADO,
 } from './_lib/variantes.js'
 import { normalizaGanchos, esReel, MAX_VARIANTES, PALABRAS_GANCHO, MAX_CARACTERES_GANCHO, LIENZO } from '../src/agents/trialreels/reglas.js'
 import { extraeJson } from './portadas.js'
 
 const TABLA = 'helm_trial_reels'
-const COLUMNAS = 'id, media_id, variante, ajustes, estado, bytes, duracion, error, created_at, updated_at'
+const COLUMNAS = 'id, media_id, fuente_id, variante, ajustes, estado, bytes, duracion, error, precio_eur, cobrado_eur, created_at, updated_at'
+const FUENTES = 'helm_trial_fuentes'
+const COLUMNAS_FUENTE = 'id, nombre, bytes, tipo, duracion, estado, error, created_at, updated_at'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MEDIA = /^\d{5,30}$/
 const MAX_PNG = 4 * 1024 * 1024
@@ -49,6 +76,30 @@ const CADUCA_PROCESANDO = 15 * 60_000
 // Una fila «en_cola» que no está en la cola de memoria es de antes de un
 // reinicio: se vuelve a encolar (con margen, para no pisar a `crear`).
 const MARGEN_REANIMA = 60_000
+// Lo que cuesta cada variante, en euros de saldo.
+const PRECIO = PRECIOS_FIJOS['trial-reel']
+// Vídeos subiéndose a la vez por perfil, y vídeos nuevos por perfil y hora:
+// cada uno son hasta 200 MB de disco.
+const MAX_SUBIENDO_PERFIL = 3
+const MAX_FUENTES_HORA = 20
+// Una subida que lleva esto sin recibir un byte (ni la fila ni su subida.part
+// se han movido) se da por cortada: ya no cuenta para MAX_SUBIENDO_PERFIL y el
+// panel la enseña como «Cortada». Un trozo de 32 MB por un móvil lento tarda
+// unos minutos; esto le deja margen de sobra.
+const SUBIDA_PARADA_MS = 15 * 60_000
+// Lo que un perfil puede tener guardado de vídeos subidos (cada uno, 7 días):
+// subir no cuesta nada y el disco es el del Editor de reels y los montajes.
+const MAX_GUARDADOS_PERFIL = 10
+const MAX_BYTES_GUARDADOS = 2 * 1024 * 1024 * 1024
+// Cada cuánto corre mantenimiento() (y la primera vez, al minuto de cargar).
+const CADA_MANTENIMIENTO_MS = 60 * 60_000
+// Los vídeos que acepta la subida (lo que graba un móvil, también el 3GP de
+// algunos Android); el tipo lo dice el navegador y puede venir vacío: lo que
+// manda son los bytes (esVideoIsoBmff).
+const TIPOS_VIDEO = new Set(['video/mp4', 'video/quicktime', 'video/x-m4v', 'video/3gpp', ''])
+const EXT_VIDEO = /\.(mp4|mov|m4v|3gp)$/i
+const NO_ES_VIDEO = 'Ese archivo no es un vídeo MP4 o MOV. Si lo es, expórtalo otra vez como MP4 (desde la galería del móvil o con cualquier editor) y vuelve a subirlo.'
+const MB = 1024 * 1024
 
 const REGLAS = `Escribes GANCHOS de texto para los 2–3 primeros segundos de un reel de Instagram, en español de España, para cuentas de negocio y creadores. El gancho va sobreimpreso arriba mientras arranca el vídeo; su trabajo es que quien está haciendo scroll se pare. Es un reel que la cuenta ya publicó y que va a volver a probar como «Reel de prueba» (se enseña primero a gente que no la sigue), así que el gancho tiene que funcionar con quien NO conoce la cuenta.
 
@@ -65,7 +116,168 @@ Responde SOLO con JSON, sin nada alrededor:
 {"opciones":[{"texto":"…","resaltada":"…","angulo":"A · curiosidad","porque":"una frase"}]}`
 
 const recorta = (s, n) => String(s || '').slice(0, n)
-const fallo = (message, statusCode) => Object.assign(new Error(message), { statusCode })
+const fallo = (message, statusCode, extra = {}) => Object.assign(new Error(message), { statusCode, ...extra })
+const euros = (v) => (v == null ? null : Number(v))
+
+/** El nombre del archivo, solo para enseñarlo: sin carpetas ni caracteres de control. */
+export function nombreSeguro(nombre) {
+  const base = String(nombre ?? '').split(/[\\/]/).pop()
+  return base.replace(/\p{Cc}/gu, '').replace(/\s+/g, ' ').trim().slice(0, 120) || 'video.mp4'
+}
+
+/** ¿Sigue en disco (y dentro de sus 7 días) el vídeo subido? */
+async function fuenteDisponible(clientId, fuenteId) {
+  try {
+    const st = await fsp.stat(rutaFuenteSubida(clientId, fuenteId))
+    return st.isFile() && Date.now() - st.mtimeMs < DIAS_GUARDADO * 86_400_000
+  } catch { return false }
+}
+
+/**
+ * Cuándo se movió por última vez una subida: la fila (cada trozo que llega la
+ * toca) o su subida.part (crece mientras entra un trozo). En ms.
+ */
+async function actividadDe(f) {
+  let t = new Date(f.updated_at || f.created_at).getTime() || 0
+  try { t = Math.max(t, (await fsp.stat(rutaParte(dirSubidaFuente(f.id)))).mtimeMs) } catch { /* aún sin trozos */ }
+  return t
+}
+const subidaViva = async (f) => f.estado === 'subiendo' && Date.now() - (await actividadDe(f)) <= SUBIDA_PARADA_MS
+
+/**
+ * Un vídeo subido tal y como lo ve el panel. Uno «subiendo» que no se mueve
+ * desde hace SUBIDA_PARADA_MS sale como «cortada» (se cerró la pestaña, se
+ * cortó la red…): el panel lo enseña así, con «Quitar».
+ */
+async function publicaFuente(f, clientId) {
+  let estado = f.estado
+  let error = f.error || null
+  if (estado === 'subiendo' && !(await subidaViva(f))) {
+    estado = 'cortada'
+    error = 'La subida se cortó a medias. Quítala y vuelve a subir el vídeo.'
+  }
+  return {
+    id: f.id,
+    nombre: f.nombre || 'video.mp4',
+    bytes: f.bytes == null ? null : Number(f.bytes),
+    duracion: f.duracion == null ? null : Number(f.duracion),
+    estado,
+    error,
+    disponible: estado === 'lista' ? await fuenteDisponible(clientId, f.id) : false,
+    creado: f.created_at,
+  }
+}
+
+/**
+ * Lo que la agencia tiene ya comprometido en Trial reels y aún sin cobrar: las
+ * variantes de TODOS sus perfiles en cola o montándose (un «procesando» que se
+ * quedó colgado por un reinicio no cuenta). Para exigirImporte · pendiente.
+ */
+export async function pendienteTrial(agenciaId) {
+  const { data: perfiles, error } = await supabase.from('clients').select('id').eq('agencia_id', agenciaId)
+  if (error) throw error
+  const ids = (perfiles || []).map(p => p.id)
+  if (!ids.length) return 0
+  const { data, error: err2 } = await supabase.from(TABLA).select('estado, precio_eur, cobrado_eur, updated_at')
+    .in('client_id', ids).in('estado', ['en_cola', 'procesando'])
+  if (err2) throw err2
+  const ahora = Date.now()
+  return (data || []).reduce((suma, f) => {
+    if (f.cobrado_eur != null) return suma
+    if (f.estado === 'procesando' && ahora - new Date(f.updated_at || 0).getTime() > CADUCA_PROCESANDO) return suma
+    return suma + (Number(f.precio_eur) || 0)
+  }, 0)
+}
+
+/**
+ * Cobra una variante que ha salido bien (cobrarFijo con `trial:<id>`: con la
+ * misma referencia no se cobra dos veces) y apunta lo cobrado en la fila: lo
+ * cobrado ahora o antes (un reintento), o 0 si la agencia no paga. Si no se
+ * sabe (falla la base), se deja en null y se vuelve a probar desde la lista o
+ * desde mantenimiento().
+ * Nunca lanza.
+ */
+export async function cobraVariante({ id, clientId, precio }) {
+  const importe = Number(precio)
+  if (!(importe > 0)) return null
+  const referencia = `trial:${id}`
+  try {
+    let cobrado = (await cobrarFijo(clientId, importe, { concepto: 'trial-reel', referencia, origen: 'auto' })) != null ? importe : null
+    if (cobrado == null) cobrado = await cobradoYa(referencia)
+    if (cobrado == null && !(await quienPagaPerfil(clientId))) cobrado = 0
+    if (cobrado != null) await marca(id, { cobrado_eur: cobrado })
+    return cobrado
+  } catch (e) {
+    console.error('[trial-reels] no se pudo apuntar el cobro de', id, e?.message || e)
+    return null
+  }
+}
+// Los cobros que se están reintentando desde la lista o mantenimiento() (para
+// no repetirlos a la vez).
+const reintentando = new Set()
+
+/**
+ * Lo que se hace aunque nadie abra Trial reels: borrar lo que pasa de 7 días
+ * (y las subidas abandonadas) y volver a cobrar lo que salió bien y no llegó a
+ * apuntar su cobro (una caída de la base o un reinicio justo entonces; con la
+ * misma referencia no se cobra dos veces). Devuelve cuántos cobros ha
+ * apuntado. Nunca lanza.
+ */
+export async function mantenimiento() {
+  await limpiaViejos().catch(e => console.error('[trial-reels] no pude limpiar:', e?.message || e))
+  let apuntados = 0
+  try {
+    const { data, error } = await supabase.from(TABLA).select('id, client_id, precio_eur, cobrado_eur, updated_at')
+      .eq('estado', 'listo').is('cobrado_eur', null).gt('precio_eur', 0).order('updated_at', { ascending: true }).limit(200)
+    if (error) throw error
+    for (const f of data || []) {
+      // Las recién terminadas las está cobrando su trabajo.
+      if (Date.now() - new Date(f.updated_at || 0).getTime() < MARGEN_REANIMA || reintentando.has(f.id)) continue
+      reintentando.add(f.id)
+      try {
+        if ((await cobraVariante({ id: f.id, clientId: f.client_id, precio: f.precio_eur })) != null) apuntados++
+      } finally { reintentando.delete(f.id) }
+    }
+  } catch (e) {
+    console.error('[trial-reels] no pude mirar los cobros pendientes:', e?.message || e)
+  }
+  return apuntados
+}
+
+// Una vez por proceso (globalThis, por si el módulo se carga dos veces) y sin
+// retener el proceso al salir. En los tests no corre: se llama a mano.
+if (!globalThis.__helmTrialMantenimiento && !process.env.VITEST) {
+  let corriendo = false
+  const corre = () => {
+    if (corriendo) return
+    corriendo = true
+    mantenimiento()
+      .then(n => { if (n) console.log(`[trial-reels] ${n} cobro(s) pendiente(s) apuntado(s)`) })
+      .finally(() => { corriendo = false })
+  }
+  setTimeout(corre, 60_000).unref?.()
+  globalThis.__helmTrialMantenimiento = setInterval(corre, CADA_MANTENIMIENTO_MS)
+  globalThis.__helmTrialMantenimiento.unref?.()
+}
+
+// De uno en uno por clave (la agencia): comprobar el saldo y meter las
+// variantes en la tabla van juntos, para que dos «crear» casi a la vez no
+// pasen los dos con el saldo de uno. El api-server es un solo proceso.
+const cerrojos = new Map()
+async function enFila(clave, fn) {
+  const antes = cerrojos.get(clave) || Promise.resolve()
+  let suelta
+  const mio = new Promise(ok => { suelta = ok })
+  const cola = antes.then(() => mio)
+  cerrojos.set(clave, cola)
+  await antes
+  try {
+    return await fn()
+  } finally {
+    suelta()
+    if (cerrojos.get(clave) === cola) cerrojos.delete(clave)
+  }
+}
 
 /** La fila tal y como la ve el panel, con el estado de verdad. */
 async function publica(fila) {
@@ -87,44 +299,56 @@ async function publica(fila) {
   }
   return {
     id: fila.id,
-    mediaId: fila.media_id,
+    mediaId: fila.media_id || null,
+    fuenteId: fila.fuente_id || null,
     variante: fila.variante,
     ajustes: fila.ajustes || {},
     estado,
     error,
     bytes: fila.bytes == null ? null : Number(fila.bytes),
     duracion: fila.duracion == null ? null : Number(fila.duracion),
+    precio: euros(fila.precio_eur),
+    cobrado: euros(fila.cobrado_eur),
     disponible,
     creado: fila.created_at,
     actualizado: fila.updated_at,
   }
 }
 
+/** Apunta cambios en la variante. Lanza si la base no lo guarda (nadie debe dar por hecho lo que no consta). */
 async function marca(id, cambios) {
-  await supabase.from(TABLA).update({ ...cambios, updated_at: new Date().toISOString() }).eq('id', id)
+  const { error } = await supabase.from(TABLA).update({ ...cambios, updated_at: new Date().toISOString() }).eq('id', id)
+  if (error) {
+    console.error('[trial-reels] no se pudo apuntar', id, error.message || error)
+    throw fallo('No se pudo guardar cómo va la variante. Vuelve a crearla.', 500)
+  }
 }
 
 /**
  * El trabajo de una variante, tal y como corre en la cola: baja la fuente (si
- * no está ya de otra variante de la misma tanda), monta y apunta el resultado.
- * Todo con el id y el perfil; nada de lo que diga la fila sobre rutas.
+ * no está ya de otra variante de la misma tanda; un vídeo subido ya está en
+ * disco), monta, apunta el resultado y, si ha salido bien, la cobra. Todo con
+ * el id y el perfil; nada de lo que diga la fila sobre rutas.
  */
-function trabajoDe({ id, clientId, mediaId }) {
-  const fuente = rutaFuente(clientId, mediaId)
+function trabajoDe({ id, clientId, mediaId, fuenteId = null }) {
+  const subido = Boolean(fuenteId)
+  const fuente = subido ? rutaFuenteSubida(clientId, fuenteId) : rutaFuente(clientId, mediaId)
   return {
     id,
     fuente,
-    // Fuera del contexto de la petición que lo encoló: esto no cobra nada y
-    // no debe quedar a nombre de nadie.
+    // Fuera del contexto de la petición que lo encoló: no debe quedar a nombre
+    // de nadie (el cobro va aparte, con el perfil explícito).
     ejecuta: () => enContexto({ origen: 'trial-reels' }, async () => {
-      const { data: fila } = await supabase.from(TABLA).select('id, media_id, ajustes, estado')
+      const { data: fila } = await supabase.from(TABLA).select('id, media_id, ajustes, estado, precio_eur')
         .eq('id', id).eq('client_id', clientId).maybeSingle()
       if (!fila || fila.estado !== 'en_cola') return
       await marca(id, { estado: 'procesando', error: null })
       const ajustes = normalizaAjustes(fila.ajustes)
       const gancho = ajustes.conGancho ? rutaGancho(id) : null
+      let salio = false
       try {
         await limpiaViejos()
+        if (subido && !fs.existsSync(fuente)) throw fallo(`El vídeo que subiste ya no está (se guardan ${DIAS_GUARDADO} días). Vuelve a subirlo.`)
         if (!fs.existsSync(fuente)) {
           const { data: reel } = await supabase.from('helm_ig_media').select('media_id, tipo, producto')
             .eq('client_id', clientId).eq('media_id', fila.media_id).maybeSingle()
@@ -136,14 +360,23 @@ function trabajoDe({ id, clientId, mediaId }) {
         }
         if (gancho && !fs.existsSync(gancho)) throw fallo('El gancho se perdió (el servidor se reinició). Vuelve a crear la variante.')
         const r = await procesaVariante({ entrada: fuente, salida: rutaSalida(id), gancho, ajustes })
+        // Solo cuenta como hecha (y se cobra) si la base ha apuntado «listo»:
+        // si no, nadie la podría descargar.
         await marca(id, { estado: 'listo', archivo: `trial-reels/${id}.mp4`, bytes: r.bytes, duracion: r.duracion, error: null })
+        salio = true
       } catch (e) {
         console.error('[trial-reels]', id, e?.message || e)
+        // Lo que no se entrega no se queda en el disco.
+        await fsp.rm(rutaSalida(id), { force: true })
         await marca(id, { estado: 'error', error: recorta(e?.message || 'No se pudo montar', 300) })
       } finally {
         if (gancho) await fsp.rm(gancho, { force: true })
-        if (!colaUsa(fuente, id)) await fsp.rm(fuente, { force: true })
+        // La de Instagram se vuelve a bajar cuando haga falta; la subida no:
+        // se queda sus 7 días para sacar más variantes.
+        if (!subido && !colaUsa(fuente, id)) await fsp.rm(fuente, { force: true })
       }
+      // Solo lo que ha salido bien se cobra.
+      if (salio) await cobraVariante({ id, clientId, precio: fila.precio_eur })
     }),
   }
 }
@@ -183,39 +416,71 @@ export default async function handler(req, res) {
   try {
     auth = await requireProfileAccess(req, clientId)
   } catch (err) {
+    // Un trozo en crudo sin leer: contestaError cierra la conexión al acabar.
+    if (action === 'trozo') return contestaError(req, res, Object.assign(err, { statusCode: err.statusCode || 401 }))
     return res.status(err.statusCode || 401).json({ error: err.message })
   }
+
+  // ── POST|GET ?action=trozo ─────────────────────────────────────────────
+  // El cuerpo es el trozo en crudo (scripts/api-server.mjs no lo lee): va
+  // aparte, con sus errores por contestaError.
+  if (action === 'trozo') return trozo(req, res, clientId)
 
   try {
     // ── GET ?action=lista ──────────────────────────────────────────────────
     if (req.method === 'GET' && action === 'lista') {
-      const { data, error } = await supabase.from(TABLA).select(COLUMNAS)
-        .eq('client_id', clientId).order('created_at', { ascending: false }).limit(30)
+      const [{ data, error }, { data: fuentes, error: errFuentes }] = await Promise.all([
+        supabase.from(TABLA).select(COLUMNAS).eq('client_id', clientId).order('created_at', { ascending: false }).limit(30),
+        supabase.from(FUENTES).select(COLUMNAS_FUENTE).eq('client_id', clientId).order('created_at', { ascending: false }).limit(20),
+      ])
       if (error) return res.status(500).json({ error: error.message })
-      // Lo que se quedó en cola antes de un reinicio vuelve a la cola.
+      if (errFuentes) return res.status(500).json({ error: errFuentes.message })
       for (const f of data || []) {
+        const edad = Date.now() - new Date(f.updated_at || f.created_at).getTime()
+        // Lo que se quedó en cola antes de un reinicio vuelve a la cola.
         if (f.estado === 'en_cola' && !enCola(f.id) && Date.now() - new Date(f.created_at).getTime() > MARGEN_REANIMA) {
-          encola(trabajoDe({ id: f.id, clientId, mediaId: f.media_id }))
+          encola(trabajoDe({ id: f.id, clientId, mediaId: f.media_id, fuenteId: f.fuente_id }))
+        }
+        // Lo que salió bien y no llegó a apuntar su cobro (se cayó la base o el
+        // servidor justo entonces): se vuelve a probar, con la misma referencia.
+        if (f.estado === 'listo' && f.cobrado_eur == null && Number(f.precio_eur) > 0 && edad > MARGEN_REANIMA && !reintentando.has(f.id)) {
+          reintentando.add(f.id)
+          cobraVariante({ id: f.id, clientId, precio: f.precio_eur }).finally(() => reintentando.delete(f.id))
         }
       }
-      return res.status(200).json({ trabajos: await Promise.all((data || []).map(publica)) })
+      return res.status(200).json({
+        trabajos: await Promise.all((data || []).map(publica)),
+        fuentes: await Promise.all((fuentes || []).map(f => publicaFuente(f, clientId))),
+      })
     }
 
     // ── POST ?action=ganchos ───────────────────────────────────────────────
-    // Lo único que gasta: Claude lee el reel y la Biblia y propone 3 ganchos.
+    // Lo único que gasta por tokens: Claude lee el reel (o lo que cuenta el
+    // usuario de su vídeo subido) y la Biblia y propone 3 ganchos.
     if (req.method === 'POST' && action === 'ganchos') {
       const mediaId = String(req.body?.mediaId || '')
-      const { data: reel } = await supabase.from('helm_ig_media')
-        .select('media_id, caption, visitas, retencion_media, guardados, compartidos')
-        .eq('client_id', clientId).eq('media_id', mediaId).maybeSingle()
-      if (!reel) return res.status(404).json({ error: 'No encuentro ese reel en este perfil' })
-      if (!String(reel.caption || '').trim()) return res.status(400).json({ error: 'Ese reel no tiene caption: escribe tú el gancho' })
+      let base
+      if (mediaId) {
+        const { data: reel } = await supabase.from('helm_ig_media')
+          .select('media_id, caption, visitas, retencion_media, guardados, compartidos')
+          .eq('client_id', clientId).eq('media_id', mediaId).maybeSingle()
+        if (!reel) return res.status(404).json({ error: 'No encuentro ese reel en este perfil' })
+        if (!String(reel.caption || '').trim()) return res.status(400).json({ error: 'Ese reel no tiene caption: escribe tú el gancho' })
+        base = [
+          `CAPTION DEL REEL:\n${recorta(reel.caption, 2200)}`,
+          `DATOS: ${Number(reel.visitas) || 0} visualizaciones · ${Number(reel.guardados) || 0} guardados · ${Number(reel.compartidos) || 0} compartidos${reel.retencion_media ? ` · ${Number(reel.retencion_media).toFixed(1)} s de visionado medio` : ''}.`,
+        ]
+      } else {
+        // Un vídeo subido no tiene caption: lo que cuente el usuario hace de caption.
+        const texto = recorta(String(req.body?.texto || '').trim(), 2200)
+        if (!texto) return res.status(400).json({ error: 'Cuenta de qué va el vídeo para proponer ganchos, o escríbelos tú' })
+        base = [`DE QUÉ VA EL VÍDEO (lo cuenta su autor; hace de caption):\n${texto}`]
+      }
 
       const { data: biblias } = await supabase.from('helm_biblia').select('kind, content').eq('client_id', clientId)
       const biblia = (biblias || []).map(b => `## Biblia de ${b.kind}\n${recorta(b.content, 3500)}`).join('\n\n')
       const usuario = [
-        `CAPTION DEL REEL:\n${recorta(reel.caption, 2200)}`,
-        `DATOS: ${Number(reel.visitas) || 0} visualizaciones · ${Number(reel.guardados) || 0} guardados · ${Number(reel.compartidos) || 0} compartidos${reel.retencion_media ? ` · ${Number(reel.retencion_media).toFixed(1)} s de visionado medio` : ''}.`,
+        ...base,
         biblia ? `MARCA:\n${biblia}` : 'MARCA: sin Biblia todavía; usa un tono claro y directo.',
         'Dame los 3 ganchos.',
       ].join('\n\n')
@@ -231,24 +496,91 @@ export default async function handler(req, res) {
       return res.status(200).json({ opciones })
     }
 
+    // ── POST ?action=fuente ────────────────────────────────────────────────
+    // Empieza la subida de un vídeo propio: se apunta lo que anuncia el
+    // navegador y los trozos llegan por ?action=trozo. Si no llega el saldo ni
+    // para una variante, se dice ya, antes de subir cientos de MB.
+    if (req.method === 'POST' && action === 'fuente') {
+      const nombre = nombreSeguro(req.body?.nombre)
+      const bytes = Number(req.body?.bytes)
+      const tipo = String(req.body?.tipo || '').split(';')[0].trim().toLowerCase()
+      const crudo = req.body?.duracion
+      const duracion = crudo == null || crudo === '' ? null : Number(crudo)
+      if (!Number.isSafeInteger(bytes) || bytes <= 0) return res.status(400).json({ error: 'No se sabe cuánto pesa el vídeo' })
+      if (bytes > MAX_VIDEO) return res.status(413).json({ error: `El vídeo pesa más de ${Math.round(MAX_VIDEO / MB)} MB` })
+      if (!TIPOS_VIDEO.has(tipo) || (!tipo && !EXT_VIDEO.test(nombre))) {
+        return res.status(415).json({ error: 'Sube un vídeo MP4 o MOV (lo que graba el móvil). Si es de otro tipo, expórtalo como MP4.' })
+      }
+      // La del navegador es orientativa (la de verdad la da ffprobe al acabar),
+      // pero si ya dice que se pasa, no se sube.
+      if (duracion != null && (!Number.isFinite(duracion) || duracion <= 0)) return res.status(400).json({ error: 'No se sabe cuánto dura el vídeo' })
+      if (duracion != null && duracion > MAX_DURACION_FUENTE + 0.5) {
+        return res.status(400).json({ error: `El vídeo dura más de ${MAX_DURACION_FUENTE / 60} minutos` })
+      }
+
+      const { data: recientes, error: errR } = await supabase.from(FUENTES).select('id, estado, bytes, created_at, updated_at').eq('client_id', clientId)
+        .order('created_at', { ascending: false }).limit(MAX_FUENTES_HORA + 5)
+      if (errR) return res.status(500).json({ error: errR.message })
+      // Solo cuentan las que de verdad se están subiendo: una cortada (pestaña
+      // cerrada, red caída) no tapa el hueco.
+      const vivas = []
+      for (const f of recientes || []) if (await subidaViva(f)) vivas.push(f)
+      if (vivas.length >= MAX_SUBIENDO_PERFIL) return res.status(429).json({ error: 'Ya hay vídeos subiéndose en este perfil. Espera a que terminen.' })
+      const haceUnaHora = Date.now() - 3_600_000
+      if ((recientes || []).filter(f => new Date(f.created_at).getTime() > haceUnaHora).length >= MAX_FUENTES_HORA) {
+        return res.status(429).json({ error: 'Has subido muchos vídeos en la última hora. Prueba dentro de un rato.' })
+      }
+      // El tope de lo guardado: lo que hay en el disco y lo que está llegando.
+      const guardado = await guardadoDelPerfil(clientId)
+      if (guardado.videos + vivas.length >= MAX_GUARDADOS_PERFIL) {
+        return res.status(429).json({ error: `Ya tienes ${MAX_GUARDADOS_PERFIL} vídeos subidos guardados. Quita alguno en «Tus vídeos subidos» para subir otro.` })
+      }
+      const llegando = vivas.reduce((s, f) => s + (Number(f.bytes) || 0), 0)
+      if (guardado.bytes + llegando + bytes > MAX_BYTES_GUARDADOS) {
+        const gb = (n) => (n / 1024 ** 3).toLocaleString('es-ES', { maximumFractionDigits: 1 })
+        return res.status(429).json({
+          error: `Tus vídeos subidos ya ocupan ${gb(guardado.bytes + llegando)} GB y el tope es de ${gb(MAX_BYTES_GUARDADOS)} GB por perfil. Quita alguno en «Tus vídeos subidos» para subir este.`,
+        })
+      }
+      await exigirImporte(clientId, PRECIO, { pendiente: ({ agenciaId }) => pendienteTrial(agenciaId) })
+      // De paso, fuera lo viejo y las subidas abandonadas (también lo hace cada montaje).
+      limpiaViejos().catch(() => {})
+
+      const { data: f, error } = await supabase.from(FUENTES).insert({
+        client_id: clientId, nombre, bytes, tipo: tipo || null, duracion: duracion == null ? null : Math.round(duracion * 100) / 100,
+        estado: 'subiendo', creado_por: UUID.test(String(auth?.userId || '')) ? auth.userId : null,
+      }).select(COLUMNAS_FUENTE)
+      if (error) return res.status(500).json({ error: 'No se pudo empezar la subida: ' + error.message })
+      const fila = Array.isArray(f) ? f[0] : f
+      return res.status(200).json({ fuenteId: fila.id, fuente: await publicaFuente(fila, clientId) })
+    }
+
     // ── POST ?action=crear ─────────────────────────────────────────────────
     if (req.method === 'POST' && action === 'crear') {
-      const mediaId = String(req.body?.mediaId || '')
-      if (!MEDIA.test(mediaId)) return res.status(400).json({ error: 'Reel no válido' })
+      const fuenteId = req.body?.fuenteId == null || req.body.fuenteId === '' ? '' : String(req.body.fuenteId)
+      if (fuenteId && req.body?.mediaId) return res.status(400).json({ error: 'O un reel o un vídeo subido, no los dos' })
+      const mediaId = fuenteId ? null : String(req.body?.mediaId || '')
+      if (fuenteId ? !UUID.test(fuenteId) : !MEDIA.test(mediaId)) {
+        return res.status(400).json({ error: fuenteId ? 'Vídeo no válido' : 'Reel no válido' })
+      }
       const variantes = Array.isArray(req.body?.variantes) ? req.body.variantes : []
       if (!variantes.length || variantes.length > MAX_VARIANTES) {
         return res.status(400).json({ error: `Entre 1 y ${MAX_VARIANTES} variantes` })
       }
-      const { data: reel } = await supabase.from('helm_ig_media').select('media_id, tipo, producto')
-        .eq('client_id', clientId).eq('media_id', mediaId).maybeSingle()
-      if (!reel) return res.status(404).json({ error: 'No encuentro ese reel en este perfil' })
-      if (!esReel(reel)) return res.status(400).json({ error: 'Esa publicación no es un reel' })
-
-      const { count } = await supabase.from(TABLA).select('id', { count: 'exact', head: true })
-        .eq('client_id', clientId).in('estado', ['en_cola', 'procesando'])
-      if ((count || 0) + variantes.length > MAX_PENDIENTES_PERFIL) {
-        return res.status(429).json({ error: 'Ya hay variantes de este perfil montándose. Espera a que terminen.' })
+      if (fuenteId) {
+        const { data: f } = await supabase.from(FUENTES).select('id, estado').eq('id', fuenteId).eq('client_id', clientId).maybeSingle()
+        if (!f) return res.status(404).json({ error: 'No encuentro ese vídeo en este perfil' })
+        if (f.estado !== 'lista') return res.status(409).json({ error: f.estado === 'subiendo' ? 'El vídeo aún no ha terminado de subir' : 'Ese vídeo no se pudo leer. Vuelve a subirlo.' })
+        if (!(await fuenteDisponible(clientId, fuenteId))) {
+          return res.status(410).json({ error: `Ese vídeo ya no está (se guardan ${DIAS_GUARDADO} días). Vuelve a subirlo.` })
+        }
+      } else {
+        const { data: reel } = await supabase.from('helm_ig_media').select('media_id, tipo, producto')
+          .eq('client_id', clientId).eq('media_id', mediaId).maybeSingle()
+        if (!reel) return res.status(404).json({ error: 'No encuentro ese reel en este perfil' })
+        if (!esReel(reel)) return res.status(400).json({ error: 'Esa publicación no es un reel' })
       }
+
       if (largoCola() + variantes.length > MAX_COLA) {
         return res.status(503).json({ error: 'HELM está montando muchas variantes ahora mismo. Prueba en unos minutos.' })
       }
@@ -260,12 +592,27 @@ export default async function handler(req, res) {
       const filas = variantes.map((v, i) => ({
         client_id: clientId,
         media_id: mediaId,
+        fuente_id: fuenteId || null,
         variante: i + 1,
-        ajustes: { ...normalizaAjustes(v?.ajustes, `${mediaId}:${i}`), conGancho: Boolean(pngs[i]) },
+        ajustes: { ...normalizaAjustes(v?.ajustes, `${mediaId || fuenteId}:${i}`), conGancho: Boolean(pngs[i]) },
         estado: 'en_cola',
+        precio_eur: PRECIO,
         creado_por: UUID.test(String(auth?.userId || '')) ? auth.userId : null,
       }))
-      const { data: creadas, error } = await supabase.from(TABLA).insert(filas).select(COLUMNAS)
+      // Lo que el perfil tiene en marcha, el saldo y meterlas en la tabla van
+      // de uno en uno por agencia (enFila): dos «crear» a la vez no pasan los
+      // dos con lo que solo llega para uno.
+      const { data: creadas, error } = await enFila(`agencia:${(await agenciaDe(clientId)) || clientId}`, async () => {
+        const { count } = await supabase.from(TABLA).select('id', { count: 'exact', head: true })
+          .eq('client_id', clientId).in('estado', ['en_cola', 'procesando'])
+        if ((count || 0) + variantes.length > MAX_PENDIENTES_PERFIL) {
+          throw fallo('Ya hay variantes de este perfil montándose. Espera a que terminen.', 429)
+        }
+        // Que llegue para todas, contando lo que la agencia ya tiene en cola sin
+        // cobrar. Si no, 402 y no se crea ninguna. Se cobran al salir bien.
+        await exigirImporte(clientId, PRECIO * variantes.length, { pendiente: ({ agenciaId }) => pendienteTrial(agenciaId) })
+        return supabase.from(TABLA).insert(filas).select(COLUMNAS)
+      })
       if (error) return res.status(500).json({ error: 'No se pudieron crear las variantes: ' + error.message })
 
       const orden = [...creadas].sort((a, b) => a.variante - b.variante)
@@ -280,14 +627,50 @@ export default async function handler(req, res) {
           f.estado = 'error'
         }
       }
-      for (const f of orden) if (f.estado === 'en_cola') encola(trabajoDe({ id: f.id, clientId, mediaId }))
+      for (const f of orden) if (f.estado === 'en_cola') encola(trabajoDe({ id: f.id, clientId, mediaId, fuenteId: fuenteId || null }))
       return res.status(200).json({ ids: orden.map(f => f.id), trabajos: await Promise.all(orden.map(publica)) })
     }
 
-    // ── GET ?action=estado | descarga · POST ?action=borrar ────────────────
+    // ── GET ?action=estado | descarga | fuente-video · POST ?action=borrar | borrar-fuente
     const id = String(req.query.id || req.body?.id || '')
-    if (['estado', 'descarga', 'borrar'].includes(action) && !UUID.test(id)) {
-      return res.status(400).json({ error: 'Variante no válida' })
+    if (['estado', 'descarga', 'borrar', 'fuente-video', 'borrar-fuente'].includes(action) && !UUID.test(id)) {
+      return res.status(400).json({ error: action.includes('fuente') ? 'Vídeo no válido' : 'Variante no válida' })
+    }
+
+    // El vídeo subido, para la vista previa del taller (solo del perfil).
+    if (req.method === 'GET' && action === 'fuente-video') {
+      const { data: f } = await supabase.from(FUENTES).select('id, estado').eq('id', id).eq('client_id', clientId).maybeSingle()
+      if (!f) return res.status(404).json({ error: 'No encuentro ese vídeo' })
+      if (f.estado !== 'lista' || !(await fuenteDisponible(clientId, id))) {
+        return res.status(410).json({ error: `Ese vídeo ya no está (se guardan ${DIAS_GUARDADO} días). Vuelve a subirlo.` })
+      }
+      const ruta = rutaFuenteSubida(clientId, id)
+      const st = await fsp.stat(ruta)
+      res.setHeader('Content-Type', 'video/mp4')
+      res.setHeader('Content-Length', String(st.size))
+      res.setHeader('Cache-Control', 'private, no-store')
+      try {
+        await pipeline(fs.createReadStream(ruta), res)
+      } catch (e) {
+        if (!res.headersSent) return res.status(500).json({ error: 'No se pudo leer el archivo' })
+        res.destroy(e)
+      }
+      return undefined
+    }
+
+    if (req.method === 'POST' && action === 'borrar-fuente') {
+      const { data: f } = await supabase.from(FUENTES).select('id').eq('id', id).eq('client_id', clientId).maybeSingle()
+      if (!f) return res.status(404).json({ error: 'No encuentro ese vídeo' })
+      const { count } = await supabase.from(TABLA).select('id', { count: 'exact', head: true })
+        .eq('client_id', clientId).eq('fuente_id', id).in('estado', ['en_cola', 'procesando'])
+      if (count) return res.status(409).json({ error: 'Hay variantes de este vídeo montándose. Espera a que terminen.' })
+      await Promise.all([
+        fsp.rm(rutaFuenteSubida(clientId, id), { force: true }),
+        fsp.rm(dirSubidaFuente(id), { recursive: true, force: true }),
+      ])
+      const { error } = await supabase.from(FUENTES).delete().eq('id', id).eq('client_id', clientId)
+      if (error) return res.status(500).json({ error: 'No se pudo borrar: ' + error.message })
+      return res.status(200).json({ ok: true })
     }
 
     if (req.method === 'GET' && action === 'estado') {
@@ -333,8 +716,94 @@ export default async function handler(req, res) {
 
     return res.status(405).json({ error: 'Method not allowed' })
   } catch (err) {
-    console.error('[trial-reels]', err)
+    // Un 402 (sin saldo) es una respuesta normal, no un fallo del servidor.
+    if (!err?.statusCode || err.statusCode >= 500) console.error('[trial-reels]', err)
     if (res.headersSent) return undefined
     return res.status(err.statusCode || 500).json({ error: err.message || 'Error' })
   }
+}
+
+// Los vídeos subidos que se están cerrando (sondeando) ahora mismo: un trozo
+// que llegue mientras (un reintento del último) no debe empezar otra subida.
+const cerrando = new Set()
+
+/**
+ * Un trozo del vídeo subido (POST, el cuerpo en crudo) o cuánto ha llegado
+ * (GET). El primero se mira por sus bytes (si no es un MP4/MOV, fuera y 415);
+ * el último cierra la subida, la sondea con ffprobe y deja el vídeo «lista».
+ */
+async function trozo(req, res, clientId) {
+  try {
+    const id = String(req.query.id || '')
+    if (!UUID.test(id)) throw fallo('Vídeo no válido', 400)
+    if (req.method !== 'GET' && req.method !== 'POST') throw fallo('Method not allowed', 405)
+    const { data: f, error } = await supabase.from(FUENTES).select(COLUMNAS_FUENTE).eq('id', id).eq('client_id', clientId).maybeSingle()
+    if (error) throw error
+    if (!f) throw fallo('No encuentro ese vídeo', 404)
+    const total = Number(f.bytes)
+    const dir = dirSubidaFuente(id)
+    const destino = rutaFuenteSubida(clientId, id)
+    // Ya entero (o cerrándose): todo lo que tenga que llegar ha llegado.
+    const entero = f.estado === 'lista' || cerrando.has(id) || fs.existsSync(destino)
+    // Con el estado, para que el panel sepa si seguir esta subida o empezar otra.
+    if (req.method === 'GET') return res.status(200).json({ recibidos: entero ? total : await recibidosDe(dir), estado: entero ? 'lista' : f.estado })
+    if (entero) throw fallo('Ese vídeo ya ha llegado entero.', 409, { recibidos: total })
+    if (f.estado !== 'subiendo') throw fallo(f.error || 'Esa subida falló. Vuelve a subir el vídeo.', 410)
+
+    const r = await recibeTrozo(req, { dir, total, offset: req.query.offset, minLibre: minLibreTrial() })
+    // En cuanto están los primeros bytes, se mira que sea un vídeo de verdad.
+    if (Number(req.query.offset) < 12 && r.recibidos >= 12) {
+      const cabeza = Buffer.alloc(12)
+      const h = await fsp.open(rutaParte(dir), 'r')
+      try { await h.read(cabeza, 0, 12, 0) } finally { await h.close() }
+      if (!esVideoIsoBmff(cabeza)) {
+        await fsp.rm(dir, { recursive: true, force: true })
+        await marcaFuente(id, { estado: 'error', error: NO_ES_VIDEO })
+        throw fallo(NO_ES_VIDEO, 415)
+      }
+    }
+    if (!r.completo) {
+      // Que se note que sigue viva (ver subidaViva): cada trozo toca la fila.
+      await marcaFuente(id, {}).catch(() => {})
+      return res.status(200).json(r)
+    }
+
+    cerrando.add(id)
+    try {
+      await cierraSubida(dir, destino, total)
+      await fsp.rm(dir, { recursive: true, force: true })
+      // Otra vez los primeros bytes, ya del archivo entero (uno de menos de 12
+      // bytes no ha pasado por la comprobación de arriba).
+      const cabeza = Buffer.alloc(12)
+      const h = await fsp.open(destino, 'r')
+      try { await h.read(cabeza, 0, 12, 0) } finally { await h.close() }
+      if (!esVideoIsoBmff(cabeza)) {
+        await fsp.rm(destino, { force: true })
+        await marcaFuente(id, { estado: 'error', error: NO_ES_VIDEO })
+        throw fallo(NO_ES_VIDEO, 415)
+      }
+      let info
+      try {
+        info = await sondea(destino)
+        if (!info.duracion) throw fallo('No se sabe cuánto dura el vídeo', 422)
+        if (info.duracion > MAX_DURACION_FUENTE) throw fallo(`El vídeo dura más de ${MAX_DURACION_FUENTE / 60} minutos`, 422)
+      } catch (e) {
+        await fsp.rm(destino, { force: true })
+        const mensaje = e?.statusCode === 422 && e.message ? e.message : 'No se pudo leer el vídeo. Prueba con un MP4 o MOV del móvil.'
+        await marcaFuente(id, { estado: 'error', error: mensaje })
+        throw fallo(mensaje, 422)
+      }
+      const cambios = { estado: 'lista', error: null, duracion: Math.round(info.duracion * 100) / 100 }
+      await marcaFuente(id, cambios)
+      return res.status(200).json({ ...r, fuente: await publicaFuente({ ...f, ...cambios }, clientId) })
+    } finally {
+      cerrando.delete(id)
+    }
+  } catch (e) {
+    return contestaError(req, res, e)
+  }
+}
+
+async function marcaFuente(id, cambios) {
+  await supabase.from(FUENTES).update({ ...cambios, updated_at: new Date().toISOString() }).eq('id', id)
 }
