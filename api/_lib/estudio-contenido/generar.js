@@ -697,6 +697,44 @@ export async function generaEstudio(job) {
 }
 
 /**
+ * Guarda como «listo» un estudio hecho fuera del worker: el que escribe Claude
+ * por el conector a partir de los datos de HELM (scripts/importar-estudio.mjs).
+ * Se trata como uno de la IA: los números (`datos`) los calcula HELM con las
+ * piezas de hoy, el estudio pasa por la misma revisión (el valor actual de
+ * cada objetivo lo pone el código, y los vigentes conservan su partida), lo
+ * confirmado va a la memoria del equipo y se avisa. No cuesta nada: no ha
+ * llamado a Claude con la clave de HELM. Con `prueba` no escribe: devuelve lo
+ * que guardaría. Con errores de la revisión no guarda nada y los devuelve.
+ */
+export async function importaEstudio({ clientId, entrada, modelo = 'claude (conector)', prueba = false, hoy = new Date() } = {}) {
+  if (!clientId) throw new Error('importaEstudio: falta clientId')
+  const ctx = await cargaPerfil(clientId)
+  const datos = calculaDatos({
+    piezas: ctx.piezas, seguidores: ctx.seguidores, usuario: ctx.usuario,
+    historialSeguidores: ctx.historial, anterior: ctx.anterior, hoy,
+  })
+  if (!datos.cuenta.piezas) throw new Error('El perfil no tiene publicaciones de Instagram sincronizadas')
+  const vigentes = objetivosVigentes(ctx.anterior, datos)
+  const { estudio, errores } = revisaEstudio(entrada, datos, { vigentes, hoy })
+  if (errores.length || prueba) return { errores, estudio, datos, guardado: false }
+
+  const ahora = new Date(hoy).toISOString()
+  const { data, error } = await supabase.from(TABLA).insert({
+    client_id: clientId, estado: 'listo', generado_en: ahora, empezado_en: ahora,
+    datos, estudio, modelo: limpio(modelo, 60) || 'claude (conector)', tokens: 0, coste_usd: 0,
+  }).select('id').single()
+  if (error) throw error
+  const guardadas = await guardaAprendido(clientId, estudio.aprendido, fmtDia.format(hoy))
+  const caducadas = await caducaAprendido(clientId, hoy)
+  await notificar(supabase, clientId, {
+    tipo: 'estudio', titulo: 'Tu estudio de contenido está listo',
+    cuerpo: 'Ábrelo en Informe de contenido → Estudio',
+    destino: 'metricas', clave: `${TIPO}:${clientId}`, cadaHoras: 1,
+  })
+  return { id: data.id, errores: [], estudio, datos, guardado: true, guardadas, caducadas }
+}
+
+/**
  * Encola un estudio. El pedido en el panel lleva la fila que abrió el endpoint
  * (`estudioId`), y la clave sale de ella: un mismo pedido no se encola dos veces.
  */

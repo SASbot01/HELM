@@ -126,7 +126,7 @@ vi.mock('../api/_lib/estudio-contenido/conocimiento.js', () => ({
 }))
 vi.mock('../api/_lib/equipo.js', () => ({ diaMadrid: () => '2026-10-27', horaMadrid: () => 10 }))
 
-const { generaEstudio, revisaEstudio, guardaAprendido, caducaAprendido, miraEstudiosContenido, encolaEstudio, objetivosVigentes, SISTEMA, HERRAMIENTA } =
+const { generaEstudio, revisaEstudio, guardaAprendido, caducaAprendido, miraEstudiosContenido, encolaEstudio, objetivosVigentes, importaEstudio, SISTEMA, HERRAMIENTA } =
   await import('../api/_lib/estudio-contenido/generar.js')
 const { calculaDatos } = await import('../api/_lib/estudio-contenido/datos.js')
 const { sincronizaMetricas } = await import('../api/_lib/metricas-ig.js')
@@ -656,5 +656,43 @@ describe('la foto diaria de seguidores (api/instagram.js)', () => {
     await expect(sincronizar('c1')).resolves.toMatchObject({ followersFresco: true })
     expect(aviso).toHaveBeenCalled()
     aviso.mockRestore()
+  })
+})
+
+// ── Un estudio hecho fuera (Claude por el conector) ─────────────────────────
+describe('importaEstudio · el estudio que escribe Claude por el conector', () => {
+  it('con --prueba revisa y calcula, pero no escribe nada ni llama a Claude', async () => {
+    const r = await importaEstudio({ clientId: 'c1', entrada: estudioBueno(), prueba: true })
+    expect(r.errores).toEqual([])
+    expect(r.guardado).toBe(false)
+    expect(r.datos.cuenta.piezas).toBe(20)
+    expect(store.escrito).toEqual([])
+    expect(claudePaso).not.toHaveBeenCalled()
+  })
+
+  it('lo guarda «listo» y sin coste, con los números de HELM y el actual del código; lo confirmado a la memoria y avisa', async () => {
+    const r = await importaEstudio({ clientId: 'c1', entrada: estudioBueno() })
+    expect(r.guardado).toBe(true)
+    const fila = filaEstudio()
+    expect(fila).toMatchObject({ id: r.id, client_id: 'c1', estado: 'listo', modelo: 'claude (conector)', tokens: 0, coste_usd: 0 })
+    expect(fila.datos.cuenta.piezas).toBe(20)
+    // El «actual» que trae el JSON no vale: lo pone el código; lo inventado se cae.
+    expect(fila.estudio.objetivos.map(o => o.metrica)).not.toContain('felicidad')
+    expect(fila.estudio.objetivos.every(o => o.actual !== 99999)).toBe(true)
+    expect(store.tablas.agent_memory.some(n => n.agente === 'estratega' && n.tipo === 'aprendido')).toBe(true)
+    expect(notificar).toHaveBeenCalledWith(expect.anything(), 'c1', expect.objectContaining({ destino: 'metricas' }))
+    expect(claudePaso).not.toHaveBeenCalled()
+  })
+
+  it('si no pasa la revisión (sin plan de 4 semanas), no guarda nada y dice por qué', async () => {
+    const r = await importaEstudio({ clientId: 'c1', entrada: estudioBueno({ plan: [semana(1)] }) })
+    expect(r.guardado).toBe(false)
+    expect(r.errores.join(' ')).toMatch(/4 semanas/)
+    expect(store.tablas.helm_estudio_contenido).toEqual([])
+  })
+
+  it('sin piezas sincronizadas no hay estudio que guardar', async () => {
+    store.tablas.helm_ig_media = []
+    await expect(importaEstudio({ clientId: 'c1', entrada: estudioBueno() })).rejects.toThrow(/sincronizadas/)
   })
 })
