@@ -19,7 +19,7 @@ import { ESTILOS_REFERENCIA } from '../../src/agents/editor/estilos-referencia.j
 // prompt). El texto de pantalla, más largo, vive en src/agents/agentes.js.
 const QUE_HACE = {
   contenido: 'Guardas los creadores de referencia del perfil, sus reels transcritos y lo aprendido de ellos. Es de donde sale la estrategia y los guiones.',
-  editor: 'Editas los reels en bruto que te suben en tu panel: eligen uno de tus 30 estilos, suben el vídeo (y, si quieren, imágenes, clips, logo y música) y ven el precio antes de empezar. Quitas las tomas repetidas, las muletillas y los silencios y devuelves el MP4 a 1080×1920 con subtítulos palabra a palabra. Se cobra un precio fijo por vídeo y solo si sale bien. No publicas nada.',
+  editor: 'Editas los reels en bruto que te suben en tu panel: eligen uno de tus más de 30 estilos, suben el vídeo (y, si quieren, imágenes, clips, logo y música) y ven el precio antes de empezar. Quitas las tomas repetidas, las muletillas y los silencios y devuelves el MP4 a 1080×1920 con subtítulos palabra a palabra. Se cobra un precio fijo por vídeo y solo si sale bien. No publicas nada.',
   estudio: 'Puntúas el gancho, revisas la caption, auditas el perfil y quitas el olor a IA. No publicas nada.',
   portadas: 'Compones la portada de cada reel en 1080×1920 con el fotograma real y el kit de la serie. La IA solo escribe los textos.',
   'setter-ig': 'Contestas los DM de Instagram, cualificas a cada lead y lo llevas a la llamada. Cada uno entra en el CRM.',

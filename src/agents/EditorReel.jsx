@@ -1,7 +1,7 @@
 // HELM — Editor de reels. La ventana del agente editor dentro de Agentes.
 //
 // Una sola pantalla, de arriba abajo:
-//   1. La GALERÍA de 30 estilos de edición (./editor/estilos-referencia.js),
+//   1. La GALERÍA de estilos de edición (./editor/estilos-referencia.js),
 //      cada uno con el nombre del perfil de donde sale, filtrable por idioma y
 //      tema. «Crear» abre el taller con ese estilo; «Copiar prompt», para que
 //      Claude lo monte por el conector. Los que no traen reels de ejemplo

@@ -69,7 +69,7 @@ export const AGENTES = [
     ruta: 'editor',
     nombre: 'Editor de reels',
     resumen: 'Subes tu vídeo en bruto y te lo devuelve editado: sin tomas repetidas ni silencios, con subtítulos y en el estilo que elijas.',
-    detalle: 'Eliges uno de sus 30 estilos de edición, subes el vídeo tal cual sale del móvil (y, si quieres, imágenes, clips, tu logo y música) y te devuelve el MP4 a 1080×1920 listo para Instagram. Ves el precio antes de empezar. HELM no publica.',
+    detalle: 'Eliges uno de sus más de 30 estilos de edición, subes el vídeo tal cual sale del móvil (y, si quieres, imágenes, clips, tu logo y música) y te devuelve el MP4 a 1080×1920 listo para Instagram. Ves el precio antes de empezar. HELM no publica.',
     estado: 'activo',
     icono: 'editor',
   },

@@ -1,4 +1,4 @@
-// HELM — Editor de reels: la biblioteca de estilos de referencia (30).
+// HELM — Editor de reels: la biblioteca de estilos de referencia (31).
 //
 // Cada estilo lleva el NOMBRE DEL PERFIL de donde sale (lo pidió Alex el
 // 2026-10-19). En el editor, cada tarjeta tiene dos botones:
@@ -11,9 +11,10 @@
 //                       todo lo que el motor no hace (rótulos, gráficos, SFX…).
 //
 // De dónde sale cada uno:
-//   · Los 6 primeros, de mirar FOTOGRAMAS reales de sus reels (2026-10-19): por
-//     eso traen `reels` con su portada (public/agentes/editor-estilos/). Lo que
-//     un fotograma no da (el ritmo exacto) va marcado «a ajustar».
+//   · Los 7 primeros, de mirar FOTOGRAMAS reales de sus reels (los 6 de
+//     2026-10-19 y marcoalbanny, 2026-10-27): por eso traen `reels` con su
+//     portada (public/agentes/editor-estilos/). Lo que un fotograma no da (el
+//     ritmo exacto) va marcado «a ajustar».
 //   · Los otros 24, de la investigación de 2026-10-27 (creadores de negocio,
 //     marketing e IA en español e inglés, con fuentes públicas en `fuentes`):
 //     sin reels de ejemplo (`reels: []`), la tarjeta enseña una vista previa
@@ -21,7 +22,7 @@
 //     documentado su modo de editar: con «baja», el estilo es aproximado.
 //     Lo marcado «[aprox.]» en el prompt no está verificado en una fuente.
 //
-// Cuáles 30 (provisional, A CONFIRMAR CON ALEX): la orden pedía «6 de antes +
+// Cuáles 30 de la investigación (provisional, A CONFIRMAR CON ALEX): la orden pedía «6 de antes +
 // 24 nuevos» y a la vez «los 30 de la investigación sin el Ali Abdaal repetido
 // y uno más de habla hispana», que serían 36. Para quedarse en 30, de los 29
 // creadores distintos de la investigación salieron 6:
@@ -55,6 +56,7 @@ export const TEMAS = Object.freeze({
   productividad: 'Productividad',
   mentalidad: 'Mentalidad',
   fitness: 'Fitness y salud',
+  filmmaking: 'Filmmaking y vídeo',
 })
 
 export const IDIOMAS = Object.freeze({ es: 'Español', en: 'Inglés', pt: 'Portugués' })
@@ -62,7 +64,7 @@ export const IDIOMAS = Object.freeze({ es: 'Español', en: 'Inglés', pt: 'Portu
 const ig = (perfil) => `https://www.instagram.com/${perfil}/`
 
 export const ESTILOS_REFERENCIA = [
-  // ── Los 6 sacados de fotogramas reales ────────────────────────────────────
+  // ── Los 7 sacados de fotogramas reales ────────────────────────────────────
   {
     clave: 'rpn',
     nombre: 'rpn',
@@ -180,6 +182,29 @@ export const ESTILOS_REFERENCIA = [
       silencioMax: 0.45, silencioDeja: 0.14, recursosModo: 'arriba', recursoDuracion: 3, musicaVolumen: 0.08,
     },
     prompt: 'Edita el reel en el estilo de izansimon (fitness, en español, formato pódcast/reacción). Talking head con micrófono de pódcast y fondo de ventana con skyline. Sobre la parte inferior, TARJETAS INSERTADAS (picture-in-picture) con borde de color (rosa) que muestran aquello de lo que habla: fotos de físico antes/después, capturas. Dos tipos de subtítulo: (a) una ETIQUETA de tema en caja negra redondeada con texto blanco en minúscula (p. ej. «el poder de la recomposición corporal»), que aparece cuando toca el punto; y (b) el subtítulo del habla en blanco, palabra a palabra. Ritmo medio; corta a la imagen insertada justo cuando la menciona. Color natural y brillante. [Ritmo de cortes: ajustar al audio.]' + SOLO_ESTILO,
+  },
+  {
+    // Añadido el 2026-10-27 a petición de Alex, de mirar los 59 fotogramas del
+    // reel (uno por segundo) y su transcripción en el corpus (marcoalbanny).
+    clave: 'marcoalbanny',
+    nombre: 'marcoalbanny',
+    nicho: 'filmmaking / color y cámara explicados',
+    tema: 'filmmaking',
+    idioma: 'es',
+    enlace: ig('marcoalbanny'),
+    reels: [
+      { shortcode: 'De9uLd4NiCA', url: 'https://www.instagram.com/reel/De9uLd4NiCA/', caption: '8 bits vs 10 bits: ¿de verdad se nota? 🎨', likes: 828 },
+    ],
+    // Animación explicativa sin persona a cámara: lo que pone el motor son los
+    // subtítulos karaoke abajo (mayúsculas, la cifra clave en cian), sin
+    // punch-in, cortes limpios de voz en off y los recursos a pantalla
+    // completa; los gráficos y la interfaz técnica van por el prompt.
+    estilo: {
+      palabrasPorBloque: 4, mayusculas: true, colorTexto: '#FFFFFF', colorResalte: '#22D3EE', colorBorde: '#000000',
+      tamano: 56, borde: 0, posicion: 72, zoom: false,
+      pausaFrase: 0.4, silencioMax: 0.25, silencioDeja: 0.08, recursosModo: 'corte', recursoDuracion: 3, musicaVolumen: 0.08,
+    },
+    prompt: 'Edita el reel en el estilo de marcoalbanny (explicador técnico de filmmaking, en español). Todo es ANIMACIÓN sobre voz en off, sin persona a cámara: fondo azul noche (#0B1020) con un brillo radial suave y una rejilla muy tenue. Arriba, una cabecera fija de interfaz en monoespaciada pequeña («● REC // TEMA» a la izquierda y «A VS B» a la derecha) y una barra de progreso fina en cian abajo del todo. El vídeo va por CAPÍTULOS numerados en monoespaciada («01 // EL PÍXEL», «02 // TONOS POR CANAL», «03 // COLORES TOTALES»…), uno por idea. Dos colores de marca para la comparación: ÁMBAR (#F5A623) para la opción A y CIAN (#22D3EE) para la B, siempre los mismos. Cada idea se ve con un GRÁFICO que se construye al ritmo de la voz: barras de color, escaleras de tonos que suben, contadores que cuentan hasta la cifra (16.777.216 → 1.073.741.824, «×64»), comparación lado a lado con etiquetas en píldora, deslizadores de un «editor de color» que se mueven, y tarjetas con casillas que se marcan una a una. Remata cada bloque con un SELLO inclinado tipo etiqueta («SE ROMPE» en rojo, «AGUANTA» en cian, «SUFICIENTE» en ámbar, «SIN DUDAR»). Titulares en sans muy gruesa en mayúsculas, grandes y centrados. Subtítulos karaoke abajo, en mayúsculas y negrita: la palabra que suena en blanco, las que vienen en gris y las cifras o palabras clave en el color de su opción. Cierre: «LA REGLA» y la frase final enorme en cian, con una barra arcoíris y una línea pequeña en monoespaciada («A · B · TÚ DECIDES»). Ritmo: un cambio de gráfico por frase (2-4 s), animaciones de entrada rápidas y suaves, sin cortes bruscos; música electrónica muy baja. [Duración de cada animación: ajustar a la voz.]' + SOLO_ESTILO,
   },
 
   // ── Negocio y ventas, en inglés ───────────────────────────────────────────

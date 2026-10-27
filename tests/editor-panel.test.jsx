@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // El Editor de reels en pantalla (src/agents/EditorReel.jsx), pulsando de
 // verdad con la API simulada:
-//   · la galería: los 30 estilos, el filtro por idioma y tema, «Crear» abre el
+//   · la galería: los 31 estilos, el filtro por idioma y tema, «Crear» abre el
 //     taller con ese estilo y «Copiar prompt» copia el suyo;
 //   · el precio antes de subir («Esto cuesta… · te quedan…» o «Gratis en tu
 //     agencia») y un vídeo de más de 10 minutos que no entra;
@@ -14,7 +14,7 @@
 //   · la lista: cada estado en castellano con su barra, lo cobrado, una subida
 //     a medias que se sigue eligiendo el mismo archivo, una entera que se lanza
 //     sin él, y que no se sondea por subidas a medias;
-//   · los 30 estilos son parámetros válidos para el motor.
+//   · los 31 estilos son parámetros válidos para el motor.
 // Y que ya no aparece «En construcción» por ningún lado.
 //
 // Usa jsdom y @testing-library/react, que vienen del node_modules compartido
@@ -156,10 +156,10 @@ async function eligeVideo(a = video()) {
 }
 
 describe('EditorReel · la galería de estilos', () => {
-  it('enseña los 30 estilos, filtra por idioma y tema, y ya no dice «En construcción»', async () => {
+  it('enseña los 31 estilos, filtra por idioma y tema, y ya no dice «En construcción»', async () => {
     const { container } = pinta()
     await screen.findByText('lista.mp4')
-    expect(tarjetas(container)).toHaveLength(30)
+    expect(tarjetas(container)).toHaveLength(ESTILOS_REFERENCIA.length)
     // Los 6 de fotogramas reales enseñan su portada; los demás, la vista previa con CSS.
     expect(screen.getByAltText('Reel de ejemplo de @rpn')).toBeTruthy()
     expect(screen.getByRole('img', { name: 'Vista previa de los subtítulos del estilo de @hormozi' })).toBeTruthy()
@@ -176,7 +176,7 @@ describe('EditorReel · la galería de estilos', () => {
     expect(screen.queryByText('@hormozi')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Todos' }))
     fireEvent.change(screen.getByLabelText('Tema'), { target: { value: '' } })
-    expect(tarjetas(container)).toHaveLength(30)
+    expect(tarjetas(container)).toHaveLength(ESTILOS_REFERENCIA.length)
 
     expect(document.body.textContent).not.toMatch(/construcción|esté integrado|se activa cuando/i)
     const editor = AGENTES.find(a => a.key === 'editor')
@@ -204,7 +204,7 @@ describe('EditorReel · la galería de estilos', () => {
 
     // «Estilos» vuelve a la galería.
     fireEvent.click(screen.getByRole('button', { name: 'Estilos' }))
-    expect(tarjetas(container)).toHaveLength(30)
+    expect(tarjetas(container)).toHaveLength(ESTILOS_REFERENCIA.length)
   })
 
   it('la tarjeta dice de qué plataforma es el enlace del perfil', async () => {
@@ -364,7 +364,7 @@ describe('EditorReel · editar un vídeo', () => {
     expect(llamadas('trozo').map(l => [l[1], l[2]])).toEqual([[0, 1024], [1024, 1024], [2048, 952]])
     expect(llamadas('lanzar')).toEqual([['lanzar', 'e1', []]])
     // El taller se cierra (vuelve la galería) y el vídeo sale en la lista, en cola.
-    expect(tarjetas(container)).toHaveLength(30)
+    expect(tarjetas(container)).toHaveLength(ESTILOS_REFERENCIA.length)
     const fila = (await screen.findByText('toma.mp4')).closest('li')
     await within(fila).findByText('En cola')
     expect(within(fila).getByText(/estilo @hormozi/)).toBeTruthy()
@@ -593,7 +593,7 @@ describe('EditorReel · cuando «lanzar» no sale', () => {
     expect(screen.queryByText(/ya está en cola/)).toBeNull()
     expect(screen.queryByRole('button', { name: 'Lanzar la edición' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Cerrar' }))
-    expect(tarjetas(container)).toHaveLength(30)
+    expect(tarjetas(container)).toHaveLength(ESTILOS_REFERENCIA.length)
   })
 
   it('un 409 con `recibidos` (le falta un trozo) vuelve a «Seguir subiendo» y sigue desde ahí', async () => {
@@ -735,10 +735,10 @@ describe('EditorReel · tus vídeos', () => {
   })
 })
 
-describe('los 30 estilos de referencia', () => {
-  it('son 30, sin repetir, con su perfil y parámetros válidos para el motor', () => {
-    expect(ESTILOS_REFERENCIA).toHaveLength(30)
-    expect(new Set(ESTILOS_REFERENCIA.map(e => e.clave)).size).toBe(30)
+describe('los 31 estilos de referencia', () => {
+  it('son 31 (los 30 y marcoalbanny), sin repetir, con su perfil y parámetros válidos para el motor', () => {
+    expect(ESTILOS_REFERENCIA).toHaveLength(31)
+    expect(new Set(ESTILOS_REFERENCIA.map(e => e.clave)).size).toBe(ESTILOS_REFERENCIA.length)
     expect(ESTILOS_REFERENCIA.filter(e => /abdaal/i.test(e.clave))).toHaveLength(1)
     for (const e of ESTILOS_REFERENCIA) {
       expect(e.nombre, e.clave).toBeTruthy()
@@ -757,7 +757,7 @@ describe('los 30 estilos de referencia', () => {
       if (!e.reels.length) expect(e.fuentes?.length, e.clave).toBeGreaterThan(0)
     }
     // Los 6 de hoy conservan sus reels de ejemplo.
-    for (const clave of ['rpn', 'austingeorgas', 'pedrobuerbaum', 'samzia', 'felipetambara.ia', 'izansimon']) {
+    for (const clave of ['rpn', 'austingeorgas', 'pedrobuerbaum', 'samzia', 'felipetambara.ia', 'izansimon', 'marcoalbanny']) {
       expect(ESTILOS_REFERENCIA.find(e => e.clave === clave).reels.length, clave).toBeGreaterThan(0)
     }
     expect(ESTILOS_REFERENCIA.filter(e => e.idioma === 'es').length).toBeGreaterThanOrEqual(10)
@@ -777,5 +777,7 @@ describe('los 30 estilos de referencia', () => {
     expect(de('imangadzhi').colorResalte).toBe(de('imangadzhi').colorTexto)
     expect(de('felipetambara.ia').volumen).toBe(-14)
     expect(de('romualdfonstv').zoomFactor).toBe(1.15)
+    // Animación sin persona: sin punch-in, karaoke en mayúsculas con la cifra en cian, recursos a pantalla completa.
+    expect(de('marcoalbanny')).toMatchObject({ zoom: false, mayusculas: true, colorResalte: '#22D3EE', recursosModo: 'corte' })
   })
 })
