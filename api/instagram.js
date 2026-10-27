@@ -26,6 +26,7 @@ import { requireProfileAccess } from './_lib/access.js'
 import {
   igAuthUrl, igRedirectUri, igCredsMissing, exchangeCode, exchangeLongLived,
   getPerfil, listMedia, getInsights, getIgConfig, saveIgConfig, getToken, maskToken, informeIg, suscribirMensajes,
+  altasYBajas,
 } from './_lib/instagram.js'
 
 const TABLA = 'helm_ig_media'
@@ -115,6 +116,45 @@ export async function guardaSeguidores(clientId, seguidores, d = new Date()) {
   }
 }
 
+/**
+ * Rellena hacia atrás el histórico de seguidores (helm_ig_seguidores) de un
+ * perfil que tiene menos de `minimo` días: con las altas y bajas de cada día
+ * que da Instagram (altasYBajas, los últimos 30), el total al final de un día
+ * es el de hoy menos lo neto de los días que vinieron después. Así el ritmo de
+ * crecimiento del Estudio de contenido sale desde el primer día, y no a la
+ * semana de empezar a hacer fotos. No pisa ninguna foto que ya esté (esas son
+ * reales) y solo corre una vez: con 7 días o más, no hace nada.
+ * Devuelve cuántos días ha añadido. Nunca lanza.
+ */
+export async function rellenaSeguidores(clientId, token, seguidoresHoy, { hoy = new Date(), minimo = 7, altasYBajasDe = altasYBajas } = {}) {
+  const n = Number(seguidoresHoy)
+  if (!clientId || !token || seguidoresHoy == null || !Number.isFinite(n)) return 0
+  try {
+    const { data, error } = await supabase.from('helm_ig_seguidores').select('dia').eq('client_id', clientId)
+    if (error) throw error
+    if ((data || []).length >= minimo) return 0
+    const dias = await altasYBajasDe(token, { dias: 30, hoy })
+    if (!dias.length) return 0
+    const hoyDia = fmtDiaMadrid.format(hoy)
+    const filas = []
+    let total = n
+    // Del más nuevo al más antiguo. Lo de hoy (si Instagram ya lo trae) se
+    // resta sin apuntarlo: la foto de hoy es la real.
+    for (const d of [...dias].sort((a, b) => (a.dia < b.dia ? 1 : -1))) {
+      if (d.dia < hoyDia) filas.push({ client_id: clientId, dia: d.dia, seguidores: Math.max(0, Math.round(total)) })
+      total -= (d.altas || 0) - (d.bajas || 0)
+    }
+    if (!filas.length) return 0
+    const { error: e2 } = await supabase.from('helm_ig_seguidores')
+      .upsert(filas, { onConflict: 'client_id,dia', ignoreDuplicates: true })
+    if (e2) throw e2
+    return filas.length
+  } catch (e) {
+    console.warn(`[instagram] no se pudo rellenar el histórico de seguidores de ${clientId}:`, e?.message || e)
+    return 0
+  }
+}
+
 // Trae las últimas publicaciones con sus métricas y las guarda, y apunta la
 // foto de seguidores del día. La usan el botón de sincronizar del panel, la
 // sincronización del worker (api/_lib/metricas-ig.js) y el analista del equipo
@@ -143,7 +183,11 @@ export async function sincronizar(clientId, limite = LIMITE_POR_DEFECTO) {
   })
   // Si getPerfil falló (va con .catch), lo de arriba es el número de antes: no es foto de hoy.
   const followersFresco = perfil.followers_count != null
-  if (followersFresco) await guardaSeguidores(clientId, perfil.followers_count)
+  if (followersFresco) {
+    await guardaSeguidores(clientId, perfil.followers_count)
+    // La primera vez (menos de 7 días de fotos), el último mes con lo que da Instagram.
+    await rellenaSeguidores(clientId, token, perfil.followers_count)
+  }
 
   return {
     sincronizadas: filas.length,

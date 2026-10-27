@@ -107,6 +107,8 @@ vi.mock('../api/_lib/instagram.js', () => {
     getPerfil: async () => { if (!ig.perfil) throw new Error('Meta no contesta'); return ig.perfil },
     listMedia: async () => [],
     getInsights: async () => ({}),
+    // Sin altas ni bajas: el relleno del histórico (tests/seguidores-historial.test.js) no añade nada aquí.
+    altasYBajas: async () => [],
     exchangeCode: async () => ({ access_token: 'corto', user_id: 7 }),
     exchangeLongLived: async () => ({ access_token: 'largo', expires_in: 5_184_000 }),
     suscribirMensajes: async () => ({}),
