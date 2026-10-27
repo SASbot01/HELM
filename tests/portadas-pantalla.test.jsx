@@ -122,6 +122,53 @@ describe('Portadas · pantalla', () => {
     expect(screen.getByText(/Te quedan 500 créditos/)).toBeTruthy()
   })
 
+  // jsdom no carga imágenes: esta avisa de que ha cargado en cuanto se le pone el src.
+  class ImagenQueCarga {
+    width = 1080; height = 1920; naturalWidth = 1080; naturalHeight = 1920
+    set src(v) { this._src = v; queueMicrotask(() => this.onload?.()) }
+    get src() { return this._src }
+  }
+  async function generaConFoto(container) {
+    fireEvent.click(await screen.findByRole('button', { name: /Portada desde una foto/ }))
+    await screen.findByRole('button', { name: /Generar portada/ })
+    fireEvent.change(container.querySelector('input[type="file"][accept="image/*"]'), { target: { files: [new File(['x'], 'foto.jpg', { type: 'image/jpeg' })] } })
+    fireEvent.change(screen.getByLabelText(/Titular/), { target: { value: 'Graba mejor' } })
+    const boton = screen.getByRole('button', { name: /Generar portada/ })
+    await waitFor(() => expect(boton.disabled).toBe(false))
+    fireEvent.click(boton)
+    await screen.findByRole('button', { name: 'Versión 1' })
+  }
+
+  it('quien administra la agencia ve lo que queda, y tras cobrar se actualiza', async () => {
+    const Antes = globalThis.Image
+    globalThis.Image = ImagenQueCarga
+    try {
+      const { container } = render(<Portadas clientId="perfil-1" client={{ name: 'Demo' }} onVolver={() => {}} />)
+      await generaConFoto(container)
+      expect(screen.getByText(/Te quedan 460 créditos/)).toBeTruthy()
+    } finally { globalThis.Image = Antes }
+  })
+
+  it('sin ver el saldo (no administras la agencia): solo el precio, y tras cobrar tampoco aparece lo que queda', async () => {
+    h.precios = { paga: true, saldo: null, alcanza: { 'editor-reels': true, 'portada-ia': true, 'trial-reel': true }, precios: PRECIOS_FIJOS }
+    const Antes = globalThis.Image
+    globalThis.Image = ImagenQueCarga
+    try {
+      render(<Portadas clientId="perfil-1" client={{ name: 'Demo' }} onVolver={() => {}} />)
+      expect(await screen.findByRole('button', { name: /Portada desde una foto/ })).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: /Portada desde una foto/ }))
+      expect(await screen.findByRole('button', { name: /Generar portada · 40 créditos/ })).toBeTruthy()
+      expect(screen.getByText('Cada imagen se cobra solo si sale bien.')).toBeTruthy()
+      expect(screen.queryByText(/Te quedan/)).toBeNull()
+      cleanup()
+      // Aunque la respuesta de la generación trajera un saldo, no se enseña.
+      const otra = render(<Portadas clientId="perfil-1" client={{ name: 'Demo' }} onVolver={() => {}} />)
+      await generaConFoto(otra.container)
+      expect(screen.getByText('Cada imagen se cobra solo si sale bien.')).toBeTruthy()
+      expect(screen.queryByText(/Te quedan/)).toBeNull()
+    } finally { globalThis.Image = Antes }
+  })
+
   it('si el perfil no paga (la agencia de la casa o sin agencia), el botón dice que es gratis', async () => {
     h.precios = { paga: false, saldo: null, precios: PRECIOS_FIJOS }
     render(<Portadas clientId="perfil-1" client={{ name: 'Demo' }} onVolver={() => {}} />)

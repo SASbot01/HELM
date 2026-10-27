@@ -167,11 +167,12 @@ const rpc = vi.fn(async (fn, a) => {
 
 function consulta(tabla) {
   const filtros = []
-  let op = 'select', datos = null, cabeza = false, tope = Infinity, orden = null
+  // devuelve: un update(…).select(…) devuelve las filas que ha tocado (como PostgREST).
+  let op = 'select', datos = null, cabeza = false, tope = Infinity, orden = null, devuelve = false
   const filas = () => (db[tabla] ||= [])
   const encaja = (f) => filtros.every(fn => fn(f))
   const q = {
-    select(_c, opts) { if (opts?.head) cabeza = true; if (op === 'select') op = 'select'; return q },
+    select(_c, opts) { if (opts?.head) cabeza = true; if (op !== 'select') devuelve = true; return q },
     eq(c, v) { filtros.push(f => f[c] === v); return q },
     in(c, vs) { filtros.push(f => vs.includes(f[c])); return q },
     is(c, v) { filtros.push(f => (f[c] ?? null) === v); return q },
@@ -190,7 +191,9 @@ function consulta(tabla) {
         data = structuredClone(nuevas)
       } else if (op === 'update') {
         if (fallos.update?.(tabla, datos)) return Promise.resolve({ data: null, error: { message: 'se cayó la base' } }).then(ok, mal)
-        filas().filter(encaja).forEach(f => Object.assign(f, datos)); data = null
+        const tocadas = filas().filter(encaja)
+        tocadas.forEach(f => Object.assign(f, datos))
+        data = devuelve ? structuredClone(tocadas) : null
       } else if (op === 'delete') {
         db[tabla] = filas().filter(f => !encaja(f)); data = null
       } else {
@@ -209,6 +212,9 @@ vi.mock('../api/lib/supabase.js', () => ({ supabase: { from: (t) => consulta(t),
 vi.mock('../api/_lib/access.js', () => ({
   requireProfileAccess: vi.fn(async () => ({ userId: 'b0000000-0000-4000-8000-000000000001' })),
   agenciaDe: async (clientId) => (db.clients || []).find(c => c.id === clientId)?.agencia_id || null,
+  // Por defecto, quien llama administra la agencia (ve el saldo) y puede usar los agentes.
+  puedeUsarAgentes: vi.fn(async () => true),
+  puedeVerSaldo: vi.fn(async () => true),
 }))
 vi.mock('../api/_lib/llm.js', () => ({ llmChat: vi.fn() }))
 vi.mock('../api/_lib/instagram.js', () => ({ getToken: vi.fn(async () => ({ token: 't' })), getMediaUrls: vi.fn() }))
@@ -219,7 +225,9 @@ vi.mock('../api/_lib/variantes.js', async (original) => {
   return { ...o, encola: vi.fn(() => true), quitaDeCola: vi.fn(), procesaVariante: vi.fn(o.procesaVariante) }
 })
 
-const { default: trialReels, cobraVariante, pendienteTrial, nombreSeguro, mantenimiento } = await import('../api/trial-reels.js')
+const { default: trialReels, cobraVariante, nombreSeguro, mantenimiento } = await import('../api/trial-reels.js')
+const { apartadoDeAgencia, reservaTemporal, conCerrojoAgencia } = await import('../api/_lib/creditos.js')
+const { puedeUsarAgentes, puedeVerSaldo } = await import('../api/_lib/access.js')
 const { llmChat } = await import('../api/_lib/llm.js')
 const { getMediaUrls } = await import('../api/_lib/instagram.js')
 const { fetchPublico } = await import('../api/_lib/web.js')
@@ -250,8 +258,9 @@ async function llama({ method = 'GET', action, query = {}, body }) {
 }
 
 /** Un trozo de subida en crudo: la petición es el stream, como la deja pasar api-server. */
-async function trozo({ id, offset = 0, cuerpo = Buffer.alloc(0), method = 'POST', clientId = PERFIL }) {
+async function trozo({ id, offset = 0, cuerpo = Buffer.alloc(0), method = 'POST', clientId = PERFIL, conReq = null }) {
   const req = Readable.from(method === 'POST' ? [cuerpo] : [])
+  conReq?.(req)
   Object.assign(req, {
     method,
     query: { action: 'trozo', clientId, id, ...(method === 'POST' ? { offset: String(offset) } : {}) },
@@ -266,6 +275,7 @@ async function trozo({ id, offset = 0, cuerpo = Buffer.alloc(0), method = 'POST'
     setHeader(k, v) { this.headers[k] = v },
   })
   await trialReels(req, res)
+  res.req = req
   return res
 }
 
@@ -286,7 +296,10 @@ beforeEach(() => {
   db.helm_biblia = [{ client_id: PERFIL, kind: 'contenido', content: 'Tono cercano.' }]
   db.helm_trial_reels = []
   fallos.update = null
+  db.helm_ediciones = []
   encola.mockClear(); quitaDeCola.mockClear(); llmChat.mockReset()
+  puedeUsarAgentes.mockReset(); puedeUsarAgentes.mockResolvedValue(true)
+  puedeVerSaldo.mockReset(); puedeVerSaldo.mockResolvedValue(true)
   // Los vídeos subidos de cada test, fuera (cuentan para el tope de lo guardado).
   fs.rmSync(path.join(DATOS, 'trial-reels', 'fuentes'), { recursive: true, force: true })
 })
@@ -425,7 +438,8 @@ describe('trial-reels · cobro', () => {
       { id: nuevoId(), client_id: PERFIL, estado: 'listo', precio_eur: 0.3, cobrado_eur: null, updated_at: ahora },
       { id: nuevoId(), client_id: OTRO, estado: 'en_cola', precio_eur: 0.3, cobrado_eur: null, updated_at: ahora },
     ]
-    expect(await pendienteTrial(AGENCIA)).toBeCloseTo(0.6)
+    // Lo cuenta apartadoDeAgencia (común a todos los agentes; antes, pendienteTrial).
+    expect(await apartadoDeAgencia(AGENCIA)).toBeCloseTo(0.6)
     const r = await llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}, {}] } })
     expect(r.statusCode).toBe(402)
     expect(r.body.error).toMatch(/te quedan 40 \(otros 60 ya están apartados/)
@@ -822,5 +836,183 @@ describe('trial-reels · más vídeos que se aceptan', () => {
     const malo = await trozo({ id: otro, offset: 0, cuerpo: Buffer.from('RIFF....AVI LIST'.padEnd(40, ' ')) })
     expect(malo.statusCode).toBe(415)
     expect(malo.body.error).toMatch(/expórtalo otra vez como MP4/)
+  })
+})
+
+// ── Lo que arregló la verificación antes de desplegar (27-oct) ─────────────
+describe('trial-reels · quién puede gastar', () => {
+  it('sin rol para los agentes: 403 en lo que gasta o sube, y no se toca nada', async () => {
+    puedeUsarAgentes.mockResolvedValue(false)
+    const f = { id: nuevoId(), client_id: PERFIL, media_id: REEL, variante: 1, estado: 'listo', created_at: new Date().toISOString() }
+    db.helm_trial_reels = [f]
+    const fuente = { id: nuevoId(), client_id: PERFIL, nombre: 'a.mp4', bytes: 40, estado: 'subiendo', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+    db.helm_trial_fuentes = [fuente]
+    const casos = [
+      ['fuente', { nombre: 'a.mp4', bytes: 1000, tipo: 'video/mp4' }],
+      ['crear', { mediaId: REEL, variantes: [{}] }],
+      ['ganchos', { mediaId: REEL }],
+      ['borrar', { id: f.id }],
+      ['borrar-fuente', { id: fuente.id }],
+    ]
+    for (const [action, body] of casos) {
+      const r = await llama({ method: 'POST', action, body })
+      expect(r.statusCode, action).toBe(403)
+      expect(r.body.error).toBe('Tu rol no puede usar los agentes de este perfil.')
+    }
+    expect(db.helm_trial_reels).toEqual([f])
+    expect(db.helm_trial_fuentes).toEqual([fuente])
+    expect(llmChat).not.toHaveBeenCalled()
+    expect(encola).not.toHaveBeenCalled()
+    expect(quitaDeCola).not.toHaveBeenCalled()
+    expect(puedeUsarAgentes).toHaveBeenCalledWith(expect.objectContaining({ userId: expect.any(String) }), PERFIL)
+    // Ver lo que hay sí (no gasta): la lista y el estado.
+    expect((await llama({ action: 'lista' })).statusCode).toBe(200)
+    expect((await llama({ action: 'estado', query: { id: f.id } })).statusCode).toBe(200)
+  })
+
+  it('trozo sin rol: 403 sin leer el cuerpo en crudo y cerrando la conexión', async () => {
+    const fuente = { id: nuevoId(), client_id: PERFIL, nombre: 'a.mp4', bytes: 40, estado: 'subiendo', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+    db.helm_trial_fuentes = [fuente]
+    puedeUsarAgentes.mockResolvedValue(false)
+    let leido = false
+    const r = await trozo({ id: fuente.id, offset: 0, cuerpo: CABEZA_MP4, conReq: (req) => req.on('data', () => { leido = true }) })
+    expect(r.statusCode).toBe(403)
+    expect(r.headers.Connection).toBe('close')
+    expect(leido).toBe(false)
+    expect(fs.existsSync(dirSubidaFuente(fuente.id))).toBe(false)
+    // Tampoco se puede preguntar cuánto ha llegado.
+    expect((await trozo({ id: fuente.id, method: 'GET' })).statusCode).toBe(403)
+  })
+
+  it('si no se puede mirar el rol (falla la base): 503 y no pasa', async () => {
+    puedeUsarAgentes.mockRejectedValue(new Error('la base no contesta'))
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const r = await llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}] } })
+    log.mockRestore()
+    expect(r.statusCode).toBe(503)
+    expect(r.body.error).not.toMatch(/base no contesta/)
+    expect(db.helm_trial_reels).toHaveLength(0)
+  })
+})
+
+describe('trial-reels · lo apartado es común a todos los agentes', () => {
+  it('un vídeo del Editor en cola ya tiene apartado el saldo: no hay para variantes', async () => {
+    db.agencias[0].saldo = 1.5
+    // De otro perfil de la agencia, subiéndose hace un momento y sin cobrar.
+    db.helm_ediciones = [{ id: nuevoId(), client_id: HERMANO, estado: 'en_cola', precio_eur: 1.5, cobrado_eur: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }]
+    const r = await llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}] } })
+    expect(r.statusCode).toBe(402)
+    expect(r.body.error).toMatch(/te quedan 0 \(otros 150 ya están apartados/)
+    expect(db.helm_trial_reels).toHaveLength(0)
+    // Ni para empezar a subir un vídeo.
+    expect((await llama({ method: 'POST', action: 'fuente', body: { nombre: 'a.mp4', bytes: 1000, tipo: 'video/mp4' } })).statusCode).toBe(402)
+    // Cobrado el vídeo, ya no está apartado.
+    db.helm_ediciones[0].cobrado_eur = 1.5
+    db.agencias[0].saldo = 0.3
+    expect((await llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}] } })).statusCode).toBe(200)
+  })
+
+  it('una portada generándose (reservaTemporal) también cuenta', async () => {
+    db.agencias[0].saldo = 0.5
+    const liberar = reservaTemporal(AGENCIA, 0.4)
+    try {
+      expect((await llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}] } })).statusCode).toBe(402)
+    } finally { liberar() }
+    expect((await llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}] } })).statusCode).toBe(200)
+  })
+
+  it('crear espera al cerrojo COMÚN de la agencia (el que usan Portadas y el Editor)', async () => {
+    let suelta
+    const otroAgente = conCerrojoAgencia(AGENCIA, () => new Promise(ok => { suelta = ok }))
+    const crear = llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}] } })
+    await new Promise(r => setTimeout(r, 30))
+    // Mientras otro agente comprueba y aparta, no se mete ninguna variante.
+    expect(db.helm_trial_reels).toHaveLength(0)
+    suelta()
+    await otroAgente
+    expect((await crear).statusCode).toBe(200)
+    expect(db.helm_trial_reels).toHaveLength(1)
+  })
+
+  it('el 402 lleva cifras solo para quien puede ver el saldo', async () => {
+    db.agencias[0].saldo = 0.5
+    puedeVerSaldo.mockResolvedValue(false)
+    const r = await llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}, {}] } })
+    expect(r.statusCode).toBe(402)
+    expect(r.body.error).toBe('La agencia no tiene créditos suficientes para esto (cuesta 60 créditos). Pide a quien administra la agencia que recargue.')
+    db.agencias[0].saldo = 0.2
+    const f = await llama({ method: 'POST', action: 'fuente', body: { nombre: 'a.mp4', bytes: 1000, tipo: 'video/mp4' } })
+    expect(f.statusCode).toBe(402)
+    expect(f.body.error).not.toMatch(/te quedan|20/)
+  })
+})
+
+describe('trial-reels · borrada mientras se montaba', () => {
+  it('no se cobra, no se queda el MP4 y la fila no vuelve', async () => {
+    const fuente = { id: nuevoId(), client_id: PERFIL, nombre: 'a.mp4', bytes: 10, estado: 'lista', created_at: new Date().toISOString() }
+    db.helm_trial_fuentes = [fuente]
+    fs.mkdirSync(path.dirname(rutaFuenteSubida(PERFIL, fuente.id)), { recursive: true })
+    fs.writeFileSync(rutaFuenteSubida(PERFIL, fuente.id), 'mp4')
+    const r = await llama({ method: 'POST', action: 'crear', body: { fuenteId: fuente.id, variantes: [{}] } })
+    const id = r.body.ids[0]
+    // El usuario pulsa «borrar» mientras ffmpeg monta (quitaDeCola solo mata
+    // ffmpeg si ya corre; aquí el montaje acaba igual).
+    procesaVariante.mockImplementationOnce(async ({ salida }) => {
+      expect((await llama({ method: 'POST', action: 'borrar', body: { id } })).statusCode).toBe(200)
+      fs.writeFileSync(salida, 'mp4 montado')
+      return { bytes: 11, duracion: 4 }
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await encola.mock.calls.at(-1)[0].ejecuta()
+    log.mockRestore()
+    expect(db.helm_trial_reels).toHaveLength(0)
+    expect(MOVIMIENTOS()).toHaveLength(0)
+    expect(fs.existsSync(rutaSalida(id))).toBe(false)
+    // El vídeo subido sigue (es del usuario, para sacar más variantes).
+    expect(fs.existsSync(rutaFuenteSubida(PERFIL, fuente.id))).toBe(true)
+  })
+
+  it('«listo» se apunta solo en la fila de ESE perfil', async () => {
+    const fuente = { id: nuevoId(), client_id: PERFIL, nombre: 'a.mp4', bytes: 10, estado: 'lista', created_at: new Date().toISOString() }
+    db.helm_trial_fuentes = [fuente]
+    fs.mkdirSync(path.dirname(rutaFuenteSubida(PERFIL, fuente.id)), { recursive: true })
+    fs.writeFileSync(rutaFuenteSubida(PERFIL, fuente.id), 'mp4')
+    const r = await llama({ method: 'POST', action: 'crear', body: { fuenteId: fuente.id, variantes: [{}] } })
+    const fila = db.helm_trial_reels[0]
+    // Como si la fila hubiera cambiado de perfil a mitad (no debería pasar):
+    // el update con id + client_id no la encuentra, y no se cobra.
+    procesaVariante.mockImplementationOnce(async ({ salida }) => { fila.client_id = OTRO; fs.writeFileSync(salida, 'x'); return { bytes: 1, duracion: 1 } })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await encola.mock.calls.at(-1)[0].ejecuta()
+    log.mockRestore()
+    expect(fila.estado).toBe('procesando')
+    expect(MOVIMIENTOS()).toHaveLength(0)
+    expect(fs.existsSync(rutaSalida(r.body.ids[0]))).toBe(false)
+  })
+})
+
+describe('trial-reels · cabeceras de lo que se descarga', () => {
+  it('descarga y fuente-video: nosniff, CSP sin nada y sandbox; la fuente, inline con un nombre fijo', async () => {
+    const mio = { id: nuevoId(), client_id: PERFIL, media_id: REEL, variante: 1, estado: 'listo', created_at: '2026-10-18T10:00:00Z' }
+    db.helm_trial_reels = [mio]
+    fs.mkdirSync(path.dirname(rutaSalida(mio.id)), { recursive: true })
+    fs.writeFileSync(rutaSalida(mio.id), 'mp4')
+    const d = await llama({ action: 'descarga', query: { id: mio.id } })
+    expect(d.statusCode).toBe(200)
+    expect(d.headers).toMatchObject({ 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox" })
+
+    const f = { id: nuevoId(), client_id: PERFIL, nombre: '"><script>alert(1)</script>.mp4', bytes: 3, estado: 'lista', created_at: new Date().toISOString() }
+    db.helm_trial_fuentes = [f]
+    fs.mkdirSync(path.dirname(rutaFuenteSubida(PERFIL, f.id)), { recursive: true })
+    fs.writeFileSync(rutaFuenteSubida(PERFIL, f.id), 'mp4')
+    const v = await llama({ action: 'fuente-video', query: { id: f.id } })
+    expect(v.statusCode).toBe(200)
+    expect(v.headers).toMatchObject({
+      'Content-Type': 'video/mp4',
+      'Content-Disposition': 'inline; filename="video.mp4"',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; sandbox",
+    })
+    expect(v.descargado.toString()).toBe('mp4')
   })
 })

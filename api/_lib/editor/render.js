@@ -38,6 +38,7 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ejecuta, sondea, argumentosCodificacion, reencuadre, FFMPEG } from '../variantes.js'
+import { COMO_MOV, formatoDe } from './formato.js'
 import { LIENZO, FPS } from '../../../src/agents/editor/estilo.js'
 
 export const DIR_FUENTES = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fuentes')
@@ -78,12 +79,16 @@ export function entradasDe(plan) {
   return lista.map((e, i) => ({ ...e, indice: i + 1 }))
 }
 
-/** Lo que va delante de la ruta de cada recurso. PURA. */
+/**
+ * Lo que va delante de la ruta de cada recurso. PURA. Los clips (MP4/MOV por
+ * su firma) y la música en M4A se abren con su demuxer (COMO_MOV, formato.js):
+ * ffmpeg no adivina el formato de nada que haya subido el usuario como vídeo.
+ */
 function argumentosEntrada(e, ruta, plan) {
   // Del clip, solo lo que se usa (-ss antes de -i: salta sin decodificar).
-  if (e.uso === 'clip') return ['-ss', s(e.tramo.desde || 0), '-t', s(e.tramo.b - e.tramo.a + 0.5), '-i', ruta]
+  if (e.uso === 'clip') return ['-ss', s(e.tramo.desde || 0), '-t', s(e.tramo.b - e.tramo.a + 0.5), ...COMO_MOV, '-i', ruta]
   // La música, en bucle hasta lo que dura el editado.
-  if (e.uso === 'musica') return ['-stream_loop', '-1', '-t', s((Number(plan.duracionFinal) || 0) + 0.5), '-i', ruta]
+  if (e.uso === 'musica') return ['-stream_loop', '-1', '-t', s((Number(plan.duracionFinal) || 0) + 0.5), ...formatoDe(ruta), '-i', ruta]
   // Una imagen o el logo: un solo fotograma (lo repite el filtro loop, o overlay).
   return ['-i', ruta]
 }
@@ -260,7 +265,8 @@ export function grafoRender({ plan, ass = null, fuentes = DIR_FUENTES }) {
 
 /**
  * Los argumentos de ffmpeg. PURA. Con `rutaGrafo`, el grafo se lee de ese
- * archivo (-filter_complex_script) en vez de ir en la línea.
+ * archivo (-filter_complex_script) en vez de ir en la línea. El original se
+ * abre siempre como MP4/MOV (COMO_MOV): es lo único que se admite.
  */
 export function argumentosRender({ entrada, salida, plan, ass = null, fuentes = DIR_FUENTES, rutaGrafo = null, progreso = true, rutas = {} }) {
   const audio = Boolean(plan?.audio) || Boolean(plan?.musica)
@@ -272,7 +278,7 @@ export function argumentosRender({ entrada, salida, plan, ass = null, fuentes = 
   return [
     '-hide_banner', '-nostdin', '-y', '-loglevel', 'error',
     ...(progreso ? ['-progress', 'pipe:1', '-nostats'] : []),
-    '-i', entrada,
+    ...COMO_MOV, '-i', entrada,
     ...recursos,
     ...(rutaGrafo ? ['-filter_complex_script', rutaGrafo] : ['-filter_complex', grafoRender({ plan, ass, fuentes })]),
     '-map', '[vout]', ...(audio ? ['-map', '[aout]'] : []),
@@ -290,7 +296,7 @@ export function argumentosRender({ entrada, salida, plan, ass = null, fuentes = 
  * resumen en JSON al acabar). PURA.
  */
 export function argumentosMedida(ruta, duracion) {
-  return ['-hide_banner', '-nostdin', '-nostats', '-stream_loop', '-1', '-t', s(Math.max(0.5, Number(duracion) || 0)), '-i', ruta,
+  return ['-hide_banner', '-nostdin', '-nostats', '-stream_loop', '-1', '-t', s(Math.max(0.5, Number(duracion) || 0)), ...formatoDe(ruta), '-i', ruta,
     '-vn', '-af', 'loudnorm=print_format=json', '-f', 'null', '-']
 }
 

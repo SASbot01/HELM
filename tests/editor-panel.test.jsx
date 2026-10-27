@@ -256,6 +256,9 @@ describe('EditorReel · el precio, antes de subir', () => {
     await abreTaller()
     fireEvent.change(screen.getByLabelText('Elegir el vídeo'), { target: { files: [archivo('notas.txt', 'text/plain', 10)] } })
     expect(await screen.findByText(/Eso no es un vídeo/)).toBeTruthy()
+    // Un WebM es vídeo, pero el servidor solo admite MP4/MOV: se dice antes de subir.
+    fireEvent.change(screen.getByLabelText('Elegir el vídeo'), { target: { files: [archivo('toma.webm', 'video/webm', 1000)] } })
+    expect(await screen.findByText(/exporta a MP4/)).toBeTruthy()
     h.duracion = 720
     fireEvent.change(screen.getByLabelText('Elegir el vídeo'), { target: { files: [video('largo.mp4')] } })
     expect(await screen.findByText(/Ese vídeo dura 12:00: el máximo son 10 minutos/)).toBeTruthy()
@@ -296,6 +299,51 @@ describe('EditorReel · el precio, antes de subir', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cómo recargar' }))
     window.removeEventListener('helm:sin-saldo', recarga)
     expect(recarga).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('EditorReel · el precio sin ver el saldo (no administras la agencia)', () => {
+  const sinSaldo = (alcanza = {}) => ({
+    paga: true, saldo: null,
+    alcanza: { 'editor-reels': true, 'portada-ia': true, 'trial-reel': true, ...alcanza },
+    precios: PRECIOS_FIJOS,
+  })
+
+  it('solo el precio, sin «te quedan…»; si alcanza, deja empezar', async () => {
+    localStorage.removeItem('bw_superadmin')
+    h.precios = sinSaldo()
+    h.duracion = 200
+    await abreTaller('kallaway')
+    await eligeVideo()
+    expect(await lineaPrecio('Esto cuesta 300 créditos')).toBeTruthy()
+    expect(screen.queryByText(/te quedan/)).toBeNull()
+    expect(screen.queryByText(/No te llega|no tiene créditos suficientes/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Editar vídeo' }).disabled).toBe(false)
+  })
+
+  it('si a la agencia no le alcanza ni para un bloque, lo dice sin cifras y no deja empezar', async () => {
+    localStorage.removeItem('bw_superadmin')
+    h.precios = sinSaldo({ 'editor-reels': false })
+    await abreTaller()
+    await eligeVideo()
+    expect(await lineaPrecio('Esto cuesta 150 créditos')).toBeTruthy()
+    expect(screen.queryByText(/te quedan/)).toBeNull()
+    expect(screen.getByText('La agencia no tiene créditos suficientes para este vídeo.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Editar vídeo' }).disabled).toBe(true)
+    expect(screen.getByRole('button', { name: 'Cómo recargar' })).toBeTruthy()
+  })
+
+  it('el 402 genérico del servidor se enseña tal cual y ofrece cómo recargar', async () => {
+    localStorage.removeItem('bw_superadmin')
+    h.precios = sinSaldo()
+    const msg = 'La agencia no tiene créditos suficientes para esto (cuesta 150 créditos). Pide a quien administra la agencia que recargue.'
+    h.errorCrear = new Error(msg)
+    await abreTaller()
+    await eligeVideo()
+    fireEvent.click(screen.getByRole('button', { name: 'Editar vídeo' }))
+    expect(await screen.findByText(msg)).toBeTruthy()
+    expect(within(screen.getByRole('alert')).getByRole('button', { name: 'Cómo recargar' })).toBeTruthy()
+    expect(llamadas('trozo')).toEqual([])
   })
 })
 

@@ -2,6 +2,7 @@
 // maqueta del compositor (componer.js, sin canvas) y el servidor
 // (api/portadas.js) con Supabase, la IA e Instagram simulados.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { Writable } from 'node:stream'
 import {
   normalizaMarca, normalizaOpciones, primeraCifra, contraste, tintaSobre, comprobar, MARCA_POR_DEFECTO, ZONA_CUADRICULA,
 } from '../src/agents/portadas/reglas.js'
@@ -122,7 +123,12 @@ function consulta(tabla) {
   return q
 }
 vi.mock('../api/lib/supabase.js', () => ({ supabase: { from: (t) => consulta(t) } }))
-vi.mock('../api/_lib/access.js', () => ({ requireProfileAccess: vi.fn(async () => ({ sub: 'u-1' })) }))
+vi.mock('../api/_lib/access.js', () => ({
+  requireProfileAccess: vi.fn(async () => ({ sub: 'u-1' })),
+  agenciaDe: async () => null,
+  puedeUsarAgentes: vi.fn(async () => true),
+  puedeVerSaldo: vi.fn(async () => false),
+}))
 vi.mock('../api/_lib/llm.js', () => ({ llmChat: vi.fn() }))
 vi.mock('../api/_lib/instagram.js', () => ({ getToken: vi.fn(async () => ({ token: 't' })), getMediaUrls: vi.fn() }))
 vi.mock('../api/_lib/web.js', () => ({ fetchPublico: vi.fn() }))
@@ -131,6 +137,7 @@ const { default: portadas, extraeJson } = await import('../api/portadas.js')
 const { llmChat } = await import('../api/_lib/llm.js')
 const { getMediaUrls } = await import('../api/_lib/instagram.js')
 const { fetchPublico } = await import('../api/_lib/web.js')
+const { puedeUsarAgentes } = await import('../api/_lib/access.js')
 
 let ip = 0
 async function llama({ method = 'GET', action, query = {}, body }) {
@@ -150,6 +157,7 @@ beforeEach(() => {
   db.helm_ig_media = [{ client_id: PERFIL, media_id: '17900000000000001', caption: 'Los 5 errores que te hunden los reels\nY cómo evitarlos', visitas: 1200 }]
   escrituras.length = 0
   llmChat.mockReset(); getMediaUrls.mockReset(); fetchPublico.mockReset()
+  puedeUsarAgentes.mockReset(); puedeUsarAgentes.mockResolvedValue(true)
 })
 
 describe('api/portadas', () => {
@@ -188,6 +196,51 @@ describe('api/portadas', () => {
     expect((await llama({ action: 'video', query: { mediaId: '17900000000000001' } })).statusCode).toBe(502)
     expect(fetchPublico).not.toHaveBeenCalled()
     expect((await llama({ action: 'imagen', query: { mediaId: '17900000000000001' } })).statusCode).toBe(404)
+  })
+
+  it('sin rol para los agentes: 403 en lo que gasta o cambia, y leer sigue igual', async () => {
+    puedeUsarAgentes.mockResolvedValue(false)
+    const casos = [
+      ['marca', { marca: { colorPrincipal: '#123456' } }],
+      ['textos', { mediaId: '17900000000000001' }],
+      ['fondo-prompt', { tema: 'gimnasio' }],
+      ['fondo-ia', { prompt: 'x' }],
+      ['portada-ia', { titulo: 'Hola', estilo: 'oro' }],
+      ['ejemplo', { nombre: 'x', imagen: 'data:image/png;base64,AA==' }],
+      ['ejemplo-borrar', { id: 'x' }],
+    ]
+    for (const [action, body] of casos) {
+      const r = await llama({ method: 'POST', action, body: { clientId: PERFIL, ...body } })
+      expect(r.statusCode, action).toBe(403)
+      expect(r.body.error).toBe('Tu rol no puede usar los agentes de este perfil.')
+    }
+    expect(llmChat).not.toHaveBeenCalled()
+    expect(escrituras).toHaveLength(0)
+    expect((await llama({ action: 'marca' })).statusCode).toBe(200)
+    // Si no se puede mirar el rol, tampoco pasa (y no se enseña el fallo de la base).
+    puedeUsarAgentes.mockRejectedValue(new Error('la base no contesta'))
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const r = await llama({ method: 'POST', action: 'textos', body: { clientId: PERFIL, mediaId: '17900000000000001' } })
+    log.mockRestore()
+    expect(r.statusCode).toBe(503)
+    expect(r.body.error).not.toMatch(/base/)
+    expect(llmChat).not.toHaveBeenCalled()
+  })
+
+  it('video del CDN: con nosniff y una CSP que no deja ejecutar nada', async () => {
+    getMediaUrls.mockResolvedValue({ video: 'https://scontent-mad1-1.cdninstagram.com/v/reel.mp4', imagen: '' })
+    fetchPublico.mockResolvedValue(new Response('mp4', { headers: { 'content-type': 'text/html' } }))
+    const trozos = []
+    const res = new Writable({ write(c, _e, cb) { trozos.push(c); cb() } })
+    Object.assign(res, {
+      statusCode: 200, body: null, headers: {}, headersSent: false,
+      status(c) { this.statusCode = c; return this },
+      json(b) { this.body = b; this.headersSent = true; return this },
+      setHeader(k, v) { this.headers[k] = v },
+    })
+    await portadas({ method: 'GET', query: { action: 'video', clientId: PERFIL, mediaId: '17900000000000001' }, headers: { 'x-forwarded-for': `10.7.0.${++ip}` }, socket: {} }, res)
+    expect(res.headers).toMatchObject({ 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox" })
+    expect(Buffer.concat(trozos).toString()).toBe('mp4')
   })
 
   it('extraeJson aguanta texto alrededor', () => {

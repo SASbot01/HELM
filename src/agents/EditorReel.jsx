@@ -32,7 +32,7 @@ import {
 } from 'lucide-react'
 import { editorApi, creditosApi } from '../helm/lib'
 import { subePorTrozos, mandaTrozo, reintentable, espera, esperaDe } from '../helm/subida'
-import { precioEditor, aCreditos, PRECIOS_FIJOS, CREDITOS_POR_EURO } from '../helm/precios'
+import { precioEditor, aCreditos, PRECIOS_FIJOS, creditosQueQuedan } from '../helm/precios'
 import { tipoDeVideo } from './editor/subida'
 import { leeDuracion } from './editor/duracion'
 import {
@@ -59,16 +59,30 @@ const mb = (b) => (b < MB
 const num = (n) => Number(n || 0).toLocaleString('es-ES')
 const creditos = (euros) => num(aCreditos(euros))
 // Lo que QUEDA va hacia abajo, como lo cuenta el servidor (exigirImporte): el
-// saldo lleva cuatro decimales y con 1,4987 € quedan 149 créditos, no 150. Y
-// no llega si le falta más de una diezmilésima, igual que allí. (El 1e-6, por
-// la coma flotante: 0,29 × 100 da 28,999…)
-const quedan = (euros) => num(Math.max(0, Math.floor(Number(euros || 0) * CREDITOS_POR_EURO + 1e-6)))
+// saldo lleva cuatro decimales y con 1,4987 € quedan 149 créditos, no 150
+// (creditosQueQuedan). Y no llega si le falta más de una diezmilésima, igual
+// que allí.
+const quedan = (euros) => num(creditosQueQuedan(euros))
 const noAlcanza = (saldo, euros) => Number(saldo) + 1e-4 < Number(euros)
+/**
+ * ¿No le llega a la agencia para `euros`? Con el saldo a la vista (quien
+ * administra la agencia), la cuenta exacta. Sin él (el resto: el saldo es de la
+ * agencia y no se le enseña), lo que diga el servidor en `alcanza`, que va por
+ * el precio de un bloque de 3 minutos: si no llega ni para uno, no llega para
+ * ningún vídeo. Si no se sabe, que sí: el servidor lo vuelve a mirar al lanzar.
+ */
+function noLlegaPara(precios, euros) {
+  if (!precios || precios.error || !precios.paga) return false
+  if (precios.saldo != null) return noAlcanza(precios.saldo, euros)
+  return precios.alcanza?.['editor-reels'] === false
+}
 const miles = num
 const caducado = (e) => e.estado === 'listo' && Date.now() - new Date(e.created_at).getTime() > DIAS_GUARDADO * 86_400_000
 const portadaDe = (reel) => `/agentes/editor-estilos/${reel.shortcode}.jpg`
 const ICONO = { subiendo: Upload, en_cola: Clock, transcribiendo: Loader2, montando: Loader2, listo: Check, error: AlertTriangle }
-const EXT_VIDEO = /\.(mp4|mov|m4v|webm|mkv|3gp|avi|mpg)$/i
+// Solo lo que admite el servidor (MP4/MOV y familia: se comprueba por los bytes).
+const EXT_VIDEO = /\.(mp4|mov|m4v|3gp)$/i
+const TIPOS_VIDEO = ['video/mp4', 'video/quicktime', 'video/x-m4v', 'video/3gpp']
 const EN_IDIOMA = { es: 'en español', en: 'en inglés', pt: 'en portugués' }
 
 // Sin saldo, el panel abre la recarga (AvisoSinSaldo, en Creditos.jsx): con un
@@ -77,7 +91,7 @@ const EN_IDIOMA = { es: 'en español', en: 'en inglés', pt: 'en portugués' }
 // botón lo dice igual.
 const recargarCreditos = (detalle) => window.dispatchEvent(new CustomEvent('helm:sin-saldo', { detail: detalle || null }))
 const puedeRecargar = () => { try { return Boolean(localStorage.getItem('bw_superadmin')) } catch { return false } }
-const SIN_SALDO = /saldo suficiente|sin créditos|recarga en créditos/i
+const SIN_SALDO = /saldo suficiente|créditos suficientes|sin créditos|recarga en créditos/i
 // Lo que dice fetch (Chrome, Firefox, Safari) cuando no llega ni a salir.
 const SIN_RED = /failed to fetch|networkerror|load failed|network request failed/i
 
@@ -198,7 +212,11 @@ function useEdiciones(clientId) {
   return { ediciones, error, recargar }
 }
 
-/** Si este perfil paga y cuánto le queda: { paga, saldo, precios } (o { error }). */
+/**
+ * Si este perfil paga y cuánto le queda: { paga, saldo, alcanza, precios } (o
+ * { error }). `saldo` llega null si no administras la agencia: entonces solo
+ * se enseña el precio, y `alcanza` dice si llega.
+ */
 function usePrecios(clientId) {
   const [precios, setPrecios] = useState(null)
   const cargar = useCallback(
@@ -590,8 +608,10 @@ function Taller({ clientId, referencia, retomar, precios, onCerrar, onCreada, on
   async function eligeVideo(archivo) {
     setErrorVideo('')
     if (!archivo) return
-    const pareceVideo = String(archivo.type || '').startsWith('video/') || (!archivo.type && EXT_VIDEO.test(archivo.name || ''))
+    const tipo = String(archivo.type || '')
+    const pareceVideo = tipo.startsWith('video/') || (!tipo && EXT_VIDEO.test(archivo.name || ''))
     if (!pareceVideo) { setErrorVideo('Eso no es un vídeo. Sube el archivo tal cual sale del móvil (MP4 o MOV).'); return }
+    if (tipo && !TIPOS_VIDEO.includes(tipo) && !EXT_VIDEO.test(archivo.name || '')) { setErrorVideo('Ese formato de vídeo no vale: exporta a MP4 y vuelve a subirlo.'); return }
     if (!archivo.size) { setErrorVideo('Ese archivo está vacío.'); return }
     if (archivo.size > MAX_MB_SUBIDA * MB) { setErrorVideo(`El vídeo pesa ${mb(archivo.size)}: el máximo son ${MAX_MB_SUBIDA} MB.`); return }
     setLeyendo(true)
@@ -783,8 +803,7 @@ function Taller({ clientId, referencia, retomar, precios, onCerrar, onCreada, on
   }
 
   const euros = edicion?.precio_eur != null ? Number(edicion.precio_eur) : precioEditor(video?.duracion)
-  const saldo = precios && !precios.error && precios.paga && precios.saldo != null ? Number(precios.saldo) : null
-  const noLlega = Boolean(!edicion && saldo != null && video && noAlcanza(saldo, euros))
+  const noLlega = Boolean(!edicion && video && noLlegaPara(precios, euros))
   const logo = recursos.find(r => r.tipo === 'logo')
   const datosVideo = video && [
     video.bytes ? mb(video.bytes) : null,
@@ -933,7 +952,7 @@ function ZonaVideo({ onElige, leyendo }) {
       onDrop={(ev) => { ev.preventDefault(); setArrastrando(false); onElige(ev.dataTransfer?.files?.[0]) }}
     >
       <input
-        ref={input} type="file" accept="video/*" hidden aria-label="Elegir el vídeo"
+        ref={input} type="file" accept="video/mp4,video/quicktime,video/x-m4v,video/3gpp,.mp4,.mov,.m4v,.3gp" hidden aria-label="Elegir el vídeo"
         onChange={(ev) => { const f = ev.target.files?.[0]; ev.target.value = ''; onElige(f) }}
       />
       <div className="ed-subida-vacia">
@@ -966,8 +985,9 @@ function Precio({ precios, euros, duracion, conVideo, cerrado }) {
       </p>
     )
   }
+  // El saldo, solo si se ve (quien administra la agencia); si no, solo el precio.
   const saldo = precios && !precios.error && precios.saldo != null ? Number(precios.saldo) : null
-  const noLlega = !cerrado && saldo != null && noAlcanza(saldo, euros)
+  const noLlega = !cerrado && noLlegaPara(precios, euros)
   const bloques = Math.max(1, Math.round(euros / PRECIOS_FIJOS['editor-reels']))
   return (
     <div className={`ed-precio${noLlega ? ' mal' : ''}`}>
@@ -983,7 +1003,7 @@ function Precio({ precios, euros, duracion, conVideo, cerrado }) {
         </small>
         {noLlega && (
           <div className="ed-precio-recarga">
-            <small className="ed-mal">No te llega el saldo para este vídeo.</small>
+            <small className="ed-mal">{saldo != null ? 'No te llega el saldo para este vídeo.' : 'La agencia no tiene créditos suficientes para este vídeo.'}</small>
             <BotonRecarga />
           </div>
         )}

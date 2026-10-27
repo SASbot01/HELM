@@ -15,14 +15,18 @@
 // Los agentes que no usan Claude (Editor de reels, Portadas con IA, Trial
 // reels) cobran a PRECIO FIJO por trabajo (src/helm/precios.js), con el perfil
 // explícito y sin depender de claveHelm(). Uso:
-//   import { exigirImporte, cobrarFijo, cobradoYa, quienPagaPerfil, precioEditor, PRECIOS_FIJOS } from './_lib/creditos.js'
+//   import { exigirImporte, cobrarFijo, cobradoYa, quienPagaPerfil, precioEditor, PRECIOS_FIJOS,
+//            conCerrojoAgencia, reservaTemporal } from './_lib/creditos.js'
 //   // antes de lanzar: si no llega, lanza un 402 con el mensaje para el usuario.
-//   // `pendiente` = lo que ya está comprometido en trabajos de la AGENCIA que
-//   // aún no se han cobrado (en cola, en marcha…; sin contar este): sin eso,
-//   // con 1,50 € se pueden poner 20 vídeos en cola. Un número, o una función
-//   // que lo calcula y solo se llama si la agencia paga:
-//   await exigirImporte(clientId, precioEditor(duracion), {
-//     pendiente: ({ agenciaId }) => sumaDeLoQueTieneEnMarcha(agenciaId, { menos: id }),
+//   // Lo que ya está comprometido en trabajos de la AGENCIA que aún no se han
+//   // cobrado (de TODOS los agentes: apartadoDeAgencia) se resta del saldo
+//   // antes de comparar: sin eso, con 1,50 € se ponen 20 vídeos en cola, o se
+//   // gasta en Portadas lo que ya está apartado para un vídeo del Editor.
+//   // Comprobar y apartar van dentro del cerrojo de la agencia:
+//   await conCerrojoAgencia(agenciaId, async () => {
+//     await exigirImporte(clientId, precioEditor(duracion), { excluirEdicion: id, detalle: verSaldo })
+//     // …y aquí, antes de soltar el cerrojo, lo que lo deja apartado: la fila
+//     // en marcha (Editor, Trial reels) o reservaTemporal (Portadas).
 //   })
 //   // al terminar BIEN (nunca si falla); la referencia hace que no se cobre dos veces
 //   const saldo = await cobrarFijo(clientId, precio, { concepto: 'editor-reels', referencia: `editor:${id}`, origen: 'auto' })
@@ -38,7 +42,9 @@
 import { supabase } from '../lib/supabase.js'
 import { contexto } from './contexto.js'
 import { agenciaDe } from './access.js'
+import { HORAS_SUBIDA } from './subida-trozos.js'
 import { CREDITOS_POR_EURO, PRECIOS_FIJOS, precioEditor } from '../../src/helm/precios.js'
+import { EN_MARCHA as EDICIONES_EN_MARCHA } from '../../src/agents/editor/estilo.js'
 
 export { CREDITOS_POR_EURO, PRECIOS_FIJOS, precioEditor }
 export const MARGEN = 2
@@ -120,14 +126,23 @@ async function quienPaga() {
 }
 
 /**
- * Antes de llamar a Claude: sin saldo, no se llama. Lanza un 402 con un
- * mensaje que se puede enseñar tal cual.
+ * Antes de llamar a Claude: sin saldo LIBRE, no se llama. Libre es el saldo
+ * menos lo apartado para trabajos a precio fijo que aún no se han cobrado
+ * (apartadoDeAgencia): si no, lo reservado para un vídeo del Editor en cola se
+ * gastaría en Claude y el Editor, al acabar, cobraría igual. Lanza un 402 con
+ * un mensaje que se puede enseñar tal cual (sin cifras: lo ve quien sea).
  */
 export async function exigirSaldo() {
   const p = await quienPaga()
   if (!p) return
-  if (Number(p.agencia.saldo) <= 0) {
-    const e = new Error('Te has quedado sin créditos. Recarga para que la IA siga trabajando.')
+  const saldo = Number(p.agencia.saldo) || 0
+  // Sin saldo ni se mira lo apartado: no hace falta para decir que no.
+  const apartado = saldo > 0 ? await apartadoDeAgencia(p.agencia.id) : 0
+  const libre = Math.round((saldo - apartado) * 10_000) / 10_000
+  if (libre <= 0) {
+    const e = new Error(apartado > 0
+      ? 'Te has quedado sin créditos: lo que queda está apartado para trabajos que aún no han terminado. Recarga para que la IA siga trabajando.'
+      : 'Te has quedado sin créditos. Recarga para que la IA siga trabajando.')
     e.statusCode = 402
     throw e
   }
@@ -177,36 +192,216 @@ export async function quienPagaPerfil(clientId) {
   return { agenciaId, saldo: Number(a.saldo) || 0 }
 }
 
+// ── Lo apartado: lo comprometido y aún sin cobrar, de TODOS los agentes ─────
+//
+// Los agentes a precio fijo cobran al ACABAR bien, así que lo que tienen en
+// marcha ya está comprometido: no se puede gastar en otra cosa. Hasta el
+// 27-oct cada agente restaba solo lo suyo, y con 1,50 € se lanzaba un vídeo del
+// Editor, dos portadas y una variante: la agencia acababa en −1,10 €.
+
+// Las variantes de Trial reels que aún pueden salir (y cobrarse).
+const TRIAL_EN_MARCHA = ['en_cola', 'procesando']
+// Copia de CADUCA_PROCESANDO de api/trial-reels.js: un «procesando» con más de
+// esto es que el servidor se reinició a medias, y no va a cobrarse.
+const CADUCA_PROCESANDO_TRIAL = 15 * 60_000
+// Lo mismo que CADUCA_SUBIENDO_MS de api/_lib/editor/trabajo.js (que importa
+// este archivo: por eso no se importa de allí): una subida parada desde hace
+// más de esto se abandonó y no cuenta.
+const CADUCA_SUBIENDO_EDITOR = HORAS_SUBIDA * 3600_000
+const edadDe = (f) => Date.now() - new Date(f.updated_at || f.created_at || 0).getTime()
+// La tabla no existe todavía (falta su migración): nada puede estar apartado
+// en ella, y Claude no debe dejar de funcionar por eso.
+const sinTabla = (error) => ['42P01', 'PGRST205'].includes(error?.code)
+  || /relation .* does not exist|could not find the table/i.test(error?.message || '')
+
+// Reservas en memoria de ESTE proceso (el api-server es uno solo), para lo que
+// no deja una fila en marcha mientras trabaja: una portada con IA tarda unos
+// 30 s y se cobra al acabar.
+const reservas = new Map() // agenciaId -> euros
+
+/**
+ * Aparta `euros` del saldo de la agencia mientras dura un trabajo que no deja
+ * fila en marcha (Portadas con IA). Devuelve liberar(), que se llama SIEMPRE
+ * al acabar, haya salido bien o mal (en un finally); llamarla dos veces no
+ * suelta dos veces. Sin agencia o sin importe, no aparta nada.
+ *
+ * Uso (en lugar del enVuelo de api/portadas.js):
+ *   let liberar = () => {}
+ *   await conCerrojoAgencia(agenciaId, async () => {
+ *     await exigirImporte(clientId, precio, { detalle: verSaldo })
+ *     liberar = reservaTemporal(agenciaId, precio)
+ *   })
+ *   try { … genera y cobra … } finally { liberar() }
+ */
+export function reservaTemporal(agenciaId, euros) {
+  const importe = centimos(euros)
+  if (!agenciaId || !(importe > 0)) return () => {}
+  reservas.set(agenciaId, centimos((reservas.get(agenciaId) || 0) + importe))
+  let suelta = false
+  return function liberar() {
+    if (suelta) return
+    suelta = true
+    const queda = centimos((reservas.get(agenciaId) || 0) - importe)
+    if (queda > 0) reservas.set(agenciaId, queda)
+    else reservas.delete(agenciaId)
+  }
+}
+
+/**
+ * Lo que la agencia tiene comprometido y aún sin cobrar, en euros, de TODOS
+ * sus perfiles y de todos los agentes:
+ *   · ediciones del Editor subiendo, en cola, transcribiendo o montándose, sin
+ *     cobrar (precio_eur), menos las subidas abandonadas y `excluirEdicion`
+ *     (la que se está lanzando: su precio es el que se va a exigir);
+ *   · variantes de Trial reels en cola o montándose, sin cobrar (un
+ *     «procesando» colgado por un reinicio no cuenta);
+ *   · lo reservado en memoria con reservaTemporal (Portadas generando).
+ * Lanza si falla la base: entonces no se sabe, y no se lanza nada a ciegas.
+ *
+ * Uso: exigirImporte ya lo resta solo; esto es para quien enseñe lo libre.
+ *   const libre = saldo - await apartadoDeAgencia(agenciaId)
+ */
+export async function apartadoDeAgencia(agenciaId, { excluirEdicion = null } = {}) {
+  if (!agenciaId) return 0
+  // Lo reservado en memoria se lee al final, tras las consultas: lo soltado
+  // mientras tanto ya no cuenta.
+  const conReservas = (euros) => Math.max(0, centimos(euros + (reservas.get(agenciaId) || 0)))
+  const { data: perfiles, error } = await supabase.from('clients').select('id').eq('agencia_id', agenciaId)
+  if (error) throw error
+  const ids = (perfiles || []).map(p => p.id)
+  if (!ids.length) return conReservas(0)
+
+  const [ediciones, variantes] = await Promise.all([
+    supabase.from('helm_ediciones').select('id, estado, precio_eur, cobrado_eur, created_at, updated_at')
+      .in('client_id', ids).in('estado', EDICIONES_EN_MARCHA).is('cobrado_eur', null),
+    supabase.from('helm_trial_reels').select('estado, precio_eur, cobrado_eur, updated_at')
+      .in('client_id', ids).in('estado', TRIAL_EN_MARCHA),
+  ])
+  if (ediciones.error && !sinTabla(ediciones.error)) throw ediciones.error
+  if (variantes.error && !sinTabla(variantes.error)) throw variantes.error
+
+  let total = 0
+  for (const f of ediciones.data || []) {
+    if (f.cobrado_eur != null || (excluirEdicion && f.id === excluirEdicion)) continue
+    if (f.estado === 'subiendo' && edadDe(f) > CADUCA_SUBIENDO_EDITOR) continue
+    total += Number(f.precio_eur) || 0
+  }
+  for (const f of variantes.data || []) {
+    if (f.cobrado_eur != null) continue
+    if (f.estado === 'procesando' && Date.now() - new Date(f.updated_at || 0).getTime() > CADUCA_PROCESANDO_TRIAL) continue
+    total += Number(f.precio_eur) || 0
+  }
+  return conReservas(total)
+}
+
+// Un cerrojo por agencia, el MISMO para todos los agentes de este proceso.
+const cerrojos = new Map() // clave -> la cola de turnos
+
+/**
+ * Ejecuta `fn` de uno en uno por agencia: comprobar el saldo (exigirImporte) y
+ * dejar el trabajo apartado (la fila en marcha, o reservaTemporal) van dentro,
+ * juntos, para que dos peticiones casi a la vez (del mismo agente o de dos
+ * distintos) no pasen las dos con el saldo de una. Devuelve lo que devuelva
+ * `fn` (y lanza lo que lance; el turno se suelta igual).
+ *
+ * Sin agencia no espera (nadie paga); quien quiera serializar igualmente un
+ * perfil sin agencia puede pasar su clientId. No se anida con la misma clave:
+ * esperaría a sí mismo. Y dentro no va lo largo (subir, generar, montar): solo
+ * comprobar y apartar.
+ *
+ * Uso:
+ *   const agenciaId = await agenciaDe(clientId)   // de ./access.js
+ *   await conCerrojoAgencia(agenciaId, async () => {
+ *     await exigirImporte(clientId, precio, { detalle: verSaldo })
+ *     await supabase.from(TABLA).insert({ …, estado: 'en_cola', precio_eur: precio })
+ *   })
+ */
+export async function conCerrojoAgencia(agenciaId, fn) {
+  if (!agenciaId) return fn()
+  const clave = String(agenciaId)
+  const antes = cerrojos.get(clave) || Promise.resolve()
+  let suelta
+  const mio = new Promise(ok => { suelta = ok })
+  const cola = antes.then(() => mio)
+  cerrojos.set(clave, cola)
+  await antes
+  try {
+    return await fn()
+  } finally {
+    suelta()
+    if (cerrojos.get(clave) === cola) cerrojos.delete(clave)
+  }
+}
+
 /**
  * Antes de lanzar un trabajo de `euros`: si el perfil paga y no le llega el
- * saldo, lanza un 402 con un mensaje que se enseña tal cual (y que abre la
- * recarga en el panel: ver apiFetch en src/helm/lib.js). El cobro de verdad es
- * cobrarFijo, al acabar bien, así que lo que ya está en cola y aún no se ha
- * cobrado se pasa como `pendiente` (euros, o una función
- * ({ agenciaId, clientId }) → euros que solo se llama si la agencia paga): se
- * resta del saldo antes de comparar. Puede lanzar si falla la base.
+ * saldo LIBRE (el saldo menos lo apartado), lanza un 402 con un mensaje que se
+ * enseña tal cual (y que abre la recarga en el panel: ver apiFetch en
+ * src/helm/lib.js). El cobro de verdad es cobrarFijo, al acabar bien.
+ *
+ * Opciones:
+ *   · excluirEdicion: la edición que se está lanzando, para no contarla dos
+ *     veces (su fila ya está «subiendo» con su precio).
+ *   · detalle: true solo para quien puede ver el saldo (puedeVerSaldo de
+ *     ./access.js): el 402 dice cuánto cuesta, cuánto queda y cuánto está
+ *     apartado. Con false (por defecto), uno genérico que no enseña el saldo
+ *     de la agencia y dice a quién pedir la recarga.
+ *   · pendiente: lo de antes (euros, o una función ({ agenciaId, clientId }) →
+ *     euros que solo se llama si la agencia paga). Si se pasa, todo va como
+ *     hasta ahora, para no romper a ningún agente mientras se adaptan: se usa
+ *     ESO en lugar de apartadoDeAgencia y, si no se dice `detalle`, el 402
+ *     lleva las cifras, como antes. Quien lo pasa solo resta lo suyo y enseña
+ *     el saldo a cualquiera: mejor no pasarlo, y pasar `detalle`.
+ * Va dentro de conCerrojoAgencia junto con lo que deja el trabajo apartado.
+ * Puede lanzar si falla la base.
  * @returns {Promise<{ paga: boolean, saldo: number|null }>}
  */
-export async function exigirImporte(clientId, euros, { pendiente = 0 } = {}) {
+export async function exigirImporte(clientId, euros, { pendiente = null, excluirEdicion = null, detalle } = {}) {
   const p = await quienPagaPerfil(clientId)
   if (!p) return { paga: false, saldo: null }
   const importe = centimos(euros)
   if (!(importe > 0)) return { paga: true, saldo: p.saldo }
-  const comprometido = typeof pendiente === 'function' ? await pendiente({ agenciaId: p.agenciaId, clientId }) : pendiente
+  const comprometido = pendiente == null
+    ? await apartadoDeAgencia(p.agenciaId, { excluirEdicion })
+    : typeof pendiente === 'function' ? await pendiente({ agenciaId: p.agenciaId, clientId }) : pendiente
   const apartado = Math.max(0, centimos(comprometido) || 0)
   const libre = p.saldo - apartado
   // La diezmilésima: el saldo es numeric(12,4) y el precio llega en céntimos.
   if (libre + 1e-4 < importe) {
     const cuesta = formatoCreditos.format(Math.round(importe * CREDITOS_POR_EURO))
-    const quedan = formatoCreditos.format(Math.max(0, Math.floor(libre * CREDITOS_POR_EURO)))
-    const enMarcha = apartado > 0
-      ? ` (otros ${formatoCreditos.format(Math.round(apartado * CREDITOS_POR_EURO))} ya están apartados para trabajos que aún no han terminado)`
-      : ''
-    const e = new Error(`No tienes saldo suficiente: esto cuesta ${cuesta} créditos y te quedan ${quedan}${enMarcha}. Recarga en Créditos.`)
+    let mensaje = `La agencia no tiene créditos suficientes para esto (cuesta ${cuesta} créditos). Pide a quien administra la agencia que recargue.`
+    // Sin decirlo: genérico, salvo para los agentes de antes (con `pendiente`).
+    if (detalle ?? (pendiente != null)) {
+      const quedan = formatoCreditos.format(Math.max(0, Math.floor(libre * CREDITOS_POR_EURO)))
+      const enMarcha = apartado > 0
+        ? ` (otros ${formatoCreditos.format(Math.round(apartado * CREDITOS_POR_EURO))} ya están apartados para trabajos que aún no han terminado)`
+        : ''
+      mensaje = `No tienes saldo suficiente: esto cuesta ${cuesta} créditos y te quedan ${quedan}${enMarcha}. Recarga en Créditos.`
+    }
+    const e = new Error(mensaje)
     e.statusCode = 402
     throw e
   }
   return { paga: true, saldo: p.saldo }
+}
+
+/**
+ * Lo que enseña la pantalla de un agente antes de lanzar (GET
+ * /api/creditos?action=precios): si el perfil paga, los precios y, por cada
+ * uno, si le alcanza a la agencia con lo apartado ya descontado. El saldo, solo
+ * a quien puede verlo (`verSaldo`, de puedeVerSaldo); al resto, null.
+ *
+ * Uso:
+ *   res.json(await preciosDelPerfil(clientId, { verSaldo: await puedeVerSaldo(auth, clientId) }))
+ * @returns {Promise<{ paga: boolean, saldo: number|null, alcanza?: Record<string, boolean>, precios: object }>}
+ */
+export async function preciosDelPerfil(clientId, { verSaldo = false } = {}) {
+  const p = await quienPagaPerfil(clientId)
+  if (!p) return { paga: false, saldo: null, precios: PRECIOS_FIJOS }
+  const libre = p.saldo - await apartadoDeAgencia(p.agenciaId)
+  // La misma cuenta que exigirImporte: alcanza si no le falta más de una diezmilésima.
+  const alcanza = Object.fromEntries(Object.entries(PRECIOS_FIJOS).map(([k, euros]) => [k, libre + 1e-4 >= euros]))
+  return { paga: true, saldo: verSaldo ? p.saldo : null, alcanza, precios: PRECIOS_FIJOS }
 }
 
 /**

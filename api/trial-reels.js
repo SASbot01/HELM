@@ -32,9 +32,13 @@
 //
 // Cobra a PRECIO FIJO (src/helm/precios.js): 0,30 € por variante. Antes de
 // crear se mira que llegue el saldo (402 si no, contando lo que la agencia ya
-// tiene en cola sin cobrar); cada variante se cobra SOLO cuando sale bien, con
-// la referencia `trial:<id>` (nunca dos veces). La agencia de la casa
-// (sin_cobro) y un perfil sin agencia no pagan.
+// tiene apartado sin cobrar en TODOS los agentes: apartadoDeAgencia, dentro
+// del cerrojo común de la agencia); cada variante se cobra SOLO cuando sale
+// bien, con la referencia `trial:<id>` (nunca dos veces), y nunca si la
+// borraron mientras se montaba. La agencia de la casa (sin_cobro) y un perfil
+// sin agencia no pagan. El 402 lleva cifras solo para quien puede ver el saldo
+// (puedeVerSaldo), y lo que gasta o sube exige que el rol pueda usar los
+// agentes del perfil (puedeUsarAgentes).
 //
 // El montaje lo hace ffmpeg en este servidor (api/_lib/variantes.js), de uno
 // en uno; el gancho lo compone el navegador con el kit de Portadas
@@ -46,11 +50,11 @@ import fsp from 'node:fs/promises'
 import { pipeline } from 'node:stream/promises'
 import { supabase } from './lib/supabase.js'
 import { applyCors, rateLimit, getClientIp } from './_lib/auth.js'
-import { requireProfileAccess, agenciaDe } from './_lib/access.js'
+import { requireProfileAccess, agenciaDe, puedeUsarAgentes, puedeVerSaldo } from './_lib/access.js'
 import { enContexto } from './_lib/contexto.js'
 import { llmChat } from './_lib/llm.js'
 import { getToken, getMediaUrls } from './_lib/instagram.js'
-import { exigirImporte, cobrarFijo, cobradoYa, quienPagaPerfil, PRECIOS_FIJOS } from './_lib/creditos.js'
+import { exigirImporte, cobrarFijo, cobradoYa, quienPagaPerfil, conCerrojoAgencia, PRECIOS_FIJOS } from './_lib/creditos.js'
 import { recibeTrozo, recibidosDe, cierraSubida, contestaError, rutaParte } from './_lib/subida-trozos.js'
 import {
   normalizaAjustes, procesaVariante, descargaFuente, limpiaViejos, encola, enCola, quitaDeCola, colaUsa, largoCola, sondea,
@@ -100,6 +104,16 @@ const TIPOS_VIDEO = new Set(['video/mp4', 'video/quicktime', 'video/x-m4v', 'vid
 const EXT_VIDEO = /\.(mp4|mov|m4v|3gp)$/i
 const NO_ES_VIDEO = 'Ese archivo no es un vídeo MP4 o MOV. Si lo es, expórtalo otra vez como MP4 (desde la galería del móvil o con cualquier editor) y vuelve a subirlo.'
 const MB = 1024 * 1024
+// Lo que gasta o sube (o quita): exige además que el rol pueda usar los agentes.
+const ACCIONES_DE_USO = new Set(['fuente', 'trozo', 'crear', 'ganchos', 'borrar', 'borrar-fuente'])
+const SIN_ROL = 'Tu rol no puede usar los agentes de este perfil.'
+// Lo que se sirve de un archivo (el MP4 montado, el vídeo subido): que el
+// navegador no lo interprete como otra cosa ni ejecute nada desde el origen del
+// panel, aunque un día cambie lo que se acepta al subir.
+function cabecerasDeArchivo(res) {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox")
+}
 
 const REGLAS = `Escribes GANCHOS de texto para los 2–3 primeros segundos de un reel de Instagram, en español de España, para cuentas de negocio y creadores. El gancho va sobreimpreso arriba mientras arranca el vídeo; su trabajo es que quien está haciendo scroll se pare. Es un reel que la cuenta ya publicó y que va a volver a probar como «Reel de prueba» (se enseña primero a gente que no la sigue), así que el gancho tiene que funcionar con quien NO conoce la cuenta.
 
@@ -168,26 +182,10 @@ async function publicaFuente(f, clientId) {
   }
 }
 
-/**
- * Lo que la agencia tiene ya comprometido en Trial reels y aún sin cobrar: las
- * variantes de TODOS sus perfiles en cola o montándose (un «procesando» que se
- * quedó colgado por un reinicio no cuenta). Para exigirImporte · pendiente.
- */
-export async function pendienteTrial(agenciaId) {
-  const { data: perfiles, error } = await supabase.from('clients').select('id').eq('agencia_id', agenciaId)
-  if (error) throw error
-  const ids = (perfiles || []).map(p => p.id)
-  if (!ids.length) return 0
-  const { data, error: err2 } = await supabase.from(TABLA).select('estado, precio_eur, cobrado_eur, updated_at')
-    .in('client_id', ids).in('estado', ['en_cola', 'procesando'])
-  if (err2) throw err2
-  const ahora = Date.now()
-  return (data || []).reduce((suma, f) => {
-    if (f.cobrado_eur != null) return suma
-    if (f.estado === 'procesando' && ahora - new Date(f.updated_at || 0).getTime() > CADUCA_PROCESANDO) return suma
-    return suma + (Number(f.precio_eur) || 0)
-  }, 0)
-}
+// Lo que la agencia tiene ya comprometido en Trial reels (las variantes en
+// cola o montándose, sin cobrar) lo cuenta apartadoDeAgencia de
+// api/_lib/creditos.js junto con lo de los demás agentes: exigirImporte lo
+// resta solo. (Hasta el 27-oct era pendienteTrial, y solo restaba lo suyo.)
 
 /**
  * Cobra una variante que ha salido bien (cobrarFijo con `trial:<id>`: con la
@@ -260,25 +258,6 @@ if (!globalThis.__helmTrialMantenimiento && !process.env.VITEST) {
   globalThis.__helmTrialMantenimiento.unref?.()
 }
 
-// De uno en uno por clave (la agencia): comprobar el saldo y meter las
-// variantes en la tabla van juntos, para que dos «crear» casi a la vez no
-// pasen los dos con el saldo de uno. El api-server es un solo proceso.
-const cerrojos = new Map()
-async function enFila(clave, fn) {
-  const antes = cerrojos.get(clave) || Promise.resolve()
-  let suelta
-  const mio = new Promise(ok => { suelta = ok })
-  const cola = antes.then(() => mio)
-  cerrojos.set(clave, cola)
-  await antes
-  try {
-    return await fn()
-  } finally {
-    suelta()
-    if (cerrojos.get(clave) === cola) cerrojos.delete(clave)
-  }
-}
-
 /** La fila tal y como la ve el panel, con el estado de verdad. */
 async function publica(fila) {
   let estado = fila.estado
@@ -346,6 +325,7 @@ function trabajoDe({ id, clientId, mediaId, fuenteId = null }) {
       const ajustes = normalizaAjustes(fila.ajustes)
       const gancho = ajustes.conGancho ? rutaGancho(id) : null
       let salio = false
+      let borrada = false
       try {
         await limpiaViejos()
         if (subido && !fs.existsSync(fuente)) throw fallo(`El vídeo que subiste ya no está (se guardan ${DIAS_GUARDADO} días). Vuelve a subirlo.`)
@@ -360,10 +340,25 @@ function trabajoDe({ id, clientId, mediaId, fuenteId = null }) {
         }
         if (gancho && !fs.existsSync(gancho)) throw fallo('El gancho se perdió (el servidor se reinició). Vuelve a crear la variante.')
         const r = await procesaVariante({ entrada: fuente, salida: rutaSalida(id), gancho, ajustes })
-        // Solo cuenta como hecha (y se cobra) si la base ha apuntado «listo»:
-        // si no, nadie la podría descargar.
-        await marca(id, { estado: 'listo', archivo: `trial-reels/${id}.mp4`, bytes: r.bytes, duracion: r.duracion, error: null })
-        salio = true
+        // Solo cuenta como hecha (y se cobra) si la base ha apuntado «listo»
+        // en SU fila: si no, nadie la podría descargar. Si no vuelve ninguna,
+        // la borraron mientras se montaba (el botón sale también en
+        // «procesando», y quitaDeCola solo para ffmpeg si ya corría): fuera
+        // el MP4 y no se cobra.
+        const { data: marcadas, error: errListo } = await supabase.from(TABLA)
+          .update({ estado: 'listo', archivo: `trial-reels/${id}.mp4`, bytes: r.bytes, duracion: r.duracion, error: null, updated_at: new Date().toISOString() })
+          .eq('id', id).eq('client_id', clientId).select('id')
+        if (errListo) {
+          console.error('[trial-reels] no se pudo apuntar', id, errListo.message || errListo)
+          throw fallo('No se pudo guardar cómo va la variante. Vuelve a crearla.', 500)
+        }
+        if (!marcadas?.length) {
+          borrada = true
+          console.log('[trial-reels]', id, 'la borraron mientras se montaba: ni se guarda ni se cobra')
+          await fsp.rm(rutaSalida(id), { force: true })
+        } else {
+          salio = true
+        }
       } catch (e) {
         console.error('[trial-reels]', id, e?.message || e)
         // Lo que no se entrega no se queda en el disco.
@@ -375,8 +370,8 @@ function trabajoDe({ id, clientId, mediaId, fuenteId = null }) {
         // se queda sus 7 días para sacar más variantes.
         if (!subido && !colaUsa(fuente, id)) await fsp.rm(fuente, { force: true })
       }
-      // Solo lo que ha salido bien se cobra.
-      if (salio) await cobraVariante({ id, clientId, precio: fila.precio_eur })
+      // Solo lo que ha salido bien (y sigue en la tabla) se cobra.
+      if (salio && !borrada) await cobraVariante({ id, clientId, precio: fila.precio_eur })
     }),
   }
 }
@@ -419,6 +414,23 @@ export default async function handler(req, res) {
     // Un trozo en crudo sin leer: contestaError cierra la conexión al acabar.
     if (action === 'trozo') return contestaError(req, res, Object.assign(err, { statusCode: err.statusCode || 401 }))
     return res.status(err.statusCode || 401).json({ error: err.message })
+  }
+
+  // Lo que gasta o sube: solo si el rol puede usar los agentes del perfil. Va
+  // antes de leer nada del cuerpo de un trozo (contestaError no lo lee y
+  // cierra la conexión). Si no se puede mirar (falla la base), tampoco pasa.
+  if (ACCIONES_DE_USO.has(action)) {
+    let corte = null
+    try {
+      if (!(await puedeUsarAgentes(auth, clientId))) corte = fallo(SIN_ROL, 403)
+    } catch (err) {
+      console.error('[trial-reels] no se pudo mirar el rol:', err?.message || err)
+      corte = fallo('No se pudo comprobar tu rol ahora mismo. Prueba otra vez.', 503)
+    }
+    if (corte) {
+      if (action === 'trozo') return contestaError(req, res, corte)
+      return res.status(corte.statusCode).json({ error: corte.message })
+    }
   }
 
   // ── POST|GET ?action=trozo ─────────────────────────────────────────────
@@ -542,7 +554,8 @@ export default async function handler(req, res) {
           error: `Tus vídeos subidos ya ocupan ${gb(guardado.bytes + llegando)} GB y el tope es de ${gb(MAX_BYTES_GUARDADOS)} GB por perfil. Quita alguno en «Tus vídeos subidos» para subir este.`,
         })
       }
-      await exigirImporte(clientId, PRECIO, { pendiente: ({ agenciaId }) => pendienteTrial(agenciaId) })
+      // Aquí no se aparta nada (subir no cuesta): basta con mirar, sin cerrojo.
+      await exigirImporte(clientId, PRECIO, { detalle: await puedeVerSaldo(auth, clientId) })
       // De paso, fuera lo viejo y las subidas abandonadas (también lo hace cada montaje).
       limpiaViejos().catch(() => {})
 
@@ -600,17 +613,22 @@ export default async function handler(req, res) {
         creado_por: UUID.test(String(auth?.userId || '')) ? auth.userId : null,
       }))
       // Lo que el perfil tiene en marcha, el saldo y meterlas en la tabla van
-      // de uno en uno por agencia (enFila): dos «crear» a la vez no pasan los
-      // dos con lo que solo llega para uno.
-      const { data: creadas, error } = await enFila(`agencia:${(await agenciaDe(clientId)) || clientId}`, async () => {
+      // de uno en uno por agencia, con el MISMO cerrojo que el resto de
+      // agentes (conCerrojoAgencia): dos «crear» a la vez, o un «crear» y una
+      // portada o un vídeo del Editor, no pasan con lo que solo llega para uno.
+      // Un perfil sin agencia no paga, pero su tope de pendientes también va
+      // de uno en uno: su propio id hace de clave.
+      const verSaldo = await puedeVerSaldo(auth, clientId)
+      const { data: creadas, error } = await conCerrojoAgencia((await agenciaDe(clientId)) || clientId, async () => {
         const { count } = await supabase.from(TABLA).select('id', { count: 'exact', head: true })
           .eq('client_id', clientId).in('estado', ['en_cola', 'procesando'])
         if ((count || 0) + variantes.length > MAX_PENDIENTES_PERFIL) {
           throw fallo('Ya hay variantes de este perfil montándose. Espera a que terminen.', 429)
         }
-        // Que llegue para todas, contando lo que la agencia ya tiene en cola sin
-        // cobrar. Si no, 402 y no se crea ninguna. Se cobran al salir bien.
-        await exigirImporte(clientId, PRECIO * variantes.length, { pendiente: ({ agenciaId }) => pendienteTrial(agenciaId) })
+        // Que llegue para todas, contando lo que la agencia ya tiene apartado
+        // sin cobrar (de todos los agentes). Si no, 402 y no se crea ninguna.
+        // Se cobran al salir bien.
+        await exigirImporte(clientId, PRECIO * variantes.length, { detalle: verSaldo })
         return supabase.from(TABLA).insert(filas).select(COLUMNAS)
       })
       if (error) return res.status(500).json({ error: 'No se pudieron crear las variantes: ' + error.message })
@@ -648,7 +666,10 @@ export default async function handler(req, res) {
       const st = await fsp.stat(ruta)
       res.setHeader('Content-Type', 'video/mp4')
       res.setHeader('Content-Length', String(st.size))
+      // Un nombre fijo: el que puso quien subió no sale de la base.
+      res.setHeader('Content-Disposition', 'inline; filename="video.mp4"')
       res.setHeader('Cache-Control', 'private, no-store')
+      cabecerasDeArchivo(res)
       try {
         await pipeline(fs.createReadStream(ruta), res)
       } catch (e) {
@@ -695,6 +716,7 @@ export default async function handler(req, res) {
       res.setHeader('Content-Length', String(st.size))
       res.setHeader('Content-Disposition', `attachment; filename="trial-reel-${dia}-v${Number(fila.variante) || 1}.mp4"`)
       res.setHeader('Cache-Control', 'private, no-store')
+      cabecerasDeArchivo(res)
       try {
         await pipeline(fs.createReadStream(ruta), res)
       } catch (e) {

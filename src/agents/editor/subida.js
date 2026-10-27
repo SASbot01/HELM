@@ -8,7 +8,7 @@
 export { TROZO, REINTENTOS, ESPERA_MAX_MS, MAX_SALTOS, esperaDe, reintentable, espera, urlDeTrozo, mandaTrozo, subePorTrozos } from '../../helm/subida.js'
 
 // Lo que graba un móvil, por si el navegador no sabe el tipo del archivo.
-const TIPOS = { mp4: 'video/mp4', m4v: 'video/x-m4v', mov: 'video/quicktime', webm: 'video/webm', mkv: 'video/x-matroska', '3gp': 'video/3gpp', avi: 'video/x-msvideo', mpg: 'video/mpeg' }
+const TIPOS = { mp4: 'video/mp4', m4v: 'video/x-m4v', mov: 'video/quicktime', '3gp': 'video/3gpp' }
 
 /** El tipo del vídeo: el que diga el navegador o, si no lo sabe, por la extensión. */
 export function tipoDeVideo(archivo) {

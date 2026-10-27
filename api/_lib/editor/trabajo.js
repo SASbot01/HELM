@@ -29,7 +29,8 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { supabase } from '../../lib/supabase.js'
 import { normalizaEstilo } from '../../../src/agents/editor/estilo.js'
-import { ejecuta, sondea, FFMPEG } from '../variantes.js'
+import { ejecuta, FFMPEG } from '../variantes.js'
+import { sondeaVideo, COMO_MOV } from './formato.js'
 import { cobrarFijo, cobradoYa, quienPagaPerfil } from '../creditos.js'
 import { planDeEdicion } from './plan.js'
 import { assDe } from './subtitulos.js'
@@ -236,7 +237,8 @@ export async function editorRender(job, opciones = {}) {
     if (!entrada) throw fallo('El vídeo original ya no está (se guardan 7 días). Vuelve a subirlo.')
     if (!await marca({ estado: 'transcribiendo', progreso: 3, paso: 'Leyendo el vídeo', error: null })) return
 
-    const info = await sondea(entrada)
+    // Siempre como MP4/MOV (formato.js): lo que subió el usuario no se deja adivinar.
+    const info = await sondeaVideo(entrada)
     if (!info.duracion) throw fallo('No se sabe cuánto dura el vídeo')
     if (pasaDelTope(info.duracion)) throw fallo(`El vídeo dura más de ${Math.round(maxDuracionOriginal() / 60)} minutos`)
     const { size: bytes } = await fsp.stat(entrada)
@@ -245,7 +247,7 @@ export async function editorRender(job, opciones = {}) {
     let palabras = []
     if (info.audio) {
       if (!await marca({ progreso: 6, paso: 'Sacando la voz del vídeo', duracion_original: info.duracion })) return
-      await ejecuta(FFMPEG(), ['-hide_banner', '-nostdin', '-y', '-loglevel', 'error', '-i', entrada,
+      await ejecuta(FFMPEG(), ['-hide_banner', '-nostdin', '-y', '-loglevel', 'error', ...COMO_MOV, '-i', entrada,
         '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', voz], { tope: 10 * 60_000, senal: corte.signal })
       if (!await marca({ progreso: 10, paso: `Transcribiendo la voz palabra a palabra (${minSeg(info.duracion)} de vídeo)` })) return
       // Whisper no dice cómo va: el % sube con una estimación (en esta máquina,
