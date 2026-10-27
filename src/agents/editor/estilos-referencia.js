@@ -16,10 +16,12 @@
 //     portada (public/agentes/editor-estilos/). Lo que un fotograma no da (el
 //     ritmo exacto) va marcado «a ajustar».
 //   · Los otros 24, de la investigación de 2026-10-27 (creadores de negocio,
-//     marketing e IA en español e inglés, con fuentes públicas en `fuentes`):
-//     sin reels de ejemplo (`reels: []`), la tarjeta enseña una vista previa
-//     hecha con CSS a partir de `estilo`. `confianza` dice cuánto está
-//     documentado su modo de editar: con «baja», el estilo es aproximado.
+//     marketing e IA en español e inglés, con fuentes públicas en `fuentes`).
+//     Ese mismo día se les puso un reel de ejemplo real a cada uno (de su
+//     Instagram, salvo Iman Gadzhi y Jeff Su, de YouTube) con su portada a
+//     360×640; sin reel, la tarjeta enseñaría la vista previa hecha con CSS a
+//     partir de `estilo`. `confianza` dice cuánto está documentado su modo de
+//     editar: con «baja», el estilo es aproximado.
 //     Lo marcado «[aprox.]» en el prompt no está verificado en una fuente.
 //
 // Cuáles 30 de la investigación (provisional, A CONFIRMAR CON ALEX): la orden pedía «6 de antes +
@@ -222,7 +224,9 @@ export const ESTILOS_REFERENCIA = [
       'https://riverside.com/blog/hormozi-style-videos',
       'https://quso.ai/blog/how-to-edit-reels-and-shorts-like-alex-hormozi.html',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "Ddii_P4BHns", url: "https://www.instagram.com/reel/Ddii_P4BHns/", caption: "Four ways to change human behavior", likes: 127592 },
+    ],
     // El más imitado: mayúsculas blancas con borde negro grueso, la palabra que
     // suena en amarillo, 2–4 palabras en el tercio bajo, jump cut cada 1–3 s y
     // punch-in del 10–20 %. Casi sin b-roll y con la música muy baja.
@@ -247,7 +251,9 @@ export const ESTILOS_REFERENCIA = [
       'https://www.choppity.com/tools/recreate-video-editing-style/leila-hormozi/',
       'https://www.choppity.com/tools/recreate-video-editing-style/',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "C8K6GUrSGX1", url: "https://www.instagram.com/reel/C8K6GUrSGX1/", caption: "We all have had that one manager that makes things more difficult", likes: 213613 },
+    ],
     // El contrapunto calmado: sin subtítulos quemados, tomas de 3–8 s, las
     // pausas se dejan a propósito, sin zoom y casi sin música.
     estilo: {
@@ -271,7 +277,9 @@ export const ESTILOS_REFERENCIA = [
       'https://submagic.co/blog/how-to-make-captions-like-iman-gadzhi',
       'https://ark.beehiiv.com/p/iman-gadzhi-broke-youtube-made-millions',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "wtDDjBOfTZo", url: "https://www.youtube.com/watch?v=wtDDjBOfTZo", caption: "Give Me 26 minutes, I'll Give You 10,000 hours of Claude Knowledge (YouTube)", likes: 46237 },
+    ],
     // Subtítulo de un solo color blanco, en minúscula, sin resalte de color;
     // cambios de ángulo frecuentes con zoom suave y b-roll que marca el ritmo.
     estilo: {
@@ -294,7 +302,9 @@ export const ESTILOS_REFERENCIA = [
       'https://www.choppity.com/tools/recreate-video-editing-style/codie-sanchez/',
       'https://builtin.com/job/youtube-video-editor/7340580',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "De9yUHXDwQN", url: "https://www.instagram.com/reel/De9yUHXDwQN/", caption: "Do not be afraid.", likes: 8415 },
+    ],
     // Subtítulo grande blanco sin contorno (solo una sombra), en minúscula
     // normal, en bloques de varias palabras abajo; ritmo conversacional.
     estilo: {
@@ -318,7 +328,9 @@ export const ESTILOS_REFERENCIA = [
       'https://www.entertainmentcareers.net/flightstory/head-of-youtube-packaging-and-strategy-the-diary-of-a-ceo/job/529232/',
       'https://thenathanbarryshow.transistor.fm/episodes/grace-miller',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "DeFSLXCP3t7", url: "https://www.instagram.com/reel/DeFSLXCP3t7/", caption: "Such a beautiful story! (@steven)", likes: 237548 },
+    ],
     // Clips de entrevista: subtítulos grandes con la frase fuerte resaltada,
     // cortes que respetan la conversación y algún inserto.
     estilo: {
@@ -342,7 +354,9 @@ export const ESTILOS_REFERENCIA = [
       'https://requestforstartups.substack.com/p/multipreneurship-and-the-future-of',
       'https://www.youtube.com/@GregIsenberg',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "DeuNPzXxKqQ", url: "https://www.instagram.com/reel/DeuNPzXxKqQ/", caption: "People keep talking about AI software factories… What are they?", likes: 303 },
+    ],
     // Clips de vídeo-pódcast: palabra a palabra con la palabra clave en verde
     // (cifras y dinero), cortes rápidos y zoom a la cara en el remate.
     estilo: {
@@ -368,7 +382,9 @@ export const ESTILOS_REFERENCIA = [
       'https://www.mediotiempo.com/otros-mundos/carlos-master-munoz-se-retira-de-las-redes-sociales',
       'https://www.merca20.com/carlos-munoz-anuncia-su-nueva-estrategia-de-contenido-para-triunfar-en-redes',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "De-oJa4xPVo", url: "https://www.instagram.com/reel/De-oJa4xPVo/", caption: "Elon Musk anunció este proyecto en 2018… para lanzarlo en 2028", likes: 97 },
+    ],
     // Clip de conferencia: mayúsculas grandes en la franja central-alta con la
     // frase clave resaltada, corte en el remate y punch-in; casi sin música.
     estilo: {
@@ -392,7 +408,9 @@ export const ESTILOS_REFERENCIA = [
       'https://www.bbva.com/es/innovacion/youtube-para-emprendedores-siete-canales-para-inspirarse-y-hacer-crecer-un-negocio/',
       'https://www.elclubdeinversion.com/entrevista-euge-oller/',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "DYFl1ffEym4", url: "https://www.instagram.com/reel/DYFl1ffEym4/", caption: "Grabarse cocinando le cambió la vida", likes: 3767 },
+    ],
     // «Value video» rápido: cero tiempos muertos, jump cut constante, mucho
     // b-roll corto y mayúsculas con resalte por palabra; música enérgica baja.
     estilo: {
@@ -416,7 +434,9 @@ export const ESTILOS_REFERENCIA = [
       'https://expansion.mx/economia/2022/09/30/conoce-una-nueva-forma-de-hablar-del-dinero',
       'https://www.xataka.com.mx/empresas-y-economia/moris-dieck-coach-financiero-eres-1-ciento-mejor-todos-dias-a-larga-vas-a-tener-crecimiento-exponencial-asi-convirtio-formula-matematica-leccion-para-vida',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "De7hSTNj9Jg", url: "https://www.instagram.com/reel/De7hSTNj9Jg/", caption: "¿Pagar TODO con tarjeta de crédito?", likes: 654 },
+    ],
     // Pulido y didáctico: subtítulo animado de 2 palabras con la cifra en
     // verde dinero, punch-ins y b-roll de cifras.
     estilo: {
@@ -440,7 +460,9 @@ export const ESTILOS_REFERENCIA = [
       'https://creatordb.app/creatorstats/romualdfons/',
       'https://www.levelup.com/noticias/gana-1-millon-de-euros-en-solo-una-semana-con-curso-para-hackear-algoritmo-de-youtube/',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "DezeDf2BBrT", url: "https://www.instagram.com/reel/DezeDf2BBrT/", caption: "Por qué la competencia barata vende más que tú", likes: 1534 },
+    ],
     // Hiperdinámico y con humor: zoom brusco cada 2 s, cortes al límite,
     // textos enormes de énfasis (rojo) y capturas a pantalla completa.
     estilo: {
@@ -464,7 +486,9 @@ export const ESTILOS_REFERENCIA = [
       'https://creatordb.app/creatorstats/vilmanunez/',
       'https://www.planetadelibros.com/libro-de-invisible-a-invencible/396385',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "De-QZt9S6zM", url: "https://www.instagram.com/reel/De-QZt9S6zM/", caption: "Ser CEO no significa tener todo bajo control", likes: 0 },
+    ],
     // Talking head profesional: subtítulo grande con la palabra clave en el
     // color de marca, cortes al silencio y punch-in de énfasis.
     estilo: {
@@ -476,19 +500,23 @@ export const ESTILOS_REFERENCIA = [
   },
   {
     clave: 'lauraribas',
-    nombre: 'lauraribas',
+    nombre: 'laura_ribas_',
     persona: 'Laura Ribas',
-    nicho: 'marca personal / marketing esencialista',
+    // En octubre de 2026 ya se presenta como terapeuta y coach (@laura_ribas_);
+    // el estilo de edición sale de cuando era marketing esencialista.
+    nicho: 'marca personal / coaching (antes, marketing esencialista)',
     tema: 'marketing',
     idioma: 'es',
-    enlace: 'https://lauraribas.com',
+    enlace: ig('laura_ribas_'),
     confianza: 'baja',
     fuentes: [
       'https://latam.casadellibro.com/libro-el-hechizo-de-una-marca/9788418053115/14452182',
       'https://asest.es/story/mentora-de-laura-ribas/',
       'https://www.ivoox.com/en/desarrollo-profesional-personal-laura-ribas-audios-mp3_rf_128655778_1.html',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "DeuUv2fE3oK", url: "https://www.instagram.com/reel/DeuUv2fE3oK/", caption: "Cómo acceder a tu adulta interior", likes: 11 },
+    ],
     // Cálido y sobrio: subtítulo fino en crema, sin zoom, pausas que respiran.
     estilo: {
       palabrasPorBloque: 4, mayusculas: false, colorTexto: '#FFF8EE', colorResalte: '#F2C9A0', colorBorde: '#3A2A20',
@@ -512,7 +540,9 @@ export const ESTILOS_REFERENCIA = [
       'https://www.garyvaynerchuk.com/make-instagram-videos/',
       'https://www.kapwing.com/resources/how-to-make-videos-like-garyvee/',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "DMpuiXeubFY", url: "https://www.instagram.com/reel/DMpuiXeubFY/", caption: "I'm sooooo tired of the clouds and the rain…", likes: 1018382 },
+    ],
     // Tarjeta de título + selfie a cámara + subtítulos, todo dentro de la zona
     // segura del centro; la palabra clave enfatizada.
     estilo: {
@@ -536,7 +566,9 @@ export const ESTILOS_REFERENCIA = [
       'https://socialblade.com/youtube/handle/dankoetalks/achievements',
       'https://tagabukid.substack.com/p/how-dan-koe-writes-one-newsletter',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "DctQEoIq-Hy", url: "https://www.instagram.com/reel/DctQEoIq-Hy/", caption: "Writing isn’t all about grammar and sounding clever", likes: 7214 },
+    ],
     // Ensayo minimalista: tipografía grande en el centro con un solo acento,
     // sin zoom, ritmo pausado y música ambiental.
     estilo: {
@@ -561,7 +593,9 @@ export const ESTILOS_REFERENCIA = [
       'https://www.castmagic.io/podcast/rhythm-hooks-and-a-billion-views-kane-kallaways-short-form-video-content-secrets',
       'https://www.youtube.com/@kallaway',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "DMIRXG-ARnG", url: "https://www.instagram.com/reel/DMIRXG-ARnG/", caption: "This is the most insane tech company in the world… ASML", likes: 386178 },
+    ],
     // Su formato: el visual de apoyo en la mitad de ARRIBA y él en la de abajo,
     // cada frase cambia lo de arriba (1,5–3 s); karaoke en mayúsculas encima
     // de su cabeza y cortes pegados al silencio.
@@ -586,7 +620,9 @@ export const ESTILOS_REFERENCIA = [
       'https://www.rollingstone.com/culture/culture-features/colin-and-samir-youtube-interview-1342517/',
       'https://podcast.creatorscience.com/colinandsamir/',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "De9qKAvJFKY", url: "https://www.instagram.com/reel/De9qKAvJFKY/", caption: "The Future of Instagram according to @mosseri", likes: 70112 },
+    ],
     // Documental: ritmo que respira (jump cuts y planos largos), zoom muy
     // suave y espaciado, b-roll narrativo y diseño sonoro con más música.
     estilo: {
@@ -613,7 +649,9 @@ export const ESTILOS_REFERENCIA = [
       'https://academy.aliabdaal.com/',
       'https://buffer.com/resources/youtube-thumbnails/',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "DeygQOoD8WL", url: "https://www.instagram.com/reel/DeygQOoD8WL/", caption: "At 21, I was making around £3,000 a month while studying medicine", likes: 1434 },
+    ],
     // Frase entera por bloque (no palabra a palabra), en minúscula normal, con
     // las palabras clave en amarillo; ritmo moderado y b-roll que ilustra.
     estilo: {
@@ -637,7 +675,9 @@ export const ESTILOS_REFERENCIA = [
       'https://creatordb.app/creatorstats/jeffsu/',
       'https://www.youtube.com/@JeffSu',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "sfwax2dVPvI", url: "https://www.youtube.com/shorts/sfwax2dVPvI", caption: "When to use ChatGPT, Gemini, and Claude (YouTube Shorts)", likes: 6220 },
+    ],
     // Limpio y gráfico: plano fijo (sin zoom), cortes apretados al silencio y
     // el código de color verde = hacer en el resalte.
     estilo: {
@@ -663,7 +703,9 @@ export const ESTILOS_REFERENCIA = [
       'https://blog.hubspot.com/marketing/ai-tips-newsletters-youtube-x',
       'https://www.futuretools.io/',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "De4zMX6OP_1", url: "https://www.instagram.com/reel/De4zMX6OP_1/", caption: "Kimi K3.1 Pro appears to be nearly as good as the big lab models", likes: 1051 },
+    ],
     // Demo de herramientas: la pantalla arriba y él abajo (lo más parecido a
     // su cámara en una esquina), planos más largos para que se vea la demo.
     estilo: {
@@ -687,7 +729,9 @@ export const ESTILOS_REFERENCIA = [
       'https://podbay.fm/p/a-new-vibe',
       'https://x.com/rileybrown_ai',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "DenOfnPBoVH", url: "https://www.instagram.com/reel/DenOfnPBoVH/", caption: "This was a one shot edit with Opus… after building a scene on Blender", likes: 1502 },
+    ],
     // Demo en crudo: grabación de pantalla larga a pantalla completa con su voz
     // encima, sin zoom, subtítulo automático tipo CapCut y casi sin música.
     estilo: {
@@ -711,7 +755,9 @@ export const ESTILOS_REFERENCIA = [
       'https://www.therundown.ai/ai-university',
       'https://therundownai.beehiiv.com/authors/rowan-cheung',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "DPo6Y-zCQlN", url: "https://www.instagram.com/reel/DPo6Y-zCQlN/", caption: "Sam Altman on Sora and why OpenAI releases AI video tools early", likes: 6906 },
+    ],
     // Noticia de IA: palabra a palabra, cortes al silencio y b-roll de la
     // herramienta o empresa a pantalla completa.
     estilo: {
@@ -735,7 +781,9 @@ export const ESTILOS_REFERENCIA = [
       'https://www.merca2.es/2026/04/17/inteligencia-artificial-usar-a-ti-2369661/',
       'https://creatordb.app/creatorstats/jonhernandezia/',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "DehjY8chUrp", url: "https://www.instagram.com/reel/DehjY8chUrp/", caption: "Nuevo pódcast: el fin del envejecimiento", likes: 670 },
+    ],
     // Noticias de IA en español: la captura de la herramienta arriba y él abajo,
     // mayúsculas con la palabra clave en azul tech y cortes al grano.
     estilo: {
@@ -759,7 +807,9 @@ export const ESTILOS_REFERENCIA = [
       'https://blogthinkbig.com/?p=212413',
       'https://www.youtube.com/@DotCSV',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "DdmFiB1Dyy4", url: "https://www.instagram.com/reel/DdmFiB1Dyy4/", caption: "¿Qué es Jev?", likes: 1433 },
+    ],
     // Divulgación enérgica: mayúsculas con el término técnico resaltado, zooms
     // y gráficos explicativos a pantalla completa.
     estilo: {
@@ -788,7 +838,9 @@ export const ESTILOS_REFERENCIA = [
       'https://fitgeneration.es/mejores-cuentas-de-instagram-de-fitness-y-nutricion/',
       'https://www.podengine.ai/podcasts/radio-fitness-revolucionario',
     ],
-    reels: [],
+    reels: [
+      { shortcode: "Del-7ZouYfo", url: "https://www.instagram.com/reel/Del-7ZouYfo/", caption: "Tu salud depende en buena medida de la calidad de tus mitocondrias", likes: 2726 },
+    ],
     estilo: {
       palabrasPorBloque: 4, mayusculas: false, colorTexto: '#FFFFFF', colorResalte: '#F97316', colorBorde: '#000000',
       tamano: 64, borde: 4, posicion: 68, zoom: true, zoomCada: 6, zoomFactor: 1.05,

@@ -20,6 +20,7 @@
 // Usa jsdom y @testing-library/react, que vienen del node_modules compartido
 // con ~/code/HELM.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { existsSync } from 'node:fs'
 import { render, screen, fireEvent, cleanup, within, waitFor } from '@testing-library/react'
 
 const h = vi.hoisted(() => ({
@@ -160,9 +161,14 @@ describe('EditorReel · la galería de estilos', () => {
     const { container } = pinta()
     await screen.findByText('lista.mp4')
     expect(tarjetas(container)).toHaveLength(ESTILOS_REFERENCIA.length)
-    // Los 6 de fotogramas reales enseñan su portada; los demás, la vista previa con CSS.
+    // Todos traen un reel de ejemplo real con su portada (los 24 de la
+    // investigación, desde el 27-oct), y la portada existe en public/.
     expect(screen.getByAltText('Reel de ejemplo de @rpn')).toBeTruthy()
-    expect(screen.getByRole('img', { name: 'Vista previa de los subtítulos del estilo de @hormozi' })).toBeTruthy()
+    expect(screen.getByAltText('Reel de ejemplo de @hormozi')).toBeTruthy()
+    for (const e of ESTILOS_REFERENCIA) {
+      expect(e.reels.length, e.clave).toBeGreaterThan(0)
+      for (const r of e.reels) expect(existsSync(`public/agentes/editor-estilos/${r.shortcode}.jpg`), `${e.clave} ${r.shortcode}`).toBe(true)
+    }
 
     fireEvent.click(screen.getByRole('button', { name: 'Español' }))
     const es = ESTILOS_REFERENCIA.filter(e => e.idioma === 'es')
@@ -210,11 +216,13 @@ describe('EditorReel · la galería de estilos', () => {
   it('la tarjeta dice de qué plataforma es el enlace del perfil', async () => {
     pinta()
     await screen.findByText('lista.mp4')
-    const enlace = (nombre) => within(screen.getByText(`@${nombre}`).closest('li')).getByRole('link').textContent.trim()
+    // La tarjeta lleva además los enlaces a sus reels: aquí, el del perfil.
+    const enlace = (nombre) => within(screen.getByText(`@${nombre}`).closest('li')).getAllByRole('link')
+      .map(a => a.textContent.trim()).find(t => /^Ver (en|su) /.test(t))
     expect(enlace('thediaryofaceo')).toBe('Ver en YouTube')
     expect(enlace('rileybrown_ai')).toBe('Ver en X')
     expect(enlace('vilmanunez')).toBe('Ver en Instagram')
-    expect(enlace('lauraribas')).toBe('Ver su web')
+    expect(enlace('laura_ribas_')).toBe('Ver en Instagram')
   })
 })
 

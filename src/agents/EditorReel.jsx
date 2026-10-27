@@ -428,7 +428,7 @@ function TarjetaEstilo({ e, onCrear }) {
   return (
     <li className="ed-ref">
       {principal ? (
-        <a className="ed-ref-portada" href={principal.url} target="_blank" rel="noopener noreferrer" title="Ver el reel de ejemplo en Instagram">
+        <a className="ed-ref-portada" href={principal.url} target="_blank" rel="noopener noreferrer" title={enlaceDe(principal.url).replace(/^Ver en/, 'Ver el reel de ejemplo en')}>
           <img src={portadaDe(principal)} alt={`Reel de ejemplo de @${e.nombre}`} loading="lazy" />
           {otros.length > 0 && (
             <span className="ed-ref-mas">
@@ -445,11 +445,11 @@ function TarjetaEstilo({ e, onCrear }) {
         <b>@{e.nombre}</b>
         <small>{e.persona ? `${e.persona} · ` : ''}{e.nicho} · {EN_IDIOMA[e.idioma] || e.idioma}</small>
         <div className="ed-ref-enlaces">
-          {e.reels?.length
-            ? e.reels.map(r => (
-              <a key={r.shortcode} href={r.url} target="_blank" rel="noopener noreferrer">{miles(r.likes)} ♥ <ExternalLink size={11} /></a>
-            ))
-            : e.enlace && <a href={e.enlace} target="_blank" rel="noopener noreferrer">{enlaceDe(e.enlace)} <ExternalLink size={11} /></a>}
+          {/* Cada reel de ejemplo (con sus «me gusta» si el perfil los enseña) y el perfil. */}
+          {e.reels?.map(r => (
+            <a key={r.shortcode} href={r.url} target="_blank" rel="noopener noreferrer">{r.likes ? `${miles(r.likes)} ♥` : 'Ver el reel'} <ExternalLink size={11} /></a>
+          ))}
+          {e.enlace && <a href={e.enlace} target="_blank" rel="noopener noreferrer">{enlaceDe(e.enlace)} <ExternalLink size={11} /></a>}
           {e.confianza === 'baja' && (
             <span className="ed-ref-aprox" title="Su forma de editar no está bien documentada: el estilo es una aproximación.">aprox.</span>
           )}
