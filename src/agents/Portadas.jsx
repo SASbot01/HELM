@@ -812,7 +812,9 @@ function EstilosIa({ elegido, onElegir, ejemplos, marca, onSubir, onBorrar }) {
                 {e.para.map((p, i) => (
                   <span key={p.enlace}>{i ? ', ' : ''}<a href={p.enlace} target="_blank" rel="noopener noreferrer">{p.nombre}</a></span>
                 ))}
-                {e.aproximado ? ' (aproximado: sacado de sus perfiles públicos)' : ''}. Solo se copia cómo montan la portada: nunca su cara, su logo ni su marca.
+                {e.aproximado ? ' (aproximado: sacado de sus perfiles públicos)' : ''}.
+                {e.ejemploReel && <> La portada de ejemplo es de un <a href={e.ejemploReel.url} target="_blank" rel="noopener noreferrer">reel de {e.ejemploReel.de}</a>.</>}
+                {' '}Solo se copia cómo montan la portada: nunca su cara, su logo ni su marca.
               </small>
             )}
           </p>

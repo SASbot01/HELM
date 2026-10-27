@@ -18,6 +18,8 @@ const FALSO_PNG = `data:image/png;base64,${Buffer.from('esto no es un png').toSt
 
 // Los de la investigación de miniaturas: los que dicen quién los usa.
 const DE_LA_INVESTIGACION = ESTILOS_IA.filter(e => e.para)
+// El mismo estilo sin su portada de referencia: para probar la vista previa con CSS.
+const sinImagen = (e) => (e?.para ? { ...e, referencia: false } : e)
 
 describe('estilos', () => {
   it('claves únicas; la imagen de tarjeta y la referencia, si las hay, existen en public/', () => {
@@ -35,7 +37,7 @@ describe('estilos', () => {
     expect(ESTILOS_IA.at(-1).clave).toBe('libre')
   })
 
-  it('la investigación, agrupada: 12–15 estilos distintos, con quién los usa y sin imagen', () => {
+  it('la investigación, agrupada: 12–15 estilos distintos, con quién los usa y la portada de un reel real de referencia', () => {
     expect(DE_LA_INVESTIGACION.length).toBeGreaterThanOrEqual(12)
     expect(DE_LA_INVESTIGACION.length).toBeLessThanOrEqual(15)
     expect(new Set(DE_LA_INVESTIGACION.map(e => e.nombre)).size).toBe(DE_LA_INVESTIGACION.length)
@@ -46,8 +48,11 @@ describe('estilos', () => {
         expect(p.nombre).toBeTruthy()
         expect(p.enlace, p.nombre).toMatch(/^https:\/\/(www\.)?(youtube\.com|instagram\.com|x\.com|linkedin\.com|lauraribas\.com|oscarfeito\.gumroad\.com)(\/|$)/)
       }
-      expect(ejemploDe(e), e.clave).toBeNull()
-      expect(referenciaDe(e), e.clave).toBeNull()
+      // Desde el 27-oct: la portada de un reel real del primero de `para`.
+      expect(referenciaDe(e), e.clave).toBe(`public/agentes/portadas-estilos/${e.clave}-ref.jpg`)
+      expect(ejemploDe(e), e.clave).toBe(`/agentes/portadas-estilos/${e.clave}-ref.jpg`)
+      expect(e.ejemploReel?.url, e.clave).toMatch(/^https:\/\/www\.(instagram\.com\/reel|youtube\.com\/shorts)\//)
+      expect(e.ejemploReel.de.split(' ')[0], e.clave).toBe(e.para[0].nombre.split(' ')[0])
       // El nombre es genérico: no es el de ninguno de los creadores.
       for (const p of e.para) expect(e.nombre.toLowerCase()).not.toContain(p.nombre.toLowerCase().split(' ')[0])
     }
@@ -73,7 +78,10 @@ describe('estilos', () => {
   })
 
   it('vista previa sin imagen: degradado, silueta neutra, titular con su resaltada y contraste que se lee', () => {
-    for (const e of ESTILOS_IA) {
+    // Con imagen no hay vista previa; la de CSS se sigue probando con los
+    // estilos de la investigación como si no la tuvieran (por si falta alguna).
+    for (const e of ESTILOS_IA) if (ejemploDe(e)) expect(vistaDe(e), e.clave).toBeNull()
+    for (const e of ESTILOS_IA.map(sinImagen)) {
       const v = vistaDe(e)
       if (ejemploDe(e) || e.clave === 'libre') { expect(v, e.clave).toBeNull(); continue }
       expect(v, e.clave).not.toBeNull()
@@ -88,14 +96,14 @@ describe('estilos', () => {
         expect(contraste(v.resalte, d), `${e.clave} resalte`).toBeGreaterThanOrEqual(2)
       }
     }
-    const verdad = vistaDe(estiloIaPorClave('verdad'))
+    const verdad = vistaDe(sinImagen(estiloIaPorClave('verdad')))
     expect(verdad.palabras.map(p => p.texto).join(' ')).toBe('NADIE TE LO DICE')
     expect(verdad.palabras[0].resaltada).toBe(true)
     // Los de marca se enseñan con los colores del kit.
-    const marca = vistaDe(estiloIaPorClave('marca'), { colorPrincipal: '#1d4ed8', colorResalte: '#facc15' })
+    const marca = vistaDe(sinImagen(estiloIaPorClave('marca')), { colorPrincipal: '#1d4ed8', colorResalte: '#facc15' })
     expect(marca).toMatchObject({ fondo: ['#1D4ED8', '#1D4ED8'], resalte: '#FACC15', tinta: '#FFFFFF' })
-    expect(vistaDe(estiloIaPorClave('verdad'), { colorPrincipal: '#1d4ed8', colorResalte: '#facc15' }).fondo).toEqual(verdad.fondo)
-    expect(vistaDe(estiloIaPorClave('antes')).degradado).toContain('50%')
+    expect(vistaDe(sinImagen(estiloIaPorClave('verdad')), { colorPrincipal: '#1d4ed8', colorResalte: '#facc15' }).fondo).toEqual(verdad.fondo)
+    expect(vistaDe(sinImagen(estiloIaPorClave('antes'))).degradado).toContain('50%')
     expect(vistaDe(null)).toBeNull()
   })
 
@@ -360,8 +368,8 @@ describe('cobro: 40 créditos por imagen generada', () => {
     const { prompt, imagenes } = imagen.generaPortadaIa.mock.calls[1][0]
     expect(prompt).not.toContain('#123456')
     expect(prompt).toContain('«DEJA DE AHORRAR»')
-    // Sin imagen de referencia: solo el fotograma.
-    expect(imagenes).toHaveLength(1)
+    // El fotograma y, desde el 27-oct, la portada de referencia del estilo.
+    expect(imagenes).toHaveLength(2)
   })
 })
 

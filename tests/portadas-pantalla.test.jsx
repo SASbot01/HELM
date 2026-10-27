@@ -52,7 +52,7 @@ afterEach(cleanup)
 
 describe('VistaEstilo', () => {
   it('un estilo sin imagen se pinta con CSS: fondo, silueta, adorno y el titular con su resaltada', () => {
-    const html = renderToStaticMarkup(<VistaEstilo estilo={estiloIaPorClave('verdad')} />)
+    const html = renderToStaticMarkup(<VistaEstilo estilo={{ ...estiloIaPorClave('verdad'), referencia: false }} />)
     expect(html).toContain('data-estilo="verdad"')
     expect(html).toContain('linear-gradient(180deg, #0B0B0D, #1E1A16)')
     expect(html).toContain('por-vista-persona derecha')
@@ -60,9 +60,9 @@ describe('VistaEstilo', () => {
     expect(html.replace(/<[^>]+>/g, '')).toBe('NADIE TE LO DICE')
     expect(html).not.toContain('<img')
     // La cifra va en grande en «Número grande»; las comillas, en «Frase entre comillas».
-    expect(renderToStaticMarkup(<VistaEstilo estilo={estiloIaPorClave('numero')} />)).toContain('class="res grande"')
-    expect(renderToStaticMarkup(<VistaEstilo estilo={estiloIaPorClave('cita')} />)).toContain('por-vista-comillas')
-    expect(renderToStaticMarkup(<VistaEstilo estilo={estiloIaPorClave('entrevista')} />)).toMatch(/dos-a[\s\S]*dos-b/)
+    expect(renderToStaticMarkup(<VistaEstilo estilo={{ ...estiloIaPorClave('numero'), referencia: false }} />)).toContain('class="res grande"')
+    expect(renderToStaticMarkup(<VistaEstilo estilo={{ ...estiloIaPorClave('cita'), referencia: false }} />)).toContain('por-vista-comillas')
+    expect(renderToStaticMarkup(<VistaEstilo estilo={{ ...estiloIaPorClave('entrevista'), referencia: false }} />)).toMatch(/dos-a[\s\S]*dos-b/)
   })
 
   it('un estilo con imagen no pinta nada (va su imagen)', () => {
