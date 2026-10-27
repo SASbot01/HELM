@@ -57,7 +57,7 @@ function Casilla({ a, metrica, onAbrir }) {
   const Icono = ICONOS[a.icono] || ScatterChart
   const est = ESTADOS_AGENTE[a.estado] || ESTADOS_AGENTE.construido
   // `abrible` deja abrir una casilla aún «en construcción» para ver su proceso,
-  // sin enseñarla como activa: lo usa el editor de reels (el render aún no está).
+  // sin enseñarla como activa (hoy no la lleva ninguno).
   const entrable = a.estado === 'activo' || a.abrible
 
   // Todas las casillas tienen la misma anatomía y en el mismo orden: icono,

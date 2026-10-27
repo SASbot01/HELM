@@ -8,6 +8,10 @@
 //                estructura, CTA, y cada frase como gancho / planteamiento /
 //                remate / venta
 //
+// Y otros trabajos que no son del corpus: entre ellos `editor-render`, el
+// Editor de reels (api/_lib/editor/trabajo.js): transcribe palabra a palabra
+// el vídeo que subió alguien y lo devuelve editado con ffmpeg.
+//
 // Por qué un proceso aparte y no un endpoint: transcribir un reel de 60 s en
 // esta máquina (4 núcleos, sin GPU) tarda entre 20 y 40 segundos. Eso no cabe
 // en una petición HTTP, y si se cae a mitad no se puede reintentar solo.
@@ -106,9 +110,12 @@ async function coge() {
     .lte('correr_tras', ahora())
     .order('created_at', { ascending: true })
     .limit(1)
-  // Primero las noticias y el equipo de agentes: son pocos trabajos al día y
+  // Primero el Editor de reels: alguien ha subido un vídeo y está mirando la
+  // barra de progreso.
+  let { data, error } = await pendientes().eq('tipo', 'editor-render')
+  // Después, las noticias y el equipo de agentes: son pocos trabajos al día y
   // cortos, y lo de la mañana no puede esperar a que se vacíe la cola de reels.
-  let { data, error } = await pendientes().in('tipo', ['noticias', 'articulo', 'equipo', 'avatar', 'radar', 'estudio-contenido'])
+  if (!error && !data?.length) ({ data, error } = await pendientes().in('tipo', ['noticias', 'articulo', 'equipo', 'avatar', 'radar', 'estudio-contenido']))
   if (!error && !data?.length) ({ data, error } = await pendientes())
   if (error) { log('error leyendo la cola:', error.message); return null }
   const job = data?.[0]
@@ -149,6 +156,11 @@ async function fallo(job, err) {
     await db.from('agent_reels')
       .update({ estado: 'error', error: msg, updated_at: ahora() })
       .eq('id', job.payload.reelId)
+  }
+  // Una edición del Editor de reels cuyo trabajo ya no se reintenta no se
+  // queda «en cola» para siempre (si editorRender no llegó a apuntarlo).
+  if (agotado && job.tipo === 'editor-render') {
+    await edicionFallida(job, msg, { db }).catch(e => log('no pude cerrar la edición fallida:', e.message))
   }
   log(`✗ ${job.tipo} (intento ${job.intentos}/${job.max_intentos}):`, msg)
 }
@@ -675,12 +687,23 @@ const { miraFabricacion, generaEstudioWeb } = await import('../api/_lib/webcreat
 // a petición y, los lunes desde las 6:30, solo para los perfiles de la casa.
 const { generaEstudio: generaEstudioContenido, miraEstudiosContenido } = await import('../api/_lib/estudio-contenido/generar.js')
 
+// El Editor de reels (api/_lib/editor/trabajo.js): la API sube el vídeo y
+// encola; aquí se transcribe palabra a palabra, se monta y se cobra. Cada
+// hora: lo de más de 7 días (originales, recursos y editados) y las subidas
+// abandonadas se borran, las ediciones que se quedaron colgadas pasan a error
+// y se reintentan los cobros que no se pudieron apuntar.
+const { editorRender, reintentaCobros, cierraColgadas, edicionFallida } = await import('../api/_lib/editor/trabajo.js')
+const { limpiaEdiciones } = await import('../api/_lib/editor/archivos.js')
+const editaReel = (job) => editorRender(job, { db, log, py: PY, script: TRANSCRIBE, modelo: MODELO_WHISPER })
+const CADA_CUANTO_LIMPIAR_EDITOR_MS = 3600_000
+let ultimaLimpiezaEditor = 0
+
 const CADA_CUANTO_AGENDA_MS = 60_000
 let ultimaAgenda = 0
 
 // ── Bucle ───────────────────────────────────────────────────────────────────
 
-const PASOS = { descargar, transcribir, etiquetar, estudiar, equipo: ejecutaAgente, noticias: generaNoticias, articulo: generaArticulo, avatar: generaAvatar, radar: generaRadar, metricas: sincronizaMetricas, 'ad-estudio': estudiaAd, 'web-estudio': generaEstudioWeb, 'estudio-contenido': generaEstudioContenido }
+const PASOS = { descargar, transcribir, etiquetar, estudiar, equipo: ejecutaAgente, noticias: generaNoticias, articulo: generaArticulo, avatar: generaAvatar, radar: generaRadar, metricas: sincronizaMetricas, 'ad-estudio': estudiaAd, 'web-estudio': generaEstudioWeb, 'estudio-contenido': generaEstudioContenido, 'editor-render': editaReel }
 
 let parando = false
 for (const s of ['SIGINT', 'SIGTERM']) {
@@ -713,6 +736,15 @@ async function bucle() {
         await miraMetricas().catch(e => log('no pude mirar las métricas del día:', e.message))
         await miraFabricacion().catch(e => log('no pude mirar las webs en fabricación:', e.message))
         await miraEstudiosContenido().catch(e => log('no pude mirar los estudios de contenido del lunes:', e.message))
+      }
+      if (Date.now() - ultimaLimpiezaEditor > CADA_CUANTO_LIMPIAR_EDITOR_MS) {
+        ultimaLimpiezaEditor = Date.now()
+        const n = await limpiaEdiciones().catch(e => { log('no pude limpiar el editor de reels:', e.message); return 0 })
+        if (n) log(`editor de reels: ${n} edición(es) viejas o subidas abandonadas borradas del disco`)
+        const k = await cierraColgadas({ db, log }).catch(e => { log('no pude cerrar las ediciones colgadas del editor de reels:', e.message); return 0 })
+        if (k) log(`editor de reels: ${k} edición(es) colgadas pasadas a error`)
+        const c = await reintentaCobros({ db, log }).catch(e => { log('no pude reintentar los cobros del editor de reels:', e.message); return 0 })
+        if (c) log(`editor de reels: ${c} cobro(s) pendiente(s) apuntado(s)`)
       }
       job = await coge()
       if (!job) { await duerme(ESPERA_VACIO_MS); continue }

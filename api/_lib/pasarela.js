@@ -53,8 +53,8 @@ const SECRETAS = new Set([
   'helm_altas',
   // El setter de Instagram: DM privados de terceros (api/setter-ig.js).
   'helm_setter_ig', 'helm_ig_conversaciones', 'helm_ig_mensajes',
-  // Trial reels: los trabajos de vídeo, solo por api/trial-reels.js.
-  'helm_trial_reels',
+  // Trial reels: los trabajos de vídeo y los vídeos subidos, solo por api/trial-reels.js.
+  'helm_trial_reels', 'helm_trial_fuentes',
   // Web Creator: estudio y prompt de cada web, solo por api/web-creator.js.
   'helm_web_creator', 'helm_web_fabricacion',
   // La oficina de cada agente: el chat va por api/agente-oficina.js.
@@ -63,6 +63,8 @@ const SECRETAS = new Set([
   'helm_participaciones',
   // El estudio de contenido y la foto diaria de seguidores: solo por api/estudio-contenido.js.
   'helm_ig_seguidores', 'helm_estudio_contenido',
+  // Editor de reels: los vídeos y los estilos, solo por api/editor.js.
+  'helm_ediciones', 'helm_estilos_edicion',
 ])
 
 // LISTA BLANCA: las únicas tablas que el panel toca por aquí (las que usa

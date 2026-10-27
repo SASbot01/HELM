@@ -699,6 +699,10 @@ export const creditosApi = {
   bienvenida: () => apiFetch('/api/creditos?action=bienvenida', { method: 'POST', body: {} }),
   agencias: () => apiFetch('/api/creditos?action=agencias'),
   ajuste: (agenciaId, euros, nota) => apiFetch('/api/creditos?action=ajuste', { method: 'POST', body: { agenciaId, euros, nota } }),
+  // Lo que cuesta cada trabajo a precio fijo y si este perfil paga:
+  // { paga, saldo (€ o null), precios: PRECIOS_FIJOS (€) }. La cuenta del
+  // Editor por duración, con precioEditor de ./precios.js.
+  precios: (clientId) => apiFetch(`/api/creditos?action=precios&clientId=${encodeURIComponent(clientId)}`),
   // El enlace del conector de Claude de la agencia entera (sin perfil).
   enlaceMcp: () => apiFetch('/api/agents?action=mcp-enlace'),
   nuevoEnlaceMcp: () => apiFetch('/api/agents?action=mcp-enlace', { method: 'POST', body: {} }),
@@ -775,6 +779,8 @@ export const portadasApi = {
     apiFetch('/api/portadas?action=fondo-ia', { method: 'POST', body: { clientId, prompt } }),
   // Portada entera con IA en un estilo (estilos de src/agents/portadas/estilosIa.js
   // o «ej:<id>» para un ejemplo subido). `fotograma`: data URL de la imagen real.
+  // fondoIa y portadaIa cuestan PRECIOS_FIJOS['portada-ia'] por imagen (402 si
+  // no llega) y devuelven { imagen, ia, cobrado (€), saldo (€ o null) }.
   portadaIa: (clientId, { fotograma, titulo, estilo, detalle, mediaId }) =>
     apiFetch('/api/portadas?action=portada-ia', { method: 'POST', body: { clientId, fotograma, titulo, estilo, detalle, mediaId } }),
   ejemplos: (clientId) => apiFetch(`/api/portadas?action=ejemplos&clientId=${clientId}`),
@@ -786,15 +792,89 @@ export const portadasApi = {
 
 // Trial reels (api/trial-reels.js): variantes editadas de un reel propio para
 // probarlas como «Reel de prueba». El MP4 llega como archivo, por apiBlob.
+// El vídeo de partida es un reel (mediaId) o uno subido ({ fuenteId }): la
+// subida empieza con fuente() y los trozos van a urlTrozo() con subePorTrozos
+// (./subida.js); recibidos() dice cuánto tiene ya el servidor, para seguir una
+// subida cortada con el mismo fuenteId. lista → { trabajos, fuentes }.
 export const trialReelsApi = {
   lista: (clientId) => apiFetch(`/api/trial-reels?action=lista&clientId=${clientId}`),
-  ganchos: (clientId, mediaId) =>
-    apiFetch('/api/trial-reels?action=ganchos', { method: 'POST', body: { clientId, mediaId } }),
-  crear: (clientId, mediaId, variantes) =>
-    apiFetch('/api/trial-reels?action=crear', { method: 'POST', body: { clientId, mediaId, variantes } }),
+  // Sin reel (un vídeo subido), `texto` cuenta de qué va el vídeo.
+  ganchos: (clientId, mediaId, texto) =>
+    apiFetch('/api/trial-reels?action=ganchos', { method: 'POST', body: { clientId, ...(mediaId ? { mediaId } : { texto }) } }),
+  crear: (clientId, origen, variantes) =>
+    apiFetch('/api/trial-reels?action=crear', {
+      method: 'POST',
+      body: { clientId, ...(origen && typeof origen === 'object' ? { fuenteId: origen.fuenteId } : { mediaId: origen }), variantes },
+    }),
+  fuente: (clientId, { nombre, bytes, tipo, duracion }) =>
+    apiFetch('/api/trial-reels?action=fuente', { method: 'POST', body: { clientId, nombre, bytes, tipo, duracion } }),
+  urlTrozo: (clientId, id) => `/api/trial-reels?action=trozo&clientId=${encodeURIComponent(clientId)}&id=${encodeURIComponent(id)}`,
+  recibidos: (clientId, id) => apiFetch(`/api/trial-reels?action=trozo&clientId=${encodeURIComponent(clientId)}&id=${encodeURIComponent(id)}`),
+  videoFuente: (clientId, id) => apiBlob(`/api/trial-reels?action=fuente-video&clientId=${clientId}&id=${encodeURIComponent(id)}`),
+  borrarFuente: (clientId, id) => apiFetch('/api/trial-reels?action=borrar-fuente', { method: 'POST', body: { clientId, id } }),
   estado: (clientId, id) => apiFetch(`/api/trial-reels?action=estado&clientId=${clientId}&id=${encodeURIComponent(id)}`),
   descarga: (clientId, id) => apiBlob(`/api/trial-reels?action=descarga&clientId=${clientId}&id=${encodeURIComponent(id)}`),
   borrar: (clientId, id) => apiFetch('/api/trial-reels?action=borrar', { method: 'POST', body: { clientId, id } }),
+}
+
+// Editor de reels (api/editor.js): subes el vídeo en bruto (y, si quieres,
+// recursos: imágenes y clips de apoyo, el logo y la música) y HELM lo devuelve
+// editado, cobrando su precio fijo al terminar bien (src/helm/precios.js).
+// El vídeo va por trozos y cada recurso en una sola petición, los dos en crudo
+// (el archivo es el cuerpo, no JSON) con subePorTrozos / mandaTrozo de
+// ./subida.js; aquí van las urls y lo que es JSON. El flujo:
+//   const { edicion } = await editorApi.crear(clientId, { nombre, bytes, tipo, duracion, estilo_ref, params })
+//   await subePorTrozos({ url: editorApi.urlTrozo(clientId, edicion.id), archivo, alProgreso, senal })
+//   const { recurso } = await mandaTrozo({ url: editorApi.urlRecurso(clientId, edicion.id, 'broll', archivo.name), cuerpo: archivo })
+//   await editorApi.lanzar(clientId, edicion.id, [{ id: recurso.id, palabra: 'factura' }])
+// Sin saldo, crear y lanzar contestan 402 con el mensaje para enseñar (y se
+// abre la recarga). `recibidos` dice cuánto tiene ya el servidor, para seguir
+// una subida cortada.
+//
+// Lo JSON del editor va por pideEditor, que es apiFetch con una cosa más: el
+// error lleva `status` y `datos` (el JSON de la respuesta). El taller tiene
+// que saber QUÉ ha fallado al lanzar: un 409 con `recibidos` es que al vídeo
+// le falta un trozo (se sigue subiendo); un 410 o un 422, que ya no tiene
+// arreglo (se empieza otra vez); y un 404 al borrar, que ya no estaba.
+async function pideEditor(path, { method = 'GET', body } = {}) {
+  const token = localStorage.getItem('bw_admin_jwt')
+  const r = await fetch(path, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  })
+  const data = await r.json().catch(() => ({}))
+  // La sesión caducada y el sin saldo, igual que en apiFetch.
+  if (r.status === 401) {
+    localStorage.removeItem('bw_admin_jwt')
+    localStorage.removeItem('bw_superadmin')
+    localStorage.removeItem('bw_client')
+    if (typeof window !== 'undefined') window.location.href = '/login'
+    throw Object.assign(new Error('Tu sesión ha caducado. Vuelve a iniciar sesión.'), { status: 401, datos: data })
+  }
+  if (r.status === 402 && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('helm:sin-saldo', { detail: data?.error || null }))
+  }
+  if (!r.ok) throw Object.assign(new Error(data?.error || `Error ${r.status}`), { status: r.status, datos: data })
+  return data
+}
+
+const enEditor = (clientId, id) => `clientId=${encodeURIComponent(clientId)}&id=${encodeURIComponent(id)}`
+export const editorApi = {
+  crear: (clientId, datos) => pideEditor('/api/editor?action=crear', { method: 'POST', body: { clientId, ...datos } }),
+  urlTrozo: (clientId, id) => `/api/editor?action=trozo&${enEditor(clientId, id)}`,
+  recibidos: (clientId, id) => pideEditor(`/api/editor?action=trozo&${enEditor(clientId, id)}`),
+  urlRecurso: (clientId, id, tipo, nombre) =>
+    `/api/editor?action=recurso&${enEditor(clientId, id)}&tipo=${encodeURIComponent(tipo)}&nombre=${encodeURIComponent(nombre || '')}`,
+  quitarRecurso: (clientId, id, recurso) =>
+    pideEditor('/api/editor?action=quitar-recurso', { method: 'POST', body: { clientId, id, recurso } }),
+  lanzar: (clientId, id, recursos = []) => pideEditor('/api/editor?action=lanzar', { method: 'POST', body: { clientId, id, recursos } }),
+  lista: (clientId) => pideEditor(`/api/editor?action=lista&clientId=${clientId}`),
+  estado: (clientId, id) => pideEditor(`/api/editor?action=estado&clientId=${clientId}&id=${encodeURIComponent(id)}`),
+  descarga: (clientId, id) => apiBlob(`/api/editor?action=descarga&clientId=${clientId}&id=${encodeURIComponent(id)}`),
+  estilos: (clientId) => pideEditor(`/api/editor?action=estilos&clientId=${clientId}`),
+  guardarEstilo: (clientId, params) => pideEditor('/api/editor?action=estilo', { method: 'POST', body: { clientId, params } }),
+  borrar: (clientId, id) => pideEditor('/api/editor?action=borrar', { method: 'POST', body: { clientId, id } }),
 }
 
 // Web Creator (api/web-creator.js): las webs de los clientes en fabricación.

@@ -21,12 +21,13 @@ import { spawn } from 'node:child_process'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { fetchPublico } from './web.js'
+import { limpiaSubidas } from './subida-trozos.js'
 import { normalizaAjustes, tramos, reencuadre, LIENZO, FPS } from '../../src/agents/trialreels/reglas.js'
 
 export { normalizaAjustes, tramos, reencuadre }
 
-const FFMPEG = () => process.env.HELM_FFMPEG || 'ffmpeg'
-const FFPROBE = () => process.env.HELM_FFPROBE || 'ffprobe'
+export const FFMPEG = () => process.env.HELM_FFMPEG || 'ffmpeg'
+export const FFPROBE = () => process.env.HELM_FFPROBE || 'ffprobe'
 export const CARPETA = () => path.join(process.env.HELM_DATA_DIR || '/home/s4sf/helm-data', 'trial-reels')
 
 // Del CDN de Meta y de nada más (el mismo criterio que api/portadas.js).
@@ -50,6 +51,68 @@ const seguro = (t) => String(t || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64)
 export const rutaSalida = (id) => path.join(CARPETA(), `${seguro(id)}.mp4`)
 export const rutaGancho = (id) => path.join(CARPETA(), `${seguro(id)}.gancho.png`)
 export const rutaFuente = (clientId, mediaId) => path.join(CARPETA(), 'fuentes', `${seguro(clientId)}-${seguro(mediaId)}.mp4`)
+// Los vídeos que sube el usuario: mientras llegan, en su carpeta de subidas
+// (subida.part, api/_lib/subida-trozos.js); enteros, junto a las fuentes de
+// Instagram, con «subido» en el nombre para que nunca choquen con un media_id
+// (que es solo cifras). Se borran a los 7 días, como todo lo de aquí.
+export const CARPETA_SUBIDAS = () => path.join(CARPETA(), 'subidas')
+export const dirSubidaFuente = (fuenteId) => path.join(CARPETA_SUBIDAS(), seguro(fuenteId))
+export const rutaFuenteSubida = (clientId, fuenteId) => path.join(CARPETA(), 'fuentes', `${seguro(clientId)}-subido-${seguro(fuenteId)}.mp4`)
+
+/**
+ * Los vídeos subidos que un perfil tiene ahora en el disco (los de sus 7 días):
+ * { videos, bytes }. Lo que hay de verdad, no lo que diga la tabla: para el tope
+ * de lo guardado por perfil (api/trial-reels.js).
+ */
+export async function guardadoDelPerfil(clientId, dias = DIAS_GUARDADO) {
+  const dir = path.join(CARPETA(), 'fuentes')
+  const prefijo = `${seguro(clientId)}-subido-`
+  const limite = Date.now() - dias * 86_400_000
+  let nombres = []
+  try { nombres = await fsp.readdir(dir) } catch { return { videos: 0, bytes: 0 } }
+  let videos = 0
+  let bytes = 0
+  for (const n of nombres) {
+    if (!n.startsWith(prefijo) || !n.endsWith('.mp4')) continue
+    try {
+      const st = await fsp.stat(path.join(dir, n))
+      if (st.isFile() && st.mtimeMs >= limite) { videos++; bytes += st.size }
+    } catch { /* ya no está */ }
+  }
+  return { videos, bytes }
+}
+// Lo que tiene que quedar libre en el disco después de recibir un trozo
+// (HELM_TRIAL_MIN_LIBRE_MB, 2 GB por defecto: el disco es el mismo que el del
+// Editor de reels y el de los montajes).
+export const minLibreTrial = () => {
+  const mb = Number(process.env.HELM_TRIAL_MIN_LIBRE_MB)
+  return (Number.isFinite(mb) && mb >= 0 ? mb : 2048) * 1024 * 1024
+}
+
+// Las cajas con las que puede empezar un MOV sin «ftyp»: los QuickTime de antes
+// y algunas cámaras empiezan por «wide», «free» o «skip» (relleno) o directamente
+// por «moov» o «mdat». El demuxer mov de ffmpeg las reconoce igual (95–100 de
+// 100) y ninguna lista (HLS, concat) puede empezar así: esas son texto desde el
+// byte 0, y aquí los 4 primeros son el tamaño de la caja.
+const CAJAS_SIN_FTYP = new Set(['moov', 'mdat', 'wide', 'free', 'skip'])
+
+/**
+ * ¿Estos primeros bytes son de un MP4/MOV/3GP (una caja de ISO BMFF)? Lo que
+ * suba el usuario solo se le pasa a ffmpeg si lo es: el tipo y la extensión los
+ * pone el navegador, y ffmpeg adivina el formato por el contenido (una lista
+ * HLS o un concat disfrazados de .mp4 le harían abrir otros archivos o URLs).
+ * Con «ftyp» (o una de CAJAS_SIN_FTYP) en el byte 4, ffmpeg lo reconoce como
+ * MP4/MOV (es la firma que mejor puntúa) y no como una de esas listas.
+ */
+export function esVideoIsoBmff(buf) {
+  if (!buf || buf.length < 12) return false
+  const tam = buf.readUInt32BE(0)
+  const caja = buf.toString('latin1', 4, 8)
+  if (caja === 'ftyp') return tam === 1 || (tam >= 16 && tam <= 4096)
+  if (!CAJAS_SIN_FTYP.has(caja)) return false
+  // 1: el tamaño va en 64 bits; 0: hasta el final del archivo (solo «mdat»).
+  return tam === 1 || tam >= 8 || (tam === 0 && caja === 'mdat')
+}
 
 // ── El color: cuatro preajustes de eq, retoques pequeños ───────────────────
 // gamma_r y gamma_b mueven los canales rojo y azul sin tocar la luz: así se
@@ -159,29 +222,39 @@ export function argumentosFfmpeg({ entrada, salida, gancho = null, ajustes, info
 
   args.push('-filter_complex', f.join(';'), '-map', '[vout]')
   if (audio) args.push('-map', '[aout]')
-  args.push(
-    '-c:v', 'libx264', '-profile:v', 'high', '-level:v', '4.1',
-    // Los vídeos largos, más deprisa: tienen que caber en el tope de tiempo.
-    '-preset', (t.salida || 0) > 90 ? 'faster' : 'medium', '-crf', '20',
-    '-pix_fmt', 'yuv420p', '-r', String(FPS), '-g', String(FPS * 2),
-  )
-  if (audio) args.push('-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2')
-  else args.push('-an')
-  // Sin metadatos: ni los de la fuente (título, fecha, móvil, GPS) ni la marca
-  // del codificador (bitexact y la etiqueta «encoder» vacía, que la borra; el
-  // ffmpeg 6.1 del servidor deja «Lavc libx264», sin versión, y no hay manera).
-  args.push(
-    '-map_metadata', '-1', '-map_chapters', '-1', '-fflags', '+bitexact', '-metadata:s:v:0', 'encoder=',
-    '-movflags', '+faststart', '-f', 'mp4', salida,
-  )
+  // Los vídeos largos, más deprisa: tienen que caber en el tope de tiempo.
+  args.push(...argumentosCodificacion({ audio, preset: (t.salida || 0) > 90 ? 'faster' : 'medium' }), salida)
   return args
+}
+
+/**
+ * Cómo se codifica lo que sale, para Trial reels y para el Editor de reels:
+ * H.264 high 4.1, yuv420p, 30 fps, GOP de 2 s, AAC 48 kHz estéreo (o sin
+ * pista de audio) y MP4 con +faststart. PURA. Va justo antes de la salida.
+ */
+export function argumentosCodificacion({ audio, preset = 'medium' }) {
+  return [
+    '-c:v', 'libx264', '-profile:v', 'high', '-level:v', '4.1',
+    '-preset', preset, '-crf', '20',
+    '-pix_fmt', 'yuv420p', '-r', String(FPS), '-g', String(FPS * 2),
+    ...(audio ? ['-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2'] : ['-an']),
+    // Sin metadatos: ni los de la fuente (título, fecha, móvil, GPS) ni la marca
+    // del codificador (bitexact y la etiqueta «encoder» vacía, que la borra; el
+    // ffmpeg 6.1 del servidor deja «Lavc libx264», sin versión, y no hay manera).
+    '-map_metadata', '-1', '-map_chapters', '-1', '-fflags', '+bitexact', '-metadata:s:v:0', 'encoder=',
+    '-movflags', '+faststart', '-f', 'mp4',
+  ]
 }
 
 // ── Lanzar binarios ─────────────────────────────────────────────────────────
 const COLA = globalThis.__helmTrialReels || (globalThis.__helmTrialReels = { cola: [], activo: null, hijo: null })
 
-/** Lanza un binario sin shell, con tope de tiempo. Devuelve { stdout, stderr }. */
-export function ejecuta(bin, args, { tope = TOPE_FFMPEG_MS, registra = false } = {}) {
+/**
+ * Lanza un binario sin shell, con tope de tiempo. Devuelve { stdout, stderr }.
+ *   alLeer → se llama con cada trozo de stdout (el -progress de ffmpeg)
+ *   senal  → un AbortSignal: si se aborta, se mata el proceso
+ */
+export function ejecuta(bin, args, { tope = TOPE_FFMPEG_MS, registra = false, alLeer = null, senal = null } = {}) {
   return new Promise((ok, mal) => {
     const hijo = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] })
     if (registra) COLA.hijo = hijo
@@ -189,15 +262,22 @@ export function ejecuta(bin, args, { tope = TOPE_FFMPEG_MS, registra = false } =
     try { os.setPriority(hijo.pid, 10) } catch { /* sin permiso: da igual */ }
     let stdout = ''
     let stderr = ''
-    hijo.stdout.on('data', d => { if (stdout.length < 2_000_000) stdout += d })
+    hijo.stdout.on('data', d => {
+      if (stdout.length < 2_000_000) stdout += d
+      if (alLeer) { try { alLeer(String(d)) } catch { /* quien escucha no para el proceso */ } }
+    })
     hijo.stderr.on('data', d => { stderr = (stderr + d).slice(-4000) })
     const reloj = setTimeout(() => { hijo.kill('SIGKILL') }, tope)
+    const corta = () => hijo.kill('SIGKILL')
+    if (senal?.aborted) corta()
+    else senal?.addEventListener?.('abort', corta, { once: true })
     hijo.on('error', e => { clearTimeout(reloj); mal(err(`No se pudo lanzar ${path.basename(bin)}: ${e.message}`)) })
-    hijo.on('close', (code, senal) => {
+    hijo.on('close', (code, senal2) => {
       clearTimeout(reloj)
+      senal?.removeEventListener?.('abort', corta)
       if (registra && COLA.hijo === hijo) COLA.hijo = null
       if (code === 0) return ok({ stdout, stderr })
-      const motivo = senal === 'SIGKILL' ? 'se cortó (tardaba demasiado o se canceló)' : (stderr.trim().split('\n').slice(-3).join(' ') || `código ${code}`)
+      const motivo = senal2 === 'SIGKILL' ? 'se cortó (tardaba demasiado o se canceló)' : (stderr.trim().split('\n').slice(-3).join(' ') || `código ${code}`)
       mal(err(`ffmpeg: ${motivo}`.slice(0, 400)))
     })
   })
@@ -239,9 +319,13 @@ export async function descargaFuente(url, destino, { max = MAX_VIDEO } = {}) {
   return { bytes: total }
 }
 
-/** Borra lo que lleve más de 7 días en la carpeta (y en la de fuentes). */
+/**
+ * Borra lo que lleve más de 7 días en la carpeta (y en la de fuentes, también
+ * los vídeos subidos), y las subidas que se quedaron a medias.
+ */
 export async function limpiaViejos(dias = DIAS_GUARDADO) {
   const limite = Date.now() - dias * 86_400_000
+  await limpiaSubidas(CARPETA_SUBIDAS()).catch(() => 0)
   for (const dir of [CARPETA(), path.join(CARPETA(), 'fuentes')]) {
     let nombres = []
     try { nombres = await fsp.readdir(dir) } catch { continue }

@@ -12,6 +12,12 @@
 //   POST ?action=webhook                     → Stripe avisa de un pago
 //   POST ?action=ajuste { agenciaId, euros } → (plataforma) sumar o quitar a mano
 //   GET  ?action=agencias                    → (plataforma) todas, con saldo
+//   GET  ?action=precios &clientId=          → (quien entre al perfil, también un
+//                                               acceso de cliente) lo que cuesta cada
+//                                               trabajo a precio fijo y si ese perfil
+//                                               paga: { paga, saldo, precios }, con
+//                                               saldo y precios en EUROS (en pantalla,
+//                                               ×100 = créditos; ver src/helm/precios.js)
 //
 // Las cuentas de pago son las de HELM, no las de Stripe que cada perfil conecta
 // para sus ventas. Desde el 27-oct-2026 los créditos van a una cuenta de Stripe
@@ -31,9 +37,11 @@
 import crypto from 'node:crypto'
 import { supabase } from './lib/supabase.js'
 import { applyCors, requireSuperAdmin, requirePlataforma, writeAudit } from './_lib/auth.js'
-import { PACKS, CREDITOS_POR_EURO, BIENVENIDA_EUROS, sumarSaldo } from './_lib/creditos.js'
+import { requireProfileAccess } from './_lib/access.js'
+import { PACKS, CREDITOS_POR_EURO, BIENVENIDA_EUROS, PRECIOS_FIJOS, sumarSaldo, quienPagaPerfil } from './_lib/creditos.js'
 
 const STRIPE = 'https://api.stripe.com/v1'
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const claveStripe = () => process.env.HELM_CREDITOS_STRIPE_KEY || process.env.HELM_STRIPE_SECRET_KEY || ''
 // Los dos secretos valen mientras se pasa de una cuenta a la otra.
 const secretosWebhook = () => [process.env.HELM_CREDITOS_STRIPE_WEBHOOK_SECRET, process.env.HELM_STRIPE_WEBHOOK_SECRET].filter(Boolean)
@@ -114,6 +122,18 @@ export default async function handler(req, res) {
   try {
     if (accion === 'packs') {
       return res.status(200).json({ packs: PACKS, bienvenida: aCreditos(BIENVENIDA_EUROS) })
+    }
+
+    if (accion === 'precios') {
+      // Lo pregunta la pantalla de un agente antes de lanzar: va por el perfil
+      // (como el resto de agentes), no por ser administrador de la agencia.
+      const clientId = String(req.query?.clientId || '')
+      if (!clientId) throw falla('Falta el perfil')
+      // Un id que no es un UUID no llega a la base (volvería un 500 con su texto).
+      if (!UUID.test(clientId)) throw falla('Ese perfil no es válido')
+      await requireProfileAccess(req, clientId)
+      const p = await quienPagaPerfil(clientId)
+      return res.status(200).json({ paga: Boolean(p), saldo: p ? p.saldo : null, precios: PRECIOS_FIJOS })
     }
 
     if (accion === 'webhook') {

@@ -6,8 +6,17 @@
 // el kit de la serie. Antes de descargarla se ve cómo queda en la cuadrícula
 // del perfil y pasa las comprobaciones del estudio (src/agents/portadas/).
 //
+// También sin Instagram: «Portada desde una foto» y «Portada desde un vídeo»
+// (desde el 27-oct). El vídeo se abre AQUÍ, en el navegador
+// (URL.createObjectURL), con el mismo selector de instante que el del reel:
+// no se sube a ningún sitio; a la IA solo va el fotograma elegido.
+//
 // Instagram no deja cambiar la portada por API una vez publicado: se descarga
-// y se pone en la app (Editar → Portada). Solo gasta créditos «Proponer textos».
+// y se pone en la app (Editar → Portada). Gastan créditos «Proponer textos» y
+// «Sugerir estilo» (por lo que use la IA) y cada imagen generada con IA (la
+// portada entera o el fondo): 40 créditos, a precio fijo, que se enseñan en el
+// botón antes de pulsar (src/helm/precios.js). Si la generación falla, no se
+// cobra; en la agencia de la casa es gratis.
 //
 // Dos modos (desde el 2026-10-22):
 //   · Con IA: eliges el fotograma, un estilo (con su portada de ejemplo, o uno
@@ -18,10 +27,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, Sparkles, Download, Upload, Film, Image as ImagenIcono, Check, AlertTriangle, Loader2, Palette, Plus, X, ExternalLink } from 'lucide-react'
 import { supabase } from '../utils/supabase'
-import { portadasApi } from '../helm/lib'
+import { portadasApi, creditosApi } from '../helm/lib'
+import { aCreditos } from '../helm/precios'
 import { PLANTILLAS, LETRAS, MARCA_POR_DEFECTO, normalizaMarca, comprobar, LIENZO, ZONA_CUADRICULA } from './portadas/reglas'
 import { maquetar, pintar } from './portadas/componer'
 import { ESTILOS_IA, ejemploDe, MAX_TITULO_IA, MAX_DETALLE_IA, MAX_NOMBRE_EJEMPLO } from './portadas/estilosIa'
+import VistaEstilo from './portadas/VistaEstilo'
+import { capturador } from './portadas/fotograma'
 import '../fonts/barlow-condensed.css'
 import '../fonts/inter-tight.css'
 import './portadas.css'
@@ -60,6 +72,19 @@ function ejemploParaSubir(img) {
   return c.toDataURL('image/jpeg', 0.9)
 }
 
+/**
+ * Lo que se enseña en el botón de generar: «· 40 créditos», «· gratis» o nada
+ * mientras no se sabe. `precios` es lo de creditosApi.precios. «Gratis» a
+ * secas: no pagan ni la agencia de la casa ni un perfil sin agencia, y
+ * creditosApi.precios no dice cuál de los dos es.
+ */
+function etiquetaPrecio(precios, concepto = 'portada-ia') {
+  if (!precios) return ''
+  if (!precios.paga) return ' · gratis'
+  const euros = precios.precios?.[concepto]
+  return euros > 0 ? ` · ${aCreditos(euros).toLocaleString('es-ES')} créditos` : ''
+}
+
 function cargaImagen(src) {
   return new Promise((ok, mal) => {
     const img = new Image()
@@ -73,7 +98,9 @@ export default function Portadas({ clientId, client, onVolver }) {
   const [reels, setReels] = useState(null)
   const [error, setError] = useState('')
   const [marca, setMarca] = useState(MARCA_POR_DEFECTO)
-  const [elegido, setElegido] = useState(undefined)   // undefined: lista · null: desde una foto · reel
+  // undefined: la lista · { reel, inicio }: el taller, con un reel o sin él
+  // (desde una foto o desde un vídeo tuyo).
+  const [elegido, setElegido] = useState(undefined)
 
   useEffect(() => {
     let vivo = true
@@ -92,7 +119,8 @@ export default function Portadas({ clientId, client, onVolver }) {
   if (elegido !== undefined) {
     return (
       <Taller
-        clientId={clientId} reel={elegido} marca={marca} vecinos={(reels || []).filter(r => r !== elegido).slice(0, 5)}
+        clientId={clientId} reel={elegido.reel} inicio={elegido.inicio} marca={marca}
+        vecinos={(reels || []).filter(r => r !== elegido.reel).slice(0, 5)}
         onVolver={() => setElegido(undefined)}
       />
     )
@@ -116,14 +144,15 @@ export default function Portadas({ clientId, client, onVolver }) {
       <KitMarca clientId={clientId} marca={marca} onGuardada={setMarca} />
 
       <div className="por-acciones">
-        <button type="button" className="ag-btn" onClick={() => setElegido(null)}><Upload size={14} /> Portada desde una foto</button>
+        <button type="button" className="ag-btn" onClick={() => setElegido({ reel: null, inicio: 'foto' })}><Upload size={14} /> Portada desde una foto</button>
+        <button type="button" className="ag-btn" onClick={() => setElegido({ reel: null, inicio: 'mivideo' })}><Film size={14} /> Portada desde un vídeo</button>
       </div>
 
       {reels == null ? <p className="por-ayuda"><Loader2 size={14} className="por-gira" /> Cargando tus reels…</p>
         : !reels.length ? (
           <p className="por-ayuda">
             Aún no hay reels de este perfil. Conecta Instagram en <b>Ajustes → Instagram</b> y, cuando sincronice, aquí salen
-            todos con su portada. Mientras, puedes hacer una portada desde una foto.
+            todos con su portada. Mientras, puedes hacer una portada desde una foto o desde un vídeo tuyo.
           </p>
         ) : (
           <ul className="por-reels">
@@ -134,7 +163,7 @@ export default function Portadas({ clientId, client, onVolver }) {
                   <small>{fecha(r.publicado_en)} · {miles(r.visitas)} visualizaciones</small>
                   <p>{String(r.caption || '').split('\n')[0].slice(0, 110) || 'Sin caption'}</p>
                 </div>
-                <button type="button" className="ag-btn primario sm" onClick={() => setElegido(r)}><Sparkles size={13} /> Crear portada</button>
+                <button type="button" className="ag-btn primario sm" onClick={() => setElegido({ reel: r, inicio: 'video' })}><Sparkles size={13} /> Crear portada</button>
               </li>
             ))}
           </ul>
@@ -204,16 +233,55 @@ function KitMarca({ clientId, marca, onGuardada }) {
   )
 }
 
-function Taller({ clientId, reel, marca, vecinos, onVolver }) {
+// El selector de instante: el vídeo (el del reel o el tuyo, abierto aquí) y
+// una barra para elegir el fotograma. Cada vez que el vídeo termina de saltar a
+// un instante, ese fotograma pasa a ser el fondo (copiado a un canvas: el
+// <video> sigue moviéndose; reducido y con dos lienzos que se turnan, para que
+// un 4K del móvil no agote la memoria: portadas/fotograma.js). Al volver a la
+// pestaña, vuelve al instante que tenía (`tiempo` lo guarda el taller).
+function Fotogramas({ src, tiempo, onTiempo, onCaptura, onFallo }) {
+  const ref = useRef(null)
+  const [duracion, setDuracion] = useState(0)
+  const [captura] = useState(() => capturador())
+  const capturar = () => {
+    // Sin lienzo (el navegador se quedó sin memoria), se queda el de antes.
+    const c = captura(ref.current)
+    if (c) onCaptura(c)
+  }
+  return (
+    <div className="por-video">
+      <video
+        ref={ref} src={src} muted playsInline preload="auto"
+        onLoadedMetadata={e => {
+          const d = Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0
+          const t = tiempo == null ? Math.min(1, d / 2) : Math.min(tiempo, Math.max(0, d - 0.05))
+          setDuracion(d); onTiempo(t)
+          // A 0 justo no siempre salta (ya está ahí) y no llegaría el fotograma.
+          e.currentTarget.currentTime = Math.max(0.01, t)
+        }}
+        onSeeked={capturar}
+        onError={() => onFallo?.()}
+      />
+      <label>Instante: {(tiempo ?? 0).toFixed(1)} s
+        <input type="range" min="0" max={Math.max(0.1, duracion)} step="0.1" value={tiempo ?? 0}
+          onChange={e => { const t = Number(e.target.value); onTiempo(t); if (ref.current) ref.current.currentTime = t }} />
+      </label>
+      <small className="por-ayuda">Busca uno con los ojos abiertos, nítido y sin el subtítulo quemado.</small>
+    </div>
+  )
+}
+
+function Taller({ clientId, reel, inicio = 'foto', marca, vecinos, onVolver }) {
   const lienzo = useRef(null)
-  const video = useRef(null)
   // Si el usuario ya eligió modo a mano, capacidad() no debe pisárselo al llegar.
   const tocoModo = useRef(false)
-  const [fuente, setFuente] = useState(reel ? 'video' : 'foto')
+  const [fuente, setFuente] = useState(reel ? 'video' : inicio)
   const [imagen, setImagen] = useState(null)
   const [videoUrl, setVideoUrl] = useState('')
-  const [duracion, setDuracion] = useState(0)
-  const [tiempo, setTiempo] = useState(1)
+  // El vídeo propio: abierto aquí con URL.createObjectURL, nunca se sube.
+  const [miVideo, setMiVideo] = useState(null)   // { url, nombre }
+  // El instante elegido en cada vídeo (null: aún no se ha abierto).
+  const [tiempos, setTiempos] = useState({ video: null, mivideo: null })
   const [cargando, setCargando] = useState(reel ? 'Descargando el vídeo…' : '')
   const [error, setError] = useState('')
   const [encuadre, setEncuadre] = useState(0.5)
@@ -243,6 +311,8 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
   const [versiones, setVersiones] = useState([])
   const [elegida, setElegida] = useState(-1)
   const [generandoPortada, setGenerandoPortada] = useState(false)
+  // Lo que cuesta cada imagen con IA y si este perfil paga (creditosApi.precios).
+  const [precios, setPrecios] = useState(null)
 
   useEffect(() => {
     let vivo = true
@@ -253,8 +323,11 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
       if (d.portadaIa && !tocoModo.current) setModo('ia')
     }).catch(() => {})
     portadasApi.ejemplos(clientId).then(d => { if (vivo) setEjemplos(d.ejemplos || []) }).catch(() => {})
+    creditosApi.precios(clientId).then(d => { if (vivo) setPrecios(d) }).catch(() => {})
     return () => { vivo = false }
   }, [clientId])
+  // Tras cobrar, el saldo que devuelve la API (para enseñar lo que queda).
+  const apuntaSaldo = (d) => { if (d?.saldo != null) setPrecios(p => (p ? { ...p, saldo: Number(d.saldo) } : p)) }
 
   // La portada que tiene ahora el reel, por si se prefiere de fondo (o si el
   // vídeo no se puede descargar).
@@ -279,29 +352,34 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
     return () => { vivo = false }
   }, [clientId, reel, traerActual])
   useEffect(() => () => { if (videoUrl) URL.revokeObjectURL(videoUrl) }, [videoUrl])
+  useEffect(() => () => { if (miVideo?.url) URL.revokeObjectURL(miVideo.url) }, [miVideo])
 
+  // Al cambiar de pestaña de vídeo, el selector se vuelve a montar y saca solo
+  // el fotograma del instante que tenía.
   function elegirFuente(f) {
     setFuente(f)
     if (f !== 'ia') setFondoEsIa(false)
     if (f === 'actual') traerActual()
-    if (f === 'video') capturar()
   }
-
-  // Cada vez que el vídeo termina de saltar a un instante, ese fotograma pasa
-  // a ser el fondo (copiado a un canvas: el <video> sigue moviéndose).
-  const capturar = useCallback(() => {
-    const v = video.current
-    if (!v || !v.videoWidth) return
-    const c = document.createElement('canvas')
-    c.width = v.videoWidth; c.height = v.videoHeight
-    c.getContext('2d').drawImage(v, 0, 0)
-    setImagen(c)
-  }, [])
+  const ponTiempo = (cual) => (t) => setTiempos(ts => (ts[cual] === t ? ts : { ...ts, [cual]: t }))
 
   function subirFoto(e) {
     const f = e.target.files?.[0]
     if (!f) return
     cargaImagen(URL.createObjectURL(f)).then(setImagen).catch(err => setError(err.message))
+  }
+
+  // Un vídeo tuyo, del ordenador o del móvil: se abre aquí y no sale de tu
+  // navegador; solo el fotograma que elijas va a la IA (como el del reel).
+  function abrirVideo(e) {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    if (f.type && !f.type.startsWith('video/')) { setError('Eso no es un vídeo. Elige un MP4 o MOV.'); return }
+    setError('')
+    setTiempos(ts => ({ ...ts, mivideo: null }))
+    setMiVideo({ url: URL.createObjectURL(f), nombre: f.name || 'tu vídeo' })
+    setFuente('mivideo')
   }
 
   async function proponer() {
@@ -326,6 +404,7 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
     setGenerandoIa(true); setError('')
     try {
       const d = await portadasApi.fondoIa(clientId, p)
+      apuntaSaldo(d)
       const img = await cargaImagen(d.imagen)
       setImagen(img); setEncuadre(0.5); setZoom(1); setFondoEsIa(true)
     } catch (e) { setError(e.message) }
@@ -341,6 +420,7 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
       const d = await portadasApi.portadaIa(clientId, {
         fotograma: fotogramaParaIa(imagen), titulo: texto.trim(), estilo: estiloIa, detalle: detalle.trim(), mediaId: reel?.media_id,
       })
+      apuntaSaldo(d)
       const img = await cargaImagen(d.imagen)
       setVersiones(v => { const n = [...v, { img, estilo: estiloIa }]; setElegida(n.length - 1); return n })
     } catch (e) { setError(e.message) }
@@ -442,7 +522,7 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
         <div>
           <button type="button" className="ag-volver" onClick={onVolver}><ArrowLeft size={14} strokeWidth={2.2} /> Portadas</button>
           <h1>Crear portada</h1>
-          <p>{reel ? String(reel.caption || '').split('\n')[0].slice(0, 140) : 'Desde una foto tuya'}</p>
+          <p>{reel ? String(reel.caption || '').split('\n')[0].slice(0, 140) : inicio === 'mivideo' ? 'Desde un vídeo tuyo' : 'Desde una foto tuya'}</p>
         </div>
       </header>
 
@@ -477,27 +557,28 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
             <div className="por-pestanas" role="tablist">
               {reel && <button type="button" role="tab" aria-selected={fuente === 'video'} className={fuente === 'video' ? 'on' : ''} onClick={() => elegirFuente('video')}><Film size={14} /> Fotograma</button>}
               {reel && <button type="button" role="tab" aria-selected={fuente === 'actual'} className={fuente === 'actual' ? 'on' : ''} onClick={() => elegirFuente('actual')}><ImagenIcono size={14} /> Portada actual</button>}
+              <button type="button" role="tab" aria-selected={fuente === 'mivideo'} className={fuente === 'mivideo' ? 'on' : ''} onClick={() => elegirFuente('mivideo')}><Film size={14} /> Tu vídeo</button>
               <button type="button" role="tab" aria-selected={fuente === 'foto'} className={fuente === 'foto' ? 'on' : ''} onClick={() => elegirFuente('foto')}><Upload size={14} /> Foto</button>
               {modo === 'serie' && <button type="button" role="tab" aria-selected={fuente === 'ia'} className={fuente === 'ia' ? 'on' : ''} onClick={() => elegirFuente('ia')}><Sparkles size={14} /> Fondo IA</button>}
             </div>
             {cargando && <p className="por-ayuda"><Loader2 size={14} className="por-gira" /> {cargando}</p>}
             {fuente === 'video' && videoUrl && (
-              <div className="por-video">
-                <video
-                  ref={video} src={videoUrl} muted playsInline preload="auto"
-                  onLoadedMetadata={e => {
-                    const d = e.currentTarget.duration || 0
-                    const t = Math.min(1, d / 2)
-                    setDuracion(d); setTiempo(t); e.currentTarget.currentTime = t
-                  }}
-                  onSeeked={capturar}
-                />
-                <label>Instante: {tiempo.toFixed(1)} s
-                  <input type="range" min="0" max={Math.max(0.1, duracion)} step="0.1" value={tiempo}
-                    onChange={e => { const t = Number(e.target.value); setTiempo(t); if (video.current) video.current.currentTime = t }} />
-                </label>
-                <small className="por-ayuda">Busca uno con los ojos abiertos, nítido y sin el subtítulo quemado.</small>
-              </div>
+              <Fotogramas src={videoUrl} tiempo={tiempos.video} onTiempo={ponTiempo('video')} onCaptura={setImagen} />
+            )}
+            {fuente === 'mivideo' && (
+              <>
+                <div className="por-video-propio">
+                  <label className="por-subir"><Film size={14} /> {miVideo ? 'Cambiar de vídeo' : 'Elegir vídeo'} <input type="file" accept="video/*" onChange={abrirVideo} /></label>
+                  {miVideo && <small className="por-ayuda">{miVideo.nombre}</small>}
+                  <small className="por-ayuda">Del ordenador o del móvil. El vídeo no se sube: el fotograma se saca aquí, en tu navegador.</small>
+                </div>
+                {miVideo && (
+                  <Fotogramas
+                    key={miVideo.url} src={miVideo.url} tiempo={tiempos.mivideo} onTiempo={ponTiempo('mivideo')} onCaptura={setImagen}
+                    onFallo={() => setError('Tu navegador no puede abrir este vídeo. Prueba con un MP4, o haz una captura y súbela como foto.')}
+                  />
+                )}
+              </>
             )}
             {fuente === 'foto' && <label className="por-subir"><Upload size={14} /> Elegir foto <input type="file" accept="image/*" onChange={subirFoto} /></label>}
             {modo === 'serie' && fuente === 'ia' && (
@@ -522,7 +603,7 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
                     onChange={e => setPromptIa(e.target.value)}
                   />
                   <button type="button" className="ag-btn primario sm" onClick={generarFondoIa} disabled={generandoIa || !promptIa.trim()}>
-                    {generandoIa ? <><Loader2 size={13} className="por-gira" /> Generando el fondo…</> : <><Sparkles size={13} /> Generar fondo</>}
+                    {generandoIa ? <><Loader2 size={13} className="por-gira" /> Generando el fondo…</> : <><Sparkles size={13} /> Generar fondo<span className="por-precio">{etiquetaPrecio(precios)}</span></>}
                   </button>
                   <small className="por-ayuda">El titular lo pone HELM encima, nítido. El fondo es IA: márcalo como tal al publicar.</small>
                 </div>
@@ -538,7 +619,7 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
             <section>
               <h3>2 · Estilo</h3>
               <EstilosIa
-                elegido={estiloIa} onElegir={setEstiloIa} ejemplos={ejemplos}
+                elegido={estiloIa} onElegir={setEstiloIa} ejemplos={ejemplos} marca={marca}
                 onSubir={subirEjemplo} onBorrar={borrarEjemplo}
               />
             </section>
@@ -606,8 +687,13 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
               <button type="button" className="ag-btn primario" onClick={generarPortada} disabled={generandoPortada || !hayPortadaIa || !imagen || !texto.trim() || texto.trim().length > MAX_TITULO_IA}>
                 {generandoPortada
                   ? <><Loader2 size={14} className="por-gira" /> Generando (unos 30 s)…</>
-                  : <><Sparkles size={14} /> {versiones.length ? 'Otra versión' : 'Generar portada'}</>}
+                  : <><Sparkles size={14} /> {versiones.length ? 'Otra versión' : 'Generar portada'}<span className="por-precio">{etiquetaPrecio(precios)}</span></>}
               </button>
+              {precios?.paga && precios.saldo != null && (
+                <small className="por-ayuda por-saldo">
+                  Cada imagen se cobra solo si sale bien. Te quedan {Math.max(0, Math.floor(aCreditos(precios.saldo))).toLocaleString('es-ES')} créditos.
+                </small>
+              )}
               {versiones.length > 0 && (
                 <div className="por-versiones" aria-label="Versiones generadas">
                   {versiones.map((v, i) => (
@@ -646,7 +732,7 @@ function Taller({ clientId, reel, marca, vecinos, onVolver }) {
 // Los estilos de la portada con IA: los de serie (con su portada de ejemplo y
 // de quién sale) y los ejemplos que el perfil sube a mano, que quedan
 // guardados como un estilo más.
-function EstilosIa({ elegido, onElegir, ejemplos, onSubir, onBorrar }) {
+function EstilosIa({ elegido, onElegir, ejemplos, marca, onSubir, onBorrar }) {
   const [archivo, setArchivo] = useState(null)
   const [nombre, setNombre] = useState('')
   const [subiendo, setSubiendo] = useState(false)
@@ -661,17 +747,25 @@ function EstilosIa({ elegido, onElegir, ejemplos, onSubir, onBorrar }) {
   return (
     <>
       <ul className="por-estilos">
-        {ESTILOS_IA.map(e => (
-          <li key={e.clave}>
-            <button type="button" className={'por-estilo' + (elegido === e.clave ? ' on' : '')} onClick={() => onElegir(e.clave)} title={e.desc}>
-              {e.clave === 'libre'
-                ? <span className="por-estilo-libre"><Sparkles size={22} /></span>
-                : <img src={ejemploDe(e)} alt="" loading="lazy" />}
-              <b>{e.nombre}</b>
-              <small>{e.origen ? `@${e.origen.perfil}` : e.clave === 'libre' ? 'Lo describes tú' : 'Estilo de la casa'}</small>
-            </button>
-          </li>
-        ))}
+        {ESTILOS_IA.map(e => {
+          // La imagen de ejemplo si la tiene; si no, la vista previa con CSS.
+          const img = ejemploDe(e)
+          return (
+            <li key={e.clave}>
+              <button type="button" className={'por-estilo' + (elegido === e.clave ? ' on' : '')} onClick={() => onElegir(e.clave)} title={e.desc}>
+                {e.clave === 'libre'
+                  ? <span className="por-estilo-libre"><Sparkles size={22} /></span>
+                  : img ? <img src={img} alt="" loading="lazy" /> : <VistaEstilo estilo={e} marca={marca} />}
+                <b>{e.nombre}</b>
+                <small>
+                  {e.origen ? `@${e.origen.perfil}`
+                    : e.para?.length ? `Como ${e.para.slice(0, 2).map(p => p.nombre).join(' o ')}`
+                      : e.clave === 'libre' ? 'Lo describes tú' : 'Estilo de la casa'}
+                </small>
+              </button>
+            </li>
+          )
+        })}
         {ejemplos.map(e => (
           <li key={e.id}>
             <button type="button" className={'por-estilo' + (elegido === `ej:${e.id}` ? ' on' : '')} onClick={() => onElegir(`ej:${e.id}`)} title="Tu ejemplo">
@@ -707,7 +801,17 @@ function EstilosIa({ elegido, onElegir, ejemplos, onSubir, onBorrar }) {
         return e ? (
           <p className="por-ayuda">
             {e.desc}
+            {e.consejo && <> {e.consejo}</>}
             {e.origen && <> · <a href={e.origen.reel} target="_blank" rel="noopener noreferrer">ver el reel de @{e.origen.perfil} <ExternalLink size={11} /></a></>}
+            {e.para?.length > 0 && (
+              <small className="por-estilo-para">
+                Lo usan, como referencia:{' '}
+                {e.para.map((p, i) => (
+                  <span key={p.enlace}>{i ? ', ' : ''}<a href={p.enlace} target="_blank" rel="noopener noreferrer">{p.nombre}</a></span>
+                ))}
+                {e.aproximado ? ' (aproximado: sacado de sus perfiles públicos)' : ''}. Solo se copia cómo montan la portada: nunca su cara, su logo ni su marca.
+              </small>
+            )}
           </p>
         ) : null
       })()}
