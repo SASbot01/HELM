@@ -26,7 +26,7 @@ Hay dependencias declaradas que no se usan: `@sentry/node`, `pino`, `@tauri-apps
 
 Cinco servicios de systemd en la misma máquina:
 
-- `helm-web`: sirve la interfaz (`vite preview`, puerto 5173). También hace de pasarela hacia la base de datos en la ruta `/sb`.
+- `helm-web`: sirve la interfaz (`vite preview`, puerto 5173). En la ruta `/sb` deja ver archivos públicos del almacén: solo GET/HEAD de `/storage/v1/object/public/…`, ver `scripts/sb-proxy.mjs`, sin escrituras ni Realtime. El panel habla con la base por `/api/db` (`api/_lib/pasarela.js`), con su sesión.
 - `helm-api`: las funciones de `api/` (puerto 5182, solo local).
 - `helm-apex`: proxy del dominio principal hacia el 5173.
 - `helm-agents`: el worker (descargas, transcripción, etiquetado, equipo de agentes).

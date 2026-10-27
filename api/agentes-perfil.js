@@ -7,11 +7,12 @@
 //
 //   GET ?action=creadores &clientId=          → los creadores del perfil
 //   GET ?action=ficha     &clientId=&slug=    → uno, con reels, guiones y memoria
-//   GET ?action=drive     &clientId=          → calendario de guiones y vídeos de Entrada
+//   GET ?action=fases     &clientId=          → la fase de cada guion, según su carpeta de Drive
+//   POST ?action=grabar   &clientId=          → marca un guion como grabado (o lo desmarca)
 import { supabase } from './lib/supabase.js'
 import { applyCors } from './_lib/auth.js'
 import { requireProfileAccess, agenciaDe } from './_lib/access.js'
-import { resumenDrive, enEntrada } from './_lib/ingesta.js'
+import { resumenDrive } from './_lib/ingesta.js'
 
 async function creadoresDe(clientId) {
   const { data, error } = await supabase.from('agent_identity_clients')
@@ -57,9 +58,6 @@ export default async function handler(req, res) {
       return res.status(200).json(await fichaDe(ident.id, (_, a) => Boolean(agencia) && a === agencia))
     }
 
-    // El calendario de guiones y lo que ha pasado por su Entrada de Drive.
-    if (accion === 'drive') return res.status(200).json(await resumenDrive(clientId))
-
     // Solo las fases de cada guion (dónde está su carpeta en Drive), para que el
     // roadmap pinte "Sin editar / Editado / Publicado" sin traerse todo el Drive.
     if (accion === 'fases') {
@@ -70,10 +68,9 @@ export default async function handler(req, res) {
       return res.status(200).json({ conectado: true, fases, carpeta: r.carpeta })
     }
 
-    // Marcar un guion como grabado y disparar una pasada de Entrada: el worker
-    // detecta el vídeo, lo archiva en la pieza del guion y lo deja enlazado. Así
-    // nada se queda suelto. Si Drive no está conectado, el guion queda grabado
-    // igualmente y el vídeo se archivará cuando lo esté.
+    // Marcar un guion como grabado (o desmarcarlo). Solo eso: la Entrada de
+    // Drive ya no se vigila sola, y el vídeo lo ordena Claude por el conector
+    // (ordenar_video). Si el guion ya tiene carpeta, se devuelve su enlace.
     if (accion === 'grabar') {
       const guionId = String(req.body?.guionId || '')
       if (!guionId) return res.status(400).json({ error: 'Falta el guion' })
@@ -89,22 +86,8 @@ export default async function handler(req, res) {
       const { error: e2 } = await supabase.from('helm_content_calendar').update(patch).eq('id', g.id)
       if (e2) throw e2
 
-      let detectando = 0
-      if (!desmarcar) {
-        try {
-          for (const v of await enEntrada(clientId)) {
-            const { data: ya } = await supabase.from('agent_drive_videos').select('drive_id').eq('drive_id', v.id).maybeSingle()
-            if (ya) continue
-            await supabase.from('agent_drive_videos').insert({ drive_id: v.id, client_id: clientId, nombre: v.name })
-            await supabase.from('agent_jobs').upsert(
-              { tipo: 'drive-ingesta', payload: { clientId, driveId: v.id }, clave: `drive:${v.id}`, estado: 'pendiente', correr_tras: new Date().toISOString() },
-              { onConflict: 'clave', ignoreDuplicates: true })
-            detectando++
-          }
-        } catch { /* Drive puede no estar conectado: el guion queda grabado igual */ }
-      }
       const driveUrl = g.drive_carpeta_id ? `https://drive.google.com/drive/folders/${g.drive_carpeta_id}` : null
-      return res.status(200).json({ grabado: !desmarcar, driveUrl, detectando })
+      return res.status(200).json({ grabado: !desmarcar, driveUrl })
     }
 
     return res.status(400).json({ error: `Acción desconocida: ${accion || '(ninguna)'}` })
@@ -125,7 +108,7 @@ export async function fichaDe(identityId, visible = () => true) {
     supabase.from('agent_reels')
       .select('id, url, caption, metricas, etiquetas, frases, transcripcion, estado, error, publicado_en, created_at')
       .eq('identity_id', identityId).limit(500),
-    supabase.from('agent_memory').select('id, contenido, updated_at')
+    supabase.from('agent_memory').select('id, contenido, updated_at, client_id, clients(agencia_id)')
       .eq('identity_id', identityId).order('updated_at', { ascending: false }),
     supabase.from('agent_identity_clients').select('client_id, clients(slug, name, agencia_id)').eq('identity_id', identityId),
   ])
@@ -135,7 +118,10 @@ export async function fichaDe(identityId, visible = () => true) {
   return {
     identidad: ident.data,
     reels: (reels.data || []).sort((a, b) => vistas(b) - vistas(a)),
-    memoria: memoria.data || [],
+    // Las notas sin perfil son de la plataforma; las que escribió una agencia
+    // por el MCP llevan su perfil y solo las ve esa agencia.
+    memoria: (memoria.data || []).filter(m => !m.client_id || visible(m.client_id, m.clients?.agencia_id))
+      .map(({ id, contenido, updated_at }) => ({ id, contenido, updated_at })),
     perfiles: (perfiles.data || []).filter(p => p.clients && visible(p.client_id, p.clients.agencia_id))
       .map(({ clients: { slug, name } }) => ({ slug, name })),
   }

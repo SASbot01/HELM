@@ -1,19 +1,16 @@
-// AI para todo — las piezas que son solo suyas: el fondo ASCII de la bio, el
-// bloque de HELM, las dos guías en PDF (los Mods y los no negociables) y el
-// cuerpo de un post de skills. El resto lo pinta el motor de las comunidades
+// AI para todo — las piezas que son solo suyas: el fondo ASCII de la bio, las
+// dos guías en PDF (los Mods y los no negociables) y el cuerpo de un post de
+// skills. El resto lo pinta el motor de las comunidades
 // (src/pages/comunidad/Comunidad.jsx) con la configuración de ./config.jsx.
 import { Link } from 'react-router-dom'
 import {
-  ArrowRight, Check, Download, ExternalLink, FileText, Github, Workflow, AlertTriangle,
+  ArrowRight, Check, Download, ExternalLink, FileText, Github, AlertTriangle,
 } from 'lucide-react'
 import { track } from '../inicio/socio/track.js'
 import { Rico, Bloque, IndiceCapitulo, Codigo, Prompt } from '../comunidad/bloques.jsx'
 import mascara from '../inicio/mascara.txt?raw'
 import aiArte from '../inicio/ai.txt?raw'
 import { NN_RUTA } from './contenido.js'
-// HELM: su web (qué es y cómo funciona) y el registro.
-const HELM_WEB = 'https://helm.s4sf.net/web'
-const HELM_REGISTRO = 'https://helm.s4sf.net/registro'
 import { NN_PDF, NN_PORTADA_3D, NN_INTRO, NN_PUNTOS, NN_ORDEN } from './noNegociables.js'
 import {
   MODOS_RUTA, MODOS_PDF, MODOS_PORTADA_3D, MODOS_INTRO, MODOS_INDICE, MODOS_BLOQUES, MODOS_CLAVES,
@@ -32,29 +29,6 @@ export function Fondo() {
       </pre>
       <div className="aip-lineas" />
     </div>
-  )
-}
-
-// HELM, el sistema con el que operamos: crear cuenta o verlo. Sin muro: es
-// gratis registrarse, y es justo lo que queremos que haga quien lee.
-export function BloqueHelm({ donde }) {
-  return (
-    <aside className="aip-helm">
-      <p className="aip-kicker"><Workflow size={13} /> HELM · el sistema de Silvestre AI</p>
-      <h3>Opera a tus clientes con HELM</h3>
-      <p>
-        Redes, contenido y ventas de cada cliente en un solo panel, con agentes que trabajan solos y conectado a
-        Claude. Sin suscripción: pagas por uso, con créditos de regalo al empezar.
-      </p>
-      <div className="aip-helm-btns">
-        <a className="aip-btn pequeno" href={HELM_WEB} target="_blank" rel="noopener noreferrer" onClick={() => track('clic_cta', { donde: `aip-helm-web-${donde}` })}>
-          Ver HELM <ExternalLink size={14} />
-        </a>
-        <a className="aip-btn sec pequeno" href={HELM_REGISTRO} target="_blank" rel="noopener noreferrer" onClick={() => track('clic_cta', { donde: `aip-helm-registro-${donde}` })}>
-          Crea tu cuenta <ArrowRight size={14} />
-        </a>
-      </div>
-    </aside>
   )
 }
 
@@ -240,7 +214,7 @@ export function CuerpoPost({ p }) {
           <p className="aip-skill-n"><span>{s.n}</span> {s.clave}</p>
           <h2>{s.titular}</h2>
           <p className="aip-historia">{s.historia}</p>
-          <h3>Qué puedes hacer</h3>
+          <h3>{s.puedesTitulo || 'Qué puedes hacer'}</h3>
           <ul className="aip-puedes">{s.puedes.map(x => <li key={x}>{x}</li>)}</ul>
           {/* Cuando la herramienta ya tiene un hilo propio, el enlace a ese hilo. */}
           {s.hilo && (
@@ -255,6 +229,18 @@ export function CuerpoPost({ p }) {
                 <small>{s.oficial === false ? `De la comunidad · ${s.autor}` : 'Skill oficial de Anthropic'}{s.licencia ? ` · ${s.licencia}` : ''}</small>
               </div>
               <a className="aip-btn sec pequeno" href={s.github} target="_blank" rel="noopener noreferrer">Ver en GitHub <ArrowRight size={14} /></a>
+            </div>
+          )}
+
+          {/* Para lo que no es un repo (una API, un servicio): su documentación oficial. */}
+          {s.web && (
+            <div className="aip-repo">
+              <ExternalLink size={16} />
+              <div>
+                <code>{s.web.nombre}</code>
+                {s.web.detalle && <small>{s.web.detalle}</small>}
+              </div>
+              <a className="aip-btn sec pequeno" href={s.web.url} target="_blank" rel="noopener noreferrer">{s.web.boton || 'Abrir'} <ArrowRight size={14} /></a>
             </div>
           )}
 
@@ -284,7 +270,7 @@ export function CuerpoPost({ p }) {
       <section className="aip-card aip-resumen">
         <h2>Resumen rápido</h2>
         <table>
-          <thead><tr><th>#</th><th>{p.tipo === 'mcp' ? 'Qué' : p.tipo === 'repo' ? 'Apartado' : 'Skill'}</th><th>Para qué</th></tr></thead>
+          <thead><tr><th>#</th><th>{p.tipo === 'mcp' ? 'Qué' : p.tipo === 'repo' || p.tipo === 'guia' ? 'Apartado' : 'Skill'}</th><th>Para qué</th></tr></thead>
           <tbody>
             {p.skills.map(s => <tr key={s.clave}><td>{s.n}</td><td>{s.github ? <a href={s.github} target="_blank" rel="noopener noreferrer">{s.nombre}</a> : s.nombre}</td><td>{s.corto}</td></tr>)}
           </tbody>

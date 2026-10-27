@@ -467,7 +467,7 @@
 .helm .ag-tipo { border-color: var(--border-2); }
 
 /* ── El día de hoy en los calendarios: filo, no contorno ────────────────── */
-.helm-cal-dia.hoy, .helm .ag-cal-dia.hoy {
+.helm-cal-dia.hoy {
   border: 1px solid transparent;
   background: var(--superficie-2) padding-box,
     linear-gradient(140deg, var(--oro) 0%, rgba(255, 255, 255, 0.12) 45%, rgba(255, 255, 255, 0.05) 100%) border-box;

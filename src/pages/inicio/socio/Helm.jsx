@@ -19,7 +19,7 @@ export const DEPARTAMENTOS = [
       { i: Compass, id: 'estratega', rol: 'Estratega', d: 'Escribe la Biblia de tu marca: tu tono, tu oferta y tu cliente ideal. Es lo primero que lee el resto del equipo.' },
       { i: Radar, id: 'investigador', rol: 'Investigador', d: 'Estudia los reels que más venden en tu nicho, frase a frase, y te trae qué ganchos y qué temas funcionan.' },
       { i: PenLine, id: 'guionista', rol: 'Guionista', d: 'Te deja los guiones escritos con tu voz y puestos en tu calendario. Tú solo grabas.' },
-      { i: Clapperboard, id: 'productor', rol: 'Productor', d: 'Recoge lo que grabas, lo ordena por fases —sin editar, editado, publicado— y te dice qué falta.' },
+      { i: Clapperboard, id: 'productor', rol: 'Productor', d: 'Sigue cada pieza del guion a publicada —por grabar, sin editar, editada— y te avisa de lo que se atasca y de lo que toca hoy.' },
     ],
   },
   {

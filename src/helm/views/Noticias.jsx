@@ -1,10 +1,11 @@
 // HELM — Noticias: las tres noticias del día del perfil (IA y ciberseguridad,
 // o los temas propios del perfil: ver api/_lib/noticias-perfiles.js).
 //
-// Las deja cada mañana, antes de las 6:00, el agente de noticias
-// (api/_lib/noticias.js). Arriba las de hoy, enteras; debajo las de los días
-// anteriores, plegadas. El botón pide una pasada ahora, por si ha salido algo
-// gordo a media tarde.
+// Las deja el agente de noticias (api/_lib/noticias.js) cuando se pulsa
+// «Buscar ahora». Solo los perfiles que no van a demanda (brevesADemanda en
+// api/_lib/noticias-perfiles.js; hoy, Detrás de Cámara, que alimenta su web)
+// las reciben además cada mañana antes de las 6:00. Arriba las de hoy,
+// enteras; debajo las de los días anteriores, plegadas.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowUpRight, RotateCcw } from 'lucide-react'
 import { noticiasApi } from '../lib'
@@ -92,7 +93,7 @@ export default function Noticias({ clientId }) {
         <Empty>
           {datos.buscando
             ? 'El agente está leyendo las fuentes. Tarda alrededor de un minuto.'
-            : 'Todavía no hay noticias de hoy. Llegan cada mañana antes de las 6:00; si no quieres esperar, pulsa «Buscar ahora».'}
+            : 'Todavía no hay noticias de hoy. Pulsa «Buscar ahora» y el agente lee las fuentes y te deja las tres que más te importan.'}
         </Empty>
       )}
 

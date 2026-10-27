@@ -4,22 +4,29 @@
 // administración de Postgres (/pg, que ejecuta SQL), auth, GraphQL… Desde la
 // reforma de agencias (migraciones 097 y 098) el navegador ya no habla con las
 // tablas por aquí: el panel va por /api/db con su sesión (api/_lib/pasarela.js)
-// y las páginas públicas por endpoints del servidor. Así que solo quedan dos
-// cosas, y ninguna necesita clave:
+// y las páginas públicas por endpoints del servidor. Así que solo queda una
+// cosa, de lectura y sin clave:
 //
-//   · GET /storage/v1/object/public/…        ver un archivo por su enlace
+//   · GET/HEAD /storage/v1/object/public/…   ver un archivo por su enlace
 //     (los enlaces viejos guardados en la base apuntan aquí)
-//   · PUT/POST /storage/v1/object/upload/sign/…?token=…
-//     subir a una URL que ha firmado el servidor para una ruta concreta (el
-//     portal de documentos, api/documentos.js); la autoriza el token firmado
+//
+// Antes pasaban también las subidas a una URL firmada (PUT/POST
+// /storage/v1/object/upload/sign/…?token=), las del portal de documentos. Ese
+// token lo firma storage con su secreto JWT, y en esta Supabase es el de
+// ejemplo del CLI, que es público: cualquiera podía fabricarse uno para
+// cualquier ruta del bucket y sobrescribir facturas o colgar lo que quisiera
+// bajo nuestro dominio. Ahora el portal le manda el fichero a
+// api/documentos.js y lo escribe el servidor. Aquí no se sube nada.
 //
 // Si alguien manda además una clave, tiene que ser la pública: la de servicio
 // se salta todas las reglas y nunca viaja por aquí.
 //
-// Lo usa vite.config.js, igual en desarrollo que en el build publicado.
+// Lo usa vite.config.js, igual en desarrollo que en el build publicado. La CSP
+// con que salen estos archivos la pone scripts/cabeceras.mjs.
+import { SALTO } from '../api/_lib/almacen.js'
 
 const PUBLICO = /^\/sb\/storage\/v1\/object\/public\/[^?]+(\?|$)/
-const FIRMADA = /^\/sb\/storage\/v1\/object\/upload\/sign\/[^?]+\?(.*&)?token=/
+const LECTURA = ['GET', 'HEAD', 'OPTIONS']
 
 function rolDe(token) {
   try {
@@ -30,10 +37,10 @@ function rolDe(token) {
 /** Por qué no pasa una petición, o '' si pasa. */
 export function motivoBloqueo({ method = 'GET', url = '', headers = {} }) {
   const m = String(method).toUpperCase()
-  const vale = PUBLICO.test(url) ? ['GET', 'HEAD', 'OPTIONS'].includes(m)
-    : FIRMADA.test(url) ? ['PUT', 'POST', 'OPTIONS'].includes(m)
-      : false
-  if (!vale) return 'ruta'
+  const ruta = String(url).split('?')[0]
+  // SALTO: un `..` (o codificado), una barra codificada o invertida. La misma
+  // regla que en la pasarela del panel (api/_lib/almacen.js).
+  if (!PUBLICO.test(url) || SALTO.test(ruta) || !LECTURA.includes(m)) return 'ruta'
   const claves = [
     headers.apikey,
     /^Bearer\s+(.+)$/i.exec(headers.authorization || '')?.[1],

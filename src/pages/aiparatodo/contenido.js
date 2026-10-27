@@ -5,6 +5,8 @@
 //   · Guía: cada capítulo es un archivo de ./guia/ (NN-slug.js). Mientras un
 //     capítulo del índice no tenga archivo, se enseña como «pronto».
 //   · No negociables: la guía en PDF, en ./noNegociables.js.
+//   · Webs de referencia: el panel de webs premiadas con su prompt, en
+//     ./webs.js (datos) y ./Webs.jsx (cómo se pinta).
 //   · News: no está aquí. Es el diario que escribe la redacción automática de
 //     HELM (dos artículos al día) más las breves del agente de noticias, y se
 //     piden a /api/aiparatodo.
@@ -15,19 +17,29 @@
 // ~/.claude/skills. Comprobado contra los repos el 29/09/2026.
 
 import { MODOS_HILO } from './guiaModos.js'
+import { SECTORES, WEBS_HILOS, PREMIADAS, ELEGIDAS } from './webs.js'
 
 export const FUNDADOR = {
   nombre: 'Alex Silvestre',
   rol: 'Fundador de AI para todo',
   foto: '/inicio/alex.jpg',
-  instagram: 'https://www.instagram.com/silvesttre.ia',
-  handle: '@silvesttre.ia',
+  instagram: 'https://www.instagram.com/silvesttre.ai',
+  handle: '@silvesttre.ai',
   youtube: 'https://www.youtube.com/@silvesttre-ai',
 }
 
 // Las secciones. Todas se recorren sin dejar nada: se ven los temas y los
-// hilos, como un foro. Lo que pide el pago es LEER un hilo.
+// hilos, como un foro. Lo que pide los datos (gratis) es LEER un hilo y, en
+// las webs, copiar el prompt o entrar en la web.
+//
+// La de Comunidad (el foro de dudas) se quitó el 20-10-2026: no tenía hilos.
 export const SECCIONES = [
+  {
+    key: 'webs', titulo: 'Webs de referencia', corto: 'Webs',
+    desc: `${PREMIADAS} webs premiadas y ${ELEGIDAS.length} elegidas por Alex, con su portada a la vista y un prompt para que tu IA te haga la tuya con su estilo.`,
+    temas: SECTORES,
+    pie: (n) => `${n} webs · cada una con su prompt`,
+  },
   {
     key: 'skills', titulo: 'Skills y repos', desc: 'Habilidades que se le instalan a Claude para que haga un trabajo concreto, y repos de código abierto que amplían lo que pueden hacer tus agentes.',
     temas: [
@@ -42,21 +54,13 @@ export const SECCIONES = [
     ],
   },
   {
-    key: 'news', titulo: 'News', desc: 'El diario de IA, tecnología y ciberseguridad: tres piezas al día, investigadas y contrastadas, y las breves de cada mañana.',
+    key: 'news', titulo: 'News', desc: 'El diario de IA, tecnología y ciberseguridad: tres piezas al día, investigadas y contrastadas, y breves cuando las haya.',
     // Los temas del diario (aip_articulos.tema). Las breves (helm_noticias) usan
     // 'ia' y 'ciberseguridad', que también están aquí.
     temas: [
       { key: 'ia', nombre: 'IA', desc: 'Modelos, herramientas y lo que cambia cómo trabajas' },
       { key: 'tecnologia', nombre: 'Tecnología', desc: 'Lo nuevo en tecnología que de verdad importa' },
       { key: 'ciberseguridad', nombre: 'Ciberseguridad', desc: 'Fallos, estafas y cómo protegerte' },
-    ],
-  },
-  {
-    key: 'comunidad', titulo: 'Comunidad', desc: 'Dudas, lo que has montado y lo que te ha funcionado. Entre todos.',
-    temas: [
-      { key: 'presentate', nombre: 'Preséntate', desc: 'Quién eres y qué quieres montar' },
-      { key: 'dudas', nombre: 'Dudas', desc: 'Pregunta lo que sea' },
-      { key: 'montado', nombre: 'Lo que he montado', desc: 'Enseña tus sistemas y resultados' },
     ],
   },
   {
@@ -230,5 +234,5 @@ export const NN_RUTA = `/aiparatodo/${NN_HILO.seccion}/${NN_HILO.tema}/${NN_HILO
 
 // Los hilos de una sección (y de un tema). News no está aquí: viene de la API.
 // Los capítulos solo se listan si están en CAPITULOS_PUBLICADOS.
-export const hilosDe = (seccion, tema) => [MODOS_HILO, ...POSTS, ...CAPITULOS.filter(capituloVisible), NN_HILO]
+export const hilosDe = (seccion, tema) => [MODOS_HILO, ...POSTS, ...CAPITULOS.filter(capituloVisible), NN_HILO, ...WEBS_HILOS]
   .filter(h => h.seccion === seccion && (!tema || h.tema === tema))

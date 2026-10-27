@@ -5,12 +5,18 @@
 // "Comisión · Juan · 900 €" en una pregunta contestable: cuánto le he pagado a
 // Juan este mes y por qué clientes. Antes todo eso vivía suelto en la
 // descripción y no se podía filtrar ni sumar.
+//
+// Si el perfil se lleva una parte de lo que cobra otro (Silvestre AI: el 35 %
+// de Detrás de Cámara y el 50 % de web-seller), cada pago de cada cliente entra
+// como un ingreso más, en su fecha (src/helm/participaciones.js). No se guarda:
+// sale de las ventas reales del otro perfil, así que no lleva papelera.
 import { useEffect, useState, useMemo } from 'react'
 import { Plus, Trash2, Users } from 'lucide-react'
 import {
   fetchRows, fetchRowsOrError, insertRow, deleteRow,
-  money, fmtDate, todayISO, activeSales,
+  money, fmtDate, todayISO, activeSales, isSaleCancelled, participacionesApi,
 } from '../lib'
+import { partesDe, movimientosDe } from '../participaciones'
 import { Panel, Empty, Modal, Field, Input, Select, Kpi, MoneyInput, FormNote } from '../ui'
 import { rolesDelProducto, roleLabel } from '../equipo/roles'
 import { productoActual } from '../producto'
@@ -48,6 +54,7 @@ const EMPTY = {
 
 export default function Finanzas({ clientId }) {
   const [rows, setRows] = useState(null)
+  const [deOtros, setDeOtros] = useState([])   // los ingresos de participaciones
   const [products, setProducts] = useState(null)
   const [sales, setSales] = useState(null)
   const [people, setPeople] = useState([])
@@ -73,7 +80,14 @@ export default function Finanzas({ clientId }) {
     load(); loadCatalog()
     fetchRowsOrError('helm_team', clientId, { order: 'created_at', asc: true }).then(({ rows: r }) => setPeople(r))
     fetchRows('crm_contacts', clientId, { limit: 1000 }).then(setContacts)
+    participacionesApi.de(clientId)
+      .then(p => setDeOtros(movimientosDe(partesDe(p?.participaciones, { esCancelada: isSaleCancelled }).cobros)))
+      .catch(() => setDeOtros([]))
   }, [clientId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Los movimientos guardados y los de participaciones, juntos y por fecha.
+  const todos = useMemo(() => (rows == null ? null : [...rows, ...deOtros]
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))), [rows, deOtros])
 
   // Qué se está vendiendo de verdad: catálogo activo cruzado con las ventas.
   const catalogo = useMemo(() => {
@@ -106,8 +120,8 @@ export default function Finanzas({ clientId }) {
 
   // Meses con movimientos, para el filtro. Del más reciente al más antiguo.
   const meses = useMemo(
-    () => [...new Set((rows || []).map(r => mesDe(r.date)).filter(Boolean))].sort().reverse(),
-    [rows],
+    () => [...new Set((todos || []).map(r => mesDe(r.date)).filter(Boolean))].sort().reverse(),
+    [todos],
   )
 
   // Personas que aparecen en algún movimiento, aunque ya no estén en el equipo.
@@ -121,29 +135,30 @@ export default function Finanzas({ clientId }) {
     return [...m.values()].sort((a, b) => a.name.localeCompare(b.name))
   }, [rows])
 
-  const filtrados = useMemo(() => (rows || []).filter(r => {
+  const filtrados = useMemo(() => (todos || []).filter(r => {
     if (fRol !== '__all__' && (r.person_role || '') !== fRol) return false
     if (fPersona !== '__all__' && (r.person_id || r.person_name || '') !== fPersona) return false
     if (fMes !== '__all__' && mesDe(r.date) !== fMes) return false
     return true
-  }), [rows, fRol, fPersona, fMes])
+  }), [todos, fRol, fPersona, fMes])
 
   const hayFiltro = fRol !== '__all__' || fPersona !== '__all__' || fMes !== '__all__'
 
   // Los KPI de arriba miran SIEMPRE el total del negocio; el resumen del filtro
   // se enseña aparte para que no se confunda una cosa con la otra.
   const t = useMemo(() => {
-    const r = rows || []
+    const r = todos || []
     const sum = (f) => r.filter(f).reduce((a, x) => a + Number(x.amount), 0)
     const income = sum(x => Number(x.amount) > 0)
+    const participaciones = sum(x => x.participacion)
     const expense = sum(x => Number(x.amount) < 0)
     return {
-      income, expense, balance: income + expense,
+      income, expense, balance: income + expense, participaciones,
       fijos: sum(x => tipoDe(x).key === 'fijo'),
       puntuales: sum(x => tipoDe(x).key === 'puntual'),
       comisiones: sum(x => tipoDe(x).key === 'comision'),
     }
-  }, [rows])
+  }, [todos])
 
   const totalFiltro = useMemo(
     () => filtrados.reduce((a, x) => a + Number(x.amount), 0),
@@ -186,7 +201,8 @@ export default function Finanzas({ clientId }) {
     <div className="helm-grid" style={{ gap: 20 }}>
       <div className="helm-grid helm-kpis">
         <Kpi label="Balance" value={money(t.balance)} accent sub="ingresos − gastos" />
-        <Kpi label="Ingresos" value={money(t.income)} />
+        <Kpi label="Ingresos" value={money(t.income)}
+          sub={t.participaciones ? `${money(t.participaciones)} de tu parte de otros perfiles` : undefined} />
         <Kpi label="Gastos" value={money(t.expense)} sub="todos los tipos" />
         <Kpi label="Gastos fijos" value={money(t.fijos)} sub="se repiten cada mes" />
         <Kpi label="Gastos puntuales" value={money(t.puntuales)} sub="una sola vez" />
@@ -255,7 +271,7 @@ export default function Finanzas({ clientId }) {
           )}
         </div>
 
-        {rows == null ? <Empty>Cargando…</Empty> : filtrados.length === 0 ? (
+        {todos == null ? <Empty>Cargando…</Empty> : filtrados.length === 0 ? (
           <Empty>{hayFiltro ? 'Ningún movimiento con estos filtros.' : 'Sin movimientos registrados.'}</Empty>
         ) : (
           <div className="helm-tablewrap">
@@ -271,7 +287,10 @@ export default function Finanzas({ clientId }) {
                   return (
                     <tr key={r.id}>
                       <td>{fmtDate(r.date)}</td>
-                      <td><span className={'helm-badge tipo-' + tipo.key}>{tipo.label}</span></td>
+                      <td>
+                        <span className={'helm-badge tipo-' + tipo.key}>{tipo.label}</span>
+                        {r.participacion && <small style={{ display: 'block', color: 'var(--text-mut)' }}>Participación · automático</small>}
+                      </td>
                       <td>{r.description || '—'}</td>
                       <td>
                         {r.person_name
@@ -286,7 +305,7 @@ export default function Finanzas({ clientId }) {
                         )}
                       </td>
                       <td className="helm-num" style={{ color: pos ? 'var(--green)' : 'var(--red)' }}>{pos ? '+' : ''}{money(r.amount)}</td>
-                      <td><Trash2 size={15} className="helm-x" onClick={() => remove(r.id)} /></td>
+                      <td>{!r.participacion && <Trash2 size={15} className="helm-x" onClick={() => remove(r.id)} />}</td>
                     </tr>
                   )
                 })}

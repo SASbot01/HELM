@@ -65,10 +65,19 @@ async function todas(apiKey, ruta, params = {}) {
  *        sus enlaces de pago; `cuotas` (y opcionalmente `total`) marca los de
  *        un plan fraccionado de N cuotas y `mensual` los de la mensualidad
  * @param {string}   [o.mensualidad] nombre del producto de la mensualidad
+ * @param {Object<string, string>} [o.alias] correos que son de otro cliente:
+ *        { 'quien-paga@…': 'el-cliente@…' }. Para quien paga su mensualidad con
+ *        el enlace suelto desde otro correo (otra persona, su tarjeta…): esos
+ *        pagos van a SU mensualidad y no a una nueva a nombre de quien pagó.
  * @param {boolean}  [o.leads]     los checkouts sin pagar con email, al CRM
  * @param {boolean}  [o.prueba]    no escribe nada
  */
-export async function historicoPorEnlaces({ supabase, clientId, apiKey, enlaces, mensualidad = null, leads = false, prueba = false }) {
+export async function historicoPorEnlaces({ supabase, clientId, apiKey, enlaces, mensualidad = null, alias = {}, leads = false, prueba = false }) {
+  // Sin las que se apuntan a sí mismas o a nada (un error al copiar): esas
+  // dejarían la mensualidad sin el nombre ni el teléfono del cliente.
+  const deQuien = Object.fromEntries(Object.entries(alias || {})
+    .map(([a, b]) => [String(a).toLowerCase().trim(), String(b || '').toLowerCase().trim()])
+    .filter(([a, b]) => a && b && a !== b))
   const r = {
     prueba, enlaces: [], ventas: { nuevas: 0, yaEstaban: 0, vinculadas: 0, actualizadas: 0 },
     finanzas: 0, leads: 0, enlacesGuardados: 0, cobrado: 0, ops: [], errores: [],
@@ -114,8 +123,12 @@ export async function historicoPorEnlaces({ supabase, clientId, apiKey, enlaces,
       const telefono = s.customer_details?.phone || ''
       try {
         if (tipo === 'mensual') {
-          const clave = email ? email.toLowerCase() : `nombre:${pila(nombre)}`
-          const g = mensuales.get(clave) || { email, nombre, telefono, pagos: [], subs: [] }
+          // Con alias, el pago es del cliente al que apunta: su correo y, en
+          // cuanto aparezca un pago suyo, su nombre (no el de quien pagó).
+          const propio = email ? deQuien[email.toLowerCase()] : null
+          const clave = propio || (email ? email.toLowerCase() : `nombre:${pila(nombre)}`)
+          const g = mensuales.get(clave) || { email: propio || email, nombre: propio ? '' : nombre, telefono: propio ? '' : telefono, pagos: [], subs: [], alias: new Set() }
+          if (!propio) { g.nombre = g.nombre || nombre; g.telefono = g.telefono || telefono } else g.alias.add(email.toLowerCase())
           if (s.mode === 'subscription' && s.subscription) {
             const sub = await stripeRequest(apiKey, `/subscriptions/${s.subscription}`)
             const facturas = (await todas(apiKey, '/invoices', { subscription: sub.id })).filter(i => i.status === 'paid' && i.amount_paid > 0)
@@ -327,6 +340,9 @@ async function planFraccionado(c) {
 }
 
 const ddmm = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+// Con el año: con más de doce meses de cobros, el mismo dd/mm sale dos veces
+// en la lista y Ventas → Próximos cobros no sabría cuál es (src/helm/cobrosPrevistos.js).
+const ddmmaaaa = (iso) => `${ddmm(iso)}/${iso.slice(0, 4)}`
 const ESTADO = { past_due: 'impagada', unpaid: 'impagada', canceled: 'cancelada', incomplete_expired: 'caducada' }
 
 // El plan fraccionado abierto de un cliente: mismo email o, si se apuntó sin
@@ -390,13 +406,18 @@ async function mensualidadDe(c) {
   }
   if (!pagos.length) return
 
-  const huella = crypto.createHash('sha256').update(g.email ? g.email.toLowerCase() : `nombre:${pila(g.nombre)}`).digest('hex').slice(0, 16)
+  const huellaDe = (t) => crypto.createHash('sha256').update(t).digest('hex').slice(0, 16)
+  const huella = huellaDe(g.email ? g.email.toLowerCase() : `nombre:${pila(g.nombre)}`)
   const source = `stripe:mensual:${huella}`
+  // La mensualidad que tuviera quien pagó con un correo alias (apuntada antes
+  // de poner el alias) pasa a ser esta, como las sueltas: si no, ese pago
+  // contaría dos veces.
+  const deAlias = [...(g.alias || [])].map(e => `stripe:mensual:${huellaDe(e)}`)
   const cobrado = redondea(pagos.reduce((a, p) => a + p.importe, 0))
   const cuota = pagos.at(-1).importe
   const avisos = g.subs.filter(s => ESTADO[s.estado]).map(s => {
     const sueltos = pagos.some(p => p.suelto) ? ' Desde entonces paga con el enlace suelto, que cuenta aquí igual.' : ''
-    return `La suscripción ${s.id} está ${ESTADO[s.estado]}${s.ultimo ? ` (último cobro el ${ddmm(dia(s.ultimo))})` : ''}.${sueltos}`
+    return `La suscripción ${s.id} está ${ESTADO[s.estado]}${s.ultimo ? ` (último cobro el ${ddmmaaaa(dia(s.ultimo))})` : ''}.${sueltos}`
   })
   const nota = [
     `Mensualidad de ${cuota} €: ${pagos.length} ${pagos.length === 1 ? 'cuota cobrada' : 'cuotas cobradas'} (${pagos.map(p => ddmm(p.fecha)).join(', ')}).`,
@@ -413,7 +434,7 @@ async function mensualidadDe(c) {
   // La venta de la mensualidad (si ya está) y las sueltas que dejó una
   // importación anterior de estos mismos pagos, que pasan a ser esta.
   const { data: ya } = await supabase.from('sales').select('id, cash_collected, installments_paid').eq('client_id', clientId).eq('source', source).limit(1)
-  const { data: sueltas } = await supabase.from('sales').select('id').eq('client_id', clientId).in('source', pagos.map(p => `stripe:${p.ref}`))
+  const { data: sueltas } = await supabase.from('sales').select('id').eq('client_id', clientId).in('source', [...pagos.map(p => `stripe:${p.ref}`), ...deAlias])
   const quien = g.nombre || tapa(g.email)
   if (ya?.length) {
     if (Number(ya[0].cash_collected) !== cobrado || Number(ya[0].installments_paid) !== pagos.length || sueltas?.length) {

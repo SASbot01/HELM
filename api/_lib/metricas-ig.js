@@ -1,12 +1,13 @@
-// HELM — Resincronización diaria de las métricas de Instagram.
+// HELM — Resincronización de las métricas de Instagram, sola y a menudo.
 //
-// A partir de las 6:00 de Madrid, una vez al día, se bajan de Meta las métricas
+// Desde las 6:00 de Madrid y cada HELM_METRICAS_CADA_H horas (3 por defecto:
+// 6, 9, 12, 15, 18 y 21 h), se bajan de Meta las métricas
 // de TODAS las cuentas de Instagram conectadas (cada fila de user_integrations
 // del servicio 'instagram' con token), para que el «Informe de contenido» y las
 // estrategias del roadmap trabajen siempre con datos frescos.
 //
 // Corre dentro del worker (scripts/agents-worker.mjs) como trabajo de tipo
-// 'metricas'. Es idempotente por día (la clave lleva la fecha) y no depende de
+// 'metricas'. Es idempotente por tramo (la clave lleva la fecha y el tramo) y no depende de
 // que el perfil tenga el equipo de agentes encendido: sincroniza toda cuenta
 // conectada, la use un agente o no.
 import { supabase } from '../lib/supabase.js'
@@ -28,21 +29,25 @@ async function cuentasConectadas() {
     .map(r => r.client_id)
 }
 
+const CADA_H = Math.min(24, Math.max(1, Number(process.env.HELM_METRICAS_CADA_H) || 3))
+
 /**
  * Lo que mira el worker cada minuto: a partir de las 6:00 de Madrid encola, una
- * vez al día, la resincronización de métricas de cada cuenta conectada. La
- * clave lleva la fecha, así que revisarlo cada minuto solo encola la primera
- * vez del día.
+ * vez por tramo de CADA_H horas, la resincronización de métricas de cada cuenta
+ * conectada. La clave lleva la fecha y el tramo, así que revisarlo cada minuto
+ * solo encola la primera vez de cada tramo. Nadie tiene que sincronizar a mano.
  */
 export async function miraMetricas() {
-  if (horaMadrid() < 6) return
+  const hora = horaMadrid()
+  if (hora < 6) return
+  const tramo = Math.floor((hora - 6) / CADA_H)
   const clientes = await cuentasConectadas()
   if (!clientes.length) return
   const hoy = diaMadrid()
   const filas = clientes.map((clientId) => ({
     tipo: 'metricas',
     payload: { clientId },
-    clave: `metricas:${clientId}:${hoy}`,
+    clave: `metricas:${clientId}:${hoy}:${tramo}`,
     estado: 'pendiente',
     max_intentos: 2, // un reintento: Meta da 429/5xx pasajeros de vez en cuando
     correr_tras: new Date().toISOString(),

@@ -17,6 +17,11 @@
 //   · /storage/v1/object/helm/<perfil>/…   subir y borrar archivos
 //   · /storage/v1/object/public/helm/…     ver archivos (sin sesión: son enlaces)
 //
+// Los archivos salen del mismo dominio que el panel, así que una subida solo
+// entra si su extensión está en la lista de api/_lib/almacen.js, y se guarda
+// con el tipo que dice esa lista, no con el del navegador: si no, un .html o
+// un .svg subido a tu carpeta se abría como página nuestra y leía la sesión.
+//
 // Cómo se recorta, según la tabla:
 //   · con columna client_id → solo filas de tus perfiles, al leer, al
 //     cambiar, al borrar y al crear
@@ -30,7 +35,9 @@
 // tablas de secretos tampoco las abre por aquí.
 import { supabase } from '../lib/supabase.js'
 import { validateAuth } from './auth.js'
-import { perfilesVisibles } from './access.js'
+import { perfilesVisibles, olvidarVisibles } from './access.js'
+import { SLUG_RE, RUTAS_DE_LA_WEB } from '../../src/helm/perfilNuevo.js'
+import { SALTO, NO_ADMITIDO, tipoDeArchivo, cspArchivo } from './almacen.js'
 
 const BASE = () => process.env.SUPABASE_URL || 'http://localhost:54321'
 const CLAVE = () => process.env.SUPABASE_SERVICE_KEY || ''
@@ -50,13 +57,61 @@ const SECRETAS = new Set([
   'helm_trial_reels',
   // Web Creator: estudio y prompt de cada web, solo por api/web-creator.js.
   'helm_web_creator', 'helm_web_fabricacion',
+  // La oficina de cada agente: el chat va por api/agente-oficina.js.
+  'helm_agente_chat',
+  // Qué parte de las ventas de un perfil es de otro: solo por api/participaciones.js.
+  'helm_participaciones',
   // Editor de reels: los vídeos y los estilos, solo por api/editor.js.
   'helm_ediciones', 'helm_estilos_edicion',
 ])
 
+// LISTA BLANCA: las únicas tablas que el panel toca por aquí (las que usa
+// src/; tests/pasarela.test.js comprueba que no falta ninguna). Antes era una
+// lista negra y quedaban abiertas, para cualquier sesión de su perfil, tablas
+// heredadas con secretos que el panel ni usa (whatsapp_config, email_config,
+// calendly_auth, console_api_keys…). Una tabla nueva del panel se añade aquí.
+export const PANEL = new Set([
+  'ceo_finance_entries', 'clients', 'crm_activities', 'crm_contacts', 'crm_pipelines', 'crm_tasks',
+  'helm_calls', 'helm_collaborations', 'helm_content_calendar', 'helm_documentos_venta',
+  'helm_fiscal_avisos', 'helm_fiscal_obligaciones', 'helm_fiscal_perfil', 'helm_form_responses',
+  'helm_forms', 'helm_gastos', 'helm_ig_media', 'helm_library', 'helm_links', 'helm_onboarding',
+  'helm_permissions', 'helm_services', 'helm_team', 'helm_virales', 'products', 'reports', 'sales', 'team',
+])
+
+// Lo que PostgREST acepta y el panel usa. PUT y compañía, fuera.
+const METODOS = new Set(['GET', 'HEAD', 'POST', 'PATCH', 'DELETE'])
+
 // `team` guarda los accesos (con su contraseña). El panel solo lee nombres
 // para asignar tareas; escribir va por api/equipo.js.
 const COLUMNAS_TEAM = new Set(['id', 'name', 'client_id', 'active', 'role', 'email'])
+// Parámetros de PostgREST que no filtran por ninguna columna.
+const NO_FILTRAN = new Set(['select', 'limit', 'offset', 'on_conflict', 'columns'])
+
+// Quien manda en un perfil: propietario ('admin,ceo,director') o admin ('admin'),
+// igual que api/equipo.js.
+const nivelTotal = (nivel) => String(nivel || '').split(',').map(s => s.trim()).includes('admin')
+
+/**
+ * En `team` solo se puede filtrar y ordenar por las columnas que se dejan
+ * leer: si no, un filtro sobre password_hash (`like.scrypt:ab*`) contesta sí o
+ * no y deja sacar el hash de la contraseña de un compañero letra a letra.
+ */
+function revisaFiltrosTeam(query) {
+  const fuera = (c) => !COLUMNAS_TEAM.has(c)
+  for (const [k, v] of query) {
+    if (NO_FILTRAN.has(k)) continue
+    if (k === 'order') {
+      const cols = v.split(',').map(s => s.trim().split('.')[0]).filter(Boolean)
+      if (cols.some(fuera)) throw prohibido('Por ese campo de team no se puede ordenar')
+      continue
+    }
+    // El panel no usa or/and en team (solo client_id, active y orden por
+    // nombre): fuera del todo, mejor que intentar leer dentro (con comillas o
+    // anidados se colaría una columna).
+    if (/(^|\.)(or|and)$/.test(k)) throw prohibido('Por esos campos de team no se puede filtrar')
+    if (fuera(k)) throw prohibido('Por esos campos de team no se puede filtrar')
+  }
+}
 
 // Solo el administrador de la agencia: qué perfiles existen y qué secciones
 // ve cada uno. Un acceso de cliente podría, si no, darse secciones a sí mismo.
@@ -72,7 +127,8 @@ const SOLO_SERVIDOR = { helm_team: ['login_id'], clients: ['agencia_id'] }
 // que solo se permite lo que sabemos que es del mismo perfil.
 const INCRUSTABLES = new Set(['helm_forms'])
 
-// Cabeceras de la petición que entiende PostgREST/Storage y se reenvían.
+// Cabeceras de la petición que entiende PostgREST/Storage y se reenvían. En
+// una subida, content-type y cache-control no: las pone preparaSubida().
 const PASAN = ['accept', 'content-type', 'prefer', 'range', 'range-unit', 'accept-profile',
   'content-profile', 'x-upsert', 'cache-control', 'x-client-info']
 // Y las de la respuesta que necesita supabase-js.
@@ -131,8 +187,12 @@ function prohibido(msg = 'No tienes acceso a esto') {
  * Revisa y recorta una petición a /rest/v1/<tabla>. Devuelve la query ya
  * recortada (URLSearchParams) y, si hace falta, el cuerpo reescrito.
  */
-async function recortaTabla({ auth, ids, metodo, tabla, query, cuerpo, prefer }) {
+export async function recortaTabla({ auth, ids, metodo, tabla, query, cuerpo, prefer }) {
   if (SECRETAS.has(tabla)) throw prohibido()
+  if (!PANEL.has(tabla)) {
+    console.warn(`[db] tabla fuera de la lista del panel: ${tabla} (${metodo})`)
+    throw prohibido()
+  }
   const cols = await columnasDe(tabla)
   if (!cols) throw Object.assign(new Error(`No existe la tabla ${tabla}`), { statusCode: 404 })
 
@@ -147,20 +207,46 @@ async function recortaTabla({ auth, ids, metodo, tabla, query, cuerpo, prefer })
     if (!lee) throw prohibido('Los accesos se gestionan desde Equipo')
     const pedidas = (select || '*').split(',').map(c => c.trim())
     if (pedidas.some(c => !COLUMNAS_TEAM.has(c))) throw prohibido('Esas columnas de team no se pueden leer')
+    revisaFiltrosTeam(query)
   }
   if (!lee && SOLO_ADMIN_ESCRIBE.has(tabla) && !esAdmin(auth)) throw prohibido('Solo el administrador puede cambiar esto')
   if (tabla === 'clients' && metodo === 'DELETE') throw prohibido('Los perfiles se borran desde Perfiles')
+
+  // Un «guardar pisando» (upsert) en perfiles o colaboraciones no pasa por el
+  // recorte de abajo: con `on_conflict=id` (o slug) reescribiría el perfil de
+  // OTRA agencia y, como el perfil nuevo nace en la agencia de quien guarda, se
+  // lo llevaría a la suya. El registro es público, así que cualquiera podía.
+  const pisa = /resolution\s*=/i.test(prefer) || query.has('on_conflict')
+  if (pisa && (tabla === 'clients' || tabla === 'helm_collaborations') && !auth.plataforma) {
+    throw prohibido('Eso no se puede guardar así')
+  }
 
   const filas = metodo === 'POST' || metodo === 'PATCH' ? filasDe(cuerpo) : []
   const vetadas = auth.plataforma ? [] : (SOLO_SERVIDOR[tabla] || []).filter(c => c !== 'agencia_id')
   if (filas.some(f => vetadas.some(c => c in f))) throw prohibido('Ese campo lo gestiona el servidor')
 
+  // El oficio de cada persona (dueño, closer…) decide lo que ve y edita: solo lo
+  // cambia, y solo borra personas, quien manda en el perfil o el administrador.
+  // Si no, cualquiera del equipo se subía a «dueño» él solo.
+  if (tabla === 'helm_team' && !lee && !esAdmin(auth) && !nivelTotal(auth.nivel)) {
+    if (metodo === 'DELETE' || filas.some(f => 'role' in f)) {
+      throw prohibido('Solo quien manda en el perfil cambia el equipo')
+    }
+  }
+
   // Perfiles nuevos: nacen en la agencia de quien los crea. Y nadie mueve un
   // perfil de agencia desde aquí.
+  // El slug es la llave del perfil fuera del panel (su web, el MCP): solo
+  // minúsculas, números y guiones, y no se cambia. Con mayúsculas o espacios,
+  // `DETRAS-DE-CAMRA` se leía como el perfil de otra agencia.
   if (tabla === 'clients') {
     for (const f of filas) {
       if ('agencia_id' in f && !auth.plataforma) throw prohibido('Un perfil no se cambia de agencia')
       if (metodo === 'POST') f.agencia_id = auth.agenciaId
+      if (!auth.plataforma && metodo === 'PATCH' && 'slug' in f) throw prohibido('La URL de un perfil no se cambia')
+      if (!auth.plataforma && metodo === 'POST' && (!SLUG_RE.test(String(f.slug ?? '')) || RUTAS_DE_LA_WEB.has(f.slug))) {
+        throw prohibido('URL inválida: usa a-z, 0-9 y guiones (3-40)')
+      }
     }
     if (metodo === 'POST' && !auth.agenciaId) throw prohibido('Tu cuenta no tiene agencia')
   }
@@ -188,9 +274,12 @@ async function recortaTabla({ auth, ids, metodo, tabla, query, cuerpo, prefer })
   if (metodo === 'POST') {
     if (filas.some(f => !ids.includes(f.client_id))) throw prohibido('No puedes crear filas en ese perfil')
     // Un upsert que pisa filas existentes: tiene que pisarlas dentro de tus
-    // perfiles. Por (client_id, …) siempre lo es; por id, se comprueba.
-    if (/resolution=merge-duplicates/.test(prefer)) {
-      const conflicto = (query.get('on_conflict') || 'id').split(',').map(c => c.trim())
+    // perfiles. Por (client_id, …) siempre lo es; por id, se comprueba. Sin
+    // `on_conflict` PostgREST usaría la clave primaria de la tabla, que no
+    // siempre es `id` (p. ej. event_id): se exige decirla.
+    if (/resolution\s*=\s*merge-duplicates/i.test(prefer)) {
+      if (!query.get('on_conflict')) throw prohibido('Ese guardado no se puede hacer por aquí')
+      const conflicto = query.get('on_conflict').split(',').map(c => c.trim())
       if (!conflicto.includes('client_id')) {
         if (conflicto.join() !== 'id') throw prohibido('Ese guardado no se puede hacer por aquí')
         const conId = filas.map(f => f.id).filter(Boolean)
@@ -210,27 +299,82 @@ async function recortaTabla({ auth, ids, metodo, tabla, query, cuerpo, prefer })
   return { query, filas: null }
 }
 
-/** Revisa una petición a Storage. Solo el bucket `helm`, y solo en tus perfiles. */
-function recortaArchivo({ auth, ids, metodo, ruta, cuerpo }) {
-  // Subir: /storage/v1/object/helm/<perfil>/<carpeta>/<archivo>
-  const m = ruta.match(/^\/storage\/v1\/object\/helm\/([^/]+)\/.+/)
-  const prefijoValido = (p) => ids === null || ids.includes(p) || (p === 'registro' && esAdmin(auth))
-  if (m && ['POST', 'PUT'].includes(metodo)) {
-    if (!prefijoValido(m[1])) throw prohibido('No puedes subir archivos a ese perfil')
-    return
+const malFormado = (msg) => Object.assign(new Error(msg), { statusCode: 400 })
+
+// Subir: POST/PUT /storage/v1/object/helm/<perfil>/<carpeta>/<archivo>
+const SUBIDA = /^\/storage\/v1\/object\/helm\/([^/]+)\/.+/
+const prefijoValido = (auth, ids, p) => ids === null || ids.includes(p) || (p === 'registro' && esAdmin(auth))
+
+/**
+ * Lo que se puede mirar de una subida sin leer el cuerpo: a qué perfil va y si
+ * su extensión entra. Va antes de leeCuerpo, así un archivo de otro perfil o
+ * un .html de 25 MB se cortan ya con su 403 o su 415, sin esperar a que llegue
+ * entero ni guardarlo en memoria (lo que quede del cuerpo, Node lo tira al
+ * contestar). Devuelve el tipo con que se guardará, o null si no es una subida.
+ */
+function revisaSubida({ auth, ids, metodo, ruta }) {
+  const m = ruta.match(SUBIDA)
+  if (!m || !['POST', 'PUT'].includes(metodo)) return null
+  if (!prefijoValido(auth, ids, m[1])) throw prohibido('No puedes subir archivos a ese perfil')
+  let nombre
+  try { nombre = decodeURIComponent(ruta.split('/').pop()) } catch { throw malFormado('Ruta no válida') }
+  const tipo = tipoDeArchivo(nombre)
+  if (!tipo) throw Object.assign(new Error(NO_ADMITIDO), { statusCode: 415 })
+  return tipo
+}
+
+/**
+ * El archivo de una subida, listo para storage: en crudo y con el tipo que
+ * sale de su extensión (revisaSubida). supabase-js lo manda de dos formas:
+ * desde el navegador (un File) como multipart/form-data, con un campo
+ * `cacheControl` y el archivo con el tipo que diga el navegador; desde Node (un
+ * Buffer), en crudo con su content-type. En los dos casos el tipo del
+ * navegador se tira.
+ */
+async function preparaSubida({ tipo, cuerpo, tipoPedido = '', cachePedida = '' }) {
+  let bytes = cuerpo
+  let cache = /^max-age=\d{1,9}$/.test(String(cachePedida)) ? String(cachePedida) : ''
+  if (/^multipart\/form-data/i.test(String(tipoPedido))) {
+    let form
+    try { form = await new Response(cuerpo, { headers: { 'content-type': String(tipoPedido) } }).formData() }
+    catch { throw malFormado('No he podido leer el archivo. Vuelve a intentarlo.') }
+    const archivos = [...form.values()].filter(v => typeof v !== 'string')
+    if (archivos.length !== 1) throw malFormado('Sube los archivos de uno en uno')
+    bytes = Buffer.from(await archivos[0].arrayBuffer())
+    const c = form.get('cacheControl')
+    cache = typeof c === 'string' && /^\d{1,9}$/.test(c) ? `max-age=${c}` : ''
   }
+  if (!bytes?.length) throw malFormado('El archivo está vacío')
+  return { cuerpo: bytes, cabeceras: { 'content-type': tipo, ...(cache ? { 'cache-control': cache } : {}) } }
+}
+
+/**
+ * Revisa una petición a Storage. Solo el bucket `helm`, y solo en tus perfiles.
+ * Devuelve lo que se reenvía: el cuerpo y, en una subida, sus cabeceras. Una
+ * subida llega ya revisada (revisaSubida, antes de leer el cuerpo): `tipo` es
+ * con lo que se guarda.
+ */
+async function recortaArchivo({ auth, ids, metodo, ruta, cuerpo, tipo, tipoPedido, cachePedida }) {
+  if (tipo) return preparaSubida({ tipo, cuerpo, tipoPedido, cachePedida })
   // Borrar: DELETE /storage/v1/object/helm  { prefixes: [...] }
   if (ruta === '/storage/v1/object/helm' && metodo === 'DELETE') {
     const { prefixes = [] } = JSON.parse(cuerpo?.toString('utf8') || '{}')
-    if (!prefixes.length || prefixes.some(p => !prefijoValido(String(p).split('/')[0]))) throw prohibido('No puedes borrar esos archivos')
-    return
+    if (!prefixes.length || prefixes.some(p => SALTO.test(String(p)) || !prefijoValido(auth, ids, String(p).split('/')[0]))) {
+      throw prohibido('No puedes borrar esos archivos')
+    }
+    return { cuerpo, cabeceras: null }
   }
   throw prohibido()
 }
 
-async function reenvia(req, res, { ruta, query, cuerpo, conClave = true }) {
+async function reenvia(req, res, { ruta, query, cuerpo, conClave = true, cabeceras = null }) {
   const headers = {}
   for (const h of PASAN) if (req.headers[h]) headers[h] = req.headers[h]
+  // Una subida lleva las suyas: el tipo lo pone el servidor, no el navegador.
+  if (cabeceras) {
+    delete headers['content-type']; delete headers['cache-control']
+    Object.assign(headers, cabeceras)
+  }
   if (conClave) { headers.apikey = CLAVE(); headers.Authorization = `Bearer ${CLAVE()}` }
   const qs = query?.toString()
   const r = await fetch(`${BASE()}${ruta}${qs ? `?${qs}` : ''}`, {
@@ -243,6 +387,13 @@ async function reenvia(req, res, { ruta, query, cuerpo, conClave = true }) {
     const v = r.headers.get(h)
     if (v && h !== 'content-length') res.setHeader(h, v)
   }
+  // Lo que sale del almacén, con su CSP: un HTML o un SVG que ya estuviera en
+  // el bucket no se ejecuta. La misma que pone scripts/cabeceras.mjs delante;
+  // esta vale también cuando se llega aquí sin pasar por `vite preview`.
+  if (ruta.startsWith('/storage/')) {
+    res.setHeader('Content-Security-Policy', cspArchivo(r.headers.get('content-type')))
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+  }
   res.end(Buffer.from(await r.arrayBuffer()))
 }
 
@@ -250,6 +401,17 @@ async function reenvia(req, res, { ruta, query, cuerpo, conClave = true }) {
 export async function pasarela(req, res) {
   try {
     if (req.method === 'OPTIONS') { res.statusCode = 204; return res.end() }
+    if (!METODOS.has(req.method)) return corta(res, 405, 'Método no permitido')
+    // Solo el esquema `public`: con Accept-Profile/Content-Profile se podría
+    // pedir otro esquema expuesto con una tabla que se llame igual.
+    for (const h of ['accept-profile', 'content-profile']) {
+      const v = req.headers?.[h]
+      if (v && String(v).trim().toLowerCase() !== 'public') return corta(res, 403, 'Ese esquema no se abre por aquí')
+    }
+    // La ruta tal cual llegó, antes de que `new URL` resuelva los `..` y
+    // cambie `\` por `/`: lo que se comprueba aquí abajo tiene que ser lo
+    // mismo que verá storage.
+    if (SALTO.test(String(req.url).split('?')[0])) return corta(res, 400, 'Ruta no válida')
     const u = new URL(req.url, 'http://local')
     const ruta = u.pathname.replace(/^\/api\/db/, '')
     const query = new URLSearchParams(u.search)
@@ -263,11 +425,16 @@ export async function pasarela(req, res) {
     try { auth = await validateAuth(req, { required: true }) }
     catch { return corta(res, 401, 'Tu sesión ha caducado. Vuelve a entrar.') }
     const ids = await perfilesVisibles(auth)
+    // Una subida se mira antes de leer el cuerpo: si no va a entrar, no se
+    // espera a sus megas (ver revisaSubida).
+    const tipoSubida = ruta.startsWith('/storage/v1/object/') ? revisaSubida({ auth, ids, metodo: req.method, ruta }) : null
     const cuerpo = ['GET', 'HEAD'].includes(req.method) ? null : await leeCuerpo(req)
 
     const t = ruta.match(/^\/rest\/v1\/([a-z0-9_]+)$/)
     if (t) {
       const tabla = t[1]
+      // Un perfil creado o movido tiene que salir ya en la siguiente lista.
+      if (tabla === 'clients' && !['GET', 'HEAD'].includes(req.method)) olvidarVisibles()
       const { query: q, filas } = await recortaTabla({
         auth, ids, metodo: req.method, tabla, query, cuerpo, prefer: String(req.headers.prefer || ''),
       })
@@ -276,8 +443,11 @@ export async function pasarela(req, res) {
     }
 
     if (ruta.startsWith('/storage/v1/object/')) {
-      recortaArchivo({ auth, ids, metodo: req.method, ruta, cuerpo })
-      return await reenvia(req, res, { ruta, query, cuerpo })
+      const listo = await recortaArchivo({
+        auth, ids, metodo: req.method, ruta, cuerpo, tipo: tipoSubida,
+        tipoPedido: req.headers['content-type'] || '', cachePedida: req.headers['cache-control'] || '',
+      })
+      return await reenvia(req, res, { ruta, query, ...listo })
     }
 
     return corta(res, 404, 'Ruta desconocida')

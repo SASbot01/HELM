@@ -79,3 +79,54 @@
   .por-taller { grid-template-columns: 1fr; }
   .por-lienzo-col { position: static; max-width: 340px; margin: 0 auto; width: 100%; }
 }
+
+/* ── Fondo generado con IA (Ideogram) ────────────────────────────────────── */
+.por-ia { display: flex; flex-direction: column; gap: 8px; }
+.por-ia-tema { width: 100%; }
+.por-ia-prompt {
+  width: 100%; box-sizing: border-box; resize: vertical; min-height: 64px;
+  font: inherit; font-size: .86rem; line-height: 1.4; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--text);
+}
+.por-ia-prompt:focus, .por-ia-tema:focus { outline: none; border-color: var(--orange); }
+.por-ia-falta {
+  display: flex; align-items: flex-start; gap: 7px;
+  border: 1px dashed var(--border); border-radius: 8px; padding: 10px 12px;
+}
+.por-ia-falta code { font-size: .82em; }
+.por-ia-badge {
+  display: inline-flex; align-items: center; gap: 5px; margin: 8px 0 0;
+  font-size: .78rem; font-weight: 600; color: var(--orange);
+}
+
+/* ── Portada con IA (2026-10-22): modo, estilos con su ejemplo y versiones ── */
+.por-modo { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.por-modo button {
+  font: inherit; font-size: 14px; font-weight: 600; color: inherit; background: transparent; border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 12px; min-height: 44px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.por-modo button.on { border-color: var(--orange); color: var(--orange); background: rgba(245,158,11,.08); }
+
+.por-estilos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 104px), 1fr)); gap: 8px; }
+.por-estilos li { position: relative; min-width: 0; }
+.por-estilo {
+  font: inherit; color: inherit; width: 100%; display: flex; flex-direction: column; gap: 3px; align-items: stretch; text-align: left;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 5px; cursor: pointer; }
+.por-estilo:hover { border-color: var(--text-muted); }
+.por-estilo.on { border-color: var(--orange); box-shadow: 0 0 0 1px var(--orange); }
+.por-estilo img, .por-estilo-libre { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 7px; background: #0A0A0C; display: block; }
+.por-estilo-libre { display: grid; place-items: center; color: var(--text-muted); border: 1px dashed var(--border); background: transparent; }
+.por-estilo b { font-size: 12.5px; line-height: 1.25; padding: 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.por-estilo small { font-size: 11px; color: var(--text-muted); padding: 0 2px 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.por-estilo-subir { position: relative; }
+.por-estilo-subir input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.por-estilo-quitar {
+  position: absolute; top: 9px; right: 9px; width: 24px; height: 24px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center; color: #fff; background: rgba(0,0,0,.65); }
+.por-subir-ejemplo { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.por-subir-ejemplo small { flex: 1 1 100%; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.por-subir-ejemplo input { flex: 1 1 200px; }
+
+.por-versiones { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.por-versiones button { flex: 0 0 72px; padding: 0; border: 2px solid transparent; border-radius: 8px; background: none; cursor: pointer; overflow: hidden; }
+.por-versiones button.on { border-color: var(--orange); }
+.por-versiones img { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; display: block; }

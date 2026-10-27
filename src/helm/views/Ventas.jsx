@@ -8,7 +8,10 @@
 //
 // Cancelar ≠ borrar: una venta cancelada deja de contar en los totales, en el
 // Informe y en Finanzas, pero se queda en su histórico. Ver lib.js.
-import { useEffect, useState, useMemo } from 'react'
+//
+// «Próximos cobros» enseña lo que va a entrar y cuándo, calculado de los
+// planes fraccionados y las mensualidades (../cobrosPrevistos.js).
+import { Fragment, useEffect, useState, useMemo } from 'react'
 import { Plus, Ban, Undo2, Trash2, CalendarClock } from 'lucide-react'
 import {
   fetchRows, fetchRowsOrError, insertRow, deleteRow, money, fmtDate, todayISO,
@@ -17,6 +20,18 @@ import {
 import {
   Panel, Empty, Modal, Field, Input, Select, Kpi, MoneyInput, CountInput, FormNote, SearchSelect,
 } from '../ui'
+import { cobrosPrevistos, porMes, hoyLocal } from '../cobrosPrevistos'
+
+const MESES_PREVISTOS = 6
+// Las fechas AAAA-MM-DD, sin pasar por la hora local: en una zona con desfase
+// negativo (Latinoamérica), new Date('2026-11-26') cae el día 25.
+const fmtDia = (iso) => (iso
+  ? new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' })
+  : '—')
+const nombreMes = (aaaamm) => {
+  const t = new Date(`${aaaamm}-15T12:00:00Z`).toLocaleDateString('es-ES', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+  return t.charAt(0).toUpperCase() + t.slice(1)
+}
 
 const PAY_METHODS = ['Transferencia', 'Tarjeta', 'Stripe', 'PayPal', 'Bizum', 'Efectivo', 'Financiación']
 
@@ -63,6 +78,10 @@ export default function Ventas({ clientId }) {
     const cash = activas.reduce((a, x) => a + (Number(x.cash_collected) || 0), 0)
     return { revenue, cash, pendiente: revenue - cash, count: activas.length }
   }, [activas])
+  const previstos = useMemo(
+    () => porMes(cobrosPrevistos(rows || [], { hoy: hoyLocal(), meses: MESES_PREVISTOS, esCancelada: isSaleCancelled })),
+    [rows],
+  )
 
   async function save(row) {
     const saved = await insertRow('sales', { client_id: clientId, ...row })
@@ -107,6 +126,48 @@ export default function Ventas({ clientId }) {
 
       {error && <FormNote>{error}</FormNote>}
 
+      {previstos.length > 0 && (
+        <Panel
+          title="Próximos cobros"
+          action={<small style={{ color: 'var(--text-mut)' }}>De los planes de pago y las mensualidades · {MESES_PREVISTOS} meses</small>}
+        >
+          <div className="helm-tablewrap">
+            <table className="helm-table">
+              <thead>
+                <tr><th>Fecha</th><th>Cliente</th><th>Concepto</th><th>Cómo llega</th><th>Importe</th></tr>
+              </thead>
+              <tbody>
+                {previstos.map(m => (
+                  <Fragment key={m.mes}>
+                    <tr style={{ background: 'var(--hover)' }}>
+                      <td colSpan={4}><b>{nombreMes(m.mes)}</b></td>
+                      <td className="helm-num"><b>{money(m.total)}</b></td>
+                    </tr>
+                    {m.cobros.map(c => (
+                      <tr key={`${c.ventaId}-${c.fecha}`}>
+                        <td>
+                          {fmtDia(c.fecha)}
+                          {c.vencido && <span className="helm-chip red" style={{ marginLeft: 6 }}>vencido</span>}
+                        </td>
+                        <td>{c.cliente}</td>
+                        <td>
+                          {c.concepto}
+                          <small style={{ color: 'var(--text-mut)' }}>
+                            {c.tipo === 'cuota' ? ` · cuota ${c.n}/${c.de}` : (/mensualidad/i.test(c.concepto) ? ` · ${c.n}ª` : ` · mensualidad ${c.n}ª`)}
+                          </small>
+                        </td>
+                        <td><small style={{ color: 'var(--text-mut)' }}>{c.como}</small></td>
+                        <td className="helm-num">{money(c.importe)}</td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      )}
+
       <Panel title="Ventas" action={<button className="helm-btn primary" onClick={() => setOpen(true)}><Plus size={15} />Registrar venta</button>}>
         {rows == null ? <Empty>Cargando…</Empty> : activas.length === 0 ? (
           <Empty>Sin ventas registradas.</Empty>
@@ -133,7 +194,18 @@ export default function Ventas({ clientId }) {
                         </small>
                       </td>
                       <td>
-                        {pend == null ? <span className="helm-chip">Pago único</span> : (
+                        {pend == null ? (
+                          // Una mensualidad no es un pago único: lleva la cuenta
+                          // de las cuotas cobradas, para saber por qué mes va.
+                          r.payment_type === 'Suscripción' && Number(r.installments_paid) > 0
+                            ? (
+                              <span className="helm-chip" title={r.plan_start ? `Desde el ${fmtDia(r.plan_start)}` : undefined}>
+                                <CalendarClock size={11} />
+                                mensual · {r.installments_paid} {Number(r.installments_paid) === 1 ? 'pago' : 'pagos'}
+                              </span>
+                            )
+                            : <span className="helm-chip">Pago único</span>
+                        ) : (
                           <span className={'helm-chip ' + (pend === 0 ? 'green' : 'amber')}>
                             <CalendarClock size={11} />
                             {r.installments_paid || 0}/{r.installments_total}

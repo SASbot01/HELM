@@ -37,6 +37,7 @@ import { notificar } from './notificar.js'
 import { puntuarGancho, clasificaGancho } from './ig-calidad.js'
 import { apifyListo, rastreaCuentas } from './apify.js'
 import { validaArgs } from './esquema.js'
+import { esPropio } from './creadores.js'
 
 export const AGENTES = ['director', 'investigador', 'analista', 'productor', 'comercial', 'informe', 'guionista']
 // En el orden en que corren: el guionista el último, para leer lo de los demás.
@@ -59,7 +60,7 @@ const MODELOS = {
   virales: process.env.AGENTS_MODELO_VIRALES || 'claude-sonnet-5',
 }
 
-// Agentes que se pueden LANZAR a mano (o por MCP/Drive) pero que no entran en el
+// Agentes que se pueden LANZAR a mano (o por el MCP) pero que no entran en el
 // reparto diario del director: el editor de reels es uno.
 export const AGENTES_LANZABLES = [...AGENTES, 'editor', 'programador', 'virales']
 
@@ -144,10 +145,13 @@ export async function cierraHuerfanas() {
 
 // ── La memoria compartida ───────────────────────────────────────────────────
 
+// Sin las notas de creador que Claude guarda por el MCP (tipo 'creador'):
+// llevan el perfil para saber de qué agencia son, pero no son memoria del
+// equipo y se comerían el tope (y con él, las reglas del dueño más antiguas).
 async function memoriaDe(clientId) {
   const { data, error } = await supabase.from('agent_memory')
     .select('id, clave, agente, tipo, para_agente, estado, contenido, updated_at')
-    .eq('client_id', clientId).order('updated_at', { ascending: false }).limit(200)
+    .eq('client_id', clientId).neq('tipo', 'creador').order('updated_at', { ascending: false }).limit(200)
   if (error) throw error
   return data || []
 }
@@ -514,7 +518,7 @@ ${REGLAS_COMUNES}`,
 async function investigador(ctx) {
   const { clientId } = ctx
   // Los creadores «Propio» son el perfil mismo, no una referencia.
-  const creadores = (await creadoresDe(clientId)).filter(c => c.categoria !== 'Propio')
+  const creadores = (await creadoresDe(clientId)).filter(c => !esPropio(c))
   if (!creadores.length) {
     await ctx.log('Este perfil no tiene creadores de referencia asignados. No hay nada que investigar.')
     return 'Sin creadores de referencia: no hice nada.'
@@ -722,7 +726,7 @@ async function escribeGuiones(ctx, { fechas, tipoForzado = null, nota = null, av
   const { clientId } = ctx
   const hoy = diaMadrid()
   if (!fechas?.length) { await ctx.log('Sin fechas libres: no escribo.'); return [] }
-  const creadores = (await creadoresDe(clientId)).filter(c => c.categoria !== 'Propio')
+  const creadores = (await creadoresDe(clientId)).filter(c => !esPropio(c))
   const ids = creadores.map(c => c.id)
   const [reels, estudios, guia, biblia, propios, cal, notas] = await Promise.all([
     reelsDe(ids),
@@ -831,7 +835,7 @@ ${REGLAS_COMUNES}`,
   }
   if (avisar && escritos.length) {
     await notificar(supabase, clientId, {
-      tipo: 'agentes', destino: 'agentes',
+      tipo: 'agentes', destino: 'contenido',
       titulo: `${escritos.length} ${escritos.length === 1 ? 'guion nuevo' : 'guiones nuevos'} en borrador`,
       cuerpo: `${escritos.map(e => `${e.fecha} · ${e.titulo}`).join('\n')}\nRevísalos en Agentes → Equipo → Borradores.`,
     })
@@ -1103,7 +1107,7 @@ ${REGLAS_COMUNES}`,
   await ctx.log('Informe guardado en la memoria.')
   await notificar(supabase, clientId, {
     tipo: 'agentes', titulo: `Informe de la semana del ${desde}`,
-    cuerpo: `${texto.slice(0, 280)}…\nEntero en Agentes → Equipo → Memoria.`, destino: 'agentes',
+    cuerpo: `${texto.slice(0, 280)}…\nEntero en Agentes → Equipo → Memoria.`, destino: 'contenido',
   })
   await escribeMemoria(ctx, out)
   return String(out.hecho || 'Informe semanal escrito.').slice(0, 400)
@@ -1138,7 +1142,7 @@ async function editor(ctx) {
 async function virales(ctx) {
   const { clientId } = ctx
   if (!apifyListo()) { await ctx.log('No hay APIFY_TOKEN en el worker: no puedo rastrear Instagram.'); return 'Sin APIFY_TOKEN.' }
-  const creadores = (await creadoresDe(clientId)).filter(c => c.categoria !== 'Propio')
+  const creadores = (await creadoresDe(clientId)).filter(c => !esPropio(c))
   // El nombre de la identidad es el usuario de IG (p. ej. "soybedia", "hormozi").
   const cuentas = creadores.map(c => c.nombre).filter(h => /^[a-z0-9._]{1,30}$/i.test(h || ''))
   if (!cuentas.length) { await ctx.log('El perfil no tiene creadores de referencia con cuenta de Instagram.'); return 'Sin cuentas de referencia.' }

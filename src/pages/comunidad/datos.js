@@ -37,6 +37,22 @@ export function accesoGuardado(llave) {
   try { return JSON.parse(localStorage.getItem(llave) || 'null') } catch { return null }
 }
 
+/** El acceso de la comunidad: el de su llave o, si no hay, el de una llave
+ *  antigua (cfg.llavesAntiguas), que se pasa a la nueva para la próxima vez.
+ *  Así quien ya dejó sus datos con una versión anterior no repite la puerta. */
+export function accesoDe(cfg) {
+  const actual = accesoGuardado(cfg.llave)
+  if (actual) return actual
+  for (const llave of cfg.llavesAntiguas || []) {
+    const viejo = accesoGuardado(llave)
+    if (viejo && typeof viejo === 'object') {
+      try { localStorage.setItem(cfg.llave, JSON.stringify(viejo)) } catch { /* incógnito */ }
+      return viejo
+    }
+  }
+  return null
+}
+
 // ── La API de la comunidad ──────────────────────────────────────────────────
 // AI para todo sigue en /api/aiparatodo; las demás van por
 // /api/comunidad?c=<clave>, que solo conoce las comunidades de su lista.

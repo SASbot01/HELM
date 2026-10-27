@@ -1,0 +1,215 @@
+/* ============================================================================
+   BIO — s4sf.net (Clase.jsx), desde el 22-10-2026.
+
+   Todo en una sola tarjeta, al estilo de las bios de creadores: arriba el
+   nombre; luego el héroe de HELM Academy, con «skool» enorme en los colores
+   del logo de Skool y Alex recortado delante; debajo, los enlaces en tarjetas.
+
+   Solo bajo `.ini--bio`: la página de Hugo comparte inicio.css y no lleva
+   nada de esto. Las variables (--marca, --papel…) son las de `.ini`.
+   ============================================================================ */
+
+.ini--bio { padding: 18px 14px 30px; }
+
+/* Una cortina de rayas verticales muy suave por encima del granate del fondo. */
+.ini--bio::before {
+  content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    repeating-linear-gradient(90deg,
+      rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 30px,
+      rgba(0, 0, 0, 0.22) 30px 33px, transparent 33px 60px);
+}
+
+/* ── La tarjeta que lo une todo ─────────────────────────────────────────── */
+.bio {
+  width: 100%;
+  max-width: 440px;
+  align-self: flex-start;
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center;
+  padding: 28px 18px 22px;
+  border-radius: 30px;
+  background: linear-gradient(180deg, rgba(56, 13, 24, 0.9) 0%, rgba(26, 6, 12, 0.95) 100%);
+  border: 1px solid rgba(var(--papel-rgb), 0.09);
+  box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: ini-sube .5s cubic-bezier(.16, 1, .3, 1) backwards;
+}
+
+.bio-quien h1 {
+  margin: 0;
+  font-size: 27px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1;
+  color: var(--papel);
+}
+.bio-rol { margin: 7px 0 0; font-size: 15px; font-weight: 700; color: var(--marca-claro); }
+.bio-arroba {
+  display: inline-block; margin-top: 4px;
+  font-size: 13px; color: var(--papel-mut); text-decoration: none;
+}
+.bio-arroba:hover { color: var(--papel-dim); }
+
+/* ── El héroe: HELM Academy ─────────────────────────────────────────────── */
+.bio-heroe {
+  margin-top: 22px;
+  width: 100%;
+  display: flex; flex-direction: column; align-items: stretch;
+  border-radius: 26px;
+  overflow: hidden;
+  background: #0b0507;
+  border: 1px solid rgba(var(--marca-claro-rgb), 0.16);
+  box-shadow: 0 26px 60px -28px rgba(0, 0, 0, 0.95);
+  color: var(--papel);
+  text-decoration: none;
+  /* «skool» se mide contra el ancho de la tarjeta (cqw), no de la pantalla. */
+  container-type: inline-size;
+  transition: transform .18s cubic-bezier(.2, .8, .2, 1), border-color .18s, box-shadow .18s;
+}
+.bio-heroe:hover {
+  transform: translateY(-2px);
+  border-color: rgba(var(--marca-claro-rgb), 0.34);
+  box-shadow: 0 30px 70px -28px rgba(var(--marca-rgb), 0.55);
+}
+.bio-heroe:focus-visible { outline: 2px solid var(--marca-claro); outline-offset: 3px; }
+
+.bio-escena {
+  position: relative; display: block;
+  /* Con este alto, la gorra solo tapa el pie de «skool»: la palabra se lee entera. */
+  width: 100%; aspect-ratio: 1 / 1.08;
+  overflow: hidden;
+  /* Fuego detrás de las letras y el granate subiendo desde el suelo. */
+  background:
+    radial-gradient(58% 34% at 50% 26%, rgba(255, 96, 38, 0.38), transparent 72%),
+    radial-gradient(40% 26% at 22% 30%, rgba(74, 125, 255, 0.22), transparent 70%),
+    radial-gradient(40% 26% at 80% 30%, rgba(74, 125, 255, 0.18), transparent 70%),
+    radial-gradient(90% 46% at 50% 104%, rgba(166, 43, 70, 0.6), transparent 72%),
+    radial-gradient(130% 90% at 50% 18%, #2c0b11 0%, #0b0507 72%);
+}
+/* Brasas: un polvo de puntos encendidos muy tenue alrededor de las letras. */
+.bio-escena::before {
+  content: ''; position: absolute; inset: 0 0 40% 0; pointer-events: none;
+  background-image:
+    radial-gradient(1.5px 1.5px at 12% 22%, rgba(255, 170, 90, .8), transparent),
+    radial-gradient(1px 1px at 30% 8%, rgba(255, 140, 70, .7), transparent),
+    radial-gradient(1.5px 1.5px at 58% 14%, rgba(255, 190, 110, .7), transparent),
+    radial-gradient(1px 1px at 76% 6%, rgba(255, 120, 60, .7), transparent),
+    radial-gradient(1.5px 1.5px at 90% 26%, rgba(255, 160, 80, .7), transparent),
+    radial-gradient(1px 1px at 44% 40%, rgba(255, 120, 60, .6), transparent),
+    radial-gradient(1px 1px at 6% 46%, rgba(255, 150, 80, .6), transparent);
+}
+/* El suelo: una línea de luz donde se apoya la foto. */
+.bio-escena::after {
+  content: ''; position: absolute; left: 6%; right: 6%; bottom: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(var(--marca-claro-rgb), 0.45), transparent);
+  z-index: 3;
+}
+
+.bio-skool {
+  position: absolute; left: 0; right: 0; top: 3%;
+  z-index: 1;
+  display: flex; justify-content: center;
+  font-family: 'Montserrat', 'Inter Tight', sans-serif;
+  font-weight: 900;
+  font-size: 33cqw;
+  line-height: 1;
+  letter-spacing: -0.045em;
+  user-select: none;
+}
+.bio-letra {
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+.bio-letra.azul {
+  background-image: linear-gradient(180deg, #b7ceff 0%, #4f80ff 46%, #2146d4 100%);
+  filter: drop-shadow(0 0 0.05em rgba(79, 128, 255, 0.95)) drop-shadow(0 0 0.2em rgba(79, 128, 255, 0.5));
+}
+.bio-letra.rojo {
+  background-image: linear-gradient(180deg, #ffbba3 0%, #ff4d2e 46%, #c21f17 100%);
+  filter: drop-shadow(0 0 0.05em rgba(255, 77, 46, 0.95)) drop-shadow(0 0 0.2em rgba(255, 77, 46, 0.5));
+}
+.bio-letra.oro {
+  background-image: linear-gradient(180deg, #fff3b8 0%, #ffc21f 46%, #d98800 100%);
+  filter: drop-shadow(0 0 0.05em rgba(255, 194, 31, 0.95)) drop-shadow(0 0 0.2em rgba(255, 194, 31, 0.45));
+}
+
+.bio-foto {
+  position: absolute; z-index: 2;
+  bottom: 0; left: 50%;
+  width: 98%; height: auto;
+  transform: translateX(-47%);
+  /* El cuerpo se funde con la tarjeta, como un recorte de estudio. */
+  -webkit-mask-image: linear-gradient(180deg, #000 70%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 70%, transparent 100%);
+  /* Un punto más de luz y un contorno cálido: la foto es de un reel con luz de
+     ventana, y sin esto se pierde contra el fondo oscuro. */
+  filter: brightness(1.08) contrast(1.04)
+    drop-shadow(0 0 14px rgba(255, 110, 70, 0.28))
+    drop-shadow(0 16px 28px rgba(0, 0, 0, 0.65));
+}
+
+.bio-lema {
+  padding: 14px 22px 0;
+  font-size: 15.5px; line-height: 1.5;
+  color: var(--papel-dim);
+}
+.bio-cta {
+  margin: 16px 18px 20px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 15px 18px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--marca-cima), var(--marca));
+  color: rgb(var(--sobre-marca-rgb));
+  font-size: 16px; font-weight: 700;
+  box-shadow: 0 14px 34px -14px rgba(var(--marca-rgb), 0.95);
+  transition: background .18s;
+}
+.bio-cta svg { transition: transform .18s; }
+.bio-heroe:hover .bio-cta { background: linear-gradient(135deg, #d23a5c, var(--marca-alto)); }
+.bio-heroe:hover .bio-cta svg { transform: translateX(3px); }
+
+/* ── ¿En qué puedo ayudarte? ────────────────────────────────────────────── */
+.bio-sep {
+  margin: 28px 0 12px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--papel-mut);
+}
+.bio-lista { width: 100%; display: flex; flex-direction: column; gap: 12px; }
+.bio-enlace {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(var(--papel-rgb), 0.045);
+  border: 1px solid rgba(var(--papel-rgb), 0.08);
+  color: var(--papel);
+  text-align: left;
+  text-decoration: none;
+  transition: transform .16s cubic-bezier(.2, .8, .2, 1), background .16s, border-color .16s;
+}
+.bio-enlace:hover {
+  transform: translateY(-2px);
+  background: rgba(var(--papel-rgb), 0.08);
+  border-color: rgba(var(--marca-claro-rgb), 0.3);
+}
+.bio-icono {
+  flex-shrink: 0;
+  width: 56px; height: 56px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: rgba(var(--marca-rgb), 0.24);
+  color: var(--marca-claro);
+}
+.bio-icono.yt { background: #ff0033; color: #fff; }
+.bio-txt { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.bio-txt b { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.bio-txt span { font-size: 13.5px; line-height: 1.4; color: var(--papel-dim); }
+.bio-txt small {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 11px; color: var(--papel-mut);
+}
+.bio-flecha { flex-shrink: 0; align-self: flex-end; opacity: 0.5; transition: opacity .16s, transform .16s; }
+.bio-enlace:hover .bio-flecha { opacity: 1; transform: translateX(2px); }
+
+.bio-pie { margin: 26px 0 0; font-size: 11.5px; color: var(--papel-mut); }
+
+@media (prefers-reduced-motion: reduce) {
+  .bio { animation: none; }
+  .bio-heroe, .bio-enlace, .bio-cta, .bio-cta svg, .bio-flecha { transition: none; }
+}

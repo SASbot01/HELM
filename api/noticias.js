@@ -1,7 +1,8 @@
 // HELM — Noticias: las tres noticias del día de IA y ciberseguridad.
 //
-// Las elige cada mañana el worker (api/_lib/noticias.js). Aquí solo se leen y
-// se pide una pasada a mano.
+// Las elige el worker (api/_lib/noticias.js): cada mañana, salvo en los perfiles
+// que van a demanda (brevesADemanda), que solo buscan con «Buscar ahora». Aquí
+// solo se leen y se pide una pasada a mano.
 //
 //   GET  ?action=lista  &clientId=   → las de hoy y las de las dos últimas
 //                                      semanas, y si hay una pasada en marcha

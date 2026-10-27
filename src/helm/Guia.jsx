@@ -25,7 +25,7 @@ const PAGES_HELM = [
   { icon: Bot, title: 'Agentes', lead: 'Tu equipo de IA para el contenido, en una oficina donde cada agente tiene su trabajo. Cada mañana a las 6:00 el director planifica el día y reparte; los guiones llegan como borrador para que tú los apruebes.',
     bullets: ['Pincha un agente en la oficina para ver sus normas, sus tareas y lo que hace ahora mismo; a la derecha, el registro en vivo.', 'El guionista escribe inspirándose en tus creadores de referencia; los lunes, Virales rastrea los reels que despegan y el Programador prepara la semana por tipo.', 'Nada se publica ni se aprueba sin ti. Para lanzar algo a mano, por el MCP.'] },
   { icon: CalendarRange, title: 'Roadmap', lead: 'Tu plan de contenido a seis meses —mes a mes y semana a semana— con los guiones que el equipo ya tiene programados en su día.',
-    bullets: ['Pincha un guion para verlo entero y descargarlo, o baja el PDF de toda la semana.', 'Cuando lo grabes, pulsa «marcar grabado»: HELM busca el vídeo en tu Drive, lo archiva en su sitio y te lo deja enlazado, para no perder ninguno.', '«Iniciar estudio y creación» prepara los guiones que falten del periodo, en tus mejores días.'] },
+    bullets: ['Pincha un guion para verlo entero y descargarlo, o baja el PDF de toda la semana.', 'Cuando lo grabes, pulsa «marcar grabado», súbelo a la «0 · Entrada» de tu Drive y ordénalo con Claude por el conector: queda en la carpeta de su guion, para no perder ninguno.', '«Iniciar estudio y creación» prepara los guiones que falten del periodo, en tus mejores días.'] },
   { icon: Users, title: 'CRM', lead: 'Tus contactos y tu pipeline de ventas, estilo tablero.',
     bullets: ['Arrastra los contactos entre etapas.', 'Cada contacto guarda su historial de actividad.'] },
   { icon: TrendingUp, title: 'Ventas y Diario', lead: 'Registra tus ventas y el trabajo diario del equipo.',
@@ -35,7 +35,7 @@ const PAGES_HELM = [
   { icon: CheckSquare, title: 'Tareas', lead: 'Un tablero kanban para organizar el trabajo.',
     bullets: ['Columnas por estado, con arrastrar y soltar.', 'Asigna tareas a tu equipo y añade subtareas.', 'Filtra por prioridad o responsable.'] },
   { icon: Plug, title: 'Conexiones', lead: 'Enlaza tus herramientas para que HELM trabaje solo.',
-    bullets: ['Instagram: cada día a las 6:00 se resincronizan las métricas de tus reels.', 'Stripe: cada pago se registra como venta, lead y apunte.', 'Drive: las piezas grabadas se archivan y enlazan solas. Iremos añadiendo más.'] },
+    bullets: ['Instagram: cada día a las 6:00 se resincronizan las métricas de tus reels.', 'Stripe: cada pago se registra como venta, lead y apunte.', 'Drive: guarda tus piezas grabadas y, con Claude por el conector, las ordenas en su carpeta. Iremos añadiendo más.'] },
   { icon: Flag, title: '¡Listo! Empieza por aquí', lead: 'Ya conoces HELM. El primer paso es tu onboarding: cuéntale a la IA quién eres para que empiece a crear tu contenido.',
     bullets: ['Al pulsar el botón te llevo directo a tu Onboarding.', 'Puedes volver a cualquier sección desde el menú cuando quieras.'] },
 ]

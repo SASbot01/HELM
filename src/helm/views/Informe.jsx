@@ -1,10 +1,30 @@
 // HELM — Informe: qué se ha facturado, filtrable por periodo y por programa.
+//
+// Dos pestañas: «Resumen» (todo lo de abajo) y «Avatar de ventas», el estudio
+// de a quién le vende de verdad el negocio, que antes tenía entrada propia en
+// el menú (views/Avatar.jsx). La segunda solo sale con `verAvatar`, que
+// calcula HelmApp con los permisos de verdad: ver el Informe no basta.
+//
+// Si el perfil se lleva una parte de lo que cobra otro (Silvestre AI: el 35 %
+// de Detrás de Cámara y el 50 % de web-seller, ver api/participaciones.js),
+// esas ventas entran con los importes ya multiplicados: suman en facturado,
+// cobrado, la gráfica y las mensualidades, cada cobro en su mes, pero no
+// cuentan como ventas propias (ni en «Ventas» ni en el ticket medio).
 import { useEffect, useMemo, useState } from 'react'
 import { Rocket, ArrowRight, X } from 'lucide-react'
 import { Evolucion, PorPrograma } from './informe/Graficas'
-import { supabase, money, fmtDate, getOnboarding, onboardingApi, isSaleCancelled, cuotasPendientes } from '../lib'
-import { Kpi, Panel, Empty } from '../ui'
+import { supabase, money, fmtDate, getOnboarding, onboardingApi, isSaleCancelled, cuotasPendientes, participacionesApi } from '../lib'
+import { Kpi, Panel, Empty, Tabs } from '../ui'
 import { seccionDelProducto } from '../producto'
+import { mensualidadesVivas, hoyLocal, ventasPorCobro, esVentaNueva } from '../cobrosPrevistos'
+import { partesDe } from '../participaciones'
+import Avatar from './Avatar.jsx'
+
+// Las fechas AAAA-MM-DD sin pasar por la hora local (en Latinoamérica,
+// new Date('2026-11-05') cae el día 4).
+const fmtDia = (iso) => (iso
+  ? new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' })
+  : '—')
 
 // Banner de arranque: empuja al onboarding (el alta; o el de contenido en los
 // perfiles que lo hicieron antes) mientras no esté hecho.
@@ -83,16 +103,56 @@ const PERIODOS = [
   { key: 'todo', label: 'Todo', days: null },
 ]
 
+// En la fecha de quien mira, sin pasar por UTC: en España la medianoche del 1
+// es aún el día 30 en UTC, y «Este mes» empezaba un día antes.
 function desdeISO(periodo) {
-  const now = new Date()
-  if (periodo.key === 'mes') return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
-  if (periodo.key === 'ano') return new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10)
+  const hoy = hoyLocal()
+  if (periodo.key === 'mes') return `${hoy.slice(0, 7)}-01`
+  if (periodo.key === 'ano') return `${hoy.slice(0, 4)}-01-01`
   if (periodo.days == null) return null
-  return new Date(now.getTime() - periodo.days * 86400000).toISOString().slice(0, 10)
+  return new Date(Date.parse(`${hoy}T12:00:00Z`) - periodo.days * 86400000).toISOString().slice(0, 10)
 }
 
-export default function Informe({ clientId, onNavigate }) {
+const PESTANAS = [
+  { key: 'resumen', label: 'Resumen' },
+  { key: 'avatar', label: 'Avatar de ventas' },
+]
+
+export default function Informe({ clientId, onNavigate, verAvatar = false }) {
+  const [pestana, setPestana] = useState('resumen')
+
+  // Sin permiso para el avatar, el Informe es el de siempre, sin pestañas. Lo
+  // decide HelmApp (puede('avatar')): que exista en el producto —en un
+  // despacho y en el Scraper, no—, que el negocio no lo haya apagado y que tu
+  // rol lo tenga en Permisos. Si falta el prop, se queda fuera: la pestaña
+  // lanza un estudio que gasta créditos, y no se abre por omisión.
+  const enResumen = !verAvatar || pestana === 'resumen'
+
+  // La estructura es SIEMPRE la misma —el envoltorio y <Resumen/> en el mismo
+  // sitio del árbol—, y solo se añaden la fila de pestañas y el Avatar cuando
+  // verAvatar es verdadero. verAvatar lo calcula HelmApp y llega tarde (cuando
+  // cargan permisos y secciones): si al pasar de falso a verdadero cambiara la
+  // forma del árbol, React desmontaría el Resumen y lo volvería a pedir todo a
+  // la base. Al estar siempre en el índice 1, se conserva.
+  return (
+    <div className="helm-grid" style={{ gap: 20 }}>
+      {/* El envoltorio evita que la rejilla estire las pestañas a todo el ancho. */}
+      {verAvatar && <div><Tabs tabs={PESTANAS} value={pestana} onChange={setPestana} /></div>}
+      {/* El resumen se oculta en vez de desmontarse: al volver de la pestaña
+          del avatar siguen puestos el periodo y el programa, y no se vuelve a
+          pedir todo a la base. El avatar sí se monta solo al abrirlo, para no
+          gastar una petición en cada visita al Informe. */}
+      <div hidden={!enResumen}>
+        <Resumen clientId={clientId} onNavigate={onNavigate} />
+      </div>
+      {verAvatar && pestana === 'avatar' && <Avatar clientId={clientId} />}
+    </div>
+  )
+}
+
+function Resumen({ clientId, onNavigate }) {
   const [sales, setSales] = useState(null)
+  const [partes, setPartes] = useState({ ventas: [], cobros: [], fijos: [] })
   const [finance, setFinance] = useState([])
   const [contacts, setContacts] = useState(0)
   const [periodoKey, setPeriodoKey] = useState('mes')
@@ -108,25 +168,31 @@ export default function Informe({ clientId, onNavigate }) {
       // `status` entra en el select para poder descartar las canceladas: una
       // venta anulada no puede seguir contando como facturación.
       supabase.from('sales')
-        .select('revenue, cash_collected, date, client_name, product, status, ' +
+        .select('id, revenue, cash_collected, date, client_name, product, status, payment_type, notes, ' +
           'installments_total, installments_paid, installment_amount, plan_start, plan_end')
         .eq('client_id', clientId).order('date', { ascending: false }).limit(2000),
       supabase.from('ceo_finance_entries')
         .select('amount, category, date').eq('client_id', clientId).limit(2000),
       supabase.from('crm_contacts').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
-    ]).then(([s, f, c]) => {
+      // Sin participaciones (o si falla) el informe sigue con lo propio.
+      participacionesApi.de(clientId).catch(() => ({ participaciones: [] })),
+    ]).then(([s, f, c, p]) => {
       if (!alive) return
       setSales((s.data || []).filter(r => !isSaleCancelled(r)))
+      setPartes(partesDe(p?.participaciones, { esCancelada: isSaleCancelled }))
       setFinance(f.data || [])
       setContacts(c.count || 0)
     })
     return () => { alive = false }
   }, [clientId])
 
+  // Las propias y la parte de otros perfiles, enteras (planes y mensualidades).
+  const todasLasVentas = useMemo(() => [...(sales || []), ...partes.ventas], [sales, partes])
+
   const programas = useMemo(() => {
-    const set = new Set((sales || []).map(s => (s.product || '').trim()).filter(Boolean))
+    const set = new Set(todasLasVentas.map(s => (s.product || '').trim()).filter(Boolean))
     return [...set].sort((a, b) => a.localeCompare(b))
-  }, [sales])
+  }, [todasLasVentas])
 
   // Sin `if (!sales) return null` dentro del useMemo: el compilador de React no
   // puede preservar la memoización con una salida temprana. El estado "cargando"
@@ -135,7 +201,10 @@ export default function Informe({ clientId, onNavigate }) {
     // `desdeISO` mira el reloj, así que se calcula aquí dentro: si viviera en el
     // cuerpo del render, el compilador no podría memoizar nada.
     const desde = desdeISO(periodo)
-    const todas = sales || []
+    // Lo que se cuenta por fechas va por cobros: cada cuota de una mensualidad
+    // en su mes, y no toda en el mes en que empezó (ventasPorCobro).
+    // La parte de otros perfiles llega ya repartida en cobros (partesDe).
+    const todas = [...ventasPorCobro(sales || []), ...partes.cobros].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
     const enRango = (fecha) => !desde || (fecha || '') >= desde
     const filtradas = todas
       .filter(s => enRango(s.date))
@@ -143,6 +212,11 @@ export default function Informe({ clientId, onNavigate }) {
 
     const revenue = filtradas.reduce((a, r) => a + (Number(r.revenue) || 0), 0)
     const cash = filtradas.reduce((a, r) => a + (Number(r.cash_collected) || 0), 0)
+    // Ventas y ticket medio: solo las ventas del periodo, no cada cobro (la
+    // renovación de octubre de una mensualidad de mayo no es una venta nueva),
+    // y solo las propias: la parte de las de otro perfil no es una venta tuya.
+    const nuevas = filtradas.filter(s => esVentaNueva(s) && !s.participacion)
+    const facturadoNuevas = nuevas.reduce((a, r) => a + (Number(r.revenue) || 0), 0)
 
     // Desglose por programa (siempre sobre el periodo, ignorando el filtro de
     // programa: si no, la tabla tendría una sola fila y no compararías nada).
@@ -151,7 +225,7 @@ export default function Informe({ clientId, onNavigate }) {
     for (const s of delPeriodo) {
       const k = (s.product || '').trim() || 'Sin programa'
       porPrograma[k] = porPrograma[k] || { unidades: 0, facturado: 0, cobrado: 0 }
-      porPrograma[k].unidades++
+      if (esVentaNueva(s) && !s.participacion) porPrograma[k].unidades++   // un cobro más de una venta no es otra venta
       porPrograma[k].facturado += Number(s.revenue) || 0
       porPrograma[k].cobrado += Number(s.cash_collected) || 0
     }
@@ -162,15 +236,49 @@ export default function Informe({ clientId, onNavigate }) {
 
     // Pagos fraccionados vivos: los que aún tienen cuotas por cobrar. Sin esto
     // el informe daba por buena toda la facturación aunque estuviera a medias.
-    const planes = filtradas
+    // Un plan con cuotas pendientes sale empiece cuando empiece (uno de mayo
+    // sigue cobrando en octubre); los ya cobrados, solo los del periodo.
+    // Los planes y las mensualidades, enteros (sin partir por cobros).
+    const delPrograma = todasLasVentas.filter(s => programa === '__all__' || (s.product || '').trim() === programa)
+    const planes = delPrograma
       .map(s => ({ ...s, pendientes: cuotasPendientes(s) }))
-      .filter(s => s.pendientes != null)
+      .filter(s => s.pendientes != null && (s.pendientes > 0 || enRango(s.date)))
       .sort((a, b) => b.pendientes - a.pendientes)
+    // Y las mensualidades vivas (las de 197 € al mes…): no tienen nº de
+    // cuotas, así que se cuentan los pagos y se dice cuándo toca el siguiente.
+    const mensualidades = mensualidadesVivas(delPrograma, { hoy: hoyLocal(), esCancelada: isSaleCancelled })
+    // Las cantidades fijas al mes de otros perfiles (200 € de Hugo) son también
+    // ingreso recurrente: suman en «Mensualidades».
+    const fijos = programa === '__all__' ? partes.fijos : []
+    const alMes = mensualidades.reduce((a, m) => a + (Number(m.venta.installment_amount) || 0), 0)
+      + fijos.reduce((a, f) => a + f.importe, 0)
+    const recurrentes = mensualidades.length + fijos.length
     const porCobrar = planes.reduce(
       (a, s) => a + (s.pendientes * (Number(s.installment_amount) || 0)), 0)
 
+    // Tu parte de otros perfiles en el periodo: por perfil y, dentro, por
+    // cliente (lo que ha pagado cada uno y lo que te toca).
+    const partesPorOrigen = {}
+    for (const s of filtradas) {
+      if (!s.participacion) continue
+      const o = (partesPorOrigen[s.product] ||= { nombre: s.product, porcentaje: s.participacion.porcentaje, cobrado: 0, clientes: {} })
+      const cobro = Number(s.cash_collected) || 0
+      o.cobrado += cobro
+      // El mismo cliente aunque su nombre venga con otras mayúsculas.
+      const nombre = (s.client_name || 'Sin nombre').trim()
+      const k = nombre.toLowerCase()
+      o.clientes[k] ||= { nombre, cobrado: 0 }
+      o.clientes[k].cobrado += cobro
+    }
+    const tuParte = Object.values(partesPorOrigen)
+      .map(o => ({ ...o, clientes: Object.values(o.clientes).filter(c => c.cobrado > 0).sort((a, b) => b.cobrado - a.cobrado) }))
+      .filter(o => o.cobrado > 0)
+      .sort((a, b) => b.cobrado - a.cobrado)
+    const deOtros = tuParte.reduce((a, o) => a + o.cobrado, 0)
+
     const fin = finance.filter(e => enRango(e.date))
-    const ingresos = fin.filter(e => Number(e.amount) > 0).reduce((a, e) => a + Number(e.amount), 0)
+    // Como en Finanzas: la parte cobrada de otros perfiles es un ingreso más.
+    const ingresos = fin.filter(e => Number(e.amount) > 0).reduce((a, e) => a + Number(e.amount), 0) + deOtros
     const gastos = fin.filter(e => Number(e.amount) < 0).reduce((a, e) => a + Number(e.amount), 0)
 
     // Serie mes a mes para la gráfica de evolución. Se construye desde los
@@ -203,14 +311,14 @@ export default function Informe({ clientId, onNavigate }) {
     }
 
     return {
-      revenue, cash, ventas: filtradas.length, serie,
-      ticket: filtradas.length ? revenue / filtradas.length : 0,
+      revenue, cash, ventas: nuevas.length, serie,
+      ticket: nuevas.length ? facturadoNuevas / nuevas.length : 0,
       balance: ingresos + gastos,
-      planes, porCobrar,
-      tabla,
+      planes, porCobrar, mensualidades, alMes, recurrentes,
+      tabla, partes: tuParte, deOtros,
       recientes: filtradas.slice(0, 8),
     }
-  }, [sales, finance, periodo, programa])
+  }, [sales, partes, todasLasVentas, finance, periodo, programa])
 
   if (sales == null) return <Empty>Cargando…</Empty>
 
@@ -242,10 +350,16 @@ export default function Informe({ clientId, onNavigate }) {
         <Kpi label="Facturado" value={money(d.revenue)} accent sub={sufijo} />
         <Kpi label="Cobrado" value={money(d.cash)} />
         <Kpi label="Ventas" value={d.ventas} sub={`ticket medio ${money(d.ticket)}`} />
+        {d.partes.length > 0 && (
+          <Kpi label="Tu parte de otros perfiles" value={money(d.deOtros)} sub={`cobrado · ${d.partes.map(o => o.nombre).join(' y ')}`} />
+        )}
         <Kpi label="Balance finanzas" value={money(d.balance)} sub="ingresos − gastos" />
         <Kpi label="Contactos CRM" value={contacts} sub="en pipeline" />
         {d.planes.length > 0 && (
           <Kpi label="Pendiente en cuotas" value={money(d.porCobrar)} sub={`${d.planes.length} plan${d.planes.length === 1 ? '' : 'es'} de pago`} />
+        )}
+        {d.recurrentes > 0 && (
+          <Kpi label="Mensualidades" value={`${money(d.alMes)}/mes`} sub={`${d.recurrentes} activa${d.recurrentes === 1 ? '' : 's'}`} />
         )}
       </div>
 
@@ -256,8 +370,8 @@ export default function Informe({ clientId, onNavigate }) {
         <PorPrograma tabla={d.tabla} />
       </div>
 
-      {d.planes.length > 0 && (
-        <Panel title="Pagos fraccionados">
+      {(d.planes.length > 0 || d.mensualidades.length > 0) && (
+        <Panel title={d.mensualidades.length ? 'Pagos fraccionados y mensualidades' : 'Pagos fraccionados'}>
           <div className="helm-tablewrap">
             <table className="helm-table">
               <thead>
@@ -278,10 +392,51 @@ export default function Informe({ clientId, onNavigate }) {
                       </span>
                     </td>
                     <td className="helm-num">{s.installment_amount ? money(s.installment_amount) : '—'}</td>
-                    <td>{s.plan_start ? fmtDate(s.plan_start) : '—'}</td>
-                    <td>{s.plan_end ? fmtDate(s.plan_end) : '—'}</td>
+                    <td>{s.plan_start ? fmtDia(s.plan_start) : '—'}</td>
+                    <td>{s.plan_end ? fmtDia(s.plan_end) : '—'}</td>
                   </tr>
                 ))}
+                {d.mensualidades.map(m => (
+                  <tr key={`m-${m.venta.id}`} className="pending">
+                    <td>{m.venta.client_name || '—'}</td>
+                    <td>{m.venta.product || '—'}</td>
+                    <td className="helm-num">{m.pagos} {m.pagos === 1 ? 'pago' : 'pagos'}</td>
+                    <td>
+                      <span className={'helm-chip ' + (m.vencida ? 'red' : 'amber')}>
+                        {m.vencida ? `Vencida la ${m.n}ª (${fmtDia(m.siguiente)})` : `La ${m.n}ª el ${fmtDia(m.siguiente)}`}
+                      </span>
+                    </td>
+                    <td className="helm-num">{money(m.venta.installment_amount)}</td>
+                    <td>{fmtDia(m.venta.plan_start)}</td>
+                    <td>Mensual</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      )}
+
+      {d.partes.length > 0 && (
+        <Panel title={`Tu parte de otros perfiles · ${periodo.label.toLowerCase()}`}>
+          <div className="helm-tablewrap">
+            <table className="helm-table">
+              <thead><tr><th>Perfil</th><th>Cliente</th><th>Tu parte cobrada</th></tr></thead>
+              <tbody>
+                {d.partes.flatMap(o => [
+                  ...o.clientes.map(c => (
+                    <tr key={`${o.nombre}-${c.nombre}`}>
+                      <td>{o.nombre}</td>
+                      <td>{c.nombre}</td>
+                      <td className="helm-num">{money(c.cobrado)}</td>
+                    </tr>
+                  )),
+                  <tr key={`${o.nombre}-total`} className="active">
+                    <td><b>{o.nombre}</b></td>
+                    <td><b>Total</b></td>
+                    <td className="helm-num"><b>{money(o.cobrado)}</b></td>
+                  </tr>,
+                ])}
               </tbody>
             </table>
           </div>
@@ -331,7 +486,7 @@ export default function Informe({ clientId, onNavigate }) {
                 <tr key={i}>
                   <td>{fmtDate(r.date)}</td>
                   <td>{r.client_name || '—'}</td>
-                  <td>{r.product || '—'}</td>
+                  <td>{r.product || '—'}{r.cuota ? ` · ${r.cuota}ª` : ''}</td>
                   <td className="helm-num">{money(r.revenue)}</td>
                   <td className="helm-num">{money(r.cash_collected)}</td>
                 </tr>

@@ -538,3 +538,29 @@ a.aip-hilo:hover .aip-candado { color: var(--rosa); }
 
 /* El enlace de una tarjeta de skill a su hilo propio (piezas.jsx). */
 .aip-a-hilo { margin: 4px 0 18px; }
+
+/* Entrada con el correo (AI para todo): el enlace a HELM Academy (Skool) para
+   quien aún no está. El violeta es el de Skool. */
+.aip-skool-paso {
+  display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%;
+  margin: 16px auto 0; padding: 10px 16px;
+  border-radius: 999px; text-decoration: none;
+  background: rgba(124, 58, 237, 0.14); border: 1px solid rgba(124, 58, 237, 0.45);
+  color: var(--papel); font-weight: 700; font-size: 14px;
+  transition: background .15s;
+}
+.aip-skool-paso:hover { background: rgba(124, 58, 237, 0.24); }
+.aip-skool-n {
+  display: inline-grid; place-items: center; flex-shrink: 0;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #7c3aed; color: #fff; font-size: 12px; font-weight: 800;
+}
+.aip-aprobada .aip-btn.grande { margin-top: 18px; }
+.aip-aprobada .aip-btn.sec { margin-top: 10px; }
+/* Ese correo no está en HELM Academy: el aviso y el botón al formulario. */
+.aip-no-esta {
+  display: grid; justify-items: center; gap: 12px;
+  margin-top: 16px; padding: 16px 18px; border-radius: 16px;
+  background: rgba(124, 58, 237, 0.10); border: 1px solid rgba(124, 58, 237, 0.4);
+}
+.aip-no-esta p { margin: 0; text-align: center; color: var(--papel); }

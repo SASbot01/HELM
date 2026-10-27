@@ -1,10 +1,11 @@
 // HELM — qué noticias lee y cómo elige cada perfil, y qué diarios hay.
 //
 //   · Las breves (api/_lib/noticias.js): las tres noticias del día. Las recibe
-//     todo perfil con la sección Noticias encendida; sus fuentes, sus temas y
-//     el criterio con que se eligen salen de aquí por el slug del perfil, y si
-//     no tiene entrada propia, los de siempre (IA y ciberseguridad: silvestre,
-//     estudio-nova…).
+//     todo perfil con la sección Noticias encendida (cada mañana, o solo al
+//     pulsar «Buscar ahora» si está en brevesADemanda); sus fuentes, sus temas
+//     y el criterio con que se eligen salen de aquí por el slug del perfil, y
+//     si no tiene entrada propia, los de siempre (IA y ciberseguridad:
+//     silvestre, estudio-nova…).
 //   · El diario (api/_lib/redaccion.js): las piezas largas de las comunidades
 //     públicas. Solo los perfiles de DIARIOS, cada uno con su línea editorial,
 //     sus ediciones y su web.
@@ -192,6 +193,14 @@ const BREVES = {
 
 /** Las breves del perfil con ese slug: las suyas o las de siempre. */
 export const brevesDe = (slug) => (Object.hasOwn(BREVES, String(slug ?? '')) ? BREVES[slug] : BREVES_POR_DEFECTO)
+
+// Breves que el worker NO lanza solas cada mañana: solo con «Buscar ahora».
+// Por defecto, silvestre y estudio-nova; Detrás de Cámara sigue con su pasada
+// diaria porque sus breves son lo único que actualiza su web pública. Con la
+// variable vacía (HELM_NOTICIAS_A_DEMANDA=) vuelven todos a la pasada diaria.
+export const brevesADemanda = (slug) =>
+  String(process.env.HELM_NOTICIAS_A_DEMANDA ?? 'silvestre,estudio-nova')
+    .split(',').map(s => s.trim()).filter(Boolean).includes(slug)
 
 // ── Los diarios ─────────────────────────────────────────────────────────────
 // Uno por comunidad pública, en el perfil de la comunidad. Las ediciones, en

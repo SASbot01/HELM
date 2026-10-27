@@ -7,7 +7,7 @@
 //   POST ?action=set-active   → (superadmin) activa/desactiva; aprobar un acceso
 //                               de cliente activa también su negocio
 import { supabase } from './lib/supabase.js'
-import { applyCors, validateAuth, requireSuperAdmin } from './_lib/auth.js'
+import { applyCors, validateAuth, requireSuperAdmin, olvidarAcceso } from './_lib/auth.js'
 import { perfilesVisibles } from './_lib/access.js'
 
 export default async function handler(req, res) {
@@ -74,6 +74,7 @@ export default async function handler(req, res) {
     if (suyo.plataforma && !auth.plataforma) return res.status(403).json({ error: 'Esa cuenta no se puede tocar desde aquí' })
     const { error } = await supabase.from(table).update({ active: !!active }).eq('id', id)
     if (error) return res.status(500).json({ error: error.message })
+    if (type === 'team') olvidarAcceso(id)   // desactivar corta su sesión ya
 
     // Aprobar un acceso de cliente activa también su negocio (que se creó pendiente).
     if (type === 'team' && active) {

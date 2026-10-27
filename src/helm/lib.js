@@ -2,6 +2,7 @@
 import { supabase } from '../utils/supabase'
 import { esDeEsteProducto, productoActual } from './producto'
 import { SLUG_RE, slugify, RUTAS_DE_LA_WEB, filaPerfilNuevo, pipelineInicial } from './perfilNuevo'
+import { tipoDeArchivo, NO_ADMITIDO } from '../../api/_lib/almacen.js'
 
 export { supabase }
 
@@ -10,7 +11,14 @@ export const money = (n) =>
 
 export const fmtDate = (d) => {
   if (!d) return '—'
-  try { return new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) } catch { return d }
+  try {
+    // Una fecha sola (AAAA-MM-DD) se lee como medianoche UTC: en una zona con
+    // desfase negativo (Latinoamérica) saldría el día anterior.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      return new Date(`${d}T12:00:00Z`).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' })
+    }
+    return new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
+  } catch { return d }
 }
 
 export const todayISO = () => new Date().toISOString().slice(0, 10)
@@ -183,6 +191,10 @@ export async function uploadFile(clientId, folder, file) {
     throw new Error(`El archivo pesa más de ${MAX_UPLOAD_MB} MB`)
   }
   const path = `${clientId}/${folder}/${safeName(file.name)}`
+  // La misma lista que mira la pasarela (api/_lib/almacen.js), y sobre el
+  // mismo nombre que verá ella: lo que no va a entrar se avisa aquí, antes de
+  // mandar sus megas para nada.
+  if (!tipoDeArchivo(path)) throw new Error(NO_ADMITIDO)
   const { error } = await supabase.storage.from('helm').upload(path, file, {
     cacheControl: '3600', upsert: false, contentType: file.type || undefined,
   })
@@ -237,8 +249,11 @@ export const brandOf = (client) => ({
 // Sube el logo al bucket público. Se usa desde Ajustes (con perfil ya creado)
 // y desde el registro público, donde todavía no hay id: en ese caso cuelga de
 // `registro/` y se queda ahí, que es una carpeta y no un problema.
+//
+// SVG no: es XML, puede llevar script y el bucket se sirve desde nuestro
+// dominio. La pasarela (api/_lib/almacen.js) tampoco lo deja subir.
 export async function uploadLogo(file, clientId) {
-  if (!/^image\//.test(file.type || '')) throw new Error('El logo tiene que ser una imagen (PNG, JPG o SVG)')
+  if (!/^image\/(png|jpeg|webp)$/.test(file.type || '')) throw new Error('El logo tiene que ser PNG, JPG o WebP (SVG no)')
   if (file.size > MAX_LOGO_MB * 1024 * 1024) throw new Error(`El logo pesa más de ${MAX_LOGO_MB} MB`)
   const { url } = await uploadFile(clientId || 'registro', 'marca', file)
   return url
@@ -407,8 +422,8 @@ export const adsApi = {
   borrar: (clientId, id) => apiFetch(`/api/ads?action=borrar&clientId=${clientId}&id=${id}`, { method: 'DELETE' }),
 }
 
-// Contenido: marcar un guion como grabado (dispara la detección del vídeo en
-// Drive y lo archiva en su pieza) y leer en qué fase de Drive está cada guion.
+// Contenido: marcar un guion como grabado (solo lo marca: el vídeo ya no se
+// busca solo en Drive) y leer en qué fase de Drive está cada guion (Roadmap).
 export const contenidoApi = {
   grabar: (clientId, guionId, grabado = true) =>
     apiFetch(`/api/agentes-perfil?action=grabar&clientId=${clientId}`, { method: 'POST', body: { guionId, grabado } }),
@@ -562,6 +577,20 @@ export const altasApi = {
   descartar: (altaId) => apiFetch('/api/onboarding?action=alta-descartar', { method: 'POST', body: { altaId } }),
 }
 
+// Accesos con aprobación (AI para todo): las solicitudes pendientes y su visto
+// bueno. Solo superadmin (api/accesos.js lo exige). Al aprobar, la persona entra
+// en la web con su mismo correo; si hay correo saliente, además se le avisa.
+// La parte de las ventas de otros perfiles que se lleva este (api/participaciones.js).
+export const participacionesApi = {
+  de: (clientId) => apiFetch(`/api/participaciones?clientId=${encodeURIComponent(clientId)}`),
+}
+
+export const accesosApi = {
+  pendientes: (comunidad = 'aiparatodo') => apiFetch(`/api/accesos?action=pendientes&comunidad=${comunidad}`),
+  aprobar: (id, comunidad = 'aiparatodo') => apiFetch(`/api/accesos?action=aprobar&comunidad=${comunidad}`, { method: 'POST', body: { id } }),
+  rechazar: (id, comunidad = 'aiparatodo') => apiFetch(`/api/accesos?action=rechazar&comunidad=${comunidad}`, { method: 'POST', body: { id } }),
+}
+
 // El enlace público del alta de una agencia. Siempre con su slug: sin él, lo
 // que se rellene le llega a la agencia de la casa, no a la que lo mandó.
 const ALTA_PUBLICA = 'https://helm.s4sf.net/alta'
@@ -585,7 +614,18 @@ export const creadoresApi = {
   lista: (clientId) => apiFetch(`/api/agentes-perfil?action=creadores&clientId=${clientId}`),
   ficha: (clientId, slug) =>
     apiFetch(`/api/agentes-perfil?action=ficha&clientId=${clientId}&slug=${encodeURIComponent(slug)}`),
-  drive: (clientId) => apiFetch(`/api/agentes-perfil?action=drive&clientId=${clientId}`),
+}
+
+// La oficina de un agente: su estado vivo y el chat con él.
+export const oficinaApi = {
+  estado: (clientId, agente) =>
+    apiFetch(`/api/agente-oficina?action=estado&clientId=${clientId}&agente=${encodeURIComponent(agente)}`),
+  historial: (clientId, agente) =>
+    apiFetch(`/api/agente-oficina?action=historial&clientId=${clientId}&agente=${encodeURIComponent(agente)}`),
+  hablar: (clientId, agente, texto, recordar = false) =>
+    apiFetch('/api/agente-oficina?action=hablar', { method: 'POST', body: { clientId, agente, texto, recordar } }),
+  instruir: (clientId, agente, texto) =>
+    apiFetch('/api/agente-oficina?action=instruir', { method: 'POST', body: { clientId, agente, texto } }),
 }
 
 // Equipos IA — equipo de Contenido: Agente Persona (base) + Agente 1 (ideas diarias).
@@ -705,6 +745,20 @@ export const portadasApi = {
     apiFetch('/api/portadas?action=textos', { method: 'POST', body: { clientId, mediaId } }),
   video: (clientId, mediaId) => apiBlob(`/api/portadas?action=video&clientId=${clientId}&mediaId=${encodeURIComponent(mediaId)}`),
   imagen: (clientId, mediaId) => apiBlob(`/api/portadas?action=imagen&clientId=${clientId}&mediaId=${encodeURIComponent(mediaId)}`),
+  capacidad: (clientId) => apiFetch(`/api/portadas?action=capacidad&clientId=${clientId}`),
+  fondoPrompt: (clientId, mediaId, tema) =>
+    apiFetch('/api/portadas?action=fondo-prompt', { method: 'POST', body: { clientId, mediaId, tema } }),
+  fondoIa: (clientId, prompt) =>
+    apiFetch('/api/portadas?action=fondo-ia', { method: 'POST', body: { clientId, prompt } }),
+  // Portada entera con IA en un estilo (estilos de src/agents/portadas/estilosIa.js
+  // o «ej:<id>» para un ejemplo subido). `fotograma`: data URL de la imagen real.
+  portadaIa: (clientId, { fotograma, titulo, estilo, detalle, mediaId }) =>
+    apiFetch('/api/portadas?action=portada-ia', { method: 'POST', body: { clientId, fotograma, titulo, estilo, detalle, mediaId } }),
+  ejemplos: (clientId) => apiFetch(`/api/portadas?action=ejemplos&clientId=${clientId}`),
+  subirEjemplo: (clientId, nombre, imagen) =>
+    apiFetch('/api/portadas?action=ejemplo', { method: 'POST', body: { clientId, nombre, imagen } }),
+  borrarEjemplo: (clientId, id) =>
+    apiFetch('/api/portadas?action=ejemplo-borrar', { method: 'POST', body: { clientId, id } }),
 }
 
 // Trial reels (api/trial-reels.js): variantes editadas de un reel propio para

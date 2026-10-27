@@ -5,7 +5,7 @@ Guardado el 5 de octubre de 2026 para seguir al día siguiente. Marca con `[x]` 
 ## Hecho la madrugada del 5 de octubre (en producción y comprobado)
 
 - [x] Servicios reiniciados con el código nuevo: el equipo de agentes ya responde en producción con sus 7 agentes
-- [x] La pasarela `/sb` solo deja pasar tablas y archivos, y solo con la clave pública (`scripts/sb-proxy.mjs`). Fuera quedan la administración de Postgres, auth, GraphQL y cualquier petición con la clave de servicio
+- [x] La pasarela `/sb` se cerró a lo que necesita la web (`scripts/sb-proxy.mjs`). Hoy (desplegado el 27-oct-2026): solo GET/HEAD de `/storage/v1/object/public/…`, sin tablas, sin escrituras (ni subidas firmadas) y sin Realtime. Fuera quedan la administración de Postgres, auth, GraphQL y cualquier petición con la clave de servicio
 - [x] La clave pública ya no ve 177 de las 206 tablas: las que la web no usa (`migrations/090_anon_solo_tablas_de_la_web.sql`)
 - [x] Chat: un solo perfil por petición (`api/chat.js`)
 - [x] Accesos del equipo: solo propietario o administrador, y solo un propietario toca a otro propietario (`api/equipo.js`)

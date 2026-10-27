@@ -39,6 +39,8 @@ const AltaHelm = perezoso(() => import('./pages/AltaHelm.jsx'))
 const PaginaInicio = perezoso(() => import('./pages/PaginaInicio.jsx'))
 const PaginaInicioHugo = perezoso(() => import('./pages/PaginaInicioHugo.jsx'))
 const Clase = perezoso(() => import('./pages/Clase.jsx'))
+const HelmAcademy = perezoso(() => import('./pages/HelmAcademy.jsx'))
+const Accesos = perezoso(() => import('./pages/Accesos.jsx'))
 const SocioIA = perezoso(() => import('./pages/inicio/socio/SocioIA.jsx'))
 const Gracias = perezoso(() => import('./pages/inicio/socio/Gracias.jsx'))
 const Legal = perezoso(() => import('./pages/inicio/socio/Legal.jsx'))
@@ -182,6 +184,11 @@ createRoot(document.getElementById('root')).render(
               formulario. Públicas, así que ANTES de /:slug/*. */}
           <Route path="/clase" element={<Clase />} />
           <Route path="/empresas" element={<SocioIA />} />
+          {/* HELM Academy: el formulario de entrada al Skool (guarda en el CRM y
+              redirige al Skool). Y /accesos: la solicitud de acceso a AI para
+              todo (nombre y correo) que aprueba Alex. Públicas. */}
+          <Route path="/helm-academy" element={<Suspense fallback={null}><HelmAcademy /></Suspense>} />
+          <Route path="/accesos" element={<Suspense fallback={null}><Accesos /></Suspense>} />
           {/* AI para todo: la comunidad gratis de la bio, con sus rutas dentro. */}
           <Route path="/aiparatodo/*" element={<AIParaTodo />} />
           {/* Filmmaking para todo: la comunidad de Detrás de Cámara (Abel), con

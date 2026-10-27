@@ -24,8 +24,9 @@ import { createHash, randomBytes } from 'node:crypto'
 import { supabase } from './lib/supabase.js'
 import { wrap } from './_lib/auth.js'
 import { puedeVerPerfil, perfilesVisibles } from './_lib/access.js'
+import { todasLasFilas } from './_lib/filas.js'
+import { esPropio } from './_lib/creadores.js'
 import { fichaDe } from './agentes-perfil.js'
-import { resumenDrive } from './_lib/ingesta.js'
 import { getIgConfig } from './_lib/instagram.js'
 import { AGENTES as AGENTES_EQUIPO, AGENTES_LANZABLES, encolaAgente, tokensDeHoy, flujoPiezas } from './_lib/equipo.js'
 
@@ -126,6 +127,58 @@ const SOLO_PLATAFORMA = new Set([
   'reel-borrar', 'reel-reintentar', 'memoria', 'memoria-guardar', 'memoria-borrar', 'estado',
 ])
 
+// Los creadores «Propio» son el contenido del propio cliente: sus vídeos de
+// Drive, transcritos frase a frase. El resto del corpus (creadores públicos de
+// referencia) lo consulta cualquier agencia; uno «Propio» solo la plataforma y
+// la agencia que lo tiene asignado a alguno de sus perfiles. Sin esto, el
+// administrador de cualquier agencia (los alumnos que se registran lo son) leía
+// las transcripciones de los vídeos de clientes ajenos y podía asignárselas a su
+// perfil para leerlas también por el MCP.
+// Es privado si es de tipo «Propio» (esPropio) o si tiene vídeos de Drive,
+// aunque alguien le haya cambiado el tipo: lo que se transcribe de Drive es
+// siempre de un cliente.
+
+/** Todos los creadores (ids), cuáles son privados y cuáles son «Propio» de
+ *  tipo. Por páginas: si se cortara en 1000, un privado podría pasar por público. */
+async function creadoresPrivados() {
+  const [todas, drive] = await Promise.all([
+    todasLasFilas(() => supabase.from('agent_identities').select('id, categoria').order('id')),
+    todasLasFilas(() => supabase.from('agent_reels').select('identity_id').eq('fuente', 'drive').order('id')),
+  ])
+  const conDrive = new Set(drive.map(r => r.identity_id).filter(Boolean))
+  return {
+    todas: todas.map(i => i.id),
+    privadas: new Set(todas.filter(i => esPropio(i) || conDrive.has(i.id)).map(i => i.id)),
+    propias: new Set(todas.filter(esPropio).map(i => i.id)),
+  }
+}
+
+/** Los creadores que ve una sesión con estos perfiles visibles: un Set de ids,
+ *  o null si los ve todos (la plataforma). */
+export async function identidadesVisibles(visibles) {
+  if (!visibles) return null
+  const [{ todas, privadas }, mias] = await Promise.all([
+    creadoresPrivados(),
+    visibles.length
+      ? todasLasFilas(() => supabase.from('agent_identity_clients').select('identity_id').in('client_id', visibles).order('identity_id').order('client_id'))
+      : [],
+  ])
+  const asignadas = new Set(mias.map(r => r.identity_id))
+  return new Set(todas.filter(id => !privadas.has(id) || asignadas.has(id)))
+}
+
+/** De estos «Propio», los que solo tiene este perfil: si se los quita, nadie
+ *  fuera de la plataforma podría volver a verlos ni asignarlos. Solo los de
+ *  tipo «Propio»: uno público al que se le coló un vídeo de Drive sí se suelta
+ *  (lo recupera la plataforma), en vez de quedarse pegado al perfil. */
+async function soloDeEste(clientId, ids) {
+  if (!ids.length) return []
+  const { data, error } = await supabase.from('agent_identity_clients').select('identity_id, client_id').in('identity_id', ids)
+  if (error) throw error
+  const enOtro = new Set((data || []).filter(r => r.client_id !== clientId).map(r => r.identity_id))
+  return ids.filter(id => !enOtro.has(id))
+}
+
 // Filas que se tocan por su id: la acción vale si la fila es de un perfil tuyo.
 const FILA_DE = {
   'equipo-guion': 'helm_content_calendar',
@@ -170,8 +223,9 @@ async function handler(req, res) {
       const { data, error } = await supabase
         .from('agent_identities').select('*, agent_reels(estado, metricas)').order('categoria').order('nombre')
       if (error) throw error
+      const vis = await identidadesVisibles(visibles)
       // El mismo resumen por creador que ve un perfil (api/agentes-perfil.js).
-      const identidades = (data || []).map(({ agent_reels: rs = [], ...i }) => ({
+      const identidades = (data || []).filter(i => !vis || vis.has(i.id)).map(({ agent_reels: rs = [], ...i }) => ({
         ...i,
         reels: rs.length,
         analizados: rs.filter(r => r.estado === 'etiquetado').length,
@@ -187,7 +241,8 @@ async function handler(req, res) {
       const { data: identidad, error } = await supabase
         .from('agent_identities').select('id').eq('slug', slug).maybeSingle()
       if (error) throw error
-      if (!identidad) return res.status(404).json({ error: 'Ese creador no existe' })
+      const vis = await identidadesVisibles(visibles)
+      if (!identidad || (vis && !vis.has(identidad.id))) return res.status(404).json({ error: 'Ese creador no existe' })
       return res.status(200).json(await fichaDe(identidad.id, ve))
     }
 
@@ -230,7 +285,21 @@ async function handler(req, res) {
         .select('id, identity_id, url, fuente, cuenta, publicado_en, caption, metricas, etiquetas, estado, error, duracion_s, created_at')
         .order('created_at', { ascending: false })
         .limit(500)
-      if (identityId) q = q.eq('identity_id', identityId)
+      const vis = await identidadesVisibles(visibles)
+      if (identityId) {
+        if (vis && !vis.has(identityId)) return res.status(404).json({ error: 'Ese creador no existe' })
+        q = q.eq('identity_id', identityId)
+      } else if (vis) {
+        // Sin creador: solo los reels de creadores que puede ver (los que no
+        // tienen creador, de la plataforma).
+        // Se excluyen los privados ajenos en vez de listar los visibles: con
+        // muchos creadores esa lista no cabría en la URL.
+        if (!vis.size) return res.status(200).json({ reels: [] })
+        const { privadas } = await creadoresPrivados()
+        const ocultos = [...privadas].filter(id => !vis.has(id))
+        q = q.not('identity_id', 'is', null)
+        if (ocultos.length) q = q.not('identity_id', 'in', `(${ocultos.join(',')})`)
+      }
       const { data, error } = await q
       if (error) throw error
       return res.status(200).json({ reels: data || [] })
@@ -244,7 +313,11 @@ async function handler(req, res) {
       const { data, error } = await supabase
         .from('agent_reels').select('*').eq('id', id).maybeSingle()
       if (error) throw error
-      if (!data) return res.status(404).json({ error: 'Ese reel no existe' })
+      const vis = await identidadesVisibles(visibles)
+      // Un reel sin creador o de un creador que no ve, como si no existiera.
+      if (!data || (vis && !(data.identity_id && vis.has(data.identity_id)))) {
+        return res.status(404).json({ error: 'Ese reel no existe' })
+      }
       return res.status(200).json({ reel: data })
     }
 
@@ -346,7 +419,21 @@ async function handler(req, res) {
     case 'perfil-creadores-guardar': {
       const b = req.body || {}
       if (!b.clientId) return res.status(400).json({ error: 'Falta el perfil' })
-      const ids = [...new Set((Array.isArray(b.identityIds) ? b.identityIds : []).map(String))]
+      let ids = [...new Set((Array.isArray(b.identityIds) ? b.identityIds : []).map(String))]
+      if (visibles) {
+        // Un creador «Propio» solo se asigna si ya es de algún perfil de tu
+        // agencia: el de otro cliente no se puede coger (se descarta).
+        const [vis, { propias }, ya] = await Promise.all([
+          identidadesVisibles(visibles),
+          creadoresPrivados(),
+          supabase.from('agent_identity_clients').select('identity_id').eq('client_id', b.clientId),
+        ])
+        if (ya.error) throw ya.error
+        ids = ids.filter(id => vis.has(id))
+        // Y el «Propio» que solo tiene este perfil no se suelta: se queda.
+        const quitados = (ya.data || []).map(r => r.identity_id).filter(id => propias.has(id) && !ids.includes(id))
+        ids.push(...await soloDeEste(b.clientId, quitados))
+      }
       const { error: e1 } = await supabase
         .from('agent_identity_clients').delete().eq('client_id', b.clientId)
       if (e1) throw e1
@@ -363,6 +450,8 @@ async function handler(req, res) {
     case 'identidad-perfiles': {
       const identityId = String(req.query?.identityId || '')
       if (!identityId) return res.status(400).json({ error: 'Falta el creador' })
+      const vis = await identidadesVisibles(visibles)
+      if (vis && !vis.has(identityId)) return res.status(404).json({ error: 'Ese creador no existe' })
       const [perfiles, asignados] = await Promise.all([
         supabase.from('clients').select('id, slug, name').order('name'),
         supabase.from('agent_identity_clients').select('client_id').eq('identity_id', identityId),
@@ -378,9 +467,23 @@ async function handler(req, res) {
     case 'identidad-perfiles-guardar': {
       const b = req.body || {}
       if (!b.identityId) return res.status(400).json({ error: 'Falta el creador' })
+      const vis = await identidadesVisibles(visibles)
+      if (vis && !vis.has(String(b.identityId))) return res.status(404).json({ error: 'Ese creador no existe' })
       // Solo se tocan las asignaciones a perfiles tuyos: las de otras agencias
       // a ese mismo creador se quedan como están.
       const ids = [...new Set((Array.isArray(b.clientIds) ? b.clientIds : []).map(String))].filter(ve)
+      if (visibles && !ids.length) {
+        // Un «Propio» sin ningún perfil ya no lo vería nadie más que la
+        // plataforma: si solo lo tienen perfiles tuyos, alguno se lo queda.
+        const [{ propias }, usos] = await Promise.all([
+          creadoresPrivados(),
+          supabase.from('agent_identity_clients').select('client_id').eq('identity_id', b.identityId),
+        ])
+        if (usos.error) throw usos.error
+        if (propias.has(String(b.identityId)) && !(usos.data || []).some(r => !ve(r.client_id))) {
+          return res.status(409).json({ error: 'Es el contenido propio de un perfil: tiene que quedarse en alguno' })
+        }
+      }
       let borra = supabase.from('agent_identity_clients').delete().eq('identity_id', b.identityId)
       if (visibles) borra = borra.in('client_id', visibles.length ? visibles : ['00000000-0000-0000-0000-000000000000'])
       const { error: e1 } = await borra
@@ -391,19 +494,6 @@ async function handler(req, res) {
         if (e2) throw e2
       }
       return res.status(200).json({ clientIds: ids })
-    }
-
-    // ── Ingesta de Drive ──────────────────────────────────────────────────
-    // Los perfiles con carpeta en "HELM Contenido", o el detalle de uno.
-    case 'drive': {
-      const clientId = String(req.query?.clientId || '')
-      if (clientId) return res.status(200).json(await resumenDrive(clientId))
-      const { data, error } = await supabase.from('agent_drive_perfiles')
-        .select('client_id, carpeta_nombre, activa, clients(slug, name)')
-      if (error) throw error
-      return res.status(200).json({
-        perfiles: (data || []).filter(p => ve(p.client_id)).map(p => ({ id: p.client_id, slug: p.clients.slug, nombre: p.clients.name, carpeta: p.carpeta_nombre, activa: p.activa })),
-      })
     }
 
     // ── El enlace del conector de Claude de un perfil ─────────────────────
@@ -434,13 +524,23 @@ async function handler(req, res) {
     // ── Memoria a largo plazo ─────────────────────────────────────────────
     case 'memoria': {
       const q = String(req.query?.q || '').trim()
-      // Las notas del equipo de un perfil van aparte (acción 'equipo').
-      let sel = supabase.from('agent_memory').select('*').is('client_id', null)
-        .order('updated_at', { ascending: false }).limit(300)
-      if (q) sel = sel.ilike('contenido', `%${q}%`)
-      const { data, error } = await sel
-      if (error) throw error
-      return res.status(200).json({ memoria: data || [] })
+      // Las notas del equipo de un perfil van aparte (acción 'equipo'). Las de
+      // creador que guarda una agencia por el MCP llevan su perfil pero salen
+      // aquí, para poder revisarlas y borrarlas; con su propio tope, para que
+      // no desplacen a las de la plataforma.
+      const lee = (sel) => {
+        sel = sel.order('updated_at', { ascending: false }).limit(300)
+        return q ? sel.ilike('contenido', `%${q}%`) : sel
+      }
+      const [comunes, deAgencias] = await Promise.all([
+        lee(supabase.from('agent_memory').select('*').is('client_id', null)),
+        lee(supabase.from('agent_memory').select('*, clients(slug, name)').eq('tipo', 'creador')),
+      ])
+      if (comunes.error) throw comunes.error
+      if (deAgencias.error) throw deAgencias.error
+      const memoria = [...(comunes.data || []), ...(deAgencias.data || [])]
+        .sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))
+      return res.status(200).json({ memoria })
     }
 
     case 'memoria-guardar': {
@@ -494,7 +594,7 @@ async function handler(req, res) {
         supabase.from('agent_jobs').select('payload, estado, created_at').eq('tipo', 'equipo')
           .in('estado', ['pendiente', 'corriendo']).eq('payload->>clientId', clientId),
         supabase.from('agent_memory').select('id, clave, agente, tipo, para_agente, estado, contenido, updated_at')
-          .eq('client_id', clientId).order('updated_at', { ascending: false }).limit(200),
+          .eq('client_id', clientId).neq('tipo', 'creador').order('updated_at', { ascending: false }).limit(200),
         supabase.from('helm_content_calendar').select('id, date, title, body, tipo, created_at')
           .eq('client_id', clientId).eq('revision', 'borrador').order('date'),
         supabase.from('agent_identity_clients').select('identity_id', { count: 'exact', head: true }).eq('client_id', clientId),
@@ -694,18 +794,14 @@ async function enCurso() {
   if (error) throw error
   const jobs = data || []
   const reelIds = [...new Set(jobs.map(j => j.payload?.reelId).filter(Boolean))]
-  const driveIds = [...new Set(jobs.map(j => j.payload?.driveId).filter(Boolean))]
-  const [reels, videos] = await Promise.all([
-    reelIds.length ? supabase.from('agent_reels').select('id, cuenta, caption, url').in('id', reelIds) : { data: [] },
-    driveIds.length ? supabase.from('agent_drive_videos').select('drive_id, nombre').in('drive_id', driveIds) : { data: [] },
-  ])
+  const reels = reelIds.length
+    ? await supabase.from('agent_reels').select('id, cuenta, caption, url').in('id', reelIds)
+    : { data: [] }
   const reel = new Map((reels.data || []).map(r => [r.id, r]))
-  const video = new Map((videos.data || []).map(v => [v.drive_id, v]))
   return jobs.map(j => {
     const r = reel.get(j.payload?.reelId)
-    const v = video.get(j.payload?.driveId)
     const que = r ? (r.cuenta ? `@${r.cuenta.replace(/^@/, '')}` : '') + (r.caption ? ` · ${r.caption.slice(0, 70)}` : '') || r.url
-      : v ? v.nombre : ''
+      : ''
     return { id: j.id, tipo: j.tipo, intentos: j.intentos, max_intentos: j.max_intentos, empezado_en: j.empezado_en, que }
   })
 }

@@ -49,9 +49,15 @@ const RUIDO = [
   'cylex', 'infobel', 'einforma', 'axesor', 'habitissimo', 'cronoshare', 'top-rated', 'elcorteingles', 'amazon',
   'tuugo', 'guiaempresa', 'empresite', 'qdq', 'pinterest', 'eltenedor', 'thefork', 'justeat', 'glovo', 'ubereats',
 ]
-export const esRuido = (url) => {
+// Rankings, directorios y artículos de «los mejores…»: Google los pone arriba,
+// pero son listas sobre negocios, no la web de uno.
+const RUIDO_EXTRA = ['citasgo', 'directoralia', 'peluqueriamaster', 'vibeofbeauty', 'mejor.es', 'negocioscerca', 'mispelus', 'misterwhat', 'cybo', 'paginasblancas', 'hotfrog', 'yably', 'firmania', 'infoisinfo', 'abctelefonos']
+const TITULO_LISTA = /\b(mejores|top\s*\d+|ranking|directorio|\d+\s+(negocios|peluquer[ií]as|sitios|lugares)|clasificaci[oó]n|los\s+\d+|gu[ií]a de)\b/i
+const RUTA_LISTA = /\/(directorio|clasificacion|ranking|top-\d+|mejores-)/i
+export const esRuido = (url, titulo = '') => {
   const d = dominioDe(url)
-  return !d || RUIDO.some(r => d.includes(r))
+  if (!d || RUIDO.some(r => d.includes(r)) || RUIDO_EXTRA.some(r => d.includes(r))) return true
+  return RUTA_LISTA.test(String(url)) || TITULO_LISTA.test(String(titulo))
 }
 
 /** La ciudad de una dirección de Google Maps («C. Mayor, 12, 30800 Lorca, Murcia, España» → «Lorca»). */
@@ -62,6 +68,60 @@ export function ciudadDe(direccion) {
   const partes = d.split(',').map(p => p.trim()).filter(p => p && !/^españa$/i.test(p) && !/\d/.test(p))
   return partes.length ? partes[partes.length - 1] : null
 }
+
+/** La ciudad solo si la dirección trae código postal («30800 Lorca»). */
+export const ciudadConCp = (d) => String(d || '').match(/\b\d{5}\s+([^,\d]+?)\s*(,|$)/)?.[1]?.trim() || null
+
+/** «isabel lozano estilista» → «Isabel Lozano Estilista» (solo si viene todo en minúsculas). */
+export const nombrePropio = (s) => {
+  const t = String(s || '').trim()
+  if (!t || t !== t.toLowerCase()) return t
+  return t.replace(/(^|[\s\-'(])(\p{L})/gu, (_, a, b) => a + b.toUpperCase())
+}
+
+// El sector por palabras clave, cuando no viene de la prospección de Maps.
+const SECTORES = [
+  ['peluquería', /peluquer|estilista|balayage|alisado|barber[ií]a?|corte de pelo/i],
+  ['micropigmentación', /micropigment|microblading|cejas pelo a pelo/i],
+  ['centro de estética', /est[eé]tica|depilaci|tratamientos? faciales?|spa\b/i],
+  ['salón de uñas', /\bu[ñn]as\b|manicura|pedicura|nail/i],
+  ['clínica dental', /dental|dentista|ortodonc/i],
+  ['fisioterapia', /fisioterap|osteopat/i],
+  ['joyería', /joyer[ií]a|joyas|orfebre/i],
+  ['restaurante', /restaurante|cocina|tapas|bar de/i],
+  ['gimnasio', /gimnasio|entrenador personal|crossfit|pilates|yoga/i],
+  ['tatuajes', /tatuaj|tattoo/i],
+  ['inmobiliaria', /inmobiliari/i],
+  ['abogados', /abogad|bufete|asesor[ií]a legal/i],
+]
+export const sectorDeTexto = (t) => SECTORES.find(([, re]) => re.test(String(t || '')))?.[0] || null
+
+/**
+ * Lo que traen las notas de una ficha cuando están escritas como resumen
+ * («Dirección: …», «Teléfono: …», una tabla de horario en markdown…).
+ */
+export function deNotas(notas) {
+  const n = String(notas || '')
+  const linea = (re) => n.match(re)?.[1]?.replace(/[*_`]/g, '').trim().replace(/\.$/, '') || null
+  const horas = [...n.matchAll(/^\|\s*(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\s*\|\s*([^|]+?)\s*\|/gim)]
+    .map(m => `${m[1][0].toUpperCase()}${m[1].slice(1)}: ${m[2]}`)
+  const ig = n.match(/instagram\.com\/([A-Za-z0-9._]+)/i)?.[1] || n.match(/(?:^|\s|\[)@([A-Za-z0-9._]{3,30})/)?.[1] || null
+  return {
+    actividad: linea(/actividad:\s*([^\n]+?)(?:\s+ubicaci[oó]n:|\n|$)/i),
+    ubicacion: linea(/ubicaci[oó]n:\s*([^\n]+)/i),
+    direccion: linea(/direcci[oó]n:\s*([^\n]+)/i),
+    telefono: n.match(/(\+34[\s\d]{9,13}\d|\b[6789]\d{2}[\s.]?\d{2,3}[\s.]?\d{2,3}[\s.]?\d{0,3}\b)/)?.[1]?.replace(/\s+/g, ' ').trim() || null,
+    email: n.match(/[\w.+-]+@[\w-]+\.[\w.]+/)?.[0] || null,
+    instagram: ig ? `@${ig.replace(/\/$/, '')}` : null,
+    horario: horas.length ? horas.join('; ') : null,
+    // Protocolo de web-seller: las fotos del cliente se suben a una carpeta de
+    // Drive y el enlace va en sus notas.
+    fotosDrive: n.match(/https:\/\/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/([A-Za-z0-9_-]{10,})/)?.[0] || null,
+  }
+}
+
+/** El id de la carpeta de Drive de un enlace https://drive.google.com/drive/folders/<id>. */
+export const idCarpetaDrive = (url) => String(url || '').match(/folders\/([A-Za-z0-9_-]{10,})/)?.[1] || null
 
 /** Lo que mejor posiciona en Maps: buena nota con muchas reseñas. */
 export const puntuaMaps = (n) => (Number(n?.rating) || 0) * Math.log10(1 + (Number(n?.resenas) || 0))
@@ -180,14 +240,14 @@ const lineaCompetidor = (c) => {
 }
 
 /** El prompt que se copia en Claude Code. */
-export function construyePrompt({ id, cliente, sector, ciudad, competidores, patrones, ia, faltan }) {
+export function construyePrompt({ id, cliente, sector, ciudad, competidores, patrones, ia, faltan, aprendido = '' }) {
   const slug = slugDe(`${cliente.nombre} ${ciudad || ''}`)
   const nombre = cliente.nombre || 'el cliente'
   const ctaPrincipal = patrones.comunes.some(x => x.k === 'reserva_online') ? 'reservas (cita online o WhatsApp)'
     : cliente.whatsapp || cliente.telefono ? 'llamadas y mensajes de WhatsApp' : 'contactos por el formulario'
   const seo = ia?.seo || {
     title: `${nombre} | ${sector ? sector[0].toUpperCase() + sector.slice(1) : 'Negocio'}${ciudad ? ` en ${ciudad}` : ''}`,
-    description: `${sector || 'Negocio'}${ciudad ? ` en ${ciudad}` : ''}. ${cliente.rating ? `${String(cliente.rating).replace('.', ',')}★ en Google. ` : ''}Pide información o reserva por WhatsApp.`,
+    description: `${sector ? sector[0].toUpperCase() + sector.slice(1) : 'Negocio'}${ciudad ? ` en ${ciudad}` : ''}. ${cliente.rating ? `${String(cliente.rating).replace('.', ',')}★ en Google. ` : ''}Pide información o reserva por WhatsApp.`,
     keywords: [sector && ciudad ? `${sector} en ${ciudad}` : null, sector && ciudad ? `${sector} ${ciudad}` : null, sector ? `mejor ${sector}${ciudad ? ` ${ciudad}` : ''}` : null].filter(Boolean),
   }
   const secciones = ia?.secciones?.length
@@ -211,10 +271,10 @@ Construye la web de este cliente de web-seller siguiendo este encargo y, cuando 
 
 ## 1. El cliente
 ${datos.join('\n')}
-${cliente.contexto ? `\nLo que sabemos por el CRM (notas, llamadas, formularios):\n${cliente.contexto}\n` : ''}
+${cliente.fotos_drive ? `\n### Fotos del cliente\nEstán en su carpeta de Drive: ${cliente.fotos_drive}\nBájalas con \`ssh minipc "cd /home/s4sf/helm && set -a && . ./.env.server && set +a && node scripts/web-creator.mjs fotos ${id}"\` (las deja en /home/s4sf/helm-ops/tmp/fotos-${id}/) y tráelas con scp. Míralas todas y decide dónde va cada una (portada, servicio estrella, galería, el local, logo). Si son capturas del móvil, recorta la interfaz. Pásalas a WebP (el ffmpeg del servidor tiene libwebp). Si la de portada no luce, recorta a la persona con rembg (venv de helm-agents) sobre un fondo con los colores de la marca. Nada de imágenes generadas con IA haciéndolas pasar por trabajos del cliente.\n` : ''}${cliente.contexto ? `\nLo que sabemos por el CRM (notas, llamadas, formularios):\n${cliente.contexto}\n` : ''}
 Lo que falta y NO se inventa (se deja como [PENDIENTE: …] visible en el código y se apunta en el informe): ${faltan.length ? faltan.join(', ') : 'nada importante'}.
 
-## 2. Estudio de las webs mejor posicionadas
+${aprendido ? `## Lo aprendido en las webs anteriores (Web Creator)\nAplícalo salvo que este cliente pida otra cosa:\n\n${recorta(aprendido, 5000)}\n\n` : ''}## 2. Estudio de las webs mejor posicionadas
 ${patrones.leidas ? `Se han leído ${patrones.leidas} webs de referencia del sector${ciudad ? ` (${ciudad} y referentes de España)` : ''}:\n\n${competidores.filter(c => c.analisis).map(lineaCompetidor).join('\n')}\n\nLo que tienen casi todas: ${comunes || '—'}.\nLo que casi nadie hace (oportunidad para destacar): ${raros || '—'}.` : 'No se ha podido leer ninguna web de referencia: diseña con las buenas prácticas del sector y dilo en el informe.'}
 ${ia?.resumen ? `\n### Dirección creativa\n${ia.resumen}\n${ia.propuesta_valor ? `\n- Propuesta de valor: ${ia.propuesta_valor}` : ''}${ia.tono ? `\n- Tono: ${ia.tono}` : ''}${ia.paleta?.length ? `\n- Paleta orientativa: ${ia.paleta.join(', ')}` : ''}${ia.tipografia ? `\n- Tipografía: ${ia.tipografia}` : ''}${ia.titulares?.length ? `\n- Titulares posibles: ${ia.titulares.map(t => `«${t}»`).join(' · ')}` : ''}${ia.diferenciacion?.length ? `\n- Para diferenciarse: ${ia.diferenciacion.join('; ')}` : ''}\n` : ''}
 ## 3. Qué construir
@@ -268,7 +328,7 @@ async function recogeDatos(clientId, contactId) {
   ])
 
   const contexto = [
-    c.notes ? `Notas de la ficha: ${recorta(c.notes, 1200)}` : null,
+    c.notes ? `Notas de la ficha: ${recorta(c.notes, 4000)}` : null,
     c.situacion_actual ? `Situación: ${recorta(c.situacion_actual, 400)}` : null,
     c.producto_interes ? `Le interesa: ${recorta(c.producto_interes, 200)}` : null,
     ...(actividades || []).filter(a => a.description || a.title)
@@ -276,30 +336,36 @@ async function recogeDatos(clientId, contactId) {
     ...(respuestas || []).map(r => `- Formulario (${String(r.submitted_at || '').slice(0, 10)}): ${recorta(JSON.stringify(r.answers), 600)}`),
   ].filter(Boolean).join('\n')
 
+  const n = deNotas(c.notes)
   const cliente = {
-    nombre: c.company || p?.nombre || c.name,
-    persona: c.name,
-    email: c.email || p?.email || null,
-    telefono: c.phone || p?.telefono || null,
+    nombre: nombrePropio(c.company || p?.nombre || c.name),
+    persona: nombrePropio(c.name),
+    email: c.email || p?.email || n.email || null,
+    telefono: c.phone || p?.telefono || n.telefono || null,
     whatsapp: c.whatsapp || null,
-    direccion: c.address || p?.direccion || null,
+    direccion: c.address || p?.direccion || n.direccion || null,
     web: c.website || p?.web || null,
-    instagram: c.instagram || p?.instagram || null,
+    instagram: c.instagram || p?.instagram || n.instagram || null,
     facebook: p?.facebook || null,
-    horario: horarioLegible(p?.horario),
+    horario: horarioLegible(p?.horario) || n.horario,
     rating: p?.rating ?? null,
     resenas: p?.resenas ?? null,
     maps_url: p?.maps_url || null,
     categoria: p?.categoria || null,
     titular: p?.titular || null,
     cif: p?.cif || null,
-    contexto: recorta(contexto, 4000),
+    fotos_drive: n.fotosDrive,
+    contexto: recorta(contexto, 6000),
   }
-  const sector = (p?.categoria || c.custom_fields?.sector || c.producto_interes || '').toString().trim().toLowerCase() || null
-  const ciudad = ciudadDe(cliente.direccion) || c.custom_fields?.ciudad || null
+  const sector = (p?.categoria || c.custom_fields?.sector || c.producto_interes || '').toString().trim().toLowerCase()
+    || sectorDeTexto(`${c.name} ${c.company || ''} ${n.actividad || ''}`) || sectorDeTexto(c.notes) || null
+  const etiquetaCiudad = (c.tags || []).find(t => typeof t === 'string' && /^[a-záéíóúñ\s]{3,}$/i.test(t))
+  const ciudad = ciudadConCp(cliente.direccion) || c.custom_fields?.ciudad || n.ubicacion?.split(',')[0]?.trim()
+    || (etiquetaCiudad ? nombrePropio(etiquetaCiudad) : null) || ciudadDe(cliente.direccion) || null
   const faltan = [
-    !cliente.direccion && 'dirección', !cliente.telefono && 'teléfono', !cliente.horario && 'horario', 'logo',
-    'fotos propias', !cliente.titular && 'titular legal (para el aviso legal)', 'precios (si quiere enseñarlos)',
+    !cliente.direccion && 'dirección', !cliente.telefono && 'teléfono', !cliente.horario && 'horario',
+    !cliente.fotos_drive && 'logo', !cliente.fotos_drive && 'fotos propias (súbelas a una carpeta de Drive y pon el enlace en sus notas)',
+    !cliente.titular && 'titular legal (para el aviso legal)', 'precios (si quiere enseñarlos)',
   ].filter(Boolean)
   return { cliente, sector, ciudad, faltan, contactoNombre: c.name }
 }
@@ -315,6 +381,32 @@ export function horarioLegible(h) {
     return txt || null
   }
   return String(h)
+}
+
+// ── Lo aprendido en las webs anteriores ─────────────────────────────────────
+// Una nota por perfil en agent_memory: decisiones de diseño, lo que gustó al
+// cliente, lo que falló al publicar… Entra en el prompt de las webs siguientes.
+const CLAVE_APRENDIZAJES = 'webcreator-aprendizajes'
+
+export async function aprendizajesDe(clientId) {
+  const { data } = await supabase.from('agent_memory').select('contenido').eq('client_id', clientId).eq('clave', CLAVE_APRENDIZAJES).maybeSingle()
+  return data?.contenido || ''
+}
+
+export async function apuntaAprendizaje(clientId, texto, { titulo = '' } = {}) {
+  const nuevo = recorta(texto, 8000).trim()
+  if (!nuevo) throw new Error('No hay nada que apuntar')
+  const previo = await aprendizajesDe(clientId)
+  const entrada = `## ${new Date().toISOString().slice(0, 10)}${titulo ? ` · ${titulo}` : ''}\n${nuevo}`
+  // Lo más reciente arriba y con tope: el prompt no puede crecer sin fin.
+  const contenido = recorta([entrada, previo].filter(Boolean).join('\n\n'), 12000)
+  const { data: ya } = await supabase.from('agent_memory').select('id').eq('client_id', clientId).eq('clave', CLAVE_APRENDIZAJES).maybeSingle()
+  const fila = { contenido, updated_at: ahora() }
+  const { error } = ya
+    ? await supabase.from('agent_memory').update(fila).eq('id', ya.id)
+    : await supabase.from('agent_memory').insert({ ...fila, client_id: clientId, clave: CLAVE_APRENDIZAJES, ambito: 'webcreator', agente: 'webcreator', tipo: 'aprendizaje' })
+  if (error) throw error
+  return contenido
 }
 
 /** La clave de Places del perfil o, si no tiene, la de otro perfil de la misma agencia. */
@@ -364,7 +456,7 @@ async function buscaCompetidores({ clientId, sector, ciudad, dominioPropio }) {
         const res = await buscarWeb(consulta, { max: 10 })
         let pos = 0
         for (const r of res) {
-          if (esRuido(r.url)) continue
+          if (esRuido(r.url, r.title)) continue
           pos += 1
           anade({ nombre: r.title, url: r.url, consulta, posicion_google: pos })
           if (pos >= 4) break
@@ -456,7 +548,7 @@ async function direccionConIa({ clientId, cliente, sector, ciudad, competidores,
 
 // ── El trabajo ──────────────────────────────────────────────────────────────
 
-export async function estudiar(fabricacionId) {
+export async function estudiar(fabricacionId, { ia: conIa = true } = {}) {
   const { data: fila } = await supabase.from('helm_web_fabricacion').select('*').eq('id', fabricacionId).maybeSingle()
   if (!fila) return
   await supabase.from('helm_web_fabricacion').update({ estado: 'estudiando', error: null, updated_at: ahora() }).eq('id', fila.id)
@@ -464,8 +556,11 @@ export async function estudiar(fabricacionId) {
     const { cliente, sector, ciudad, faltan } = await recogeDatos(fila.client_id, fila.contact_id)
     const { competidores, avisos } = await buscaCompetidores({ clientId: fila.client_id, sector, ciudad, dominioPropio: dominioDe(cliente.web) })
     const patrones = patronesDe(competidores.map(c => c.analisis))
-    const { ia, error: errorIa } = await direccionConIa({ clientId: fila.client_id, cliente, sector, ciudad, competidores, patrones })
-    const prompt = construyePrompt({ id: fila.id, cliente, sector, ciudad, competidores, patrones, ia, faltan })
+    const { ia, error: errorIa } = conIa
+      ? await direccionConIa({ clientId: fila.client_id, cliente, sector, ciudad, competidores, patrones })
+      : { ia: null, error: 'Sin IA a propósito: la dirección creativa la pone Claude Code al construirla.' }
+    const aprendido = await aprendizajesDe(fila.client_id)
+    const prompt = construyePrompt({ id: fila.id, cliente, sector, ciudad, competidores, patrones, ia, faltan, aprendido })
     await supabase.from('helm_web_fabricacion').update({
       estado: 'listo', sector, ciudad, datos: cliente,
       estudio: { competidores, patrones, avisos, ia, ia_error: errorIa, faltan },
@@ -490,7 +585,7 @@ export async function ensayo(clientId, contactId) {
   const { cliente, sector, ciudad, faltan } = await recogeDatos(clientId, contactId)
   const { competidores, avisos } = await buscaCompetidores({ clientId, sector, ciudad, dominioPropio: dominioDe(cliente.web) })
   const patrones = patronesDe(competidores.map(c => c.analisis))
-  const prompt = construyePrompt({ id: 'ENSAYO', cliente, sector, ciudad, competidores, patrones, ia: null, faltan })
+  const prompt = construyePrompt({ id: 'ENSAYO', cliente, sector, ciudad, competidores, patrones, ia: null, faltan, aprendido: await aprendizajesDe(clientId) })
   return { sector, ciudad, competidores: competidores.map(c => ({ nombre: c.nombre, url: c.url, google: c.posicion_google, maps: c.rating })), avisos, patrones, prompt }
 }
 

@@ -1,9 +1,14 @@
-// HELM — Avatar: el estudio del cliente tipo, sacado del CRM.
+// HELM — Avatar de ventas: a quién le vende de verdad el negocio, sacado del CRM.
 //
 // Una IA repasa los contactos del perfil uno a uno (api/_lib/avatar.js) y, con
 // lo que hay en su ficha, dibuja el cliente tipo: género, edad, dónde vive, qué
 // factura, qué le duele y dónde encontrar a más gente como él. No inventa: lo
 // que no se deduce queda como «desconocido» y sale en los huecos.
+//
+// Ya no tiene entrada en el menú: es la pestaña «Avatar de ventas» del Informe.
+// La raíz se llama `av-estudio` y no `helm-avatar` porque esa es la clase del
+// circulito de 30 px con la inicial del usuario, y el tema la pisaba: la
+// sección entera acababa metida en un círculo.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { UserSearch, RefreshCw, Sparkles, MapPin, Wallet, Users, CalendarRange, Lightbulb, Target, AlertTriangle, ChevronDown } from 'lucide-react'
 import { avatarApi } from '../lib'
@@ -53,17 +58,17 @@ export default function Avatar({ clientId }) {
   if (!datos) return <Empty>Cargando el estudio…</Empty>
 
   return (
-    <div className="helm-avatar">
+    <div className="av-estudio">
       <header className="av-cab">
         <div>
           <p className="av-cab-sub">
             {est
-              ? <>Estudiados {est.n_analizados} de {est.n_contactos} contactos · {fecha(est.generado_en)}</>
-              : 'Aún no has hecho el estudio de tus clientes.'}
+              ? <>Sacado de {est.n_analizados} de {est.n_contactos} contactos del CRM · {fecha(est.generado_en)}</>
+              : 'Aún no has sacado tu avatar de ventas.'}
           </p>
         </div>
         <button className="av-btn" onClick={estudiar} disabled={datos.corriendo}>
-          {datos.corriendo ? <><RefreshCw size={16} className="av-gira" /> Analizando…</> : <><UserSearch size={16} /> {est ? 'Volver a estudiar' : 'Estudiar mis clientes'}</>}
+          {datos.corriendo ? <><RefreshCw size={16} className="av-gira" /> Analizando…</> : <><UserSearch size={16} /> {est ? 'Actualizar el avatar' : 'Sacar mi avatar de ventas'}</>}
         </button>
       </header>
 
@@ -73,7 +78,7 @@ export default function Avatar({ clientId }) {
       {datos.corriendo && (
         <div className="av-corriendo">
           <Sparkles size={22} />
-          <div><b>Analizando tus clientes, uno a uno…</b><span>Lee cada ficha del CRM y arma el avatar. Puede tardar un par de minutos; puedes salir y volver.</span></div>
+          <div><b>Analizando tus clientes, uno a uno…</b><span>Lee cada ficha del CRM y arma tu avatar de ventas. Puede tardar un par de minutos; puedes salir y volver.</span></div>
         </div>
       )}
 
@@ -81,8 +86,8 @@ export default function Avatar({ clientId }) {
         <div className="av-vacio">
           <UserSearch size={40} />
           <h2>¿A quién le vendes de verdad?</h2>
-          <p>La IA repasa los contactos de tu CRM uno a uno y dibuja tu cliente tipo: género, edad, dónde vive, qué factura, qué le duele y dónde hay más gente como él. Solo con lo que ya tienes en las fichas.</p>
-          <button className="av-btn grande" onClick={estudiar}><UserSearch size={18} /> Estudiar mis clientes</button>
+          <p>La IA repasa los contactos de tu CRM uno a uno y dibuja tu avatar de ventas: género, edad, dónde vive, qué factura, qué le duele y dónde hay más gente como él. Solo con lo que ya tienes en las fichas.</p>
+          <button className="av-btn grande" onClick={estudiar}><UserSearch size={18} /> Sacar mi avatar de ventas</button>
         </div>
       )}
 
@@ -91,7 +96,7 @@ export default function Avatar({ clientId }) {
           <section className="av-retrato">
             <div className="av-retrato-ico"><Target size={26} /></div>
             <div>
-              <p className="av-kicker">Tu cliente tipo</p>
+              <p className="av-kicker">Tu avatar de ventas</p>
               <p className="av-descripcion">{a.descripcion}</p>
             </div>
           </section>

@@ -9,6 +9,17 @@ import './notificaciones.css'
 
 const ICONOS = { reserva: CalendarCheck, lead: UserPlus, embudo: AlertTriangle, calendario: AlertTriangle, estudio: Sparkles }
 
+// Secciones que se han movido o que cambiaron de clave. Las notificaciones
+// guardadas llevan el destino de cuando se escribieron: «Tu avatar está listo»
+// de antes apunta a 'avatar', que ya no tiene entrada en el menú porque vive en
+// una pestaña del Informe; y los avisos de los agentes (guiones, informe
+// semanal) se guardaron con destino 'agentes', pero la vista de Agentes tiene la
+// clave 'contenido' en el NAV (era Guiones). Se traducen a la sección de hoy.
+const DESTINOS_MOVIDOS = { avatar: 'informe', agentes: 'contenido' }
+
+/** A qué sección lleva hoy un destino guardado. */
+const destinoActual = (destino) => DESTINOS_MOVIDOS[destino] || destino
+
 function hace(iso) {
   const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
   if (min < 1) return 'ahora'
@@ -73,7 +84,7 @@ export default function Notificaciones({ clientId, onNavigate }) {
     setAbierto(false)
     if (!n.destino) return
     if (/^https?:\/\//.test(n.destino)) window.open(n.destino, '_blank', 'noopener')
-    else onNavigate(n.destino)
+    else onNavigate(destinoActual(n.destino))
   }
 
   const hayError = items.some(n => !n.leida_at && n.nivel === 'error')

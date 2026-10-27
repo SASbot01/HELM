@@ -2,10 +2,11 @@
 // configuración qué pide para leer:
 //
 //   · solo datos (cfg.puerta.datos, sin cfg.cobro) — nombre, correo,
-//     profesión e ingresos, una vez; entran en el CRM de su perfil y se abre
-//     todo. Es la de Filmmaking para todo mientras sea gratis.
+//     profesión y, si la comunidad los pide, ingresos, una vez; entran en el
+//     CRM de su perfil y se abre todo. Es la de Filmmaking para todo (con
+//     ingresos) y, desde el 20-10-2026, la de AI para todo (sin ellos).
 //   · solo pago (cfg.cobro, sin datos) — el muro del Payment Link de Stripe,
-//     que vuelve con ?pago=ok. Es la de AI para todo.
+//     que vuelve con ?pago=ok.
 //   · las dos — primero los datos (el alta en el CRM no depende de que pague)
 //     y después el muro, con el correo ya puesto en Stripe.
 //
@@ -18,17 +19,35 @@ import { ArrowRight, Lock } from 'lucide-react'
 import { track } from '../inicio/socio/track.js'
 import { accesoGuardado, useComunidad } from './datos.js'
 import { altaMiembro } from './crm.js'
+import EntradaPorCorreo from './EntradaPorCorreo.jsx'
 
-export default function Puerta({ setAcceso, pipeline, nota, titulo, texto, boton }) {
+export default function Puerta({ setAcceso, pipeline, nota, titulo, texto, boton, inmediato, llave }) {
   const cfg = useComunidad()
+  const llaveAcc = llave || cfg.llave
   const [lead, setLead] = useState(() => (cfg.cobro && cfg.puerta?.datos ? accesoGuardado(`${cfg.llave}.datos`) : null))
+  // AI para todo: se entra con el correo con el que se rellenó el formulario de
+  // HELM Academy, que da el acceso. Solo el contenido general; los PDF (lead
+  // magnet) pasan `inmediato` con su propia llave (`${cfg.llave}.pdf`) y abren
+  // solo el PDF, no el resto.
+  if (cfg.puerta?.aprobacion && !inmediato && !cfg.cobro) {
+    return (
+      <EntradaPorCorreo
+        cfg={cfg}
+        onEntrar={({ id, nombre }) => {
+          const acc = { id: id || null, nombre, at: new Date().toISOString() }
+          try { localStorage.setItem(llaveAcc, JSON.stringify(acc)) } catch { /* incógnito */ }
+          setAcceso(acc)
+        }}
+      />
+    )
+  }
   if (!cfg.puerta?.datos) return <Muro titulo={titulo} />
   if (!cfg.cobro) {
     return (
       <Datos
         pipeline={pipeline} nota={nota} titulo={titulo} texto={texto} boton={boton}
         listo={(acc) => {
-          try { localStorage.setItem(cfg.llave, JSON.stringify(acc)) } catch { /* modo incógnito */ }
+          try { localStorage.setItem(llaveAcc, JSON.stringify(acc)) } catch { /* modo incógnito */ }
           setAcceso(acc)
         }}
       />
@@ -67,8 +86,9 @@ function Muro({ titulo, correo }) {
   )
 }
 
-// ── Los cuatro datos ────────────────────────────────────────────────────────
-// Los ingresos (y la profesión, si la comunidad da opciones) son botones: una
+// ── Los datos ───────────────────────────────────────────────────────────────
+// Nombre, correo, profesión y, si la comunidad los pide, ingresos. Los
+// ingresos (y la profesión, si la comunidad da opciones) son botones: una
 // pulsación, sin desplegables que en el móvil se abren a pantalla completa.
 function Datos({ listo, pipeline, nota, titulo, texto, boton }) {
   const cfg = useComunidad()
@@ -77,7 +97,8 @@ function Datos({ listo, pipeline, nota, titulo, texto, boton }) {
   const [estado, setEstado] = useState(null)
   const [error, setError] = useState(null)
   const pon = (campo) => (e) => setF(s => ({ ...s, [campo]: e.target.value }))
-  const completo = f.nombre.trim() && f.email.trim() && f.profesion.trim() && f.ingresos
+  const tramos = d.ingresos ? Object.entries(d.ingresos) : null
+  const completo = f.nombre.trim() && f.email.trim() && f.profesion.trim() && (!tramos || f.ingresos)
   const profesiones = d.profesiones ? Object.entries(d.profesiones) : null
 
   async function entrar(e) {
@@ -92,13 +113,21 @@ function Datos({ listo, pipeline, nota, titulo, texto, boton }) {
       track('lead', { donde: cfg.clave, embudo: pipeline })
       listo({ id: lead?.id || null, nombre, ...(cfg.cobro ? { email } : {}), at: new Date().toISOString() })
     } catch (err) {
+      // En una comunidad gratis, si el servidor está saturado de altas (429),
+      // se entra igual: el contenido es gratis y quien llega no tiene la culpa.
+      // Ese alta no queda en el CRM.
+      if (err.status === 429 && !cfg.cobro) {
+        track('lead_sin_guardar', { donde: cfg.clave })
+        listo({ id: null, nombre: f.nombre.trim(), at: new Date().toISOString() })
+        return
+      }
       setError(err.message); setEstado(null)
     }
   }
 
   return (
     <form className="aip-card aip-puerta" onSubmit={entrar}>
-      <p className="aip-kicker"><Lock size={13} /> contenido para miembros</p>
+      <p className="aip-kicker"><Lock size={13} />{` ${d.kicker || 'contenido para miembros'}`}</p>
       <h2>{titulo || d.titulo}</h2>
       <p>{texto || d.texto}</p>
       <div className="aip-campos cuatro">
@@ -119,15 +148,17 @@ function Datos({ listo, pipeline, nota, titulo, texto, boton }) {
         ) : (
           <input className="ancho" aria-label="Profesión" placeholder={d.placeholderProfesion} required value={f.profesion} maxLength={120} autoComplete="organization-title" onChange={pon('profesion')} />
         )}
-        <fieldset className="aip-ingresos">
-          <legend>Tus ingresos al mes</legend>
-          {Object.entries(d.ingresos).map(([valor, etiqueta]) => (
-            <label key={valor} className={f.ingresos === valor ? 'on' : ''}>
-              <input type="radio" name="ingresos" value={valor} aria-label={etiqueta} required checked={f.ingresos === valor} onChange={pon('ingresos')} />
-              <span>{etiqueta.replace('/mes', '')}</span>
-            </label>
-          ))}
-        </fieldset>
+        {tramos && (
+          <fieldset className="aip-ingresos">
+            <legend>Tus ingresos al mes</legend>
+            {tramos.map(([valor, etiqueta]) => (
+              <label key={valor} className={f.ingresos === valor ? 'on' : ''}>
+                <input type="radio" name="ingresos" value={valor} aria-label={etiqueta} required checked={f.ingresos === valor} onChange={pon('ingresos')} />
+                <span>{etiqueta.replace('/mes', '')}</span>
+              </label>
+            ))}
+          </fieldset>
+        )}
         <button className="aip-btn" disabled={estado === 'enviando' || !completo}>
           {estado === 'enviando' ? 'Abriendo…' : <>{boton || d.boton} <ArrowRight size={18} /></>}
         </button>

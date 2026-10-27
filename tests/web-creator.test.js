@@ -13,6 +13,7 @@ vi.mock('../api/_lib/notificar.js', () => ({ notificar: vi.fn() }))
 
 const {
   ciudadDe, esRuido, slugDe, puntuaMaps, analizaHtml, patronesDe, seccionesRecomendadas, construyePrompt, dominioDe, horarioLegible,
+  deNotas, sectorDeTexto, nombrePropio, ciudadConCp,
 } = await import('../api/_lib/webcreator.js')
 
 const HTML = `<!doctype html><html><head><title>Clínica Bella | Estética en Lorca</title>
@@ -37,6 +38,10 @@ describe('Web Creator · piezas del estudio', () => {
     expect(esRuido('https://www.instagram.com/bella')).toBe(true)
     expect(esRuido('https://www.paginasamarillas.es/x')).toBe(true)
     expect(esRuido('https://clinicabella.es/')).toBe(false)
+    expect(esRuido('https://peluqueriamaster.com/clasificacion/lorca/', 'Las mejores peluquerías de Lorca según reseñas Google')).toBe(true)
+    expect(esRuido('https://www.citasgo.com/directorio/lorca/peluquerias/', 'Peluquerías en Lorca — 99 Negocios')).toBe(true)
+    expect(esRuido('https://otra.es/', 'Peluquería: top 40 de España')).toBe(true)
+    expect(esRuido('https://davidsanchezpeluquero.com/', 'David Sánchez | Peluquería y Hair Spa')).toBe(false)
     expect(dominioDe('https://www.ClinicaBella.es/tratamientos?x=1')).toBe('clinicabella.es')
   })
 
@@ -45,6 +50,44 @@ describe('Web Creator · piezas del estudio', () => {
     expect(horarioLegible('')).toBeNull()
     expect(horarioLegible(['lunes: 10:00–14:00', 'martes: cerrado'])).toBe('lunes: 10:00–14:00; martes: cerrado')
     expect(horarioLegible({ weekdayDescriptions: ['lunes: 9:00–20:00'] })).toBe('lunes: 9:00–20:00')
+  })
+
+  it('saca los datos de unas notas escritas como resumen (Isabel Lozano)', () => {
+    const notas = `https://drive.google.com/drive/folders/1l8P4BUu96LyrGzRpEdnss0fMZZJCBpVi?usp=sharing
+
+# Resumen informativo completo — Isabel Lozano Estilista
+
+Nombre comercial: Isabel Lozano Estilista Actividad: Peluquería y estilismo capilar. Ubicación: Lorca, Murcia, España.
+
+- Dirección: Calle Navarra, 1, edificio Los Almendros, Lorca, Murcia.
+- Teléfono de contacto y reservas: +34 667 71 40 42.
+- Instagram: [@isabellozanoestilista](https://www.instagram.com/isabellozanoestilista/?utm_source=chatgpt.com)
+
+| Día       | Horario       |
+| --------- | ------------- |
+| Lunes     | 10:00–13:30   |
+| Viernes   | 10:00–19:00   |
+| Sábado    | Cerrado. Solo se atiende con cita previa para eventos. |`
+    const n = deNotas(notas)
+    expect(n.actividad).toBe('Peluquería y estilismo capilar')
+    expect(n.ubicacion).toBe('Lorca, Murcia, España')
+    expect(n.direccion).toBe('Calle Navarra, 1, edificio Los Almendros, Lorca, Murcia')
+    expect(n.telefono).toBe('+34 667 71 40 42')
+    expect(n.instagram).toBe('@isabellozanoestilista')
+    expect(n.fotosDrive).toBe('https://drive.google.com/drive/folders/1l8P4BUu96LyrGzRpEdnss0fMZZJCBpVi')
+    expect(n.horario).toBe('Lunes: 10:00–13:30; Viernes: 10:00–19:00; Sábado: Cerrado. Solo se atiende con cita previa para eventos.')
+    expect(sectorDeTexto('isabel lozano estilista')).toBe('peluquería')
+    expect(sectorDeTexto('micropigmentación de cejas')).toBe('micropigmentación')
+    expect(nombrePropio('isabel lozano estilista')).toBe('Isabel Lozano Estilista')
+    expect(nombrePropio('Joyería McQueen')).toBe('Joyería McQueen')
+    expect(ciudadConCp('Calle Navarra, 1, edificio Los Almendros, Lorca, Murcia.')).toBeNull()
+    expect(ciudadConCp('C. Mayor, 12, 30800 Lorca, Murcia')).toBe('Lorca')
+  })
+
+  it('el prompt lleva lo aprendido en webs anteriores', () => {
+    const prompt = construyePrompt({ id: 'x', cliente: { nombre: 'A' }, sector: 'peluquería', ciudad: 'Lorca', competidores: [], patrones: patronesDe([]), ia: null, faltan: [], aprendido: '## 2026-10-18 · Isabel Lozano\n- Paleta cálida' })
+    expect(prompt).toContain('## Lo aprendido en las webs anteriores')
+    expect(prompt).toContain('- Paleta cálida')
   })
 
   it('hace slugs limpios para la carpeta y el repositorio', () => {

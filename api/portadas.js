@@ -4,16 +4,33 @@
 //   GET  ?action=marca  &clientId=             → el kit de la serie del perfil
 //   POST ?action=marca  { clientId, marca }    → guardarlo
 //   POST ?action=textos { clientId, mediaId }  → 3 propuestas de texto (gasta créditos)
-//   GET  ?action=video  &clientId=&mediaId=    → el vídeo del reel, para elegir fotograma
-//   GET  ?action=imagen &clientId=&mediaId=    → la portada actual
+//   GET  ?action=video     &clientId=&mediaId= → el vídeo del reel, para elegir fotograma
+//   GET  ?action=imagen    &clientId=&mediaId= → la portada actual
+//   GET  ?action=capacidad &clientId=          → ¿se puede generar fondo con IA?
+//   POST ?action=fondo-prompt { clientId, mediaId?, tema? } → un prompt de fondo (gasta créditos)
+//   POST ?action=fondo-ia     { clientId, prompt }          → genera el fondo con IA (gasta en Replicate)
+//   POST ?action=portada-ia   { clientId, fotograma, titulo, estilo, detalle?, mediaId? }
+//                                                           → la portada ENTERA con IA en un estilo (Replicate)
+//   GET  ?action=ejemplos     &clientId=                    → las portadas de ejemplo que subió el perfil
+//   POST ?action=ejemplo      { clientId, nombre, imagen }  → subir una (se usa como estilo)
+//   POST ?action=ejemplo-borrar { clientId, id }            → quitarla
 //
-// La imagen NO la pinta una IA. El estudio de portadas (docs/estudio-portadas-
-// reels.md) lo deja claro: la portada convierte en el perfil y en Explorar, y
-// lo que funciona es texto corto, legible y en serie sobre la cara real. Una
-// IA de imagen deforma caras, se come las tildes y obliga a avisar (Ley de IA,
-// art. 50), y la cara del cliente saldría a un tercero. Así que Claude propone
-// el texto, el navegador compone con tipografía sobre el fotograma
-// (src/agents/portadas/componer.js) y la cara no sale de HELM.
+// El TITULAR nunca lo pinta una IA: el estudio de portadas (docs/estudio-
+// portadas-reels.md) manda texto corto, legible y en serie, así que Claude
+// propone el texto y el navegador lo compone con tipografía nítida
+// (src/agents/portadas/componer.js). Lo que SÍ puede generar la IA, desde el
+// 2026-10-19, es el FONDO: una escena 9:16 con hueco para el titular, cuando
+// no vale un fotograma. Nunca la cara real del cliente (el prompt lo prohíbe)
+// y la portada se marca como IA (Ley de IA, art. 50). Ver api/_lib/imagen.js.
+//
+// Desde el 2026-10-22 hay además «Portada con IA» (Alex: «que le des a crear
+// portada y genere la imagen la IA, con estilos de ejemplo»): la IA hace la
+// portada entera en el estilo elegido, a partir de un FOTOGRAMA REAL del reel
+// y conservando a la persona tal cual (src/agents/portadas/estilosIa.js). El
+// titular lo escribe la IA dentro de la imagen; el panel avisa de revisarlo.
+import { readFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
+import crypto from 'node:crypto'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { supabase } from './lib/supabase.js'
@@ -22,11 +39,76 @@ import { requireProfileAccess } from './_lib/access.js'
 import { llmChat } from './_lib/llm.js'
 import { getToken, getMediaUrls } from './_lib/instagram.js'
 import { fetchPublico } from './_lib/web.js'
+import { generaFondo, generaPortadaIa, hayClaveImagen } from './_lib/imagen.js'
+import {
+  estiloIaPorClave, referenciaDe, promptPortadaIa, MAX_TITULO_IA, MAX_DETALLE_IA, MAX_EJEMPLOS, MAX_NOMBRE_EJEMPLO,
+} from '../src/agents/portadas/estilosIa.js'
 import {
   normalizaMarca, normalizaOpciones, MARCA_POR_DEFECTO, PLANTILLAS, PALABRAS, MAX_CARACTERES,
 } from '../src/agents/portadas/reglas.js'
 
 const CLAVE_MARCA = 'portadas-marca'
+const CLAVE_EJEMPLOS = 'portadas-ejemplos'
+// Las imágenes que llegan del panel: el fotograma y los ejemplos que se suben.
+const IMAGEN_DATA = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/
+const MAX_FOTOGRAMA = 8 * 1024 * 1024
+const MAX_EJEMPLO = 6 * 1024 * 1024
+const RAIZ = fileURLToPath(new URL('..', import.meta.url))
+
+// ¿Los primeros bytes son de verdad de una imagen de ese tipo? La etiqueta MIME
+// de la data URL la pone quien sube, así que no basta: sin esto, un perfil puede
+// colar bytes arbitrarios etiquetados como image/png y dejarlos servidos desde
+// el almacén público, o mandárselos a Replicate (que cuesta).
+function cabeceraCuadra(tipo, buf) {
+  if (tipo === 'image/jpeg') return buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff
+  if (tipo === 'image/png') return buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 && buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a
+  if (tipo === 'image/webp') return buf.length >= 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP'
+  return false
+}
+
+/** { tipo, buf } de una data URL de imagen, o null si no lo es, pasa de `max` o
+ *  los bytes no son de verdad una imagen de ese tipo. */
+export function imagenDeDataUrl(dataUrl, max) {
+  const m = IMAGEN_DATA.exec(String(dataUrl || ''))
+  if (!m) return null
+  const buf = Buffer.from(m[2], 'base64')
+  if (!buf.length || buf.length > max) return null
+  const tipo = `image/${m[1]}`
+  if (!cabeceraCuadra(tipo, buf)) return null
+  return { tipo, buf }
+}
+const comoDataUrl = (tipo, buf) => `data:${tipo};base64,${buf.toString('base64')}`
+
+// Los ejemplos de cada perfil: una lista en agent_memory (como el kit) y las
+// imágenes en el almacén `helm`, en <perfil>/portadas/ejemplos/.
+async function ejemplosDe(clientId) {
+  const { data } = await supabase.from('agent_memory').select('id, contenido')
+    .eq('client_id', clientId).eq('clave', CLAVE_EJEMPLOS).maybeSingle()
+  let lista = []
+  try { lista = data?.contenido ? JSON.parse(data.contenido) : [] } catch { lista = [] }
+  return { id: data?.id || null, lista: Array.isArray(lista) ? lista : [] }
+}
+async function guardaEjemplos(clientId, id, lista) {
+  const fila = { contenido: JSON.stringify(lista), updated_at: new Date().toISOString() }
+  const { error } = id
+    ? await supabase.from('agent_memory').update(fila).eq('id', id).eq('client_id', clientId)
+    : await supabase.from('agent_memory').insert({ ...fila, client_id: clientId, clave: CLAVE_EJEMPLOS, ambito: 'portadas', agente: 'portadas', tipo: 'ejemplos' })
+  if (error) throw Object.assign(new Error('No se pudo guardar la lista de ejemplos: ' + error.message), { statusCode: 500 })
+}
+const publico = (e) => ({ id: e.id, nombre: e.nombre, url: e.url, creado: e.creado })
+
+// Subir y borrar ejemplos es leer la lista, tocarla y reescribirla: dos a la vez
+// (doble clic, dos pestañas) se pisarían y dejarían la imagen ya subida huérfana
+// en el almacén. api-server.mjs es un solo proceso, así que basta con ponerlas en
+// fila por perfil. (La tarea diaria no toca esta lista, así que no compite.)
+const colaEjemplos = new Map()
+function enColaEjemplos(clientId, fn) {
+  const antes = colaEjemplos.get(clientId) || Promise.resolve()
+  const p = antes.catch(() => {}).then(fn)
+  colaEjemplos.set(clientId, p)
+  p.catch(() => {}).finally(() => { if (colaEjemplos.get(clientId) === p) colaEjemplos.delete(clientId) })
+  return p
+}
 // Del CDN de Meta y de nada más: esto descarga lo que diga la Graph API, y una
 // dirección de otro sitio sería que algo ha ido muy mal.
 const CDN_META = /(^|\.)(cdninstagram\.com|fbcdn\.net)$/i
@@ -50,6 +132,20 @@ Responde SOLO con JSON, sin nada alrededor:
 {"opciones":[{"texto":"…","resaltada":"…","secundario":"","plantilla":"…","angulo":"A · beneficio","porque":"una frase"}]}`
 
 const recorta = (s, n) => String(s || '').slice(0, n)
+
+// Cómo Claude escribe el prompt del FONDO para Ideogram. En inglés (el modelo
+// responde mejor), vertical, con hueco arriba para el titular, SIN texto y SIN
+// caras reconocibles: la persona y el título van aparte.
+const REGLAS_FONDO = `You write a single image prompt for Ideogram that generates a VERTICAL 9:16 BACKGROUND for an Instagram reel cover. The background sets the mood; the headline text and any person are added separately afterwards, so:
+
+RULES
+1. NO text, letters, numbers or logos in the image. The title is composed on top later.
+2. NO recognizable human faces or real people. Abstract figures, hands, objects, places, textures or scenes are fine, but never a portrait that could be mistaken for the client.
+3. Composition: leave the TOP THIRD visually calm (space for a headline). Strong, scroll-stopping, high-contrast, editorial thumbnail look.
+4. Match the sector and topic you are given, and the brand colours if provided. Think like the best thumbnail designers of that niche (fitness, filmmaking, AI, beauty…).
+5. One or two sentences, concrete and visual (subject, setting, lighting, colour, mood, style). End with: "vertical 9:16, no text, cinematic, high detail".
+
+Reply with ONLY the prompt in English, nothing else.`
 
 async function marcaDe(clientId) {
   const { data } = await supabase.from('agent_memory').select('id, contenido')
@@ -173,6 +269,152 @@ export default async function handler(req, res) {
       const opciones = normalizaOpciones(extraeJson(respuesta)?.opciones)
       if (!opciones.length) return res.status(502).json({ error: 'La IA no ha dado ninguna opción válida. Prueba otra vez.' })
       return res.status(200).json({ opciones })
+    }
+
+    // ── GET ?action=capacidad ──────────────────────────────────────────────
+    // ¿Hay clave de imagen en el server? El panel enseña u oculta el fondo IA.
+    if (req.method === 'GET' && action === 'capacidad') {
+      return res.status(200).json({ fondoIa: hayClaveImagen(), portadaIa: hayClaveImagen() })
+    }
+
+    // ── GET ?action=ejemplos ───────────────────────────────────────────────
+    if (req.method === 'GET' && action === 'ejemplos') {
+      const { lista } = await ejemplosDe(clientId)
+      return res.status(200).json({ ejemplos: lista.map(publico) })
+    }
+
+    // ── POST ?action=ejemplo ───────────────────────────────────────────────
+    // Una portada de ejemplo subida a mano: queda como estilo del perfil.
+    if (req.method === 'POST' && action === 'ejemplo') {
+      const nombre = recorta(String(req.body?.nombre || '').trim(), MAX_NOMBRE_EJEMPLO)
+      const img = imagenDeDataUrl(req.body?.imagen, MAX_EJEMPLO)
+      if (!nombre) return res.status(400).json({ error: 'Ponle un nombre al ejemplo' })
+      if (!img) return res.status(400).json({ error: 'La imagen tiene que ser JPG, PNG o WebP de menos de 6 MB' })
+      return enColaEjemplos(clientId, async () => {
+        const { id, lista } = await ejemplosDe(clientId)
+        if (lista.length >= MAX_EJEMPLOS) return res.status(400).json({ error: `Como mucho ${MAX_EJEMPLOS} ejemplos: quita alguno antes` })
+        const nuevo = crypto.randomUUID()
+        const ruta = `${clientId}/portadas/ejemplos/${nuevo}.${img.tipo.split('/')[1].replace('jpeg', 'jpg')}`
+        const { error: errUp } = await supabase.storage.from('helm').upload(ruta, img.buf, { contentType: img.tipo, upsert: false, cacheControl: '31536000' })
+        if (errUp) return res.status(500).json({ error: 'No se pudo subir la imagen: ' + errUp.message })
+        const { data: pub } = supabase.storage.from('helm').getPublicUrl(ruta)
+        const ejemplo = { id: nuevo, nombre, ruta, url: pub?.publicUrl || '', creado: new Date().toISOString() }
+        try { await guardaEjemplos(clientId, id, [...lista, ejemplo]) } catch (err) { await supabase.storage.from('helm').remove([ruta]); throw err }
+        return res.status(200).json({ ejemplo: publico(ejemplo), ejemplos: [...lista, ejemplo].map(publico) })
+      })
+    }
+
+    // ── POST ?action=ejemplo-borrar ────────────────────────────────────────
+    if (req.method === 'POST' && action === 'ejemplo-borrar') {
+      const quitar = String(req.body?.id || '')
+      return enColaEjemplos(clientId, async () => {
+        const { id, lista } = await ejemplosDe(clientId)
+        const fuera = lista.find(e => e.id === quitar)
+        if (!fuera) return res.status(404).json({ error: 'Ese ejemplo ya no está' })
+        const quedan = lista.filter(e => e.id !== quitar)
+        await guardaEjemplos(clientId, id, quedan)
+        // Solo del propio namespace del perfil; el error del almacén no debe
+        // romper el borrado (la lista ya está sin él), pero sí quedar en el log.
+        if (String(fuera.ruta || '').startsWith(`${clientId}/portadas/ejemplos/`)) {
+          const { error: errDel } = await supabase.storage.from('helm').remove([fuera.ruta])
+          if (errDel) console.error('portadas: no se pudo borrar del almacén', fuera.ruta, errDel.message)
+        }
+        return res.status(200).json({ ejemplos: quedan.map(publico) })
+      })
+    }
+
+    // ── POST ?action=portada-ia ────────────────────────────────────────────
+    // La portada entera con IA en un estilo, desde un fotograma real.
+    if (req.method === 'POST' && action === 'portada-ia') {
+      if (!hayClaveImagen()) return res.status(503).json({ error: 'Falta la clave de imagen (REPLICATE_API_TOKEN) en el servidor' })
+      const fotograma = imagenDeDataUrl(req.body?.fotograma, MAX_FOTOGRAMA)
+      const titulo = String(req.body?.titulo || '').trim()
+      const detalle = recorta(String(req.body?.detalle || '').trim(), MAX_DETALLE_IA)
+      const claveEstilo = String(req.body?.estilo || '')
+      if (!fotograma) return res.status(400).json({ error: 'Elige primero el fotograma (o sube una foto)' })
+      if (!titulo) return res.status(400).json({ error: 'Escribe el titular' })
+      if (titulo.length > MAX_TITULO_IA) return res.status(400).json({ error: `El titular, como mucho ${MAX_TITULO_IA} caracteres` })
+
+      const imagenes = [comoDataUrl(fotograma.tipo, fotograma.buf)]
+      let estilo
+      if (claveEstilo.startsWith('ej:')) {
+        // Un ejemplo subido por el perfil: su imagen va de referencia.
+        const { lista } = await ejemplosDe(clientId)
+        const ej = lista.find(e => e.id === claveEstilo.slice(3))
+        if (!ej) return res.status(404).json({ error: 'Ese ejemplo ya no está' })
+        const { data: blob, error: errBaja } = await supabase.storage.from('helm').download(ej.ruta)
+        if (errBaja || !blob) return res.status(502).json({ error: 'No se pudo leer el ejemplo' })
+        imagenes.push(comoDataUrl(blob.type || 'image/jpeg', Buffer.from(await blob.arrayBuffer())))
+        estilo = { estilo: 'Copy the layout and look of the style reference as closely as possible — composition, title treatment, colors, lighting and graphic elements — adapted to this person and this title.' }
+      } else {
+        estilo = estiloIaPorClave(claveEstilo)
+        if (!estilo) return res.status(400).json({ error: 'Elige un estilo' })
+        if (estilo.clave === 'libre' && !detalle) return res.status(400).json({ error: 'Describe el estilo que quieres' })
+        const ref = referenciaDe(estilo)
+        if (ref) imagenes.push(comoDataUrl('image/jpeg', await readFile(`${RAIZ}${ref}`)))
+      }
+
+      let tema = ''
+      const mediaId = String(req.body?.mediaId || '')
+      if (mediaId) {
+        const { data: reel } = await supabase.from('helm_ig_media')
+          .select('caption').eq('client_id', clientId).eq('media_id', mediaId).maybeSingle()
+        tema = recorta(String(reel?.caption || '').split('\n')[0], 300)
+      }
+      const prompt = promptPortadaIa({ estilo, titulo, tema, detalle, imagenes: imagenes.length })
+      // Cada generación cuesta dinero en Replicate: un tope por perfil y hora.
+      // Se consume solo aquí, con la petición ya validada, para que las entradas
+      // mal formadas (400) no gasten el cupo.
+      const tope = rateLimit({ key: `portada-ia:${clientId}`, max: 30, windowMs: 3_600_000 })
+      if (!tope.ok) return res.status(429).json({ error: 'Has generado muchas portadas seguidas. Prueba dentro de un rato.', retryAfter: tope.retryAfter })
+      try {
+        const { dataUrl } = await generaPortadaIa({ prompt, imagenes })
+        return res.status(200).json({ imagen: dataUrl, ia: true })
+      } catch (err) {
+        return res.status(err.statusCode || 502).json({ error: err.message || 'No se pudo generar la portada' })
+      }
+    }
+
+    // ── POST ?action=fondo-prompt ──────────────────────────────────────────
+    // Claude escribe el prompt del fondo a partir del reel, el tema y el kit.
+    if (req.method === 'POST' && action === 'fondo-prompt') {
+      const tema = recorta(String(req.body?.tema || '').trim(), 400)
+      const mediaId = String(req.body?.mediaId || '')
+      let caption = ''
+      if (mediaId) {
+        const { data: reel } = await supabase.from('helm_ig_media')
+          .select('caption').eq('client_id', clientId).eq('media_id', mediaId).maybeSingle()
+        caption = recorta(reel?.caption || '', 1500)
+      }
+      if (!tema && !caption) return res.status(400).json({ error: 'Dime el tema del fondo o elige un reel' })
+      const { marca } = await marcaDe(clientId)
+      const colores = [marca?.colorPrincipal, marca?.colorResalte].filter(Boolean)
+      const usuario = [
+        tema ? `TEMA DEL FONDO: ${tema}` : '',
+        caption ? `CAPTION DEL REEL (para el tono, no para copiar):\n${caption}` : '',
+        colores.length ? `COLORES DE LA MARCA: ${colores.join(', ')}` : '',
+        'Escribe el prompt del fondo.',
+      ].filter(Boolean).join('\n\n')
+      let prompt
+      try {
+        prompt = await llmChat({ clientId, system: REGLAS_FONDO, messages: [{ role: 'user', content: usuario }], maxTokens: 300, temperature: 0.8 })
+      } catch (err) {
+        return res.status(err.statusCode || 502).json({ error: err.message || 'La IA no ha respondido' })
+      }
+      return res.status(200).json({ prompt: String(prompt || '').trim().replace(/^["'`]+|["'`]+$/g, '') })
+    }
+
+    // ── POST ?action=fondo-ia ──────────────────────────────────────────────
+    // Genera el fondo con Ideogram (gasta en Replicate). Sin clave → 503 claro.
+    if (req.method === 'POST' && action === 'fondo-ia') {
+      const prompt = recorta(String(req.body?.prompt || '').trim(), 1500)
+      if (!prompt) return res.status(400).json({ error: 'Escribe la descripción del fondo' })
+      try {
+        const { dataUrl } = await generaFondo({ prompt, aspecto: '9:16' })
+        return res.status(200).json({ imagen: dataUrl, ia: true })
+      } catch (err) {
+        return res.status(err.statusCode || 502).json({ error: err.message || 'No se pudo generar el fondo' })
+      }
     }
 
     // ── GET ?action=video | imagen ─────────────────────────────────────────

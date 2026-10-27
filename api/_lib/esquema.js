@@ -66,7 +66,11 @@ function valida(v, esq, ruta, errores) {
         errores.push(`${pre}${k}: falta, y es obligatorio${p.description ? ` (${p.description})` : ''}.`)
       }
     }
-    const fuera = Object.keys(v).filter(k => !(k in props))
+    // Solo las propiedades propias del esquema: con `k in props`, un
+    // "__proto__" en los argumentos pasaba y le cambiaba el prototipo a lo
+    // limpio (p. ej. heredaba prueba=true y una escritura real no se apuntaba).
+    const tiene = (k) => Object.hasOwn(props, k)
+    const fuera = Object.keys(v).filter(k => !tiene(k))
     // Un campo de más no para la llamada: se ignora y se avisa. Los modelos
     // añaden a veces alguno, y romper lo que antes funcionaba por eso sería
     // peor que dejarlo pasar. Un nombre mal escrito de un campo obligatorio
@@ -77,7 +81,7 @@ function valida(v, esq, ruta, errores) {
     }
     const limpio = {}
     for (const [k, x] of Object.entries(v)) {
-      if (!(k in props) || x === undefined || x === null) { if (k in props) limpio[k] = x; continue }
+      if (!tiene(k) || x === undefined || x === null) { if (tiene(k)) limpio[k] = x; continue }
       limpio[k] = valida(x, props[k], `${pre}${k}`, errores)
     }
     return limpio

@@ -1,16 +1,18 @@
-// AI para todo — s4sf.net/aiparatodo, la comunidad de IA de Alex Silvestre,
-// como configuración del motor de las comunidades (src/pages/comunidad/).
+// AI para todo — s4sf.net/aiparatodo, la web de IA de Alex Silvestre, como
+// configuración del motor de las comunidades (src/pages/comunidad/).
 //
 // El contenido sigue en sus archivos (contenido.js, guia/, skills/,
 // noNegociables.js, guiaModos.js); aquí se dice cómo se pinta:
 // marca, textos, puerta, cobro, API y nombres de las métricas.
 //
-// Puerta: solo pago. Desde octubre de 2026 el acceso es un muro de pago (1,97
-// €/mes de por vida, rebajado de 12 €/mes). El Payment Link de Stripe vuelve a
-// /aiparatodo?pago=ok, y eso desbloquea el acceso. Es un desbloqueo simple:
-// para verificarlo de verdad haría falta un webhook de Stripe.
+// Puerta: gratis desde el 20-10-2026. Se piden nombre, correo y a qué te
+// dedicas (una pulsación), una sola vez, y se abre todo; entran en el CRM de
+// silvestre. Del 11 al 20 de octubre fue un muro de pago de 1,97 €/mes con un
+// Payment Link de Stripe en modo de prueba (no llegó a cobrar): sigue abajo,
+// en COBRO, por si se vuelve a él (COBRO_ACTIVO = true pone el muro después de
+// los datos, con el correo ya puesto en Stripe).
 import {
-  Sparkles, Newspaper, BookOpen, Users, Blocks, BrainCircuit, Cpu, ShieldAlert,
+  Sparkles, Newspaper, BookOpen, Blocks, BrainCircuit, Cpu, ShieldAlert, PanelsTopLeft,
 } from 'lucide-react'
 import {
   FUNDADOR, SECCIONES, hilosDe, postPorSlug, CAPITULOS, capituloPorSlug, NN_HILO,
@@ -19,8 +21,25 @@ import { NN_PORTADA_3D, NN_PUNTOS } from './noNegociables.js'
 import { MODOS_HILO, MODOS_PORTADA_3D, MODOS_GANCHO, MODOS_INDICE } from './guiaModos.js'
 import { PIPELINE_COMUNIDAD, PIPELINE_LEAD_MAGNET } from './crm.js'
 import {
-  Fondo, BloqueHelm, TrasHilo, IndiceNN, CuerpoNoNegociables, IndiceModos, CuerpoGuiaModos, CuerpoPost,
+  Fondo, TrasHilo, IndiceNN, CuerpoNoNegociables, IndiceModos, CuerpoGuiaModos, CuerpoPost,
 } from './piezas.jsx'
+import { PanelWebs, FichaWeb, VitrinaWebs } from './Webs.jsx'
+import { PREMIADAS, ELEGIDAS } from './webs.js'
+
+// HELM Academy (Skool): la comunidad a la que se entra antes de AI para todo.
+// Lo usa el formulario de /helm-academy para redirigir allí tras recoger los datos.
+export const SKOOL_URL = 'https://www.skool.com/helm-academy-4887/about'
+
+const COBRO_ACTIVO = false
+const COBRO = {
+  link: 'https://buy.stripe.com/test_7sY3cu5aratnexD1eM5kk01',
+  titulo: 'Acceso a AI para todo',
+  incluye: <>Con el acceso se abren <b>todos los hilos</b>, los <b>capítulos de la guía</b> y las <b>noticias</b>. Un solo pago al mes.</>,
+  precio: { ahora: '1,97 €', periodo: '/mes', antes: '12 €/mes', nota: 'precio de por vida' },
+  urgencia: <><b>⏳ En 30 días sube a 12 €/mes</b> para los nuevos. Entra ahora y te quedas en <b>1,97 €/mes para siempre</b>.</>,
+  boton: 'Pagar y acceder',
+  legal: 'Suscripción mensual, cancela cuando quieras. Pago seguro con Stripe.',
+}
 
 export default {
   clave: 'aiparatodo',            // las métricas: aiparatodo, aiparatodo-foro, -hilo, -diario, -articulo
@@ -29,13 +48,20 @@ export default {
   ruta: '/aiparatodo',
   api: '/api/aiparatodo',
   clase: '',
-  // v3: desde el muro de pago. Se subió desde v2 para invalidar los desbloqueos
-  // gratuitos antiguos: quien entró gratis vuelve a ver el muro.
-  llave: 's4sf.aiparatodo.v3',
+  // v3: la del muro de pago (11-20 oct), que se mantiene al volver a gratis:
+  // quien entró por ?pago=ok sigue dentro. Quien dejó sus datos cuando era
+  // gratis los tiene en v2 (6-11 oct) o en la llave sin versión (hasta el 6):
+  // también valen, y se pasan a v3 la primera vez (datos.js · accesoDe).
+  // v4: desde el 22-10-2026 el acceso es con aprobación (antes gratis o de
+  // pago). Se corta con las anteriores a propósito: toda la audiencia del
+  // periodo gratuito vuelve a pasar por la solicitud, que es lo que se quiere
+  // (que pasen primero por HELM Academy). No hereda de llaves antiguas.
+  llave: 's4sf.aiparatodo.v4',
+  llavesAntiguas: [],
   privacidad: '/privacidad',
   cabecera: {
-    titulo: 'AI para todo — la comunidad de IA de Alex Silvestre',
-    descripcion: 'Skills para Claude, noticias de cada día, comunidad y la guía completa de Claude, con los 7 tipos de agentes. En español, para miembros.',
+    titulo: 'AI para todo — IA sin humo, de Alex Silvestre',
+    descripcion: `${PREMIADAS} webs premiadas (y ${ELEGIDAS.length} elegidas por Alex) con su prompt, skills para Claude, noticias de cada día y la guía completa de Claude, con los 7 tipos de agentes. Gratis y en español.`,
     imagen: '/inicio/og.jpg', colorBarra: '#050203',
   },
   Fondo,
@@ -43,8 +69,11 @@ export default {
   fundador: FUNDADOR,
 
   secciones: SECCIONES,
-  iconos: { skills: Sparkles, news: Newspaper, comunidad: Users, guia: BookOpen },
-  portadasHilo: { skills: Sparkles, mcp: Blocks, guia: BookOpen, comunidad: Users },
+  iconos: { webs: PanelsTopLeft, skills: Sparkles, news: Newspaper, guia: BookOpen },
+  portadasHilo: { webs: PanelsTopLeft, skills: Sparkles, mcp: Blocks, guia: BookOpen },
+  // Las webs de referencia se pintan a su manera (Webs.jsx): un panel con la
+  // portada de cada web y una ficha por web con su prompt.
+  vistas: { seccion: { webs: PanelWebs }, hilo: { webs: FichaWeb } },
   iconosTipo: { mcp: Blocks },
   hilosDe,
   capitulos: CAPITULOS,
@@ -53,7 +82,7 @@ export default {
     seccion: 'skills',
     porSlug: postPorSlug,
     Cuerpo: CuerpoPost,
-    kicker: (p) => ` · ${p.skills.length} ${p.tipo === 'repo' ? 'apartados' : 'skills'} · ${p.lectura}`,
+    kicker: (p) => ` · ${p.skills.length} ${p.tipo === 'repo' || p.tipo === 'guia' ? 'apartados' : 'skills'} · ${p.lectura}`,
   },
   TrasHilo,
 
@@ -64,8 +93,8 @@ export default {
       gancho: MODOS_GANCHO, kicker: `Guía en PDF · guía principal · ${MODOS_INDICE.length} puntos`,
       Indice: IndiceModos, Cuerpo: CuerpoGuiaModos,
       puerta: {
-        pipeline: PIPELINE_LEAD_MAGNET, nota: 'pidió la guía Los Mods de Claude (PDF)', titulo: 'Descárgate la guía',
-        texto: 'Cuatro datos y es tuya, con todos los prompts, junto con todos los hilos de AI para todo.', boton: 'Descargar',
+        inmediato: true, pipeline: PIPELINE_LEAD_MAGNET, nota: 'pidió la guía Los Mods de Claude (PDF)', titulo: 'Descárgate la guía',
+        texto: 'Gratis: tu nombre y tu correo y es tuya, con todos los prompts, junto con las webs de referencia y todos los hilos de AI para todo.', boton: 'Descargar',
       },
     },
     {
@@ -73,8 +102,8 @@ export default {
       gancho: 'Mis 8 no negociables con Claude', kicker: `Guía en PDF · ${NN_PUNTOS.length} puntos`,
       Indice: IndiceNN, Cuerpo: CuerpoNoNegociables,
       puerta: {
-        pipeline: PIPELINE_LEAD_MAGNET, nota: 'pidió la guía Mis 8 no negociables (PDF)', titulo: 'Descárgate la guía',
-        texto: 'Cuatro datos y es tuya, junto con todos los hilos de AI para todo.', boton: 'Descargar',
+        inmediato: true, pipeline: PIPELINE_LEAD_MAGNET, nota: 'pidió la guía Mis 8 no negociables (PDF)', titulo: 'Descárgate la guía',
+        texto: 'Gratis: tu nombre y tu correo y es tuya, junto con las webs de referencia y todos los hilos de AI para todo.', boton: 'Descargar',
       },
     },
   ],
@@ -84,18 +113,18 @@ export default {
     boton: 'Sigue a nuestro creador',
     sub: (
       <>
-        Skills para Claude, las noticias del día que importan, una comunidad para preguntar y enseñar lo que
-        montas, y la guía completa de Claude, con los 7 tipos de agentes. En español. Hazte miembro por
-        <b> 1,97 €/mes</b> y se te abre todo: hilos, capítulos y noticias.
+        Webs premiadas con su prompt para que tu IA haga la tuya, skills para Claude, las noticias del día que
+        importan y la guía completa de Claude, con los 7 tipos de agentes. En español y <b>gratis</b>: deja tu
+        nombre y tu correo una vez y se te abre todo.
       </>
     ),
-    despues: <BloqueHelm donde="portada" />,
+    despues: <VitrinaWebs />,
   },
   textos: {
     navCta: 'Sigue al creador',
-    zonaNews: 'Tres piezas al día · y las breves',
+    zonaNews: 'Tres piezas al día · y breves cuando las haya',
     foroVacio: { titulo: 'Los primeros hilos están en camino', texto: 'Sigue a nuestro creador para enterarte cuando se abran.' },
-    puertaArticulo: 'Cuatro datos, una sola vez, y se abren el diario entero, los hilos de skills y la guía completa de Claude.',
+    puertaArticulo: 'Gratis: tu nombre y tu correo, una sola vez, y se abren el diario entero, las webs de referencia con su prompt, los hilos de skills y la guía completa de Claude.',
   },
   pie: {
     marca: 'AI para todo',
@@ -112,21 +141,48 @@ export default {
     sub: 'IA, tecnología y ciberseguridad. Tres piezas al día, a las 8:00, las 14:00 y las 20:00, investigadas en las fuentes originales y revisadas dato a dato.',
     vacio: {
       titulo: 'La primera edición está en la imprenta',
-      texto: 'Cada día salen tres: a las 8:00, las 14:00 y las 20:00. Mientras tanto, las breves de la mañana, aquí abajo.',
+      texto: 'Cada día salen tres: a las 8:00, las 14:00 y las 20:00. Si hay breves recientes, las tienes aquí abajo.',
     },
     ediciones: [{ clave: 'manana', desde: 0 }, { clave: 'mediodia', desde: 14 }, { clave: 'tarde', desde: 20 }],
     iconos: { ia: BrainCircuit, tecnologia: Cpu, ciberseguridad: ShieldAlert },
   },
 
   crm: { embudoComunidad: PIPELINE_COMUNIDAD },
-  puerta: { datos: null },
-  cobro: {
-    link: 'https://buy.stripe.com/test_7sY3cu5aratnexD1eM5kk01',
-    titulo: 'Acceso a AI para todo',
-    incluye: <>Con el acceso se abren <b>todos los hilos</b>, los <b>capítulos de la guía</b> y las <b>noticias</b>. Un solo pago al mes.</>,
-    precio: { ahora: '1,97 €', periodo: '/mes', antes: '12 €/mes', nota: 'precio de por vida' },
-    urgencia: <><b>⏳ En 30 días sube a 12 €/mes</b> para los nuevos. Entra ahora y te quedas en <b>1,97 €/mes para siempre</b>.</>,
-    boton: 'Pagar y acceder',
-    legal: 'Suscripción mensual, cancela cuando quieras. Pago seguro con Stripe.',
+  // Las listas de la puerta tienen que ser las mismas que las de la comunidad
+  // en el servidor (api/_lib/comunidades.js); un test lo comprueba.
+  puerta: {
+    // Desde el 22-10-2026, AI para todo es acceso CON APROBACIÓN: se pide
+    // nombre y correo y lo aprueba Alex a quien ya está en HELM Academy (el
+    // Skool). La puerta de `datos` de abajo se queda para los PDF (lead magnet),
+    // que se piden con `inmediato` y siguen abriéndose directos.
+    aprobacion: {
+      // Se entra con el correo con el que se rellenó el formulario de HELM
+      // Academy (/helm-academy), que da el acceso al momento (27-oct-2026). Sin
+      // nombre, sin solicitud y sin aprobación a mano.
+      skool: '/helm-academy',
+      kicker: 'entra con tu correo',
+      titulo: 'Entra con tu correo',
+      texto: 'Pon el correo con el que te apuntaste a HELM Academy y se abre todo AI para todo.',
+      boton: 'Entrar',
+      skoolEnlace: '¿Aún no estás en HELM Academy? Apúntate gratis',
+      noEsta: 'Ese correo no está en HELM Academy. Apúntate gratis con él (es un minuto) y vuelve a entrar aquí.',
+      skoolBoton: 'Apuntarme gratis',
+      legal: <>Solo comprobamos tu correo para abrirte el contenido. <a href="/privacidad" target="_blank" rel="noopener noreferrer">Privacidad</a></>,
+    },
+    datos: {
+      kicker: 'gratis · una sola vez',
+      titulo: 'Entra gratis',
+      texto: 'Tu nombre y tu correo, una sola vez, y se abre todo: las webs de referencia con su prompt, los hilos de skills, la guía completa de Claude y el diario.',
+      boton: 'Entrar gratis',
+      profesiones: {
+        negocio: 'Tengo un negocio',
+        freelance: 'Freelance o creador',
+        empresa: 'Trabajo en una empresa',
+        empezando: 'Estoy empezando',
+      },
+      ingresos: null,
+      legal: <>Usamos tus datos solo para enviarte contenido de AI para todo y de Silvestre AI. Puedes darte de baja cuando quieras. <a href="/privacidad" target="_blank" rel="noopener noreferrer">Privacidad</a></>,
+    },
   },
+  cobro: COBRO_ACTIVO ? COBRO : null,
 }

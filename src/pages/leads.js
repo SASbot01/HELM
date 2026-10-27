@@ -14,6 +14,10 @@ export async function pideLead(action, body, base = '') {
     body: body ? JSON.stringify(body) : undefined,
   })
   const d = await r.json().catch(() => ({}))
-  if (!r.ok) throw new Error(d.error || 'No he podido guardarte. Prueba en un minuto.')
+  if (!r.ok) {
+    const e = new Error(d.error || 'No he podido guardarte. Prueba en un minuto.')
+    e.status = r.status
+    throw e
+  }
   return d
 }

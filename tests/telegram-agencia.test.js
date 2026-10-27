@@ -181,7 +181,6 @@ vi.mock('../api/_lib/equipo.js', () => ({
   encolaAgente: async () => {},
   tokensDeHoy: async () => 0,
 }))
-vi.mock('../api/_lib/ingesta.js', () => ({ enEntrada: async () => [] }))
 // Y lo que arrastra api/telegram.js (el bot de cada perfil), del que solo se prueba la guarda.
 vi.mock('../api/chat.js', () => ({ responderMensaje: async () => ({ respuesta: '' }), COMMANDS: [] }))
 vi.mock('../api/_lib/llm.js', () => ({ proveedorDe: () => 'claude' }))

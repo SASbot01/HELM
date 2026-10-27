@@ -149,6 +149,7 @@ export function Memoria({ identidades }) {
         <article key={n.id} className="ag-card ag-nota-it">
           <div>
             {n.identity_id && <span className="ag-tema">{nombreDe(n.identity_id) || 'Identidad borrada'}</span>}
+            {n.clients && <span className="ag-tema">Solo su agencia · {n.clients.name}</span>}
             <p>{n.contenido}</p>
             <small>{new Date(n.updated_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })}</small>
           </div>

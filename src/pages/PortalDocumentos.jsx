@@ -24,6 +24,16 @@ const TIPOS = [
 ]
 
 const MB = 25
+// Las extensiones que acepta el servidor (FORMATOS en api/documentos.js; un
+// test comprueba que no se separan). Aquí solo avisan antes de mandar megas
+// para nada: quien decide es el servidor. No van en el `accept` del selector a
+// propósito: con .heic ahí, el iPhone manda la foto en HEIC en vez de pasarla a
+// JPG, y el despacho no la abre.
+const ACEPTA = '.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.tif,.tiff,.xlsx,.xls,.ods,.csv,.txt,.n43,.q43,.aeb,.xml,.xsig,.docx,.doc,.odt,.zip'
+// El mismo aviso que da el servidor (NO_ADMITIDO en api/documentos.js).
+const NO_ADMITIDO = 'solo se admiten PDF, fotos (JPG, PNG, WebP, HEIC, TIFF), Excel, Word, OpenDocument (ODS, ODT), '
+  + 'CSV, TXT, ZIP, facturas electrónicas (XML, XSIG) o extractos del banco (Norma 43)'
+const extDe = (nombre) => (/\.[^.]+$/.exec(nombre)?.[0] || '').toLowerCase()
 
 export default function PortalDocumentos() {
   const { token } = useParams()
@@ -58,35 +68,21 @@ export default function PortalDocumentos() {
     for (const f of ficheros) {
       try {
         if (f.size > MB * 1024 * 1024) throw new Error(`${f.name} pesa más de ${MB} MB`)
-        // El fichero va del navegador al bucket directamente, a una URL que
-        // firma el servidor para la carpeta de este cliente y nada más: la
-        // ruta la decide él, y la vuelve a comprobar al registrar.
-        const rf = await fetch('/api/documentos?action=firmar', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ t: token, nombre: f.name }),
-        })
-        const firma = await rf.json()
-        if (!rf.ok) throw new Error(firma.error || 'No se pudo preparar la subida')
-        const cuerpo = new FormData()
-        cuerpo.append('cacheControl', '3600')
-        cuerpo.append('', f)
-        const up = await fetch(firma.url, { method: 'PUT', headers: { 'x-upsert': 'false' }, body: cuerpo })
-        if (!up.ok) {
-          const e = await up.json().catch(() => ({}))
-          throw new Error(e.message || e.error || `No se pudo subir ${f.name}`)
+        if (!ACEPTA.split(',').includes(extDe(f.name))) {
+          throw new Error(`${f.name}: ${NO_ADMITIDO}`)
         }
-
-        const r = await fetch('/api/documentos?action=subir', {
+        // El fichero va al servidor, que lo guarda en la carpeta de este
+        // cliente y lo registra en el mismo paso: la ruta la decide él. El
+        // cuerpo es el fichero tal cual; el enlace va en una cabecera para no
+        // dejarlo en la URL de cada subida.
+        const params = new URLSearchParams({ action: 'subir', nombre: f.name, tipo, obligacion: obligacion || '' })
+        const r = await fetch(`/api/documentos?${params}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            t: token, nombre: f.name, ruta: firma.ruta, tipo,
-            obligacionId: obligacion || null,
-          }),
+          headers: { 'Content-Type': 'application/octet-stream', 'X-Enlace': token },
+          body: f,
         })
-        const d = await r.json()
-        if (!r.ok) throw new Error(d.error || 'No se pudo registrar')
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(d.error || `No se pudo subir ${f.name}`)
         setHechos(h => [...h, f.name])
       } catch (e) {
         setError(e.message)
@@ -175,7 +171,8 @@ export default function PortalDocumentos() {
             <input type="file" multiple hidden onChange={subir} disabled={subiendo} />
           </label>
           <p className="helm-settings-note">
-            Puedes elegir varios a la vez. Hasta {MB} MB cada uno. Vale PDF, foto o Excel.
+            Puedes elegir varios a la vez. Hasta {MB} MB cada uno. Vale PDF, foto, Excel, Word, ZIP,
+            factura electrónica (XML) o el extracto del banco (Norma 43).
           </p>
 
           {error && <div className="helm-formerror" style={{ marginTop: 10 }}>{error}</div>}

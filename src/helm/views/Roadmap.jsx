@@ -157,8 +157,9 @@ function descargarGuion(g) {
 }
 
 // Pop-up con el guion entero, su referencia de vídeo, el botón de descarga y el
-// de «marcar grabado»: al pulsarlo el vídeo que esté en la Entrada de Drive se
-// detecta, se archiva en la pieza del guion y queda enlazado — nada se pierde.
+// de «marcar grabado». Al grabarlo, subes el vídeo a su carpeta de Drive y lo
+// ordenas en su sitio con Claude por el conector (o lo editas en el Editor de
+// reels de HELM); si el guion ya tiene carpeta, se enseña su enlace.
 function GuionModal({ g, fase, entradaUrl, onGrabar, onCerrar }) {
   const { script, referencia, gancho } = parseGuion(g.body)
   const [grabado, setGrabado] = useState(!!g.grabado)
@@ -173,9 +174,7 @@ function GuionModal({ g, fase, entradaUrl, onGrabar, onCerrar }) {
       setGrabado(r.grabado)
       if (r.driveUrl) setDriveUrl(r.driveUrl)
       if (r.grabado && !r.driveUrl) {
-        setAviso(r.detectando > 0
-          ? `Buscando tu vídeo en la Entrada de Drive (${r.detectando})… en cuanto lo reconozca lo archivo y lo enlazo aquí.`
-          : 'Marcado como grabado. Deja el vídeo en la Entrada de Drive y lo archivo y enlazo solo.')
+        setAviso('Marcado como grabado. Sube el vídeo a la Entrada de su Drive y ordénalo en su sitio con Claude por el conector.')
       }
     } catch (e) { setAviso(e.message || 'No se pudo guardar.') }
     setCargando(false)
@@ -208,7 +207,7 @@ function GuionModal({ g, fase, entradaUrl, onGrabar, onCerrar }) {
           {driveUrl
             ? <a className="helm-btn sec" href={driveUrl} target="_blank" rel="noopener noreferrer"><FolderOpen size={15} /> Ver vídeo en Drive</a>
             : grabado && entradaUrl
-              ? <a className="helm-btn sec" href={entradaUrl} target="_blank" rel="noopener noreferrer"><FolderOpen size={15} /> Abrir Entrada de Drive</a>
+              ? <a className="helm-btn sec" href={entradaUrl} target="_blank" rel="noopener noreferrer"><FolderOpen size={15} /> Subir vídeo a la Entrada</a>
               : null}
           <button type="button" className="helm-btn sec" onClick={() => descargarGuion(g)}><Download size={15} /> Descargar guion</button>
         </div>
