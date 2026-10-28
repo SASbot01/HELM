@@ -369,6 +369,39 @@ describe('la pasada diaria', () => {
     expect(posts()).toHaveLength(0)
   })
 
+  it('con Metricool, el gasto sale de ahí y no de los insights diarios de Meta', async () => {
+    tablas.user_integrations.push({
+      id: 'ui-mc', client_id: PERFIL.id, service: 'metricool', member_id: null, enabled: true,
+      config: { blog_id: '555', user_id: '4242', user_token: 'metricool-token-test' },
+    })
+    const serie = (valor) => {
+      const o = {}
+      for (let d = 1; d <= 7; d++) o[meta.masDias(hoyReal(), -d).replaceAll('-', '')] = valor
+      return o
+    }
+    const anuncioMc = (adId, nombre, adset) => ({
+      provider: 'facebook', campaignId: '2001', campaignName: 'Captación',
+      adGroupId: adset, adgroupName: adset === '3001' ? 'Reel cámara' : 'Carrusel',
+      adId, adName: nombre, currency: 'EUR',
+      metrics: { impressions: serie(3000), spent: serie(50), clicks: serie(60), leads: serie(21) },
+    })
+    globalThis.fetch.mockImplementation(async (url, o) => {
+      const u = String(url)
+      if (!u.includes('metricool.com')) return fetchMeta(url, o)
+      const es = u.includes('/datastudio/fbads/ads')
+      const body = es ? [anuncioMc('4001', 'Hook en la calle', '3001'), anuncioMc('4002', 'Carrusel 5 errores', '3002')] : []
+      return { ok: es, status: es ? 200 : 404, headers: new Headers(), text: async () => JSON.stringify(body) }
+    })
+    const ctx = ctxDe()
+    await agente.corre(ctx)
+    expect(M.llamadas.some(l => l.p.time_increment)).toBe(false)
+    expect(tablas.helm_ads_metricas.filter(f => f.ad_id === '4001')).toHaveLength(7)
+    expect(tablas.helm_ads_metricas.find(f => f.ad_id === '4001')).toMatchObject({ gasto: 50, leads_meta: 21, leads_crm: 20, cuenta_id: 'act_111' })
+    const parte = ctx.avisar.mock.calls[0][0]
+    expect(parte).toMatch(/Metricool cuenta 42/)
+    expect(parte).toMatch(/solo lectura/)
+  })
+
   it('en nivel 0 solo mira: sincroniza y da el parte, sin propuestas', async () => {
     tablas.helm_ads_cuentas[0].nivel = 0
     const ctx = ctxDe()

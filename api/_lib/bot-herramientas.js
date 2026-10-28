@@ -7,7 +7,7 @@
 //
 // herramientasBot(ctx) da a Claude todo HELM en herramientas con alcance de
 // AGENCIA (nunca de plataforma, aunque la cuenta lo sea):
-//   · las 8 del conector (api/mcp/[token].js, DEL_CLIENTE), envueltas con
+//   · las del conector (api/mcp/[token].js, DEL_CLIENTE), envueltas con
 //     ejecutaHerramienta para que el MCP y el bot hagan exactamente lo mismo;
 //   · las de las secciones que el panel escribe directo a Supabase (CRM,
 //     Ventas, Finanzas, Enlaces, Equipo, agentes…), en api/_lib/bot/.
@@ -301,7 +301,7 @@ function propia(def, base) {
 
 // Lo que el conector devuelve por defecto está pensado para claude.ai (60
 // guiones, 60 publicaciones); en Telegram, menos.
-const DEFECTOS = { calendario: { limite: 20 }, metricas: { limite: 20 }, corpus: { limite: 3 } }
+const DEFECTOS = { calendario: { limite: 20 }, metricas: { limite: 20 }, anuncios: { limite: 20 }, corpus: { limite: 3 } }
 
 // En el bot, las fechas también pueden ser «hoy», «mañana» o «ayer».
 function sinFormatoFecha(esq) {
@@ -346,9 +346,12 @@ function textoDelEnsayo(nombre, r, args, h) {
   return `En ${h.p.name}: ${hecho || 'sin detalle del ensayo.'}`
 }
 
-// metricas solo lee, salvo con actualizar=true: entonces sincroniza con
-// Instagram (escribe en HELM y gasta cuota de Meta) y pasa por la tarjeta.
-const DELICADA_SI = { metricas: (input) => input?.actualizar === true }
+// metricas y anuncios solo leen, salvo con actualizar=true: entonces sincronizan
+// (escriben la foto en HELM) y pasan por la tarjeta.
+const DELICADA_SI = {
+  metricas: (input) => input?.actualizar === true,
+  anuncios: (input) => input?.actualizar === true,
+}
 
 function delConector(t, base) {
   const escribe = ESCRIBEN.includes(t.name)
@@ -380,6 +383,9 @@ function delConector(t, base) {
   // Lo que dice la tarjeta: con un ensayo si escribe; si solo sincroniza, en una frase.
   async function tarjeta({ args, h, dados }) {
     if (!escribe) {
+      if (t.name === 'anuncios') {
+        return `Sincronizar ahora con Metricool las métricas de anuncios de ${h.p.name} (solo lectura hacia Metricool; guarda la foto en HELM), del ${dados.desde || 'rango por defecto'} al ${dados.hasta || 'ayer'}.`
+      }
       return `Sincronizar ahora con Instagram las métricas de ${h.p.name} (escribe en HELM y gasta cuota de la API de Meta) y leer las últimas ${dados.limite || 20} publicaciones.`
     }
     const r = await ejecutaHerramienta(t.name, { ...dados, prueba: true }, base.alcance)

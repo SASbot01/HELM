@@ -10,10 +10,13 @@
 // que usa el guionista de ventas) y aún no se están anunciando, propone
 // convertir el mejor en anuncio.
 //
-// El gasto sale de helm_ads.gasto (el que apunta el panel); si no está, se cae a
-// `presupuesto` como estimación y se avisa de que hay que apuntar el real. No
-// llama a la IA ni escribe en helm_ads: solo lee y propone.
+// El gasto, si el perfil tiene Metricool, es el de esos anuncios en la ventana
+// del test (api/_lib/metricool.js). Si no casa ninguno, sale de helm_ads.gasto
+// (el que apunta el panel); si no está, se cae a `presupuesto` como estimación
+// y se avisa de que hay que apuntar el real. No llama a la IA ni escribe en
+// helm_ads: solo lee y propone.
 import { atribuyeReels, cobradoDe, shortcodeDe } from './guionista-ventas.js'
+import { configDe, sincronizaPerfil, filasGuardadas, gastoDeAnuncio } from '../metricool.js'
 
 const DIAS_TEST = 5
 const VENTANA_REELS_DIAS = 180
@@ -27,9 +30,11 @@ const norm = (s) => String(s ?? '').trim().toLowerCase()
 const eur = (n) => Math.round(Number(n) || 0).toLocaleString('es-ES')
 const dec = (n) => (Number(n) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-// Lo invertido en un anuncio: el gasto real apuntado manda; si no, el
-// presupuesto como estimación. Devuelve { valor, real } o { valor: null }.
-function gastoDe(ad) {
+// Lo invertido en un anuncio. Metricool, si hay filas de ese anuncio en la
+// ventana, manda. Si no, el gasto real apuntado; si no, el presupuesto.
+// Devuelve { valor, real } o { valor: null }.
+function gastoDe(ad, metricool) {
+  if (metricool != null) return { valor: metricool, real: true, fuente: 'metricool' }
   if (ad.gasto != null && ad.gasto !== '') return { valor: Number(ad.gasto) || 0, real: true }
   if (ad.presupuesto != null && ad.presupuesto !== '') return { valor: Number(ad.presupuesto) || 0, real: false }
   return { valor: null, real: false }
@@ -70,7 +75,8 @@ function lineaCoste(c, gasto) {
   const cpl = c.leads > 0 ? `${dec(gasto.valor / c.leads)} €/lead` : 'sin leads'
   const cpv = c.ventas > 0 ? `${dec(gasto.valor / c.ventas)} €/venta cobrada` : 'sin ventas cobradas'
   const roas = gasto.valor > 0 && c.ingresos > 0 ? `, ROAS ${(c.ingresos / gasto.valor).toFixed(1).replace('.', ',')}×` : ''
-  return `Gasto ${eur(gasto.valor)} €${gasto.real ? '' : ' (presupuesto, apunta el real)'} → ${cpl}, ${cpv}${roas}.`
+  const deDonde = gasto.fuente === 'metricool' ? ' (Metricool)' : (gasto.real ? '' : ' (presupuesto, apunta el real)')
+  return `Gasto ${eur(gasto.valor)} €${deDonde} → ${cpl}, ${cpv}${roas}.`
 }
 
 export default {
@@ -92,7 +98,24 @@ export default {
     // de paso, la atribución de los reels orgánicos.
     const masViejo = conTest.map(a => a.publicado_en).sort()[0]
     const desde = [haceDias(hoy, VENTANA_REELS_DIAS), masViejo].sort()[0]
-    const [media, ventas, leads] = await Promise.all([
+    const hastaHoy = diaISO(hoy)
+    const filasMcP = (async () => {
+      try {
+        const cfg = await configDe(supabase, clientId, { slug: ctx.perfil?.slug })
+        if (!cfg) return []
+        const desdeSync = [desde, haceDias(hoy, 31)].sort().at(-1)
+        try {
+          await sincronizaPerfil({ db: supabase, clientId, desde: desdeSync, hasta: hastaHoy, cfg })
+        } catch (e) {
+          await ctx.log(`Metricool no se ha podido sincronizar (${e?.message || e}). Sigo con lo guardado y, si no hay, con el gasto apuntado.`)
+        }
+        return await filasGuardadas(supabase, clientId, { desde, hasta: hastaHoy })
+      } catch (e) {
+        await ctx.log(`Metricool: ${e?.message || e}`)
+        return []
+      }
+    })()
+    const [media, ventas, leads, filasMc] = await Promise.all([
       supabase.from('helm_ig_media')
         .select('media_id, caption, permalink, visitas, publicado_en, producto')
         .eq('client_id', clientId).order('publicado_en', { ascending: false }).limit(200),
@@ -102,6 +125,7 @@ export default {
       supabase.from('crm_contacts')
         .select('utm_content, utm_campaign, created_at, status')
         .eq('client_id', clientId).gte('created_at', `${desde}T00:00:00Z`).limit(2000),
+      filasMcP,
     ])
     for (const r of [media, ventas, leads]) if (r.error) throw new Error(r.error.message)
     const ventasRows = ventas.data || []
@@ -112,7 +136,7 @@ export default {
     const evaluados = conTest.filter(a => a.estado === 'evaluado')
     for (const ad of conTest) {
       const c = conversionesAd(ad, ventasRows, leadsRows)
-      const gasto = gastoDe(ad)
+      const gasto = gastoDe(ad, gastoDeAnuncio(ad, filasMc))
       if (gasto.valor == null) sinGasto += 1
       const cpl = gasto.valor != null && c.leads > 0 ? ` · ${dec(gasto.valor / c.leads)} €/lead` : ''
       const cpv = gasto.valor != null && c.ventas > 0 ? ` · ${dec(gasto.valor / c.ventas)} €/venta` : ''
