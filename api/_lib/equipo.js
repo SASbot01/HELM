@@ -156,11 +156,19 @@ async function memoriaDe(clientId) {
   return data || []
 }
 
+// Las reglas que deja el Estudio de contenido (agente 'estratega') caducan a
+// las 12 semanas sin reconfirmarse. Las borra el propio estudio, pero en las
+// agencias que pagan se pide a mano: si un perfil no vuelve a pedir otro, aquí
+// dejan de leerse igual (api/_lib/estudio-contenido/generar.js).
+const CADUCA_ESTRATEGA_MS = 12 * 7 * 86_400_000
+const caducada = (n) => n.agente === 'estratega' && n.tipo === 'aprendido' &&
+  Date.now() - Date.parse(n.updated_at) > CADUCA_ESTRATEGA_MS
+
 // Cómo la lee un agente. Las propuestas sin aceptar no son verdad todavía: se
 // enseñan como tales, y las descartadas no se enseñan.
 function memoriaTexto(notas, agente) {
   const dia = (n) => String(n.updated_at).slice(0, 10)
-  const vivas = notas.filter(n => !(n.tipo === 'propuesta' && n.estado === 'descartada'))
+  const vivas = notas.filter(n => !(n.tipo === 'propuesta' && n.estado === 'descartada') && !caducada(n))
   const grupo = (titulo, lista, fmt) => lista.length ? `## ${titulo}\n${lista.map(fmt).join('\n')}` : ''
   return [
     grupo('Reglas del dueño del perfil (se obedecen)', vivas.filter(n => n.tipo === 'regla'),

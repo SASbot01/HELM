@@ -17,6 +17,7 @@ import { instagramApi } from '../lib'
 import { Kpi, Tabs, Empty, FormNote } from '../ui'
 import { sesionHelm } from '../permisos'
 import { INSTAGRAM_CONTACTO, enlaceInstagram } from '../contacto'
+import EstudioContenido from './EstudioContenido.jsx'
 import './metricas.css'
 
 // Una sola serie por gráfica: el oro del acento, el mismo de las del Informe.
@@ -255,6 +256,10 @@ export default function Metricas({ clientId, onNavigate }) {
   const [error, setError] = useState(null)
   const [aviso, setAviso] = useState(null)
   const [sincronizando, setSincronizando] = useState(false)
+  // Cuando ya hay un estudio de contenido generado, el resumen rápido de abajo
+  // («Qué dicen los números» / «Para la próxima semana») sobra: lo dice mejor el
+  // propio estudio. Hasta entonces, se queda como estaba. Lo avisa el estudio.
+  const [hayEstudio, setHayEstudio] = useState(false)
 
   const cargar = useCallback(
     () => instagramApi.informe(clientId, periodo).then(d => { setDatos(d); setError(null) }).catch(e => setError(e.message)),
@@ -317,23 +322,34 @@ export default function Metricas({ clientId, onNavigate }) {
 
           <VisitasPorPieza piezas={publicaciones} mediana={resumen.mediana_visitas} />
 
-          <div className="met-dos">
-            {estudio.conclusiones.length > 0 && (
-              <Lista titulo="Qué dicen los números" frases={estudio.conclusiones} />
-            )}
-            {estudio.proxima_semana.length > 0 && (
-              <Lista
-                titulo="Para la próxima semana"
-                sub="Sale de comparar las piezas entre sí; no sabe de qué va cada vídeo más allá de su texto."
-                frases={estudio.proxima_semana}
-              />
-            )}
-          </div>
+          {!hayEstudio && (estudio.conclusiones.length > 0 || estudio.proxima_semana.length > 0) && (
+            <div className="met-dos">
+              {estudio.conclusiones.length > 0 && (
+                <Lista titulo="Qué dicen los números" frases={estudio.conclusiones} />
+              )}
+              {estudio.proxima_semana.length > 0 && (
+                <Lista
+                  titulo="Para la próxima semana"
+                  sub="Sale de comparar las piezas entre sí; no sabe de qué va cada vídeo más allá de su texto."
+                  frases={estudio.proxima_semana}
+                />
+              )}
+            </div>
+          )}
 
           <PorDia dias={estudio.por_dia_semana} />
           <Tabla piezas={publicaciones} />
         </>
       )}
+
+      {/* El estudio de verdad: diagnóstico, objetivos por etapas, plan, avatar
+          de contenido y lo aprendido. Trae su propia cabecera y su botón; avisa
+          a Metricas si ya hay uno para esconder el resumen. Va fuera del
+          ternario de `publicaciones` a propósito: el estudio usa TODAS las
+          piezas, no depende del periodo elegido, así que no debe desmontarse al
+          cambiar de «15 días» a «Todo» (perdería el estudio abierto del
+          historial y volvería a cargar). */}
+      <EstudioContenido clientId={clientId} onHayEstudio={setHayEstudio} />
     </div>
   )
 }

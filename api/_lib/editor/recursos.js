@@ -21,6 +21,7 @@
 // lo aplica el montaje (render.js, filtroGiro).
 import fsp from 'node:fs/promises'
 import { ejecuta, FFPROBE } from '../variantes.js'
+import { formatoDe } from './formato.js'
 
 export const TIPOS_RECURSO = Object.freeze(['broll', 'logo', 'musica'])
 export const MAX_RECURSOS = Object.freeze({ broll: 12, logo: 1, musica: 1 })
@@ -209,9 +210,12 @@ export function nombreRecurso(crudo) {
   return n.slice(0, 120) || 'recurso'
 }
 
-/** Lo que dice ffprobe de una música: { duracion } o un 422 si no tiene sonido. */
+/**
+ * Lo que dice ffprobe de una música: { duracion } o un 422 si no tiene sonido.
+ * La que va en M4A (un MP4/MOV) se abre con su demuxer (formatoDe, formato.js).
+ */
 export async function sondeaAudio(ruta) {
-  const { stdout } = await ejecuta(FFPROBE(), ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', ruta], { tope: 60_000 })
+  const { stdout } = await ejecuta(FFPROBE(), ['-v', 'error', ...formatoDe(ruta), '-print_format', 'json', '-show_streams', '-show_format', ruta], { tope: 60_000 })
   let j
   try { j = JSON.parse(stdout) } catch { throw falla('No se puede leer esa música.', 422) }
   return infoDeAudio(j)

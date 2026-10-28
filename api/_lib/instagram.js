@@ -219,6 +219,43 @@ export async function getInsights(token, media) {
   }
 }
 
+const fmtDiaMadrid = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' })
+
+/**
+ * Altas y bajas de seguidores de cada uno de los últimos `dias` días, como las
+ * da Instagram (follows_and_unfollows por tipo: FOLLOWER = quien empezó a
+ * seguir, NON_FOLLOWER = quien dejó de seguir o se fue). Solo para cuentas
+ * con 100 seguidores o más, y con un día de retraso: el día que no viene, no
+ * sale. Va día a día (una petición por día, de cuatro en cuatro).
+ * Devuelve [{ dia: 'AAAA-MM-DD' de Madrid, altas, bajas }] del más antiguo al
+ * más nuevo. Solo lanza si el token está muerto.
+ */
+export async function altasYBajas(token, { dias = 30, hoy = new Date() } = {}) {
+  const fin = Math.floor(new Date(hoy).getTime() / 1000)
+  const ventanas = Array.from({ length: dias }, (_, i) => fin - (dias - i) * 86_400)
+  const out = []
+  for (let i = 0; i < ventanas.length; i += 4) {
+    const tanda = await Promise.all(ventanas.slice(i, i + 4).map(async (desde) => {
+      try {
+        const data = await pedir(`${API}/${VERSION}/me/insights?${q({
+          metric: 'follows_and_unfollows', period: 'day', metric_type: 'total_value', breakdown: 'follow_type',
+          since: desde, until: desde + 86_400, access_token: token,
+        })}`)
+        const res = data.data?.[0]?.total_value?.breakdowns?.[0]?.results || []
+        if (!res.length) return null
+        const de = (tipo) => Number(res.find(x => x.dimension_values?.[0] === tipo)?.value) || 0
+        // El día es el de Madrid a mitad de la ventana de 24 h.
+        return { dia: fmtDiaMadrid.format(new Date((desde + 43_200) * 1000)), altas: de('FOLLOWER'), bajas: de('NON_FOLLOWER') }
+      } catch (err) {
+        if (err.statusCode === 401) throw err
+        return null
+      }
+    }))
+    out.push(...tanda.filter(Boolean))
+  }
+  return out
+}
+
 // ── Config por perfil ──────────────────────────────────────────────────────
 // config = { token, expiresAt, manual, userId, username, name, picture,
 //            followers, mediaCount, lastSyncAt }

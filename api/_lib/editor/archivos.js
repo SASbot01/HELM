@@ -32,6 +32,19 @@ export const maxDuracionOriginal = () => Number(process.env.HELM_EDITOR_MAX_SEGU
  * al crear y caer al lanzar, con todo ya subido.
  */
 export const pasaDelTope = (segundos) => Number(segundos) > maxDuracionOriginal() + GRACIA_EDITOR_S
+/**
+ * Lo que puede tener guardado un perfil en la carpeta del editor
+ * (HELM_EDITOR_MAX_GB_PERFIL, 8 GB por defecto): originales, recursos y
+ * editados de sus ediciones de los últimos días, y lo que está llegando.
+ * Sin esto, pagando (o gratis en la agencia de la casa) se llenaría el disco
+ * del servidor, que es el de todo lo demás.
+ */
+export const maxBytesPerfil = () => {
+  const gb = Number(process.env.HELM_EDITOR_MAX_GB_PERFIL)
+  return (Number.isFinite(gb) && gb > 0 ? gb : 8) * 1024 * 1024 * 1024
+}
+/** Lo que pueden sumar los recursos de una edición (imágenes, clips, logo y música). */
+export const MAX_BYTES_RECURSOS_EDICION = 300 * 1024 * 1024
 /** Lo que tiene que quedar libre en el disco después de la subida (HELM_EDITOR_MIN_LIBRE_MB, 2 GB). */
 export const minLibreBytes = () => {
   const mb = Number(process.env.HELM_EDITOR_MIN_LIBRE_MB)
@@ -58,19 +71,39 @@ export const rutaRecurso = (id, recursoId, ext) => {
   return path.join(dirRecursos(id), `${String(recursoId).toLowerCase()}.${ext}`)
 }
 
-// Lo que graba un móvil (y poco más). La extensión es solo para quien mire la
-// carpeta: ffprobe lee el contenido, no el nombre.
+// Lo que graba un móvil: MP4, MOV, M4V y 3GP, los de la familia ISO BMFF, y
+// nada más (WebM, MKV, AVI… no: se exportan a MP4). Lo que manda son los
+// bytes (formato.js: esVideoMov, y ffprobe/ffmpeg con -f mov); el tipo y la
+// extensión los pone el navegador, y la extensión es solo para quien mire la
+// carpeta.
 const POR_TIPO = {
-  'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/x-m4v': 'm4v', 'video/webm': 'webm',
-  'video/x-matroska': 'mkv', 'video/3gpp': '3gp', 'video/3gpp2': '3g2', 'video/mpeg': 'mpg', 'video/x-msvideo': 'avi',
+  'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/x-m4v': 'm4v', 'video/3gpp': '3gp', 'video/3gpp2': '3g2',
 }
 const EXTENSIONES = new Set(Object.values(POR_TIPO))
+const extensionDelNombre = (nombre) => String(nombre || '').toLowerCase().match(/\.([a-z0-9]{2,4})$/)?.[1] || ''
+
+/**
+ * ¿Se admite al crear un original con ese tipo (el que dice el navegador)?
+ * Uno de POR_TIPO; o sin tipo (el navegador no lo sabe), si el nombre acaba en
+ * una de sus extensiones. Los bytes se miran después, al llegar.
+ */
+export const NO_MOV = /^video\/(webm|x-matroska|matroska|x-msvideo|avi|mpeg|mp2t|ogg|x-flv|x-ms-wmv)$/
+
+export function tipoAdmitido(tipo, nombre = '') {
+  const t = String(tipo || '').split(';')[0].trim().toLowerCase()
+  if (POR_TIPO[t]) return true
+  // Un tipo de vídeo raro (video/x-quicktime…) con una extensión buena vale: el
+  // panel deja pasar lo mismo, y los bytes se miran igual al llegar. Los que se
+  // sabe que no son MP4/MOV (WebM, MKV, AVI, MPEG), no, se llamen como se llamen.
+  if (t && (!t.startsWith('video/') || NO_MOV.test(t))) return false
+  return EXTENSIONES.has(extensionDelNombre(nombre))
+}
 
 /** La extensión del original: por su tipo, o por su nombre si el tipo es raro, o mp4. */
 export function extensionDe(tipo, nombre = '') {
   const t = String(tipo || '').split(';')[0].trim().toLowerCase()
   if (POR_TIPO[t]) return POR_TIPO[t]
-  const ext = String(nombre).toLowerCase().match(/\.([a-z0-9]{2,4})$/)?.[1]
+  const ext = extensionDelNombre(nombre)
   return EXTENSIONES.has(ext) ? ext : 'mp4'
 }
 
@@ -81,6 +114,29 @@ export async function rutaOriginal(id) {
   try { nombres = await fsp.readdir(dir) } catch { return null }
   const n = nombres.find(x => /^original\.[a-z0-9]{2,4}$/.test(x))
   return n ? path.join(dir, n) : null
+}
+
+/**
+ * Lo que ocupa en el disco la carpeta de una edición, en bytes: el original
+ * (o lo subido hasta ahora), los recursos, el editado y lo que haya a medias.
+ * 0 si ya no está.
+ */
+export async function ocupaEdicion(id) {
+  return bytesDeCarpeta(dirEdicion(id))
+}
+
+async function bytesDeCarpeta(dir) {
+  let entradas = []
+  try { entradas = await fsp.readdir(dir, { withFileTypes: true }) } catch { return 0 }
+  let total = 0
+  for (const e of entradas) {
+    const ruta = path.join(dir, e.name)
+    if (e.isDirectory()) total += await bytesDeCarpeta(ruta)
+    else if (e.isFile()) {
+      try { total += (await fsp.stat(ruta)).size } catch { /* ya no está */ }
+    }
+  }
+  return total
 }
 
 /** Borra la carpeta entera de una edición. */

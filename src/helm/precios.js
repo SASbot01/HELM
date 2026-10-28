@@ -8,6 +8,7 @@
 //   precioEditor(video.duration)          // → 1.5, 3, 4.5… (euros de saldo)
 //   aCreditos(PRECIOS_FIJOS['portada-ia']) // → 40 (lo que se enseña)
 //   CONCEPTOS[movimiento.modelo]          // → «Editor de reels» (o undefined si es IA por tokens)
+//   creditosQueQuedan(precios.saldo)      // → 149 con 1,4987 €; null si no se ve el saldo
 //
 // Los precios van en euros de saldo, como agencias.saldo; en pantalla se
 // enseñan en créditos (1 € = 100 créditos). Son por trabajo, no por tokens:
@@ -62,3 +63,16 @@ export const precioEditor = (segundos) => {
 
 /** Euros de saldo → créditos, redondeado (lo que se enseña). */
 export const aCreditos = (euros) => Math.round(Number(euros || 0) * CREDITOS_POR_EURO)
+
+/**
+ * Los créditos que QUEDAN con un saldo de `euros`, hacia abajo como los cuenta
+ * el servidor (exigirImporte): con 1,4987 € quedan 149, no 150 (el 1e-6 es por
+ * la coma flotante: 0,29 × 100 da 28,999…). Nunca negativo. Con el saldo sin
+ * saber (null: el saldo es de la agencia y solo lo ve quien la administra),
+ * null, y la pantalla no enseña «te quedan…», solo el precio.
+ */
+export const creditosQueQuedan = (euros) => {
+  if (euros == null || euros === '') return null
+  const n = Number(euros)
+  return Number.isFinite(n) ? Math.max(0, Math.floor(n * CREDITOS_POR_EURO + 1e-6)) : null
+}

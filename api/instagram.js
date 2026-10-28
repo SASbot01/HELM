@@ -26,6 +26,7 @@ import { requireProfileAccess } from './_lib/access.js'
 import {
   igAuthUrl, igRedirectUri, igCredsMissing, exchangeCode, exchangeLongLived,
   getPerfil, listMedia, getInsights, getIgConfig, saveIgConfig, getToken, maskToken, informeIg, suscribirMensajes,
+  altasYBajas,
 } from './_lib/instagram.js'
 
 const TABLA = 'helm_ig_media'
@@ -89,9 +90,75 @@ async function enTandas(items, tam, fn) {
   return out
 }
 
-// Trae las últimas publicaciones con sus métricas y las guarda. La usan el
-// botón de sincronizar del panel y el analista del equipo de agentes
-// (api/_lib/equipo.js), que la llama antes de comparar reels.
+// El día de Madrid, que es el de la cuenta. Aquí y no importado de
+// api/_lib/equipo.js: equipo.js importa este archivo y sería circular.
+const fmtDiaMadrid = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' })
+
+/**
+ * La foto de los seguidores de hoy (día de Madrid) en helm_ig_seguidores.
+ * Instagram solo da el número del momento: sin guardarlo cada día no hay forma
+ * de saber a qué ritmo crece la cuenta, y el Estudio de contenido lo necesita
+ * para estimar cuándo llega al siguiente hito. Varias fotos el mismo día se
+ * pisan: queda la última. Solo con un número recién dado por Instagram: el de
+ * config.followers puede ser de hace días, y apuntarlo como de hoy dejaría el
+ * histórico plano. Nunca lanza: que falle la foto no tumba la sincronización
+ * ni la conexión.
+ */
+export async function guardaSeguidores(clientId, seguidores, d = new Date()) {
+  const n = Number(seguidores)
+  if (!clientId || seguidores == null || !Number.isFinite(n) || n < 0) return
+  try {
+    const { error } = await supabase.from('helm_ig_seguidores')
+      .upsert({ client_id: clientId, dia: fmtDiaMadrid.format(d), seguidores: Math.round(n) }, { onConflict: 'client_id,dia' })
+    if (error) throw error
+  } catch (e) {
+    console.warn(`[instagram] no se pudo guardar la foto de seguidores de ${clientId}:`, e?.message || e)
+  }
+}
+
+/**
+ * Rellena hacia atrás el histórico de seguidores (helm_ig_seguidores) de un
+ * perfil que tiene menos de `minimo` días: con las altas y bajas de cada día
+ * que da Instagram (altasYBajas, los últimos 30), el total al final de un día
+ * es el de hoy menos lo neto de los días que vinieron después. Así el ritmo de
+ * crecimiento del Estudio de contenido sale desde el primer día, y no a la
+ * semana de empezar a hacer fotos. No pisa ninguna foto que ya esté (esas son
+ * reales) y solo corre una vez: con 7 días o más, no hace nada.
+ * Devuelve cuántos días ha añadido. Nunca lanza.
+ */
+export async function rellenaSeguidores(clientId, token, seguidoresHoy, { hoy = new Date(), minimo = 7, altasYBajasDe = altasYBajas } = {}) {
+  const n = Number(seguidoresHoy)
+  if (!clientId || !token || seguidoresHoy == null || !Number.isFinite(n)) return 0
+  try {
+    const { data, error } = await supabase.from('helm_ig_seguidores').select('dia').eq('client_id', clientId)
+    if (error) throw error
+    if ((data || []).length >= minimo) return 0
+    const dias = await altasYBajasDe(token, { dias: 30, hoy })
+    if (!dias.length) return 0
+    const hoyDia = fmtDiaMadrid.format(hoy)
+    const filas = []
+    let total = n
+    // Del más nuevo al más antiguo. Lo de hoy (si Instagram ya lo trae) se
+    // resta sin apuntarlo: la foto de hoy es la real.
+    for (const d of [...dias].sort((a, b) => (a.dia < b.dia ? 1 : -1))) {
+      if (d.dia < hoyDia) filas.push({ client_id: clientId, dia: d.dia, seguidores: Math.max(0, Math.round(total)) })
+      total -= (d.altas || 0) - (d.bajas || 0)
+    }
+    if (!filas.length) return 0
+    const { error: e2 } = await supabase.from('helm_ig_seguidores')
+      .upsert(filas, { onConflict: 'client_id,dia', ignoreDuplicates: true })
+    if (e2) throw e2
+    return filas.length
+  } catch (e) {
+    console.warn(`[instagram] no se pudo rellenar el histórico de seguidores de ${clientId}:`, e?.message || e)
+    return 0
+  }
+}
+
+// Trae las últimas publicaciones con sus métricas y las guarda, y apunta la
+// foto de seguidores del día. La usan el botón de sincronizar del panel, la
+// sincronización del worker (api/_lib/metricas-ig.js) y el analista del equipo
+// de agentes (api/_lib/equipo.js), que la llama antes de comparar reels.
 export async function sincronizar(clientId, limite = LIMITE_POR_DEFECTO) {
   const { token, config } = await getToken(supabase, clientId)
 
@@ -114,11 +181,19 @@ export async function sincronizar(clientId, limite = LIMITE_POR_DEFECTO) {
     mediaCount: perfil.media_count ?? config.mediaCount ?? null,
     lastSyncAt: new Date().toISOString(),
   })
+  // Si getPerfil falló (va con .catch), lo de arriba es el número de antes: no es foto de hoy.
+  const followersFresco = perfil.followers_count != null
+  if (followersFresco) {
+    await guardaSeguidores(clientId, perfil.followers_count)
+    // La primera vez (menos de 7 días de fotos), el último mes con lo que da Instagram.
+    await rellenaSeguidores(clientId, token, perfil.followers_count)
+  }
 
   return {
     sincronizadas: filas.length,
     username: perfil.username || config.username || null,
     followers: perfil.followers_count ?? config.followers ?? null,
+    followersFresco,
     lastSyncAt: new Date().toISOString(),
   }
 }
@@ -184,6 +259,8 @@ export default async function handler(req, res) {
           .then(() => ({ mensajes: true, mensajesError: null, mensajesDesde: new Date().toISOString() }))
           .catch(e => ({ mensajes: false, mensajesError: e.message || 'Meta no ha dejado activar los mensajes' })) : {}),
       })
+      // La primera foto de seguidores, si Instagram ha dado el número.
+      if (perfil.followers_count != null) await guardaSeguidores(payload.clientId, perfil.followers_count)
       await writeAudit({ clientId: payload.clientId, action: 'instagram.linked', req, metadata: { username: perfil.username || null, mensajes: Boolean(payload.mensajes) } })
       return volver(payload.slug, { instagram: 'ok' })
     } catch (err) {
@@ -278,6 +355,7 @@ export default async function handler(req, res) {
         followers: perfil.followers_count ?? null,
         mediaCount: perfil.media_count ?? null,
       })
+      if (perfil.followers_count != null) await guardaSeguidores(clientId, perfil.followers_count)
       await writeAudit({ clientId, action: 'instagram.linked', req, metadata: { username: perfil.username || null, manual: true } })
       return res.status(200).json({ linked: true, username: perfil.username || null, followers: perfil.followers_count ?? null })
     }

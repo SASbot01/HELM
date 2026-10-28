@@ -1,19 +1,32 @@
 // HELM — Editor de reels: subes el vídeo en bruto (vertical, grabado con el
-// móvil) y, si quieres, imágenes o clips de apoyo, tu logo y una música; HELM
-// te devuelve el MP4 editado. Cuesta créditos: 1,50 € por cada bloque de 3
-// minutos empezado del vídeo en bruto (precioEditor, src/helm/precios.js), que
-// se comprueban ANTES de subir y de lanzar y se cobran solo si sale bien.
+// móvil, en MP4 o MOV) y, si quieres, imágenes o clips de apoyo, tu logo y una
+// música; HELM te devuelve el MP4 editado. Cuesta créditos: 1,50 € por cada
+// bloque de 3 minutos empezado del vídeo en bruto (precioEditor,
+// src/helm/precios.js), que se comprueban ANTES de subir y de lanzar y se
+// cobran solo si sale bien.
+//
+// Lo que gasta o sube (crear, trozo, recurso, quitar-recurso, lanzar, estilo,
+// borrar) solo lo puede hacer quien tiene los agentes en su rol
+// (puedeUsarAgentes, api/_lib/access.js): 403 si no. El saldo que se compara
+// es el LIBRE de la agencia (lo apartado por todos sus agentes ya restado,
+// apartadoDeAgencia en api/_lib/creditos.js), con el cerrojo de la agencia; y
+// el 402 lleva las cifras solo para quien administra la agencia (puedeVerSaldo).
 //
 //   POST ?action=crear   { clientId, nombre, bytes, tipo, duracion, estilo_ref?, params? }
 //        duracion = la del <video> del navegador (s); estilo_ref = clave de
 //        ESTILOS_REFERENCIA; params = ajustes del estilo que mandan sobre todo
+//        tipo = video/mp4, video/quicktime, video/x-m4v o video/3gpp(2) (si no, 415)
 //                                        → { edicion: { id, estado: 'subiendo', precio_eur, … } }
-//                                          402 sin saldo · 429 con 2 subiendo o en cola en el perfil
+//                                          402 sin saldo · 429 con 2 subiendo o en cola en el perfil,
+//                                          o si no cabe en lo que puede guardar el perfil
 //   POST ?action=trozo   &clientId=&id=&offset=N   cuerpo = el trozo, en crudo
 //                                        → { recibidos, completo }   (409 → { recibidos })
+//                                          415 si los primeros bytes no son de un MP4/MOV
+//                                          (la edición pasa a error y se borra lo subido)
 //   GET  ?action=trozo   &clientId=&id=  → { recibidos }
 //   POST ?action=recurso &clientId=&id=&tipo=broll|logo|musica&nombre=…   cuerpo = el archivo
 //                                        → { recurso: { id, tipo, clase, nombre, bytes, duracion, palabra } }
+//                                          429 si los de la edición pasan de 300 MB o no cabe en el perfil
 //   POST ?action=quitar-recurso { clientId, id, recurso }  → { ok: true, recursos }
 //   POST ?action=lanzar  { clientId, id, recursos?: [{ id, palabra? }] }
 //                                        → { edicion }  (402 sin saldo, ya con el precio de la duración real)
@@ -21,7 +34,7 @@
 //                                            duracion_original, duracion_final, created_at, error,
 //                                            estilo_ref, recursos, precio_eur, cobrado_eur }] }
 //   GET  ?action=estado  &clientId=&id=  → { edicion: { …lo mismo, plan: resumen del plan } }
-//   GET  ?action=descarga&clientId=&id=  → el MP4, como adjunto
+//   GET  ?action=descarga&clientId=&id=  → el MP4, como adjunto (con nosniff y una CSP que no deja ejecutar nada)
 //   GET  ?action=estilos &clientId=      → { estilos: [{ id, nombre, params, global }],
 //                                            porDefecto: { id, nombre, params, global } }
 //   POST ?action=estilo  { clientId, params, nombre? }  → guarda el estilo del perfil
@@ -33,10 +46,17 @@
 // NO pasan por readBody de scripts/api-server.mjs: llegan sin leer y se
 // escriben a disco según entran, con su tope. Cada recurso va en una sola
 // petición, y su tipo se mira por los bytes (api/_lib/editor/recursos.js).
+// El vídeo en bruto se mira por sus BYTES (api/_lib/editor/formato.js): en
+// cuanto llegan los 12 primeros y otra vez al lanzar, y ffprobe y ffmpeg lo
+// abren siempre como MP4/MOV (-f mov), sin dejarles adivinar el formato.
 // Al lanzar se mira el vídeo con ffprobe, se recalcula el precio con lo que
 // dura de verdad, se cierra la subida y se encola: transcribir y montar lo
 // hace el worker (trabajo `editor-render`, api/_lib/editor/trabajo.js), que
 // cobra al terminar bien.
+//
+// Lo que guarda cada perfil tiene tope (HELM_EDITOR_MAX_GB_PERFIL, 8 GB: sus
+// ediciones de los últimos días y lo que está llegando), y los recursos de una
+// edición, 300 MB entre todos: el disco es el del servidor entero.
 //
 // El estilo con el que se edita sale, de más a menos fuerza, de: `params` del
 // cuerpo > el estilo de referencia elegido (ESTILOS_REFERENCIA[estilo_ref].estilo)
@@ -53,9 +73,10 @@ import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { supabase } from './lib/supabase.js'
 import { applyCors, rateLimit, getClientIp } from './_lib/auth.js'
-import { requireProfileAccess } from './_lib/access.js'
+import { requireProfileAccess, agenciaDe, puedeVerSaldo, puedeUsarAgentes } from './_lib/access.js'
 import { sondea } from './_lib/variantes.js'
-import { exigirImporte, precioEditor } from './_lib/creditos.js'
+import { exigirImporte, precioEditor, conCerrojoAgencia } from './_lib/creditos.js'
+import { esVideoMov, sondeaVideo, BYTES_CABECERA, NO_ES_MP4 } from './_lib/editor/formato.js'
 import { recibeTrozo, recibidosDe, cierraSubida, contestaError } from './_lib/subida-trozos.js'
 import { normalizaEstilo, ESTILO_POR_DEFECTO, EN_MARCHA } from '../src/agents/editor/estilo.js'
 import { ESTILOS_REFERENCIA } from '../src/agents/editor/estilos-referencia.js'
@@ -67,8 +88,8 @@ import {
 } from './_lib/editor/recursos.js'
 import {
   UUID, DIAS_GUARDADO, CARPETA_EDITOR, dirEdicion, dirRecursos, rutaRecurso, rutaOriginal, rutaOriginalCon,
-  rutaParcial, rutaSubida, extensionDe, borraEdicion, editadoDisponible, rutaEditado, maxBytesSubida,
-  maxDuracionOriginal, pasaDelTope, minLibreBytes,
+  rutaParcial, rutaSubida, extensionDe, tipoAdmitido, borraEdicion, editadoDisponible, rutaEditado, maxBytesSubida,
+  maxDuracionOriginal, pasaDelTope, minLibreBytes, maxBytesPerfil, MAX_BYTES_RECURSOS_EDICION, ocupaEdicion,
 } from './_lib/editor/archivos.js'
 
 const TABLA = 'helm_ediciones'
@@ -85,6 +106,10 @@ const MAX_TIRADO = 16 * 1024 * 1024
 const MB = 1024 * 1024
 // Las acciones cuyo cuerpo es un archivo en crudo (no lo lee el api-server).
 const EN_CRUDO = ['trozo', 'recurso', 'subir']
+// Las que gastan créditos o suben al disco: solo con los agentes en el rol (puedeUsarAgentes).
+const GASTAN = ['crear', 'trozo', 'recurso', 'quitar-recurso', 'lanzar', 'estilo', 'borrar']
+const SIN_ROL = 'Tu rol no puede usar los agentes de este perfil.'
+const NO_ES_TIPO = 'Solo se editan vídeos MP4 o MOV (lo que graba el móvil). Si el tuyo es de otro tipo (WebM, MKV, AVI…), exporta a MP4 y vuelve a subirlo.'
 
 const recorta = (t, n) => String(t || '').slice(0, n)
 // Para filename*= de Content-Disposition: encodeURIComponent deja ' ( ) * ! sin codificar.
@@ -94,11 +119,16 @@ const ahora = () => new Date().toISOString()
 const r2 = (n) => Math.round(Number(n) * 100) / 100
 const falla = (mensaje, statusCode, extra = {}) => Object.assign(new Error(mensaje), { statusCode, ...extra })
 const edad = (f) => Date.now() - new Date(f.updated_at || f.created_at).getTime()
+const enGb = (n) => (n / 1024 ** 3).toLocaleString('es-ES', { maximumFractionDigits: 1 })
+const enMb = (n) => Math.ceil(n / MB).toLocaleString('es-ES')
 
 /**
  * De uno en uno por `clave` (el api-server es un solo proceso): lo que lee y
- * vuelve a escribir la lista de recursos de una edición, y lo que mira el
- * saldo y aparta un trabajo (así dos «lanzar» a la vez no gastan el mismo saldo).
+ * vuelve a escribir la lista de recursos de una edición (`edicion:<id>`), y lo
+ * que cuenta los cupos al crear (`cupo`: lo que hay a medias en el perfil y en
+ * el servidor, y lo que guarda el perfil). El saldo va con el cerrojo de la
+ * agencia (conCerrojoAgencia), el mismo para todos los agentes; siempre DENTRO
+ * de estos, nunca al revés.
  */
 const colas = new Map()
 function enFila(clave, fn) {
@@ -175,24 +205,6 @@ async function encolaEdicion(clientId, id) {
   if (error) throw new Error(`No se pudo encolar: ${error.message}`)
 }
 
-/**
- * Lo que la agencia ya tiene apartado en ediciones que aún no se han cobrado
- * (subiendo, en cola o editándose), sin contar `menos`: se resta del saldo
- * antes de dejar empezar otra. Las subidas abandonadas no cuentan.
- */
-async function pendienteDe({ agenciaId }, menos = null) {
-  const { data: perfiles, error: e1 } = await supabase.from('clients').select('id').eq('agencia_id', agenciaId)
-  if (e1) throw e1
-  const ids = (perfiles || []).map(p => p.id)
-  if (!ids.length) return 0
-  const { data, error } = await supabase.from(TABLA).select('id, estado, precio_eur, created_at, updated_at')
-    .in('client_id', ids).in('estado', EN_MARCHA).is('cobrado_eur', null)
-  if (error) throw error
-  return (data || [])
-    .filter(f => f.id !== menos && !(f.estado === 'subiendo' && edad(f) > CADUCA_SUBIENDO))
-    .reduce((t, f) => t + (Number(f.precio_eur) || 0), 0)
-}
-
 /** ¿Hay sitio en el disco para `bytes` más el margen? Si no, un 507. */
 async function hayDisco(bytes) {
   await fsp.mkdir(CARPETA_EDITOR(), { recursive: true })
@@ -206,6 +218,52 @@ async function leeSubida(id) {
     const j = JSON.parse(await fsp.readFile(rutaSubida(id), 'utf8'))
     return Number.isSafeInteger(j?.bytes) && j.bytes > 0 ? j : null
   } catch { return null }
+}
+
+/**
+ * Lo que el perfil tiene en la carpeta del editor: `guardado`, lo que ocupan
+ * las carpetas de sus ediciones de los últimos DIAS_GUARDADO días (con un día
+ * de margen: la carpeta se borra 7 días después de su último archivo), con el
+ * original o lo subido hasta ahora, los recursos y el editado; y `llegando`,
+ * lo que falta por llegar de sus subidas vivas (lo anunciado menos lo recibido).
+ * Lo que hay de verdad en el disco, no lo que diga la fila.
+ */
+async function ocupadoDelPerfil(clientId) {
+  const desde = new Date(Date.now() - (DIAS_GUARDADO + 1) * 86_400_000).toISOString()
+  const { data, error } = await supabase.from(TABLA).select('id, estado, created_at, updated_at')
+    .eq('client_id', clientId).gte('created_at', desde)
+  if (error) throw error
+  let guardado = 0
+  let llegando = 0
+  for (const f of data || []) {
+    if (!UUID.test(String(f.id || ''))) continue
+    guardado += await ocupaEdicion(f.id)
+    if (f.estado !== 'subiendo' || edad(f) > CADUCA_SUBIENDO) continue
+    const anuncio = await leeSubida(f.id)
+    if (anuncio) llegando += Math.max(0, anuncio.bytes - await recibidosDe(dirEdicion(f.id)))
+  }
+  return { guardado, llegando }
+}
+
+/** ¿Caben `bytes` más en lo que puede guardar el perfil? Si no, un 429 que dice qué hacer. */
+async function exigeSitioDelPerfil(clientId, bytes, que) {
+  const tope = maxBytesPerfil()
+  const { guardado, llegando } = await ocupadoDelPerfil(clientId)
+  const usado = guardado + llegando
+  if (usado + bytes > tope) {
+    throw falla(`Los vídeos del editor de este perfil ya ocupan ${enGb(usado)} GB y el tope es de ${enGb(tope)} GB. Borra de la lista las ediciones que ya no necesites (lo que ya hayas descargado) para subir ${que}.`, 429)
+  }
+}
+
+/** Lo que suman los recursos de una lista, en bytes. */
+const sumaRecursos = (lista) => (lista || []).reduce((t, r) => t + (Number(r?.bytes) || 0), 0)
+const recursosDeMas = (suma) => `Los archivos de esta edición ya suman ${enMb(suma)} MB y el tope es de ${enMb(MAX_BYTES_RECURSOS_EDICION)} MB entre todos. Quita alguno (o súbelo más ligero) para añadir este.`
+
+/** La edición no vale: pasa a «error» con su motivo y fuera lo que se había subido. */
+async function cierraConError(clientId, id, motivo) {
+  await supabase.from(TABLA).update({ estado: 'error', paso: null, error: motivo, updated_at: ahora() })
+    .eq('id', id).eq('client_id', clientId).then(() => {}, () => {})
+  await borraEdicion(id).catch(() => {})
 }
 
 /** La fila de una edición del perfil (cada consulta filtra por los dos). */
@@ -240,7 +298,8 @@ function nombreDe(texto) {
 async function crear(req, res, { clientId, auth }) {
   const b = req.body || {}
   const tipo = String(b.tipo || '').split(';')[0].trim().toLowerCase()
-  if (!/^video\/[a-z0-9.+-]+$/.test(tipo)) return res.status(415).json({ error: 'Eso no es un vídeo. Sube el archivo tal cual sale del móvil (MP4 o MOV).' })
+  if (tipo && !/^video\/[a-z0-9.+-]+$/.test(tipo)) return res.status(415).json({ error: 'Eso no es un vídeo. Sube el archivo tal cual sale del móvil (MP4 o MOV).' })
+  if (!tipoAdmitido(tipo, nombreDe(b.nombre))) return res.status(415).json({ error: NO_ES_TIPO })
   const bytes = Number(b.bytes)
   if (!Number.isSafeInteger(bytes) || bytes <= 0) return res.status(400).json({ error: 'Falta lo que pesa el vídeo.' })
   const max = maxBytesSubida()
@@ -260,8 +319,12 @@ async function crear(req, res, { clientId, auth }) {
   if (b.params != null && (typeof b.params !== 'object' || Array.isArray(b.params))) return res.status(400).json({ error: 'Los ajustes del estilo no son válidos.' })
 
   await hayDisco(bytes)
+  // Fuera de los cerrojos, lo que no cambia con lo que hagan los demás.
+  const estilo = await estiloEfectivo(clientId, referencia, b.params)
+  const precio = precioEditor(duracion ?? 0)
+  const [agenciaId, verSaldo] = await Promise.all([agenciaDe(clientId), puedeVerSaldo(auth, clientId)])
 
-  return enFila('saldo', async () => {
+  return enFila('cupo', async () => {
     // Las subidas abandonadas de TODOS los perfiles pasan a error: si no, las de
     // quien no vuelve al editor llenarían el tope del servidor para siempre. Y
     // aunque eso fallara, al contar se dejan fuera por su edad.
@@ -273,12 +336,9 @@ async function crear(req, res, { clientId, auth }) {
     const enTodo = vivas.length
     if (delPerfil >= MAX_A_LA_VEZ_PERFIL) return res.status(429).json({ error: `Ya hay ${MAX_A_LA_VEZ_PERFIL} vídeos de este perfil subiendo o en cola. Espera a que empiece alguno.` })
     if (enTodo >= MAX_COLA) return res.status(503).json({ error: 'HELM está editando muchos vídeos ahora mismo. Prueba en unos minutos.' })
+    // Lo que puede guardar el perfil: lo que ya tiene, lo que le está llegando y este.
+    await exigeSitioDelPerfil(clientId, bytes, 'este vídeo')
 
-    // Sin saldo, ni se empieza a subir (402 con el mensaje para el usuario).
-    const precio = precioEditor(duracion ?? 0)
-    await exigirImporte(clientId, precio, { pendiente: (q) => pendienteDe(q) })
-
-    const estilo = await estiloEfectivo(clientId, referencia, b.params)
     const id = randomUUID()
     const fila = {
       id, client_id: clientId, nombre_original: nombreDe(b.nombre), estado: 'subiendo', progreso: 0, paso: 'Subiendo el vídeo',
@@ -286,7 +346,14 @@ async function crear(req, res, { clientId, auth }) {
       duracion_s: duracion == null ? null : r2(duracion),
       creado_por: UUID.test(String(auth?.userId || '')) ? auth.userId : null,
     }
-    const { error } = await supabase.from(TABLA).insert(fila)
+    // Sin saldo LIBRE (lo apartado por todos los agentes de la agencia ya
+    // restado), ni se empieza a subir: 402 con el mensaje para el usuario. La
+    // fila «subiendo» con su precio es lo que lo deja apartado: va dentro del
+    // mismo cerrojo.
+    const { error } = await conCerrojoAgencia(agenciaId, async () => {
+      await exigirImporte(clientId, precio, { detalle: verSaldo })
+      return supabase.from(TABLA).insert(fila)
+    })
     if (error) return res.status(500).json({ error: 'No se pudo empezar la subida: ' + error.message })
     try {
       await fsp.mkdir(dirEdicion(id), { recursive: true })
@@ -316,6 +383,12 @@ async function trozo(req, res, { clientId, id }) {
     r = await recibeTrozo(req, { dir: dirEdicion(id), total: anuncio.bytes, offset: req.query.offset, minLibre: minLibreBytes() })
   } catch (e) {
     return contestaError(req, res, e)
+  }
+  // En cuanto están los primeros bytes, se mira que sea un MP4/MOV de verdad
+  // (formato.js): lo que no lo es no se sigue subiendo ni llega a ffprobe.
+  if (Number(req.query.offset) < BYTES_CABECERA && r.recibidos >= BYTES_CABECERA && !await esVideoMov(rutaParcial(id))) {
+    await cierraConError(clientId, id, NO_ES_MP4)
+    return res.status(415).json({ error: NO_ES_MP4 })
   }
   // Que se vea que sigue viva (la que lleva horas sin moverse, caduca).
   const pct = Math.floor((r.recibidos / anuncio.bytes) * 100)
@@ -382,7 +455,8 @@ async function sondeaRecurso(ruta, adm) {
     return { ancho: v.ancho, alto: v.alto, giro }
   }
   if (adm.clase === 'video') {
-    const v = await sondea(ruta)
+    // Un clip es un MP4/MOV por su firma: se abre como tal, sin dejar adivinar a ffprobe.
+    const v = await sondeaVideo(ruta)
     if (!(v.duracion >= MIN_DURACION_CLIP)) throw falla('Ese clip es demasiado corto.', 422)
     return { ancho: v.ancho, alto: v.alto, duracion: r2(v.duracion) }
   }
@@ -402,9 +476,16 @@ async function recurso(req, res, { clientId, id }) {
   const tope = maxBytesDeTipo(tipo)
   const largo = Number(req.headers['content-length'])
   if (Number.isFinite(largo) && largo > tope) return rechaza(req, res, 413, `Ese archivo pesa más de ${Math.round(tope / MB)} MB.`)
+  // Los de la edición, 300 MB entre todos (un logo o una música nuevos
+  // sustituyen al que hubiera). Aquí, con lo que anuncia; al apuntarlo, con lo
+  // que ha llegado de verdad.
+  const yaSuman = sumaRecursos((fila.recursos || []).filter(r => tipo === 'broll' || r.tipo !== tipo))
+  if (yaSuman + (Number.isFinite(largo) ? largo : 0) > MAX_BYTES_RECURSOS_EDICION) return rechaza(req, res, 429, recursosDeMas(yaSuman))
   try {
     await hayDisco(Number.isFinite(largo) ? largo : tope)
+    await exigeSitioDelPerfil(clientId, Number.isFinite(largo) ? largo : tope, 'este archivo')
   } catch (e) {
+    if (!e?.statusCode) console.error('[editor] no pude mirar el sitio del perfil', e?.message || e)
     return rechaza(req, res, e.statusCode || 500, e.statusCode ? e.message : 'No se puede guardar el archivo ahora mismo.')
   }
 
@@ -459,6 +540,11 @@ async function recurso(req, res, { clientId, id }) {
       sustituidos = lista.filter(r => r.tipo === tipo)
       lista = lista.filter(r => r.tipo !== tipo)
     }
+    // Lo que ha llegado de verdad (y lo que se apuntó mientras subía este).
+    if (sumaRecursos(lista) + bytes > MAX_BYTES_RECURSOS_EDICION) {
+      await fsp.rm(ruta, { force: true })
+      return res.status(429).json({ error: recursosDeMas(sumaRecursos(lista)) })
+    }
     const nuevo = { id: rid, tipo, clase: adm.clase, ext: adm.ext, nombre: nombreRecurso(req.query.nombre), bytes, ...info, palabra: null }
     const { error } = await supabase.from(TABLA).update({ recursos: [...lista, nuevo], updated_at: ahora() })
       .eq('id', id).eq('client_id', clientId).eq('estado', 'subiendo')
@@ -491,7 +577,7 @@ async function quitaRecurso(req, res, { clientId, id }) {
 }
 
 // ── lanzar ──────────────────────────────────────────────────────────────────
-async function lanzar(req, res, { clientId, id }) {
+async function lanzar(req, res, { clientId, id, auth }) {
   const pedidos = req.body?.recursos
   if (pedidos != null && (!Array.isArray(pedidos) || pedidos.length > 40)) return res.status(400).json({ error: 'La lista de recursos no es válida.' })
 
@@ -531,24 +617,33 @@ async function lanzar(req, res, { clientId, id }) {
       ruta = rutaParcial(id)
     }
 
+    // Otra vez los primeros bytes, ya con el vídeo entero (uno de menos de 12
+    // bytes no ha pasado por la comprobación de trozo): ffprobe solo ve MP4/MOV.
+    if (!await esVideoMov(ruta)) {
+      await cierraConError(clientId, id, NO_ES_MP4)
+      return res.status(415).json({ error: NO_ES_MP4 })
+    }
     // ¿Es un vídeo de verdad, de los que se pueden editar? Y lo que dura de verdad.
     let info
-    try { info = await sondea(ruta) } catch { info = null }
+    try { info = await sondeaVideo(ruta) } catch { info = null }
     const motivo = !info ? 'No se puede leer ese vídeo. Prueba a exportarlo otra vez desde el móvil (MP4 o MOV).'
       : !info.duracion ? 'No se sabe cuánto dura ese vídeo.'
         : pasaDelTope(info.duracion) ? `El vídeo dura más de ${Math.round(maxDuracionOriginal() / 60)} minutos. Recórtalo y vuelve a subirlo.`
           : null
     if (motivo) {
-      await supabase.from(TABLA).update({ estado: 'error', paso: null, error: motivo, updated_at: ahora() }).eq('id', id).eq('client_id', clientId)
-      await borraEdicion(id).catch(() => {})
+      await cierraConError(clientId, id, motivo)
       return res.status(422).json({ error: motivo })
     }
     // El precio de verdad: el de lo que dura el vídeo, no el que dijo el navegador.
     const precio = precioEditor(info.duracion)
+    const [agenciaId, verSaldo] = await Promise.all([agenciaDe(clientId), puedeVerSaldo(auth, clientId)])
 
-    return enFila('saldo', async () => {
-      // Sin saldo, la edición se queda subida: al recargar, se vuelve a lanzar.
-      await exigirImporte(clientId, precio, { pendiente: (q) => pendienteDe(q, id) })
+    // Comprobar el saldo libre y dejarlo apartado (la fila en cola con su
+    // precio), dentro del cerrojo de la agencia: el mismo de Portadas, Trial
+    // reels… Sin saldo, la edición se queda subida: al recargar, se vuelve a lanzar.
+    return conCerrojoAgencia(agenciaId, async () => {
+      // Su propia fila (aún «subiendo», con el precio que dijo el navegador) no cuenta como apartada.
+      await exigirImporte(clientId, precio, { excluirEdicion: id, detalle: verSaldo })
       if (ruta === rutaParcial(id)) {
         try {
           await cierraSubida(dir, rutaOriginalCon(id, anuncio.ext), anuncio.bytes)
@@ -607,6 +702,18 @@ export default async function handler(req, res) {
   } catch (err) {
     return corta(err.statusCode || 401, err.message)
   }
+  // Lo que gasta créditos o sube al disco, solo con los agentes en el rol;
+  // si no, se contesta sin leer el cuerpo (como al fallar el acceso).
+  if (GASTAN.includes(action)) {
+    let puede
+    try {
+      puede = await puedeUsarAgentes(auth, clientId)
+    } catch (err) {
+      console.error('[editor] no pude mirar el rol', err?.message || err)
+      return corta(500, 'No se pudo comprobar tu rol en este perfil. Prueba otra vez.')
+    }
+    if (!puede) return corta(403, SIN_ROL)
+  }
 
   try {
     // La subida de una sola vez de antes: ahora va por crear → trozo → lanzar.
@@ -652,7 +759,7 @@ export default async function handler(req, res) {
     if (action === 'trozo' && (req.method === 'POST' || req.method === 'GET')) return await trozo(req, res, { clientId, id })
     if (req.method === 'POST' && action === 'recurso') return await recurso(req, res, { clientId, id })
     if (req.method === 'POST' && action === 'quitar-recurso') return await quitaRecurso(req, res, { clientId, id })
-    if (req.method === 'POST' && action === 'lanzar') return await lanzar(req, res, { clientId, id })
+    if (req.method === 'POST' && action === 'lanzar') return await lanzar(req, res, { clientId, id, auth })
 
     if (req.method === 'GET' && action === 'estado') {
       const fila = await filaDe(clientId, id, `${COLUMNAS}, plan`)
@@ -672,6 +779,10 @@ export default async function handler(req, res) {
       res.setHeader('Content-Length', String(st.size))
       res.setHeader('Content-Disposition', `attachment; filename="${ascii}-editado.mp4"; filename*=UTF-8''${rfc5987(`${base}-editado.mp4`)}`)
       res.setHeader('Cache-Control', 'private, no-store')
+      // Que el navegador no lo reinterprete nunca como otra cosa (HTML) ni
+      // ejecute nada si alguien lo abre directamente en la pestaña.
+      res.setHeader('X-Content-Type-Options', 'nosniff')
+      res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox")
       try {
         await pipeline(fs.createReadStream(rutaEditado(id)), res)
       } catch (e) {

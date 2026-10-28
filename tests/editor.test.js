@@ -555,9 +555,14 @@ describe('render: los argumentos de ffmpeg con recursos', () => {
     const clip = e.find(x => x.uso === 'clip')
     // El clip: solo su trozo (-ss y -t antes de su -i); la música, en bucle.
     const iClip = args.indexOf(rutas.clip1)
-    expect(args.slice(iClip - 5, iClip)).toEqual(['-ss', '0', '-t', String(Math.round((clip.tramo.b - clip.tramo.a + 0.5) * 1000) / 1000), '-i'])
+    // (y como MP4/MOV, sin dejar a ffmpeg adivinar el formato: formato.js)
+    expect(args.slice(iClip - 7, iClip)).toEqual(['-ss', '0', '-t', String(Math.round((clip.tramo.b - clip.tramo.a + 0.5) * 1000) / 1000), '-f', 'mov', '-i'])
     const iMus = args.indexOf(rutas.mus1)
     expect(args.slice(iMus - 5, iMus)).toEqual(['-stream_loop', '-1', '-t', expect.any(String), '-i'])
+    // El original, siempre como MP4/MOV; las imágenes y el logo, tal cual.
+    expect(args.slice(args.indexOf('/d/e.mov') - 3, args.indexOf('/d/e.mov'))).toEqual(['-f', 'mov', '-i'])
+    expect(args[args.indexOf(rutas.img1) - 2]).not.toBe('mov')
+    expect(args.filter(x => x === 'mov')).toHaveLength(2)
     // El orden de las entradas es el de entradasDe (el vídeo es la 0).
     expect(e.map(x => args.indexOf(rutas[x.recurso]))).toEqual([...e.map(x => args.indexOf(rutas[x.recurso]))].sort((a, b) => a - b))
 
@@ -651,6 +656,8 @@ describe('render: los argumentos de ffmpeg con recursos', () => {
 
     // La medida: el trozo que va a sonar (en bucle hasta lo que dura el editado), sin imagen.
     expect(argumentosMedida('/d/m.mp3', 41.2)).toEqual(['-hide_banner', '-nostdin', '-nostats', '-stream_loop', '-1', '-t', '41.2', '-i', '/d/m.mp3', '-vn', '-af', 'loudnorm=print_format=json', '-f', 'null', '-'])
+    // La música en M4A es un MP4: se abre con su demuxer, como el original y los clips.
+    expect(argumentosMedida('/d/m.m4a', 41.2).slice(7, 10)).toEqual(['-f', 'mov', '-i'])
     const resumen = '[Parsed_loudnorm_0 @ 0x1]\n{\n\t"input_i" : "-13.42",\n\t"input_tp" : "-0.80",\n\t"output_i" : "-16.01"\n}\n'
     expect(sonoridadDe(`Input #0, mp3…\n${resumen}`)).toBe(-13.42)
     expect(sonoridadDe('{ "input_i" : "-inf" }')).toBeNull()
@@ -729,11 +736,18 @@ vi.mock('../api/lib/supabase.js', () => ({ supabase: { from: (t) => consulta(t),
 vi.mock('../api/_lib/access.js', () => ({
   requireProfileAccess: vi.fn(async () => ({ userId: 'b0000000-0000-4000-8000-000000000001' })),
   agenciaDe: async (clientId) => (db.clients || []).find(c => c.id === clientId)?.agencia_id ?? null,
+  // Quién puede gastar y quién ve el saldo: de serie, todo sí (hay pruebas para el no).
+  puedeUsarAgentes: vi.fn(async () => true),
+  puedeVerSaldo: vi.fn(async () => true),
 }))
-vi.mock('../api/_lib/variantes.js', async (original) => ({
-  ...(await original()),
-  sondea: vi.fn(async () => ({ ancho: 1080, alto: 1920, duracion: 12.5, audio: true })),
-}))
+// ejecuta, la de verdad pero espiada: para ver con qué se abre cada archivo.
+vi.mock('../api/_lib/variantes.js', async (original) => {
+  const o = await original()
+  return { ...o, sondea: vi.fn(async () => ({ ancho: 1080, alto: 1920, duracion: 12.5, audio: true })), ejecuta: vi.fn(o.ejecuta) }
+})
+// sondeaVideo (ffprobe con -f mov) hace lo que diga el sondea simulado; las
+// pruebas con ffmpeg de verdad ponen la suya.
+vi.mock('../api/_lib/editor/formato.js', async (original) => ({ ...(await original()), sondeaVideo: vi.fn() }))
 // Los estilos de referencia, fijos para la prueba (la galería de verdad la escribe la pantalla).
 vi.mock('../src/agents/editor/estilos-referencia.js', () => ({
   ESTILOS_REFERENCIA: [
@@ -743,8 +757,10 @@ vi.mock('../src/agents/editor/estilos-referencia.js', () => ({
 }))
 
 const { default: editor } = await import('../api/editor.js')
-const { sondea } = await import('../api/_lib/variantes.js')
-const { requireProfileAccess } = await import('../api/_lib/access.js')
+const { sondea, ejecuta } = await import('../api/_lib/variantes.js')
+const { requireProfileAccess, puedeUsarAgentes, puedeVerSaldo } = await import('../api/_lib/access.js')
+const { sondeaVideo } = await import('../api/_lib/editor/formato.js')
+const { sondeaVideo: sondeaVideoReal } = await vi.importActual('../api/_lib/editor/formato.js')
 const { rutaEditado, dirEdicion, dirRecursos, rutaRecurso, limpiaEdiciones, pasaDelTope } = await import('../api/_lib/editor/archivos.js')
 const { editorRender, cobraEdicion, reintentaCobros, cierraColgadas, edicionFallida, ABANDONADA } = await import('../api/_lib/editor/trabajo.js')
 const SONDEO = { ancho: 1080, alto: 1920, duracion: 12.5, audio: true }
@@ -783,10 +799,19 @@ beforeEach(() => {
   db.agencias = [{ id: AGENCIA, saldo: 100, sin_cobro: false }, { id: AGENCIA_OTRA, saldo: 100, sin_cobro: false }]
   db.agencia_movimientos = []
   db.rpcCaida = false
+  db.helm_trial_reels = []
   sondea.mockReset()
   sondea.mockImplementation(async () => ({ ...SONDEO }))
+  sondeaVideo.mockReset()
+  sondeaVideo.mockImplementation((ruta) => sondea(ruta))
+  ejecuta.mockClear()
   requireProfileAccess.mockClear()
+  puedeUsarAgentes.mockReset()
+  puedeUsarAgentes.mockImplementation(async () => true)
+  puedeVerSaldo.mockReset()
+  puedeVerSaldo.mockImplementation(async () => true)
   delete process.env.HELM_EDITOR_MAX_MB
+  delete process.env.HELM_EDITOR_MAX_GB_PERFIL
 })
 
 describe('api/editor: crear', () => {
@@ -1127,6 +1152,9 @@ describe('api/editor: lista, estado, descarga, borrar y estilos', () => {
     const d = await llama({ action: 'descarga', query: { id: mia.id } })
     expect(d.headers['Content-Type']).toBe('video/mp4')
     expect(d.headers['Content-Disposition']).toBe(`attachment; filename="Toma buena-editado.mp4"; filename*=UTF-8''Toma%20%C2%ABbuena%C2%BB-editado.mp4`)
+    // Que el navegador no lo reinterprete (HTML) ni ejecute nada si se abre en la pestaña.
+    expect(d.headers['X-Content-Type-Options']).toBe('nosniff')
+    expect(d.headers['Content-Security-Policy']).toBe("default-src 'none'; sandbox")
     expect(d.descargado.toString()).toBe('mp4 de mentira')
 
     expect((await llama({ method: 'POST', action: 'borrar', body: { id: ajena.id } })).statusCode).toBe(404)
@@ -1277,6 +1305,19 @@ const FFMPEG = process.env.HELM_FFMPEG || 'ffmpeg'
 const hayFfmpeg = spawnSync(FFMPEG, ['-version']).status === 0
 const hayLibass = hayFfmpeg && / ass +V->V/.test(spawnSync(FFMPEG, ['-hide_banner', '-filters'], { encoding: 'utf8' }).stdout)
 const genera = (...args) => expect(spawnSync(FFMPEG, ['-v', 'error', '-y', ...args]).status).toBe(0)
+/**
+ * Cuántas veces se le ha pasado `ruta` a ffmpeg/ffprobe (por ejecuta); lanza si
+ * alguna NO la abre como MP4/MOV (-f mov justo delante de su -i, o en ffprobe).
+ */
+function abrenComoMov(ruta) {
+  const llamadas = ejecuta.mock.calls.map(c => c[1]).filter(a => a.includes(ruta))
+  for (const a of llamadas) {
+    const i = a.indexOf(ruta)
+    const bien = a[i - 1] === '-i' ? a[i - 3] === '-f' && a[i - 2] === 'mov' : a[a.indexOf('-f') + 1] === 'mov'
+    if (!bien) throw new Error(`se abre sin -f mov: ${a.join(' ')}`)
+  }
+  return llamadas.length
+}
 /** El color (r, g, b) del píxel (x, y) del fotograma del segundo `t`. */
 function pixel(video, t, x, y) {
   const r = spawnSync(FFMPEG, ['-v', 'error', '-ss', String(t), '-i', video, '-frames:v', '1', '-vf', `crop=1:1:${x}:${y}`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'])
@@ -1290,6 +1331,7 @@ describe('trabajo editor-render', () => {
   it.skipIf(!hayFfmpeg)('transcribe (simulado), planifica, monta, deja la fila en «listo» y cobra su precio una sola vez', async () => {
     const { sondea: sondeaReal } = await vi.importActual('../api/_lib/variantes.js')
     sondea.mockImplementation(sondeaReal)
+    sondeaVideo.mockImplementation(sondeaVideoReal)
     const id = nuevoId()
     fs.mkdirSync(dirEdicion(id), { recursive: true })
     genera('-f', 'lavfi', '-i', 'testsrc2=size=360x640:rate=30:duration=9', '-f', 'lavfi', '-i', 'sine=frequency=300:sample_rate=44100:duration=9',
@@ -1302,6 +1344,8 @@ describe('trabajo editor-render', () => {
     expect(fila).toMatchObject({ estado: 'listo', progreso: 100, error: null, cobrado_eur: 1.5 })
     expect(transcribe).toHaveBeenCalledTimes(1)
     expect(fila.plan.resumen.tomas).toBe(1)
+    // ffprobe, la voz para Whisper y el montaje: los tres abren el original como MP4/MOV.
+    expect(abrenComoMov(path.join(dirEdicion(id), 'original.mp4'))).toBe(3)
     // El editado dura lo que dice el plan (el AAC redondea a tramas de 21 ms).
     expect(Math.abs(fila.duracion_final - fila.plan.duracionFinal)).toBeLessThan(0.05)
     expect(fila.bytes).toBe(fs.statSync(rutaEditado(id)).size)
@@ -1324,6 +1368,7 @@ describe('trabajo editor-render', () => {
   it.skipIf(!hayFfmpeg)('con recursos (modo «arriba»): la imagen arriba en su tramo, la persona abajo, el logo encima todo el rato y la música debajo', async () => {
     const { sondea: sondeaReal } = await vi.importActual('../api/_lib/variantes.js')
     sondea.mockImplementation(sondeaReal)
+    sondeaVideo.mockImplementation(sondeaVideoReal)
     const id = nuevoId()
     const ids = { img: nuevoId(), clip: nuevoId(), logo: nuevoId(), mus: nuevoId() }
     fs.mkdirSync(dirRecursos(id), { recursive: true })
@@ -1347,6 +1392,9 @@ describe('trabajo editor-render', () => {
     const fila = db.helm_ediciones[0]
     expect(fila).toMatchObject({ estado: 'listo', error: null, cobrado_eur: 1.5 })
     expect(fila.plan.resumen).toMatchObject({ recursos: 2, recursosEnPalabra: 1, logo: true, musica: true })
+    // El clip, como MP4/MOV en el montaje; la música en WAV, tal cual.
+    expect(abrenComoMov(rutaRecurso(id, ids.clip, 'mp4'))).toBe(1)
+    expect(abrenComoMov(path.join(dirEdicion(id), 'original.mp4'))).toBe(3)
     // La música se ha medido y lleva su ganancia hasta la sonoridad de referencia (va en el plan guardado).
     expect(fila.plan.musica.ganancia).toEqual(expect.any(Number))
     expect(fila.plan.musica.ganancia).toBe(gananciaMusica(await mideMusica(rutaRecurso(id, ids.mus, 'wav'), fila.plan.duracionFinal), -16))
@@ -1372,6 +1420,7 @@ describe('trabajo editor-render', () => {
   it.skipIf(!hayFfmpeg)('la imagen de apoyo crece desde su centro, sin tirones de la rejilla de 25 fps, y se ve hasta el último fotograma de su tramo', async () => {
     const { sondea: sondeaReal } = await vi.importActual('../api/_lib/variantes.js')
     sondea.mockImplementation(sondeaReal)
+    sondeaVideo.mockImplementation(sondeaVideoReal)
     const dir = fs.mkdtempSync(path.join(DATOS, 'zoom-'))
     const [video, punto, salida] = ['v.mp4', 'punto.png', 's.mp4'].map(n => path.join(dir, n))
     genera('-f', 'lavfi', '-i', 'color=c=blue:size=360x640:rate=30:duration=6', '-c:v', 'libx264', '-preset', 'ultrafast', video)
@@ -1413,6 +1462,7 @@ describe('trabajo editor-render', () => {
   it.skipIf(!hayFfmpeg)('si falla, no cobra; la casa (sin_cobro) no paga: cobrado 0; si el apunte falla, lo reintenta luego', async () => {
     const { sondea: sondeaReal } = await vi.importActual('../api/_lib/variantes.js')
     sondea.mockImplementation(sondeaReal)
+    sondeaVideo.mockImplementation(sondeaVideoReal)
     const id = nuevoId()
     fs.mkdirSync(dirEdicion(id), { recursive: true })
     genera('-f', 'lavfi', '-i', 'testsrc2=size=360x640:rate=30:duration=4', '-f', 'lavfi', '-i', 'sine=frequency=300:sample_rate=44100:duration=4',
@@ -1453,4 +1503,285 @@ describe('trabajo editor-render', () => {
     expect(db.agencia_movimientos).toHaveLength(1)
     expect(saldo()).toBe(98.5)
   }, 120_000)
+})
+
+// ── El vídeo en bruto, solo MP4/MOV (por sus bytes), el rol, lo apartado y el disco ──
+const { argumentosSonda, formatoDe, esVideoMov, NO_ES_MP4 } = await import('../api/_lib/editor/formato.js')
+const { tipoAdmitido, extensionDe, ocupaEdicion } = await import('../api/_lib/editor/archivos.js')
+const { conCerrojoAgencia, reservaTemporal } = await import('../api/_lib/creditos.js')
+const KB = 1024
+const MiB = 1024 * 1024
+const SIN_ROL = 'Tu rol no puede usar los agentes de este perfil.'
+// Una lista HLS con nombre y tipo de MP4: ffmpeg, adivinando, abriría lo que apunta.
+const HLS = Buffer.from('#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXTINF:1,\nfile:/etc/passwd\n#EXT-X-ENDLIST\n')
+const COMO_HLS = Buffer.concat([HLS, Buffer.alloc(64 * KB - HLS.length, 0x20)])
+const haceDias = (d) => new Date(Date.now() - d * 86_400_000).toISOString()
+
+describe('api/editor: el vídeo en bruto, solo MP4/MOV y mirado por sus bytes', () => {
+  it('las piezas: los tipos que se admiten, el demuxer forzado y la cabecera', async () => {
+    expect(['video/mp4', 'video/quicktime', 'video/x-m4v', 'video/3gpp', 'video/3gpp2', 'video/mp4; codecs=avc1'].map(t => tipoAdmitido(t))).toEqual([true, true, true, true, true, true])
+    expect(['video/webm', 'video/x-matroska', 'video/x-msvideo', 'application/x-mpegurl'].map(t => tipoAdmitido(t, 'a.mp4'))).toEqual([false, false, false, false])
+    expect([tipoAdmitido('', 'a.MOV'), tipoAdmitido('', 'a.mkv'), tipoAdmitido('', 'sin-extension')]).toEqual([true, false, false])
+    // Un tipo de vídeo raro con extensión buena vale (los bytes deciden después); con otra extensión, no.
+    expect([tipoAdmitido('video/x-quicktime', 'a.mov'), tipoAdmitido('video/x-quicktime', 'a.avi'), tipoAdmitido('text/html', 'a.mp4')]).toEqual([true, false, false])
+    expect(extensionDe('video/webm', 'a.webm')).toBe('mp4')
+    expect(argumentosSonda('/d/o.mp4')).toEqual(['-v', 'error', '-f', 'mov', '-print_format', 'json', '-show_streams', '-show_format', '/d/o.mp4'])
+    expect([formatoDe('/d/a.mp4'), formatoDe('/d/a.M4A'), formatoDe('/d/a.mp3'), formatoDe('/d/a.jpg'), formatoDe('/d/subida.part')])
+      .toEqual([['-f', 'mov'], ['-f', 'mov'], [], [], []])
+    const dir = fs.mkdtempSync(path.join(DATOS, 'cabecera-'))
+    const escribe = (n, b) => { const r = path.join(dir, n); fs.writeFileSync(r, b); return r }
+    expect(await esVideoMov(escribe('v.mp4', VIDEO))).toBe(true)
+    expect(await esVideoMov(escribe('l.mp4', COMO_HLS))).toBe(false)
+    expect(await esVideoMov(escribe('c.mp4', VIDEO.subarray(0, 8)))).toBe(false)
+    expect(await esVideoMov(path.join(dir, 'no-esta.mp4'))).toBe(false)
+  })
+
+  it('al crear, solo MP4/MOV/M4V/3GP: WebM, MKV o AVI, 415 y que se exporte a MP4; sin tipo, por la extensión', async () => {
+    for (const tipo of ['video/webm', 'video/x-matroska', 'video/x-msvideo', 'video/mpeg']) {
+      const r = await crea({ tipo, nombre: 'toma.webm' })
+      expect([tipo, r.statusCode]).toEqual([tipo, 415])
+      expect(r.body.error).toContain('exporta a MP4')
+    }
+    expect((await crea({ tipo: '', nombre: 'toma.webm' })).statusCode).toBe(415)
+    expect(db.helm_ediciones).toHaveLength(0)
+    const sinTipo = await crea({ tipo: '', nombre: 'toma.MP4' })
+    expect(sinTipo.statusCode).toBe(200)
+    expect(JSON.parse(fs.readFileSync(path.join(dirEdicion(sinTipo.body.edicion.id), 'subida.json'), 'utf8')).ext).toBe('mp4')
+    const tgp = await crea({ tipo: 'video/3gpp', nombre: 'VID_0001.3gp' })
+    expect(tgp.statusCode).toBe(200)
+    expect(JSON.parse(fs.readFileSync(path.join(dirEdicion(tgp.body.edicion.id), 'subida.json'), 'utf8')).ext).toBe('3gp')
+  })
+
+  it('el primer trozo que no es de un MP4/MOV (una lista HLS disfrazada): 415, la edición a error y fuera lo subido; ffprobe ni lo ve', async () => {
+    const { body: { edicion: { id } } } = await crea()
+    const r = await trozo(id, 0, COMO_HLS.subarray(0, 32 * KB))
+    expect(r.statusCode).toBe(415)
+    expect(r.body.error).toBe(NO_ES_MP4)
+    expect(r.body.error).toContain('exporta a MP4')
+    expect(db.helm_ediciones[0]).toMatchObject({ estado: 'error', error: NO_ES_MP4 })
+    expect(fs.existsSync(dirEdicion(id))).toBe(false)
+    // Ya no recibe más, y lanzarla no la sondea ni la encola.
+    expect((await trozo(id, 32 * KB, COMO_HLS.subarray(32 * KB))).statusCode).toBe(409)
+    expect((await lanza(id)).body.edicion.estado).toBe('error')
+    expect(sondeaVideo).not.toHaveBeenCalled()
+    expect(sondea).not.toHaveBeenCalled()
+    expect(db.agent_jobs).toHaveLength(0)
+  })
+
+  it('con un primer trozo de menos de 12 bytes, se mira en cuanto llegan; uno que sí es un MP4/MOV sigue', async () => {
+    const { body: { edicion: { id } } } = await crea()
+    expect((await trozo(id, 0, COMO_HLS.subarray(0, 5))).statusCode).toBe(200)
+    expect((await trozo(id, 5, COMO_HLS.subarray(5, 1000))).statusCode).toBe(415)
+    expect(fs.existsSync(dirEdicion(id))).toBe(false)
+    const { body: { edicion: { id: bueno } } } = await crea()
+    expect((await trozo(bueno, 0, VIDEO.subarray(0, 5))).statusCode).toBe(200)
+    expect((await trozo(bueno, 5, VIDEO.subarray(5, 1000))).body).toEqual({ recibidos: 1000, completo: false })
+  })
+
+  it('al lanzar se vuelve a mirar, antes de ffprobe: uno de menos de 12 bytes, o cambiado en el disco, 415 y fuera', async () => {
+    const { body: { edicion: { id } } } = await crea({ bytes: 8, tipo: 'video/mp4' })
+    expect((await trozo(id, 0, Buffer.from('#EXTM3U\n'))).body).toEqual({ recibidos: 8, completo: true })
+    const r = await lanza(id)
+    expect(r.statusCode).toBe(415)
+    expect(r.body.error).toBe(NO_ES_MP4)
+    expect(db.helm_ediciones.find(f => f.id === id)).toMatchObject({ estado: 'error', error: NO_ES_MP4 })
+    expect(fs.existsSync(dirEdicion(id))).toBe(false)
+    // Llegó bien, pero lo que hay en el disco ya no es un MP4/MOV.
+    const { body: { edicion: { id: otra } } } = await crea()
+    await trozo(otra, 0, VIDEO)
+    fs.writeFileSync(path.join(dirEdicion(otra), 'subida.part'), COMO_HLS)
+    expect((await lanza(otra)).statusCode).toBe(415)
+    expect(sondeaVideo).not.toHaveBeenCalled()
+    expect(db.agent_jobs).toHaveLength(0)
+  })
+
+  it('el original y los clips se sondean como MP4/MOV (sondeaVideo, con -f mov); las imágenes, no', async () => {
+    const { body: { edicion: { id } } } = await crea()
+    await trozo(id, 0, VIDEO)
+    const clip = await sube(id, 'broll', conRelleno(ftyp('isom')), 'clip.mp4')
+    expect(clip.statusCode).toBe(200)
+    expect(clip.body.recurso.clase).toBe('video')
+    expect(sondeaVideo).toHaveBeenLastCalledWith(rutaRecurso(id, clip.body.recurso.id, 'mp4'))
+    expect((await sube(id, 'broll', jpegConOrientacion(1), 'foto.jpg')).statusCode).toBe(200)
+    expect(sondeaVideo).toHaveBeenCalledTimes(1)
+    expect((await lanza(id)).statusCode).toBe(200)
+    expect(sondeaVideo).toHaveBeenLastCalledWith(path.join(dirEdicion(id), 'subida.part'))
+  })
+
+  it.skipIf(!hayFfmpeg)('con ffprobe de verdad: un MP4 se lee; una lista HLS con nombre de .mp4 no, ni con una cabecera ftyp delante', async () => {
+    const dir = fs.mkdtempSync(path.join(DATOS, 'mov-'))
+    const bueno = path.join(dir, 'bueno.mp4')
+    genera('-f', 'lavfi', '-i', 'testsrc2=size=160x284:rate=30:duration=1', '-c:v', 'libx264', '-preset', 'ultrafast', bueno)
+    expect(await sondeaVideoReal(bueno)).toMatchObject({ ancho: 160, alto: 284, audio: false })
+    const texto = `#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXTINF:1,\n${bueno}\n#EXT-X-ENDLIST\n`
+    const lista = path.join(dir, 'lista.mp4')
+    fs.writeFileSync(lista, texto)
+    await expect(sondeaVideoReal(lista)).rejects.toThrow()
+    const disfrazada = path.join(dir, 'disfrazada.mp4')
+    fs.writeFileSync(disfrazada, Buffer.concat([ftyp('isom'), Buffer.from(texto)]))
+    await expect(sondeaVideoReal(disfrazada)).rejects.toThrow()
+  }, 60_000)
+})
+
+describe('api/editor: quién puede gastar (el rol en el perfil)', () => {
+  it('sin los agentes en su rol: 403 en lo que gasta o sube, sin leer el cuerpo en crudo; lo que solo mira, sí', async () => {
+    const { body: { edicion: { id } } } = await crea()
+    puedeUsarAgentes.mockImplementation(async () => false)
+    const r = await crea()
+    expect(r.statusCode).toBe(403)
+    expect(r.body.error).toBe(SIN_ROL)
+    expect(puedeUsarAgentes).toHaveBeenLastCalledWith({ userId: 'b0000000-0000-4000-8000-000000000001' }, PERFIL)
+    expect(db.helm_ediciones).toHaveLength(1)
+    // Los cuerpos en crudo ni se leen: se contesta y se cierra la conexión.
+    for (const x of [await trozo(id, 0, VIDEO), await sube(id, 'broll', jpegConOrientacion(1), 'a.jpg')]) {
+      expect([x.statusCode, x.body.error, x.headers.Connection]).toEqual([403, SIN_ROL, 'close'])
+    }
+    expect(fs.statSync(path.join(dirEdicion(id), 'subida.part')).size).toBe(0)
+    for (const [action, body] of [['lanzar', { id }], ['quitar-recurso', { id, recurso: nuevoId() }], ['estilo', { params: { mayusculas: false } }], ['borrar', { id }]]) {
+      const x = await llama({ method: 'POST', action, body })
+      expect([action, x.statusCode, x.body.error]).toEqual([action, 403, SIN_ROL])
+    }
+    expect(db.helm_ediciones[0].estado).toBe('subiendo')
+    expect(db.helm_estilos_edicion.filter(f => f.client_id === PERFIL)).toHaveLength(0)
+    expect(db.agent_jobs).toHaveLength(0)
+    // Mirar, sí: la lista, el estado y los estilos.
+    expect((await llama({ action: 'lista' })).statusCode).toBe(200)
+    expect((await llama({ action: 'estado', query: { id } })).statusCode).toBe(200)
+    expect((await llama({ action: 'estilos' })).statusCode).toBe(200)
+  })
+
+  it('si no se puede mirar el rol (falla la base), no se deja gastar: 500', async () => {
+    puedeUsarAgentes.mockImplementation(async () => { throw new Error('la base no contesta') })
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      expect((await crea()).statusCode).toBe(500)
+    } finally { error.mockRestore() }
+    expect(db.helm_ediciones).toHaveLength(0)
+  })
+})
+
+describe('api/editor: lo apartado es el de toda la agencia, con su cerrojo', () => {
+  it('una variante de Trial reels en cola o una portada generándose (de otro perfil de la agencia) también apartan', async () => {
+    db.agencias[0].saldo = 1.5
+    db.helm_trial_reels = [{ id: nuevoId(), client_id: VECINO, estado: 'en_cola', precio_eur: 0.3, cobrado_eur: null, created_at: haceDias(0), updated_at: haceDias(0) }]
+    const r = await crea({ duracion: 60 })
+    expect(r.statusCode).toBe(402)
+    expect(r.body.error).toContain('ya están apartados')
+    db.helm_trial_reels = []
+    const liberar = reservaTemporal(AGENCIA, 0.4)
+    try {
+      expect((await crea({ duracion: 60 })).statusCode).toBe(402)
+    } finally { liberar() }
+    expect((await crea({ duracion: 60 })).statusCode).toBe(200)
+  })
+
+  it('al lanzar, su propia fila no cuenta dos veces: con 1,50 € justos, se lanza', async () => {
+    db.agencias[0].saldo = 1.5
+    const { body: { edicion: { id } } } = await crea({ duracion: 60 })
+    await trozo(id, 0, VIDEO)
+    sondea.mockResolvedValueOnce({ ...SONDEO, duracion: 60 })
+    const r = await lanza(id)
+    expect(r.statusCode).toBe(200)
+    expect(r.body.edicion).toMatchObject({ estado: 'en_cola', precio_eur: 1.5 })
+  })
+
+  it('a quien no administra la agencia, el 402 no le dice el saldo (ni al crear ni al lanzar)', async () => {
+    puedeVerSaldo.mockImplementation(async () => false)
+    db.agencias[0].saldo = 2
+    const r = await crea({ duracion: 200 })
+    expect(r.statusCode).toBe(402)
+    expect(r.body.error).toBe('La agencia no tiene créditos suficientes para esto (cuesta 300 créditos). Pide a quien administra la agencia que recargue.')
+    const { body: { edicion: { id } } } = await crea({ duracion: 60 })
+    await trozo(id, 0, VIDEO)
+    sondea.mockResolvedValueOnce({ ...SONDEO, duracion: 200 })
+    const l = await lanza(id)
+    expect(l.statusCode).toBe(402)
+    expect(l.body.error).toContain('créditos suficientes')
+    expect(l.body.error).not.toMatch(/te quedan|apartad/)
+    expect(puedeVerSaldo).toHaveBeenCalledWith({ userId: 'b0000000-0000-4000-8000-000000000001' }, PERFIL)
+  })
+
+  it('comprobar y apartar van dentro del cerrojo de la agencia (el mismo de Portadas y Trial reels)', async () => {
+    db.agencias[0].saldo = 1.9
+    const { body: { edicion: { id } } } = await crea({ duracion: 60 })
+    await trozo(id, 0, VIDEO)
+    // Otro agente de la agencia tiene el cerrojo: mientras, aparta 0,50 €.
+    let suelta = null
+    const otro = conCerrojoAgencia(AGENCIA, () => new Promise(ok => { suelta = ok }))
+    const lanzado = lanza(id)
+    await new Promise(r => setTimeout(r, 30))
+    expect(db.helm_ediciones[0].estado).toBe('subiendo')
+    const liberar = reservaTemporal(AGENCIA, 0.5)
+    suelta()
+    await otro
+    // Al entrar ya ve lo apartado por el otro: 1,90 − 0,50 no llega para 1,50.
+    const r = await lanzado
+    expect(r.statusCode).toBe(402)
+    expect(db.helm_ediciones[0].estado).toBe('subiendo')
+    liberar()
+    expect((await lanza(id)).statusCode).toBe(200)
+  })
+})
+
+describe('api/editor: lo que guarda cada perfil (el disco es el de todo el servidor)', () => {
+  const tope = (kb) => { process.env.HELM_EDITOR_MAX_GB_PERFIL = String((kb * KB) / 1024 ** 3) }
+
+  it('crear: lo guardado, lo que está llegando y este, hasta el tope del perfil (429 con qué hacer); lo de otro perfil es suyo', async () => {
+    tope(100)
+    const { body: { edicion: { id } } } = await crea() // 64 KB anunciados
+    const r = await crea()
+    expect(r.statusCode).toBe(429)
+    expect(r.body.error).toMatch(/ya ocupan .+ GB y el tope es de .+ GB/)
+    expect(r.body.error).toContain('Borra')
+    // Ya subido, ocupa lo mismo.
+    await trozo(id, 0, VIDEO)
+    expect((await crea()).statusCode).toBe(429)
+    expect((await crea({}, { clientId: OTRO })).statusCode).toBe(200)
+    // Borrada, deja sitio.
+    expect((await llama({ method: 'POST', action: 'borrar', body: { id } })).statusCode).toBe(200)
+    expect((await crea()).statusCode).toBe(200)
+  })
+
+  it('cuenta lo que hay de verdad en las carpetas de sus ediciones recientes (original, recursos, editado); las de hace más de 8 días, no', async () => {
+    tope(100)
+    const vieja = { id: nuevoId(), client_id: PERFIL, estado: 'listo', created_at: haceDias(9), updated_at: haceDias(9) }
+    const reciente = { id: nuevoId(), client_id: PERFIL, estado: 'listo', created_at: haceDias(2), updated_at: haceDias(2) }
+    db.helm_ediciones = [vieja, reciente]
+    for (const f of [vieja, reciente]) fs.mkdirSync(dirRecursos(f.id), { recursive: true })
+    fs.writeFileSync(rutaEditado(vieja.id), Buffer.alloc(80 * KB))
+    fs.writeFileSync(rutaEditado(reciente.id), Buffer.alloc(20 * KB))
+    fs.writeFileSync(path.join(dirRecursos(reciente.id), 'x.jpg'), Buffer.alloc(10 * KB))
+    expect(await ocupaEdicion(reciente.id)).toBe(30 * KB)
+    expect(await ocupaEdicion(nuevoId())).toBe(0)
+    // 30 KB de la reciente: caben 70 KB, no 71 (la vieja no cuenta).
+    expect((await crea({ bytes: 71 * KB })).statusCode).toBe(429)
+    expect((await crea({ bytes: 70 * KB })).statusCode).toBe(200)
+  })
+
+  it('recurso: el tope del perfil por lo que anuncia (sin leerlo) y 300 MB entre todos los de la edición (un logo nuevo sustituye al viejo)', async () => {
+    const { body: { edicion: { id } } } = await crea()
+    tope(100)
+    const sube40 = await llama({ method: 'POST', action: 'recurso', query: { id, tipo: 'broll', nombre: 'a.jpg' }, crudo: jpegConOrientacion(1), headers: { 'content-length': String(40 * KB) } })
+    expect([sube40.statusCode, sube40.headers.Connection]).toEqual([429, 'close'])
+    expect(sube40.body.error).toContain('ya ocupan')
+    delete process.env.HELM_EDITOR_MAX_GB_PERFIL
+
+    const fila = db.helm_ediciones.find(f => f.id === id)
+    fila.recursos = [1, 2, 3].map(() => ({ id: nuevoId(), tipo: 'broll', clase: 'imagen', ext: 'jpg', nombre: 'x.jpg', bytes: 100 * MiB - 1000 }))
+    // Por lo que anuncia: ni se lee.
+    const anuncia = await llama({ method: 'POST', action: 'recurso', query: { id, tipo: 'broll', nombre: 'b.png' }, crudo: conRelleno(PNG), headers: { 'content-length': '4096' } })
+    expect([anuncia.statusCode, anuncia.headers.Connection]).toEqual([429, 'close'])
+    expect(anuncia.body.error).toContain('300 MB')
+    // Sin anunciarlo: se mira al llegar, y no se queda en el disco ni en la fila.
+    const llega = await sube(id, 'broll', conRelleno(PNG), 'b.png')
+    expect(llega.statusCode).toBe(429)
+    expect(llega.body.error).toContain('Quita alguno')
+    expect(fs.existsSync(dirRecursos(id)) ? fs.readdirSync(dirRecursos(id)) : []).toEqual([])
+    expect(fila.recursos).toHaveLength(3)
+    // El logo nuevo sustituye al que hubiera: lo del viejo no se suma.
+    fila.recursos = [{ id: nuevoId(), tipo: 'logo', clase: 'logo', ext: 'png', nombre: 'l.png', bytes: 299 * MiB }]
+    const logo = await sube(id, 'logo', conRelleno(PNG, 9000), 'nuevo.png')
+    expect(logo.statusCode).toBe(200)
+    expect(fila.recursos.map(x => x.id)).toEqual([logo.body.recurso.id])
+  })
 })

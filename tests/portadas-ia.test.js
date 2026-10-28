@@ -6,6 +6,7 @@
 // verdad sobre esa base (mover_saldo incluido).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { existsSync } from 'node:fs'
+import { EventEmitter } from 'node:events'
 import { ESTILOS_IA, estiloIaPorClave, ejemploDe, referenciaDe, promptPortadaIa, vistaDe } from '../src/agents/portadas/estilosIa.js'
 import { contraste } from '../src/agents/portadas/reglas.js'
 
@@ -17,6 +18,8 @@ const FALSO_PNG = `data:image/png;base64,${Buffer.from('esto no es un png').toSt
 
 // Los de la investigación de miniaturas: los que dicen quién los usa.
 const DE_LA_INVESTIGACION = ESTILOS_IA.filter(e => e.para)
+// El mismo estilo sin su portada de referencia: para probar la vista previa con CSS.
+const sinImagen = (e) => (e?.para ? { ...e, referencia: false } : e)
 
 describe('estilos', () => {
   it('claves únicas; la imagen de tarjeta y la referencia, si las hay, existen en public/', () => {
@@ -34,7 +37,7 @@ describe('estilos', () => {
     expect(ESTILOS_IA.at(-1).clave).toBe('libre')
   })
 
-  it('la investigación, agrupada: 12–15 estilos distintos, con quién los usa y sin imagen', () => {
+  it('la investigación, agrupada: 12–15 estilos distintos, con quién los usa y la portada de un reel real de referencia', () => {
     expect(DE_LA_INVESTIGACION.length).toBeGreaterThanOrEqual(12)
     expect(DE_LA_INVESTIGACION.length).toBeLessThanOrEqual(15)
     expect(new Set(DE_LA_INVESTIGACION.map(e => e.nombre)).size).toBe(DE_LA_INVESTIGACION.length)
@@ -45,8 +48,11 @@ describe('estilos', () => {
         expect(p.nombre).toBeTruthy()
         expect(p.enlace, p.nombre).toMatch(/^https:\/\/(www\.)?(youtube\.com|instagram\.com|x\.com|linkedin\.com|lauraribas\.com|oscarfeito\.gumroad\.com)(\/|$)/)
       }
-      expect(ejemploDe(e), e.clave).toBeNull()
-      expect(referenciaDe(e), e.clave).toBeNull()
+      // Desde el 27-oct: la portada de un reel real del primero de `para`.
+      expect(referenciaDe(e), e.clave).toBe(`public/agentes/portadas-estilos/${e.clave}-ref.jpg`)
+      expect(ejemploDe(e), e.clave).toBe(`/agentes/portadas-estilos/${e.clave}-ref.jpg`)
+      expect(e.ejemploReel?.url, e.clave).toMatch(/^https:\/\/www\.(instagram\.com\/reel|youtube\.com\/shorts)\//)
+      expect(e.ejemploReel.de.split(' ')[0], e.clave).toBe(e.para[0].nombre.split(' ')[0])
       // El nombre es genérico: no es el de ninguno de los creadores.
       for (const p of e.para) expect(e.nombre.toLowerCase()).not.toContain(p.nombre.toLowerCase().split(' ')[0])
     }
@@ -72,7 +78,10 @@ describe('estilos', () => {
   })
 
   it('vista previa sin imagen: degradado, silueta neutra, titular con su resaltada y contraste que se lee', () => {
-    for (const e of ESTILOS_IA) {
+    // Con imagen no hay vista previa; la de CSS se sigue probando con los
+    // estilos de la investigación como si no la tuvieran (por si falta alguna).
+    for (const e of ESTILOS_IA) if (ejemploDe(e)) expect(vistaDe(e), e.clave).toBeNull()
+    for (const e of ESTILOS_IA.map(sinImagen)) {
       const v = vistaDe(e)
       if (ejemploDe(e) || e.clave === 'libre') { expect(v, e.clave).toBeNull(); continue }
       expect(v, e.clave).not.toBeNull()
@@ -87,14 +96,14 @@ describe('estilos', () => {
         expect(contraste(v.resalte, d), `${e.clave} resalte`).toBeGreaterThanOrEqual(2)
       }
     }
-    const verdad = vistaDe(estiloIaPorClave('verdad'))
+    const verdad = vistaDe(sinImagen(estiloIaPorClave('verdad')))
     expect(verdad.palabras.map(p => p.texto).join(' ')).toBe('NADIE TE LO DICE')
     expect(verdad.palabras[0].resaltada).toBe(true)
     // Los de marca se enseñan con los colores del kit.
-    const marca = vistaDe(estiloIaPorClave('marca'), { colorPrincipal: '#1d4ed8', colorResalte: '#facc15' })
+    const marca = vistaDe(sinImagen(estiloIaPorClave('marca')), { colorPrincipal: '#1d4ed8', colorResalte: '#facc15' })
     expect(marca).toMatchObject({ fondo: ['#1D4ED8', '#1D4ED8'], resalte: '#FACC15', tinta: '#FFFFFF' })
-    expect(vistaDe(estiloIaPorClave('verdad'), { colorPrincipal: '#1d4ed8', colorResalte: '#facc15' }).fondo).toEqual(verdad.fondo)
-    expect(vistaDe(estiloIaPorClave('antes')).degradado).toContain('50%')
+    expect(vistaDe(sinImagen(estiloIaPorClave('verdad')), { colorPrincipal: '#1d4ed8', colorResalte: '#facc15' }).fondo).toEqual(verdad.fondo)
+    expect(vistaDe(sinImagen(estiloIaPorClave('antes'))).degradado).toContain('50%')
     expect(vistaDe(null)).toBeNull()
   })
 
@@ -123,7 +132,7 @@ describe('estilos', () => {
 
 // ── El servidor ──────────────────────────────────────────────────────────────
 const AGENCIA = 'e0000000-0000-4000-8000-0000000000a1'
-const db = { agent_memory: [], helm_ig_media: [], agencias: [], clients: [], agencia_movimientos: [] }
+const db = { agent_memory: [], helm_ig_media: [], agencias: [], clients: [], agencia_movimientos: [], helm_ediciones: [], helm_trial_reels: [] }
 // mover_saldo como en la base: no apunta dos veces la misma referencia.
 const rpc = vi.hoisted(() => vi.fn())
 function moverSaldo(fn, a) {
@@ -137,10 +146,17 @@ const almacen = new Map()
 const subidas = []
 function consulta(tabla) {
   const f = {}
+  // in/is y el await directo: lo que pide apartadoDeAgencia (perfiles de la
+  // agencia, ediciones y variantes en marcha).
+  const otros = []
+  const encaja = (r) => Object.entries(f).every(([k, v]) => r[k] === v) && otros.every(fn => fn(r))
   const q = {
     select: () => q, order: () => q, limit: () => q,
     eq: (c, v) => { f[c] = v; return q },
-    maybeSingle: () => Promise.resolve({ data: (db[tabla] || []).find(r => Object.entries(f).every(([k, v]) => r[k] === v)) || null, error: null }),
+    in: (c, vs) => { otros.push(r => vs.includes(r[c])); return q },
+    is: (c, v) => { otros.push(r => (r[c] ?? null) === v); return q },
+    then: (ok, mal) => Promise.resolve({ data: structuredClone((db[tabla] || []).filter(encaja)), error: null }).then(ok, mal),
+    maybeSingle: () => Promise.resolve({ data: (db[tabla] || []).find(encaja) || null, error: null }),
     insert: (fila) => { db[tabla].push({ id: `m-${db[tabla].length + 1}`, ...fila }); return Promise.resolve({ error: null }) },
     update: (cambios) => ({ eq: (c, v) => ({ eq: () => { const r = db[tabla].find(x => x[c] === v); Object.assign(r, cambios); return Promise.resolve({ error: null }) } }) }),
   }
@@ -163,6 +179,9 @@ vi.mock('../api/lib/supabase.js', () => ({
 vi.mock('../api/_lib/access.js', () => ({
   requireProfileAccess: vi.fn(async () => ({ sub: 'u-1' })),
   agenciaDe: async (clientId) => (db.clients || []).find(c => c.id === clientId)?.agencia_id || null,
+  // Por defecto, quien llama administra la agencia (ve el saldo) y puede usar los agentes.
+  puedeUsarAgentes: vi.fn(async () => true),
+  puedeVerSaldo: vi.fn(async () => true),
 }))
 vi.mock('../api/_lib/llm.js', () => ({ llmChat: vi.fn() }))
 vi.mock('../api/_lib/instagram.js', () => ({ getToken: vi.fn(), getMediaUrls: vi.fn() }))
@@ -171,19 +190,31 @@ const imagen = vi.hoisted(() => ({
   hayClaveImagen: vi.fn(() => true),
   generaFondo: vi.fn(),
   generaPortadaIa: vi.fn(async () => ({ dataUrl: 'data:image/jpeg;base64,UE9SVEFEQQ==', bytes: 7 })),
+  TOPE_IMAGEN_MS: 85_000,
+  tardaDemasiado: () => Object.assign(new Error('La IA está tardando demasiado en hacer la imagen y se ha parado. Prueba otra vez en un momento.'), { statusCode: 504, tope: true }),
 }))
 vi.mock('../api/_lib/imagen.js', () => imagen)
 
-const { default: portadas } = await import('../api/portadas.js')
+const { default: portadas, generaCobrando, vigilaConexion } = await import('../api/portadas.js')
+const { apartadoDeAgencia } = await import('../api/_lib/creditos.js')
+const { puedeUsarAgentes, puedeVerSaldo } = await import('../api/_lib/access.js')
 
 let ip = 0
-async function llama({ method = 'POST', action, body = {}, query = {} }) {
-  const res = {
-    statusCode: 0, body: null, headers: {},
-    status(c) { this.statusCode = c; return this }, json(b) { this.body = b; return this }, end() { return this }, setHeader(k, v) { this.headers[k] = v },
-  }
-  await portadas({ method, query: { action, clientId: PERFIL, ...query }, body: method === 'POST' ? { clientId: PERFIL, ...body } : undefined, headers: { 'x-forwarded-for': `10.9.1.${++ip}` }, socket: {} }, res)
+// `res` emite 'close' como el de Node (ver vigilaConexion); `socket` se puede
+// pasar para simular uno destruido.
+async function llama({ method = 'POST', action, body = {}, query = {}, socket = {}, res: conRes = null }) {
+  const res = conRes || nuevaRes()
+  await portadas({ method, query: { action, clientId: PERFIL, ...query }, body: method === 'POST' ? { clientId: PERFIL, ...body } : undefined, headers: { 'x-forwarded-for': `10.9.1.${++ip}` }, socket }, res)
   return res
+}
+function nuevaRes() {
+  return Object.assign(new EventEmitter(), {
+    statusCode: 0, body: null, headers: {}, writableEnded: false,
+    status(c) { this.statusCode = c; return this },
+    json(b) { this.body = b; this.writableEnded = true; return this },
+    end() { this.writableEnded = true; return this },
+    setHeader(k, v) { this.headers[k] = v },
+  })
 }
 
 beforeEach(() => {
@@ -194,7 +225,10 @@ beforeEach(() => {
   db.agencia_movimientos = []
   rpc.mockReset(); rpc.mockImplementation(async (...a) => moverSaldo(...a))
   almacen.clear(); subidas.length = 0
+  db.helm_ediciones = []; db.helm_trial_reels = []
   imagen.generaPortadaIa.mockClear(); imagen.generaFondo.mockReset(); imagen.hayClaveImagen.mockReturnValue(true)
+  puedeUsarAgentes.mockReset(); puedeUsarAgentes.mockResolvedValue(true)
+  puedeVerSaldo.mockReset(); puedeVerSaldo.mockResolvedValue(true)
 })
 afterEach(() => vi.clearAllTimers())
 
@@ -334,8 +368,140 @@ describe('cobro: 40 créditos por imagen generada', () => {
     const { prompt, imagenes } = imagen.generaPortadaIa.mock.calls[1][0]
     expect(prompt).not.toContain('#123456')
     expect(prompt).toContain('«DEJA DE AHORRAR»')
-    // Sin imagen de referencia: solo el fotograma.
-    expect(imagenes).toHaveLength(1)
+    // El fotograma y, desde el 27-oct, la portada de referencia del estilo.
+    expect(imagenes).toHaveLength(2)
+  })
+})
+
+// ── Lo que arregló la verificación antes de desplegar (27-oct) ─────────────
+describe('portadas · quién puede gastar y qué ve', () => {
+  const pide = (extra = {}, opts = {}) => llama({ action: 'portada-ia', body: { fotograma: JPG, titulo: 'Hola', estilo: 'oro', ...extra }, ...opts })
+
+  it('sin rol para los agentes: 403 y ni se genera ni se cobra', async () => {
+    puedeUsarAgentes.mockResolvedValue(false)
+    expect((await pide()).statusCode).toBe(403)
+    imagen.generaFondo.mockResolvedValue({ dataUrl: 'data:image/png;base64,Rk9ORE8=' })
+    expect((await llama({ action: 'fondo-ia', body: { prompt: 'x' } })).statusCode).toBe(403)
+    expect(imagen.generaPortadaIa).not.toHaveBeenCalled()
+    expect(imagen.generaFondo).not.toHaveBeenCalled()
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('quien no administra la agencia: 402 genérico y el saldo no sale en la respuesta', async () => {
+    puedeVerSaldo.mockResolvedValue(false)
+    db.agencias[0].saldo = 0.3
+    const no = await pide()
+    expect(no.statusCode).toBe(402)
+    expect(no.body.error).toBe('La agencia no tiene créditos suficientes para esto (cuesta 40 créditos). Pide a quien administra la agencia que recargue.')
+    db.agencias[0].saldo = 5
+    const si = await pide()
+    expect(si.statusCode).toBe(200)
+    expect(si.body).toMatchObject({ cobrado: 0.4, saldo: null })
+    expect(db.agencias[0].saldo).toBe(4.6)
+  })
+
+  it('lo apartado por el Editor o Trial reels (de cualquier perfil de la agencia) frena la portada', async () => {
+    db.agencias[0].saldo = 1.5
+    db.clients.push({ id: 'perfil-2', agencia_id: AGENCIA })
+    const ahora = new Date().toISOString()
+    db.helm_ediciones = [{ id: 'e1', client_id: 'perfil-2', estado: 'montando', precio_eur: 1.5, cobrado_eur: null, created_at: ahora, updated_at: ahora }]
+    const r = await pide()
+    expect(r.statusCode).toBe(402)
+    expect(r.body.error).toMatch(/te quedan 0 \(otros 150 ya están apartados/)
+    expect(imagen.generaPortadaIa).not.toHaveBeenCalled()
+    db.helm_ediciones = []
+    db.helm_trial_reels = [{ id: 't1', client_id: PERFIL, estado: 'en_cola', precio_eur: 1.2, cobrado_eur: null, updated_at: ahora }]
+    expect((await pide()).statusCode).toBe(402)
+    db.helm_trial_reels = []
+    expect((await pide()).statusCode).toBe(200)
+  })
+
+  it('mientras genera, lo suyo cuenta para los demás agentes (reservaTemporal), y se suelta al acabar o al fallar', async () => {
+    let suelta
+    imagen.generaPortadaIa.mockImplementationOnce(() => new Promise(ok => { suelta = () => ok({ dataUrl: 'data:image/jpeg;base64,UE9SVEFEQQ==' }) }))
+    const primera = pide()
+    await vi.waitFor(() => expect(suelta).toBeTypeOf('function'))
+    expect(await apartadoDeAgencia(AGENCIA)).toBe(0.4)
+    suelta()
+    await primera
+    expect(await apartadoDeAgencia(AGENCIA)).toBe(0)
+    imagen.generaPortadaIa.mockRejectedValueOnce(Object.assign(new Error('NSFW'), { statusCode: 502 }))
+    await pide()
+    expect(await apartadoDeAgencia(AGENCIA)).toBe(0)
+  })
+})
+
+describe('portadas · no se cobra lo que no llega', () => {
+  const pide = (extra = {}, opts = {}) => llama({ action: 'portada-ia', body: { fotograma: JPG, titulo: 'Hola', estilo: 'oro', ...extra }, ...opts })
+
+  it('si la conexión se cierra mientras genera (pestaña cerrada, 524 de Cloudflare), no se cobra', async () => {
+    const res = nuevaRes()
+    let suelta
+    imagen.generaPortadaIa.mockImplementationOnce(() => new Promise(ok => { suelta = () => ok({ dataUrl: 'data:image/jpeg;base64,UE9SVEFEQQ==' }) }))
+    const log = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const p = pide({}, { res })
+    await vi.waitFor(() => expect(suelta).toBeTypeOf('function'))
+    res.emit('close')
+    suelta()
+    await p
+    log.mockRestore()
+    expect(rpc).not.toHaveBeenCalled()
+    expect(db.agencias[0].saldo).toBe(5)
+    expect(await apartadoDeAgencia(AGENCIA)).toBe(0)
+    // Con el socket ya destruido, igual.
+    const otra = await pide({}, { socket: { destroyed: true } })
+    expect(otra.statusCode).toBe(499)
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('el «close» de una respuesta ya enviada no cuenta como corte', () => {
+    const res = nuevaRes()
+    const v = vigilaConexion({ socket: {} }, res)
+    res.json({}); res.emit('close')
+    expect(v.sigue()).toBe(true)
+    v.suelta()
+    expect(res.listenerCount('close')).toBe(0)
+    expect(vigilaConexion(null, null).sigue()).toBe(true)
+  })
+
+  it('la generación lleva el límite de la petición (por debajo de los 100 s de Cloudflare)', async () => {
+    const antes = Date.now()
+    await pide()
+    const { limite } = imagen.generaPortadaIa.mock.calls[0][0]
+    expect(limite).toBeGreaterThanOrEqual(antes + 80_000)
+    expect(limite).toBeLessThanOrEqual(Date.now() + 85_000)
+    imagen.generaFondo.mockResolvedValue({ dataUrl: 'data:image/png;base64,Rk9ORE8=' })
+    await llama({ action: 'fondo-ia', body: { prompt: 'x' } })
+    expect(imagen.generaFondo.mock.calls[0][0].limite).toBeLessThanOrEqual(Date.now() + 85_000)
+  })
+
+  it('si se pasa del límite: 504 claro, sin cobro, y lo apartado se suelta', async () => {
+    const nunca = vi.fn(() => new Promise(() => {}))
+    const p = generaCobrando(PERFIL, 'portada-ia', nunca, { verSaldo: true, limite: Date.now() + 40 })
+    await expect(p).rejects.toMatchObject({ statusCode: 504, tope: true, message: expect.stringMatching(/tardando demasiado.*No se ha cobrado nada/) })
+    expect(nunca).toHaveBeenCalledWith({ limite: expect.any(Number) })
+    expect(rpc).not.toHaveBeenCalled()
+    expect(await apartadoDeAgencia(AGENCIA)).toBe(0)
+    // El 504 de imagen.js (que ya corta solo) llega igual al panel.
+    imagen.generaPortadaIa.mockRejectedValueOnce(imagen.tardaDemasiado())
+    const r = await pide()
+    expect(r.statusCode).toBe(504)
+    expect(r.body.error).toMatch(/No se ha cobrado nada/)
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('si el cobro falla tras generar: se entrega igual y queda en el log con la referencia', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { message: 'la base no contesta' } })
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const r = await pide()
+    const lineas = log.mock.calls.map(c => c.join(' '))
+    log.mockRestore()
+    expect(r.statusCode).toBe(200)
+    expect(r.body).toMatchObject({ imagen: 'data:image/jpeg;base64,UE9SVEFEQQ==', cobrado: 0, saldo: null })
+    const aviso = lineas.find(l => l.includes('COBRO PENDIENTE'))
+    expect(aviso).toMatch(new RegExp(`portada-ia de 0.4 € .*perfil ${PERFIL}, agencia ${AGENCIA}, referencia portada:[0-9a-f-]{36}`))
+    // Solo se intentó una vez (no se reintenta desde la petición).
+    expect(rpc).toHaveBeenCalledTimes(1)
   })
 })
 

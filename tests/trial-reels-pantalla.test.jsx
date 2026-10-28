@@ -156,6 +156,18 @@ describe('Trial reels · subir un vídeo', () => {
   })
 })
 
+describe('Trial reels · precio sin ver el saldo', () => {
+  it('quien no administra la agencia (saldo null) ve el precio y que solo se cobra si sale bien, nunca lo que queda', async () => {
+    h.precios = { paga: true, saldo: null, alcanza: { 'editor-reels': true, 'portada-ia': true, 'trial-reel': true }, precios: PRECIOS_FIJOS }
+    h.fuentes = [{ id: FUENTE, nombre: 'de-ayer.mp4', estado: 'lista', disponible: true, duracion: 30, bytes: 1048576, creado: '2026-10-26T10:00:00Z' }]
+    abre()
+    fireEvent.click(await screen.findByRole('button', { name: /Crear variantes/ }))
+    expect(await screen.findByRole('button', { name: /Crear 3 variantes · 90 créditos$/ })).toBeTruthy()
+    expect(screen.getByText(/Cada variante se cobra solo si sale bien/)).toBeTruthy()
+    expect(screen.queryByText(/te quedan|saldo/i)).toBeNull()
+  })
+})
+
 describe('Trial reels · ciclo de vida de la subida', () => {
   const cortada = () => Object.assign(new Error('La subida se cortó. Comprueba la conexión y vuelve a probar.'), { red: true })
   const sube = async (container, nombre = 'mi-video.mp4') => {

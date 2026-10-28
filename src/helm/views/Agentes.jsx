@@ -24,10 +24,14 @@ import Portadas from '../../agents/Portadas'
 import SetterIG from '../../agents/SetterIG'
 import TrialReels from '../../agents/TrialReels'
 import WebCreator from '../../agents/WebCreator'
+import Bandeja from '../../agents/Bandeja'
+import MediaBuyer from '../../agents/MediaBuyer'
 import '../../agents/agentos.css'
 import './estudioIg.css'
 
 const esAdmin = () => Boolean(localStorage.getItem('bw_superadmin'))
+// Los que abren su panel directamente, sin pasar por la oficina con chat.
+const SIN_OFICINA = ['media-buyer']
 
 export default function Agentes({ clientId, client }) {
   // 'menu' → un departamento (dep:) → la oficina de un agente (of:) → su panel
@@ -62,6 +66,7 @@ export default function Agentes({ clientId, client }) {
     const sueltos = visibles.filter(a => !a.departamento)
     return (
       <div className="ag embebido">
+        <Bandeja clientId={clientId} />
         {sueltos.length > 0 && <MenuAgentes agentes={sueltos} onAbrir={(k) => { setDep(null); setVista(aLaOficina(k)) }} metricaDe={metricaDe} />}
         <h2 className="ag-seccion ag-deps-titulo">Departamentos</h2>
         <MenuDepartamentos departamentos={departamentos} onAbrir={(k) => { setDep(k); setVista(`dep:${k}`) }} />
@@ -101,7 +106,7 @@ export default function Agentes({ clientId, client }) {
             <p>{d.resumen}</p>
           </div>
         </header>
-        <MenuAgentes agentes={d.agentes} onAbrir={(k) => setVista(aLaOficina(k))} metricaDe={metricaDe} />
+        <MenuAgentes agentes={d.agentes} onAbrir={(k) => setVista(SIN_OFICINA.includes(k) ? k : aLaOficina(k))} metricaDe={metricaDe} />
       </div>
     )
   }
@@ -124,6 +129,10 @@ export default function Agentes({ clientId, client }) {
 
   if (vista === 'trial-reels') {
     return <TrialReels clientId={clientId} client={client} onVolver={() => setVista('of:trial-reels')} />
+  }
+
+  if (vista === 'media-buyer') {
+    return <MediaBuyer clientId={clientId} onVolver={volver} />
   }
 
   if (vista === 'web-creator') {

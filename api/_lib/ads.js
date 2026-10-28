@@ -19,7 +19,13 @@ export const generarUtm = (nombre) => `ad-${slug(nombre) || 'anuncio'}-${rand()}
 
 const diaISO = (d) => d.toISOString().slice(0, 10)
 const sumar = (dia, n) => { const d = new Date(`${dia}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return diaISO(d) }
-const importeDe = (v) => Number(v?.installments_total ?? v?.importe ?? v?.amount ?? 0) || 0
+// Lo cobrado de verdad; si aún no consta, el importe de la venta. (Antes
+// leía installments_total, que es el NÚMERO de cuotas, e importe/amount, que
+// no existen: la consulta fallaba y el test daba 0 ventas siempre.)
+export const importeDe = (v) => {
+  const cobrado = Number(v?.cash_collected)
+  return (Number.isFinite(cobrado) && cobrado > 0 ? cobrado : Number(v?.revenue)) || 0
+}
 
 /**
  * Leads y ventas atribuidos a un UTM dentro de una ventana [desde, hasta).
@@ -29,8 +35,10 @@ export async function conversionesDe(clientId, utm, desde, hasta) {
   const d0 = `${desde}T00:00:00Z`, d1 = `${hasta}T00:00:00Z`
   const [lc, vc] = await Promise.all([
     supabase.from('crm_contacts').select('created_at').eq('client_id', clientId).eq('utm_content', utm).gte('created_at', d0).lt('created_at', d1),
-    supabase.from('sales').select('created_at, installments_total, importe, amount').eq('client_id', clientId).eq('utm_content', utm).gte('created_at', d0).lt('created_at', d1),
+    supabase.from('sales').select('created_at, revenue, cash_collected').eq('client_id', clientId).eq('utm_content', utm).gte('created_at', d0).lt('created_at', d1),
   ])
+  if (lc.error) console.warn('[ads] leads del test:', lc.error.message)
+  if (vc.error) console.warn('[ads] ventas del test:', vc.error.message)
   const leadsRows = lc.data || [], ventasRows = vc.data || []
   const ingresos = ventasRows.reduce((t, v) => t + importeDe(v), 0)
   // Reparto por día del test, para ver la tendencia.

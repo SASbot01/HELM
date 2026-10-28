@@ -40,6 +40,29 @@ describe('editorApi · los errores llevan su código', () => {
     expect(aviso.mock.calls[0][0].detail).toBe(msg)
   })
 
+  it('el 402 sin cifras (para quien no administra) también abre la recarga; el rol (403), el MP4 (415) y el disco (429), no', async () => {
+    const aviso = vi.fn()
+    window.addEventListener('helm:sin-saldo', aviso)
+    try {
+      const generico = 'La agencia no tiene créditos suficientes para esto (cuesta 150 créditos). Pide a quien administra la agencia que recargue.'
+      vi.stubGlobal('fetch', responde(402, { error: generico }))
+      expect((await editorApi.lanzar('c1', 'e1').catch(x => x)).status).toBe(402)
+      expect(aviso.mock.calls.map(c => c[0].detail)).toEqual([generico])
+      for (const [status, error] of [
+        [403, 'Tu rol no puede usar los agentes de este perfil.'],
+        [415, 'Solo se editan vídeos MP4 o MOV (lo que graba el móvil). Si el tuyo es de otro tipo (WebM, MKV, AVI…), exporta a MP4 y vuelve a subirlo.'],
+        [429, 'Los vídeos del editor de este perfil ya ocupan 8 GB y el tope es de 8 GB. Borra de la lista las ediciones que ya no necesites (lo que ya hayas descargado) para subir este vídeo.'],
+      ]) {
+        vi.stubGlobal('fetch', responde(status, { error }))
+        const e = await editorApi.crear('c1', { nombre: 'toma.webm', bytes: 3000, tipo: 'video/webm' }).catch(x => x)
+        expect([e.status, e.message]).toEqual([status, error])
+      }
+      expect(aviso).toHaveBeenCalledTimes(1)
+    } finally {
+      window.removeEventListener('helm:sin-saldo', aviso)
+    }
+  })
+
   it('sin JSON en la respuesta, «Error <código>»; y lo que sale bien vuelve tal cual', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 502, json: async () => { throw new Error('no es JSON') } })))
     const e = await editorApi.borrar('c1', 'e1').catch(x => x)

@@ -37,6 +37,20 @@
 // sin agencia no pagan. El fotograma puede salir de un reel, de un vídeo que
 // el usuario abre en su navegador (no se sube: el fotograma se saca allí) o de
 // una foto.
+//
+// Desde el 27-oct (revisión antes de desplegar):
+//   · Lo que gasta o sube (textos, fondo-prompt, fondo-ia, portada-ia, y los
+//     POST de la marca y los ejemplos) exige además que el ROL de la sesión
+//     pueda usar los agentes del perfil (puedeUsarAgentes): un closer o un
+//     setter no gastan el saldo de la agencia llamando a mano.
+//   · Lo que se está generando queda apartado con reservaTemporal, en la
+//     misma cuenta que el resto de agentes (apartadoDeAgencia) y dentro del
+//     cerrojo común de la agencia (conCerrojoAgencia).
+//   · El 402 y el saldo de la respuesta, con cifras solo para quien puede ver
+//     el saldo (puedeVerSaldo).
+//   · No se cobra lo que no llega: la generación tiene un tope (TOPE_IMAGEN_MS,
+//     por debajo de los 100 s de Cloudflare; si se pasa, 504 sin cobro), y si
+//     la conexión se cerró antes de responder, tampoco se cobra.
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import crypto from 'node:crypto'
@@ -44,12 +58,12 @@ import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { supabase } from './lib/supabase.js'
 import { applyCors, rateLimit, getClientIp } from './_lib/auth.js'
-import { requireProfileAccess } from './_lib/access.js'
+import { requireProfileAccess, agenciaDe, puedeUsarAgentes, puedeVerSaldo } from './_lib/access.js'
 import { llmChat } from './_lib/llm.js'
 import { getToken, getMediaUrls } from './_lib/instagram.js'
 import { fetchPublico } from './_lib/web.js'
-import { generaFondo, generaPortadaIa, hayClaveImagen } from './_lib/imagen.js'
-import { exigirImporte, cobrarFijo, PRECIOS_FIJOS } from './_lib/creditos.js'
+import { generaFondo, generaPortadaIa, hayClaveImagen, tardaDemasiado, TOPE_IMAGEN_MS } from './_lib/imagen.js'
+import { exigirImporte, cobrarFijo, conCerrojoAgencia, reservaTemporal, PRECIOS_FIJOS } from './_lib/creditos.js'
 import {
   estiloIaPorClave, referenciaDe, promptPortadaIa, MAX_TITULO_IA, MAX_DETALLE_IA, MAX_EJEMPLOS, MAX_NOMBRE_EJEMPLO,
 } from '../src/agents/portadas/estilosIa.js'
@@ -134,39 +148,89 @@ const COSTE_USD = {
   'portada-ia': Number(process.env.PORTADAS_IA_COSTE_USD || 0.15),
   'fondo-ia': Number(process.env.PORTADAS_FONDO_COSTE_USD || 0.03),
 }
-// Cada generación tarda unos 30 s y se cobra al acabar: lo que se está
-// generando ahora mismo, por agencia, ya está «apartado» (exigirImporte ·
-// pendiente). Si no, con 40 créditos se lanzan diez a la vez. El api-server es
-// un solo proceso: con esto basta.
-const enVuelo = new Map() // agenciaId -> euros
-const aparta = (agenciaId, euros) => enVuelo.set(agenciaId, (enVuelo.get(agenciaId) || 0) + euros)
-function suelta(agenciaId, euros) {
-  const queda = Math.round(((enVuelo.get(agenciaId) || 0) - euros) * 100) / 100
-  if (queda > 0) enVuelo.set(agenciaId, queda)
-  else enVuelo.delete(agenciaId)
+// Lo que gasta o sube: exige además que el rol pueda usar los agentes.
+const ACCIONES_DE_USO = new Set(['textos', 'fondo-prompt', 'fondo-ia', 'portada-ia', 'marca', 'ejemplo', 'ejemplo-borrar'])
+const SIN_ROL = 'Tu rol no puede usar los agentes de este perfil.'
+
+/**
+ * ¿Sigue alguien esperando esta respuesta? OJO: no vale el 'close' de `req`
+ * (desde Node 16 salta en cuanto se ha leído el cuerpo, y el api-server lo lee
+ * antes de llamar aquí): lo que dice que el cliente se fue es el 'close' de
+ * `res` antes de haber terminado, o el socket destruido (la pestaña cerrada, la
+ * red del móvil cortada, o Cloudflare que se cansa a los 100 s y corta).
+ * Devuelve { sigue(), suelta() }; sin req/res (una llamada interna), sigue.
+ */
+export function vigilaConexion(req, res) {
+  let cerrada = false
+  const alCerrar = () => { if (!res?.writableEnded) cerrada = true }
+  res?.on?.('close', alCerrar)
+  return {
+    sigue: () => !cerrada && !req?.socket?.destroyed && !res?.socket?.destroyed && !res?.destroyed,
+    suelta: () => res?.off?.('close', alCerrar),
+  }
+}
+
+/** `promesa`, o el error de tope si no ha acabado al llegar a `limite`. */
+function antesDe(promesa, limite) {
+  let reloj
+  const tope = new Promise((_, mal) => { reloj = setTimeout(() => mal(tardaDemasiado()), Math.max(0, limite - Date.now())) })
+  return Promise.race([promesa, tope]).finally(() => clearTimeout(reloj))
 }
 
 /**
- * Genera una imagen cobrándola: mira el saldo (lanza 402 si no llega, con lo
- * que ya se está generando en la agencia apartado), llama a `genera` y, SOLO
- * si devuelve la imagen, la cobra con una referencia nueva. Devuelve lo que
- * devuelva `genera` más { cobrado (euros, 0 si no paga), saldo (o null) }.
+ * Genera una imagen cobrándola:
+ *   1. dentro del cerrojo de la agencia (el mismo para todos los agentes), mira
+ *      que llegue el saldo LIBRE (exigirImporte: 402 si no, con cifras solo si
+ *      `verSaldo`) y lo aparta con reservaTemporal mientras genera;
+ *   2. llama a `genera({ limite })`, que no puede pasar de `limite` (si se
+ *      pasa: 504 y no se cobra);
+ *   3. si ha devuelto la imagen y quien la pidió sigue conectado
+ *      (vigilaConexion de req/res), la cobra con una referencia nueva
+ *      (`portada:<uuid>`). Si se fue, no se cobra (ni se entrega). Si el
+ *      apunte falla, la imagen se entrega igual y queda en el log, con la
+ *      referencia, para cobrarla a mano (no se reintenta desde aquí: la
+ *      imagen no se guarda en ningún sitio que se pueda volver a mirar).
+ * Devuelve lo que devuelva `genera` más { cobrado (euros, 0 si no paga o no se
+ * pudo apuntar), saldo (el nuevo, solo si `verSaldo`; si no, null) }.
+ *
+ * Uso:
+ *   const { dataUrl, cobrado, saldo } = await generaCobrando(clientId, 'portada-ia',
+ *     ({ limite }) => generaPortadaIa({ prompt, imagenes, limite }),
+ *     { verSaldo: await puedeVerSaldo(auth, clientId), req, res, limite: inicio + TOPE_IMAGEN_MS })
  */
-export async function generaCobrando(clientId, concepto, genera) {
-  let agencia = null
-  const { paga } = await exigirImporte(clientId, PRECIO_IMAGEN, {
-    pendiente: ({ agenciaId }) => { agencia = agenciaId; return enVuelo.get(agenciaId) || 0 },
+export async function generaCobrando(clientId, concepto, genera, { verSaldo = false, req = null, res = null, limite = Date.now() + TOPE_IMAGEN_MS } = {}) {
+  const agenciaId = await agenciaDe(clientId)
+  let paga = false
+  let liberar = () => {}
+  await conCerrojoAgencia(agenciaId, async () => {
+    ({ paga } = await exigirImporte(clientId, PRECIO_IMAGEN, { detalle: verSaldo }))
+    if (paga) liberar = reservaTemporal(agenciaId, PRECIO_IMAGEN)
   })
-  if (paga && agencia) aparta(agencia, PRECIO_IMAGEN)
+  const conexion = vigilaConexion(req, res)
   try {
-    const r = await genera()
+    let r
+    try {
+      r = await antesDe(Promise.resolve().then(() => genera({ limite })), limite)
+    } catch (err) {
+      if (err?.tope && paga) err.message = `${err.message} No se ha cobrado nada.`
+      throw err
+    }
     if (!paga) return { ...r, cobrado: 0, saldo: null }
+    if (!conexion.sigue()) {
+      console.warn(`[portadas] ${concepto}: la conexión se cerró antes de entregar la imagen; no se cobra (perfil ${clientId})`)
+      throw Object.assign(new Error('La conexión se cerró antes de entregar la imagen: no se ha cobrado.'), { statusCode: 499 })
+    }
+    const referencia = `portada:${crypto.randomUUID()}`
     const saldo = await cobrarFijo(clientId, PRECIO_IMAGEN, {
-      concepto, referencia: `portada:${crypto.randomUUID()}`, origen: 'panel', costeUsd: COSTE_USD[concepto] || 0,
+      concepto, referencia, origen: 'panel', costeUsd: COSTE_USD[concepto] || 0,
     })
-    return { ...r, cobrado: saldo == null ? 0 : PRECIO_IMAGEN, saldo }
+    if (saldo == null) {
+      console.error(`[portadas] COBRO PENDIENTE: ${concepto} de ${PRECIO_IMAGEN} € entregado sin apuntar (perfil ${clientId}, agencia ${agenciaId}, referencia ${referencia}). Cóbralo a mano con mover_saldo y esa referencia.`)
+    }
+    return { ...r, cobrado: saldo == null ? 0 : PRECIO_IMAGEN, saldo: verSaldo ? saldo : null }
   } finally {
-    if (paga && agencia) suelta(agencia, PRECIO_IMAGEN)
+    conexion.suelta()
+    liberar()
   }
 }
 
@@ -231,6 +295,10 @@ async function sirveDelCdn(res, url, { max, tipos }) {
   res.setHeader('Content-Type', r.headers.get('content-type') || 'application/octet-stream')
   if (largo) res.setHeader('Content-Length', String(largo))
   res.setHeader('Cache-Control', 'private, max-age=600')
+  // Lo de fuera, servido desde el origen del panel: que el navegador no lo
+  // interprete como otra cosa ni ejecute nada aunque el tipo venga mal.
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox")
   let total = 0
   const tope = new Transform({
     transform(trozo, _c, cb) {
@@ -249,6 +317,9 @@ async function sirveDelCdn(res, url, { max, tipos }) {
 }
 
 export default async function handler(req, res) {
+  // Desde aquí cuenta el tope de la generación (Cloudflare cuenta desde que
+  // nos pasa la petición).
+  const inicio = Date.now()
   applyCors(req, res)
   if (req.method === 'OPTIONS') return res.status(200).end()
 
@@ -265,10 +336,24 @@ export default async function handler(req, res) {
   }
   if (!clientId) return res.status(400).json({ error: 'clientId requerido' })
 
+  let auth
   try {
-    await requireProfileAccess(req, clientId)
+    auth = await requireProfileAccess(req, clientId)
   } catch (err) {
     return res.status(err.statusCode || 401).json({ error: err.message })
+  }
+
+  // Lo que gasta o sube: solo si el rol puede usar los agentes del perfil. Si
+  // no se puede mirar (falla la base), tampoco pasa.
+  if (req.method === 'POST' && ACCIONES_DE_USO.has(action)) {
+    let puede = false
+    try {
+      puede = await puedeUsarAgentes(auth, clientId)
+    } catch (err) {
+      console.error('[portadas] no se pudo mirar el rol:', err?.message || err)
+      return res.status(503).json({ error: 'No se pudo comprobar tu rol ahora mismo. Prueba otra vez.' })
+    }
+    if (!puede) return res.status(403).json({ error: SIN_ROL })
   }
 
   try {
@@ -429,7 +514,9 @@ export default async function handler(req, res) {
       const tope = rateLimit({ key: `portada-ia:${clientId}`, max: 30, windowMs: 3_600_000 })
       if (!tope.ok) return res.status(429).json({ error: 'Has generado muchas portadas seguidas. Prueba dentro de un rato.', retryAfter: tope.retryAfter })
       try {
-        const { dataUrl, cobrado, saldo } = await generaCobrando(clientId, 'portada-ia', () => generaPortadaIa({ prompt, imagenes }))
+        const { dataUrl, cobrado, saldo } = await generaCobrando(clientId, 'portada-ia', ({ limite }) => generaPortadaIa({ prompt, imagenes, limite }), {
+          verSaldo: await puedeVerSaldo(auth, clientId), req, res, limite: inicio + TOPE_IMAGEN_MS,
+        })
         return res.status(200).json({ imagen: dataUrl, ia: true, cobrado, saldo })
       } catch (err) {
         return res.status(err.statusCode || 502).json({ error: err.message || 'No se pudo generar la portada' })
@@ -476,7 +563,9 @@ export default async function handler(req, res) {
       const tope = rateLimit({ key: `fondo-ia:${clientId}`, max: 30, windowMs: 3_600_000 })
       if (!tope.ok) return res.status(429).json({ error: 'Has generado muchos fondos seguidos. Prueba dentro de un rato.', retryAfter: tope.retryAfter })
       try {
-        const { dataUrl, cobrado, saldo } = await generaCobrando(clientId, 'fondo-ia', () => generaFondo({ prompt, aspecto: '9:16' }))
+        const { dataUrl, cobrado, saldo } = await generaCobrando(clientId, 'fondo-ia', ({ limite }) => generaFondo({ prompt, aspecto: '9:16', limite }), {
+          verSaldo: await puedeVerSaldo(auth, clientId), req, res, limite: inicio + TOPE_IMAGEN_MS,
+        })
         return res.status(200).json({ imagen: dataUrl, ia: true, cobrado, saldo })
       } catch (err) {
         return res.status(err.statusCode || 502).json({ error: err.message || 'No se pudo generar el fondo' })

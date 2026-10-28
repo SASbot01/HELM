@@ -28,7 +28,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, Sparkles, Download, Upload, Film, Image as ImagenIcono, Check, AlertTriangle, Loader2, Palette, Plus, X, ExternalLink } from 'lucide-react'
 import { supabase } from '../utils/supabase'
 import { portadasApi, creditosApi } from '../helm/lib'
-import { aCreditos } from '../helm/precios'
+import { aCreditos, creditosQueQuedan } from '../helm/precios'
 import { PLANTILLAS, LETRAS, MARCA_POR_DEFECTO, normalizaMarca, comprobar, LIENZO, ZONA_CUADRICULA } from './portadas/reglas'
 import { maquetar, pintar } from './portadas/componer'
 import { ESTILOS_IA, ejemploDe, MAX_TITULO_IA, MAX_DETALLE_IA, MAX_NOMBRE_EJEMPLO } from './portadas/estilosIa'
@@ -326,8 +326,10 @@ function Taller({ clientId, reel, inicio = 'foto', marca, vecinos, onVolver }) {
     creditosApi.precios(clientId).then(d => { if (vivo) setPrecios(d) }).catch(() => {})
     return () => { vivo = false }
   }, [clientId])
-  // Tras cobrar, el saldo que devuelve la API (para enseñar lo que queda).
-  const apuntaSaldo = (d) => { if (d?.saldo != null) setPrecios(p => (p ? { ...p, saldo: Number(d.saldo) } : p)) }
+  // Tras cobrar, el saldo que devuelve la API (para enseñar lo que queda), solo
+  // si ya se enseñaba: el saldo es de la agencia y solo lo ve quien la
+  // administra (creditosApi.precios lo da null al resto).
+  const apuntaSaldo = (d) => { if (d?.saldo != null) setPrecios(p => (p && p.saldo != null ? { ...p, saldo: Number(d.saldo) } : p)) }
 
   // La portada que tiene ahora el reel, por si se prefiere de fondo (o si el
   // vídeo no se puede descargar).
@@ -689,9 +691,10 @@ function Taller({ clientId, reel, inicio = 'foto', marca, vecinos, onVolver }) {
                   ? <><Loader2 size={14} className="por-gira" /> Generando (unos 30 s)…</>
                   : <><Sparkles size={14} /> {versiones.length ? 'Otra versión' : 'Generar portada'}<span className="por-precio">{etiquetaPrecio(precios)}</span></>}
               </button>
-              {precios?.paga && precios.saldo != null && (
+              {precios?.paga && (
                 <small className="por-ayuda por-saldo">
-                  Cada imagen se cobra solo si sale bien. Te quedan {Math.max(0, Math.floor(aCreditos(precios.saldo))).toLocaleString('es-ES')} créditos.
+                  Cada imagen se cobra solo si sale bien.
+                  {creditosQueQuedan(precios.saldo) != null && ` Te quedan ${creditosQueQuedan(precios.saldo).toLocaleString('es-ES')} créditos.`}
                 </small>
               )}
               {versiones.length > 0 && (
@@ -809,7 +812,9 @@ function EstilosIa({ elegido, onElegir, ejemplos, marca, onSubir, onBorrar }) {
                 {e.para.map((p, i) => (
                   <span key={p.enlace}>{i ? ', ' : ''}<a href={p.enlace} target="_blank" rel="noopener noreferrer">{p.nombre}</a></span>
                 ))}
-                {e.aproximado ? ' (aproximado: sacado de sus perfiles públicos)' : ''}. Solo se copia cómo montan la portada: nunca su cara, su logo ni su marca.
+                {e.aproximado ? ' (aproximado: sacado de sus perfiles públicos)' : ''}.
+                {e.ejemploReel && <> La portada de ejemplo es de un <a href={e.ejemploReel.url} target="_blank" rel="noopener noreferrer">reel de {e.ejemploReel.de}</a>.</>}
+                {' '}Solo se copia cómo montan la portada: nunca su cara, su logo ni su marca.
               </small>
             )}
           </p>
