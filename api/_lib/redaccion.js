@@ -32,7 +32,7 @@ import { supabase } from '../lib/supabase.js'
 import { notificar } from './notificar.js'
 import { entradasDe, diaMadrid } from './noticias.js'
 import { fetchPublico } from './web.js'
-import { DIARIOS, diarioDe } from './noticias-perfiles.js'
+import { DIARIOS, diarioDe, diarioActivo } from './noticias-perfiles.js'
 
 const CLAVE = () => process.env.AGENTS_ANTHROPIC_KEY || process.env.ANTHROPIC_API_KEY || ''
 // Opus 5.5: escribir una pieza larga, contrastada y en buen español es justo
@@ -488,10 +488,11 @@ export async function generaArticulo(job) {
 
 /** Lo que mira el worker cada minuto: por cada diario, a partir de la hora de
  *  cada edición, un trabajo por edición y día (la clave lleva la fecha), si su
- *  perfil tiene encendida la sección Noticias. */
+ *  perfil tiene encendida la sección Noticias y su diario está en HELM_DIARIOS. */
 export async function miraRedaccion() {
   const hoy = diaMadrid(), min = minutosMadrid()
   for (const d of DIARIOS) {
+    if (!diarioActivo(d.perfil)) continue
     const { data: perfil } = await supabase.from('clients').select('id').eq('slug', d.perfil).maybeSingle()
     if (!perfil) continue
     const { data: permisos } = await supabase.from('helm_permissions').select('sections').eq('client_id', perfil.id).maybeSingle()

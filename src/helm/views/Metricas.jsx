@@ -5,13 +5,18 @@
 // estudio lo calcula el servidor (informeIg, en api/_lib/instagram.js) con las
 // métricas ya guardadas, así que abrir la sección no gasta cuota de Meta;
 // «Sincronizar» sí va a Instagram a por lo último.
+//
+// La sección sale en todos los perfiles, tengan Instagram o no. Sin él no hay
+// cifras, pero sí se enseña lo que trae y cómo pedir que se conecte.
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowUpRight, RefreshCw } from 'lucide-react'
+import { ArrowUpRight, RefreshCw, Hourglass, MessageCircle, BarChart3, Sparkles, Clapperboard } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell,
 } from 'recharts'
 import { instagramApi } from '../lib'
 import { Kpi, Tabs, Empty, FormNote } from '../ui'
+import { sesionHelm } from '../permisos'
+import { INSTAGRAM_CONTACTO, enlaceInstagram } from '../contacto'
 import './metricas.css'
 
 // Una sola serie por gráfica: el oro del acento, el mismo de las del Informe.
@@ -168,6 +173,82 @@ function Tabla({ piezas }) {
   )
 }
 
+// Las formas de la vista previa. Son dibujo, no datos: ni una cifra, para que
+// nadie las lea como si fueran de su cuenta.
+const BARRAS = [34, 52, 28, 61, 40, 88, 47, 36, 72, 44, 58, 31, 95, 50]
+const MEDIANA_PREVIA = 48
+const DIAS_PREVIA = [['L', 46], ['M', 62], ['X', 38], ['J', 84], ['V', 55], ['S', 30], ['D', 41]]
+
+// Sin Instagram conectado. Antes era una línea que mandaba a Ajustes, y casi
+// ningún cliente puede conectarlo solo: hay que pasar por la app de Meta, y eso
+// lo hacemos nosotros. Ahora se cuenta qué trae el informe (lo que dirá, no lo
+// que dice) y a quién pedírselo. El atajo a Ajustes queda para quien manda en
+// todo el perfil: a un closer le llevaría a una pantalla que no puede abrir.
+export function SinInstagram({ onNavigate }) {
+  const { mandaEnTodo } = sesionHelm()
+  const usuario = `@${INSTAGRAM_CONTACTO}`
+  const enlace = enlaceInstagram()
+  return (
+    <div className="metricas">
+      <section className="helm-card met-pend">
+        <span className="met-pend-etq"><Hourglass size={13} /> Todavía no disponible</span>
+        <h2>Tu informe de contenido se enciende al conectar tu Instagram</h2>
+        <p className="met-pend-txt">
+          Con la cuenta conectada, HELM lee lo que publicas varias veces al día y te dice qué ha funcionado,
+          qué tienen en común las piezas que mejor van y qué grabar la semana que viene.
+        </p>
+        <div className="met-pend-aviso">
+          <MessageCircle size={18} />
+          <p>Para conectarlo, escríbenos por Instagram a <a href={enlace} target="_blank" rel="noopener noreferrer">{usuario}</a>.</p>
+        </div>
+        <div className="met-pend-acciones">
+          <a className="helm-btn primary" href={enlace} target="_blank" rel="noopener noreferrer">
+            Escribir a {usuario} <ArrowUpRight size={14} />
+          </a>
+          {mandaEnTodo && onNavigate && (
+            <button type="button" className="helm-linkbtn" onClick={() => onNavigate('ajustes')}>
+              Conectarlo yo en Ajustes → Integraciones
+            </button>
+          )}
+        </div>
+      </section>
+
+      <section className="met-pre" aria-labelledby="met-pre-tit">
+        <h3 id="met-pre-tit" className="met-pre-tit">Lo que vas a ver aquí</h3>
+        <div className="met-pre-rejilla">
+          <article className="helm-card met-pre-caja">
+            <BarChart3 size={18} />
+            <h4>Las cifras de la cuenta</h4>
+            <p>Publicaciones, visitas, retención y guardados por cada mil visitas, con la mediana como vara de medir.</p>
+            <div className="met-pre-barras" aria-hidden="true">
+              {BARRAS.map((h, i) => <i key={i} className={h >= MEDIANA_PREVIA ? 'alta' : ''} style={{ height: `${h}%` }} />)}
+              <span style={{ bottom: `${MEDIANA_PREVIA}%` }} />
+            </div>
+          </article>
+          <article className="helm-card met-pre-caja">
+            <Sparkles size={18} />
+            <h4>Qué dicen los números</h4>
+            <p>Cuánto se aleja tu mejor pieza de una normal, qué día de publicación te funciona y si las más vistas retienen más.</p>
+            <ul className="met-pre-lineas" aria-hidden="true">
+              <li style={{ width: '94%' }} /><li style={{ width: '78%' }} /><li style={{ width: '86%' }} /><li style={{ width: '58%' }} />
+            </ul>
+          </article>
+          <article className="helm-card met-pre-caja">
+            <Clapperboard size={18} />
+            <h4>Qué grabar la semana que viene</h4>
+            <p>Los temas a los que volver, los días en que guardar las piezas fuertes y el tipo de pieza que más se guarda.</p>
+            <ul className="met-pre-dias" aria-hidden="true">
+              {DIAS_PREVIA.map(([d, h]) => (
+                <li key={d}><span>{d}</span><i><b style={{ width: `${h}%` }} /></i></li>
+              ))}
+            </ul>
+          </article>
+        </div>
+      </section>
+    </div>
+  )
+}
+
 export default function Metricas({ clientId, onNavigate }) {
   const [periodo, setPeriodo] = useState('')
   const [datos, setDatos] = useState(null)
@@ -194,15 +275,7 @@ export default function Metricas({ clientId, onNavigate }) {
   if (error && !datos) return <FormNote>{error}</FormNote>
   if (!datos) return <Empty>Cargando las métricas…</Empty>
 
-  if (!datos.conectado) {
-    return (
-      <Empty>
-        Este perfil no tiene Instagram conectado, así que todavía no hay métricas que estudiar.
-        Se conecta en Ajustes → Integraciones → Instagram
-        {onNavigate && <> — <button className="helm-linkbtn" onClick={() => onNavigate('ajustes')}>ir a Ajustes</button></>}.
-      </Empty>
-    )
-  }
+  if (!datos.conectado) return <SinInstagram onNavigate={onNavigate} />
 
   const { cuenta, resumen, estudio, publicaciones } = datos
   const sincronizado = cuenta.sincronizado

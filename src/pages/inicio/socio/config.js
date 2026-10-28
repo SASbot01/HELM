@@ -29,7 +29,7 @@ export const CAL_REPROGRAMAR_URL = String(env.VITE_CAL_REPROGRAMAR_URL || '').tr
 // URL de inserción (YouTube /embed/…, Vimeo player…).
 export const VIDEO_GRACIAS = String(env.VITE_VIDEO_GRACIAS || '').trim()
 
-export const HANDLE = 'silvesttre.ia'
+export const HANDLE = 'silvesttre.ai'
 export const INSTAGRAM = `https://www.instagram.com/${HANDLE}`
 
 // Titulares del hero. El primero es el que sale por defecto; los otros se

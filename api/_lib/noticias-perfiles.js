@@ -1,10 +1,11 @@
 // HELM — qué noticias lee y cómo elige cada perfil, y qué diarios hay.
 //
 //   · Las breves (api/_lib/noticias.js): las tres noticias del día. Las recibe
-//     todo perfil con la sección Noticias encendida; sus fuentes, sus temas y
-//     el criterio con que se eligen salen de aquí por el slug del perfil, y si
-//     no tiene entrada propia, los de siempre (IA y ciberseguridad: silvestre,
-//     estudio-nova…).
+//     todo perfil con la sección Noticias encendida (cada mañana, o solo al
+//     pulsar «Buscar ahora» si está en brevesADemanda); sus fuentes, sus temas
+//     y el criterio con que se eligen salen de aquí por el slug del perfil, y
+//     si no tiene entrada propia, los de siempre (IA y ciberseguridad:
+//     silvestre, estudio-nova…).
 //   · El diario (api/_lib/redaccion.js): las piezas largas de las comunidades
 //     públicas. Solo los perfiles de DIARIOS, cada uno con su línea editorial,
 //     sus ediciones y su web.
@@ -193,6 +194,14 @@ const BREVES = {
 /** Las breves del perfil con ese slug: las suyas o las de siempre. */
 export const brevesDe = (slug) => (Object.hasOwn(BREVES, String(slug ?? '')) ? BREVES[slug] : BREVES_POR_DEFECTO)
 
+// Breves que el worker NO lanza solas cada mañana: solo con «Buscar ahora».
+// Por defecto, silvestre y estudio-nova; Detrás de Cámara sigue con su pasada
+// diaria porque sus breves son lo único que actualiza su web pública. Con la
+// variable vacía (HELM_NOTICIAS_A_DEMANDA=) vuelven todos a la pasada diaria.
+export const brevesADemanda = (slug) =>
+  String(process.env.HELM_NOTICIAS_A_DEMANDA ?? 'silvestre,estudio-nova')
+    .split(',').map(s => s.trim()).filter(Boolean).includes(slug)
+
 // ── Los diarios ─────────────────────────────────────────────────────────────
 // Uno por comunidad pública, en el perfil de la comunidad. Las ediciones, en
 // minutos desde la medianoche de Madrid (las claves son las de la base:
@@ -211,7 +220,7 @@ export const DIARIOS = [
     // Una pieza al día: cada una gasta de 0,4 a 0,9 millones de tokens.
     perfil: 'detras-de-camra',
     nombre: 'Filmmaking para todo',
-    web: 'https://s4sf.net/filmmakingparatodo/news',
+    web: 'https://detrasdecamara.org/filmmakingparatodo/news',
     ediciones: [{ clave: 'manana', nombre: 'Edición de mañana', desde: 9 * 60 }],
     temas: TEMAS_FILMMAKING,
     fuentes: FUENTES_FILMMAKING,
@@ -221,3 +230,10 @@ export const DIARIOS = [
 
 /** El diario del perfil con ese slug, o null si no tiene. */
 export const diarioDe = (slug) => DIARIOS.find(d => d.perfil === slug) || null
+
+// El diario largo (Opus, una pieza al día) solo corre en los perfiles que dice
+// HELM_DIARIOS (por defecto, AI para todo). Encender Noticias en un perfil le
+// da sus breves; el diario, que gasta cientos de miles de tokens al día de la
+// clave de los agentes, se enciende a propósito: HELM_DIARIOS=silvestre,detras-de-camra.
+export const diarioActivo = (slug) =>
+  String(process.env.HELM_DIARIOS || 'silvestre').split(',').map(s => s.trim()).filter(Boolean).includes(slug)

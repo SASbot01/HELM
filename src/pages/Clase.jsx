@@ -1,35 +1,37 @@
 // PÁGINA DE LA BIO — s4sf.net, s4sf.net/paginainicio y s4sf.net/clase.
 //
 // Es el destino del enlace de la bio de Instagram: alguien ve un Reel, pulsa el
-// enlace y aterriza aquí. Todo lo que hay en pantalla existe para que haga UNA
-// de estas cosas:
+// enlace y aterriza aquí. Desde el 22-10-2026 va toda en una sola tarjeta, al
+// estilo de las bios de creadores (a partir de una de referencia que pasó Alex):
 //
-//   1. AI para todo              → /aiparatodo, la comunidad gratis (skills,
-//                                  news y la guía de Claude). Ahí se deja el
-//                                  correo. Sustituye a la «Charla gratis» (la
-//                                  masterclass detrás de un formulario), que
-//                                  queda en el historial de git.
-//   2. Irse a YouTube            → donde se enseña a fondo.
-//   3. ¿Eres una empresa o negocio? → /empresas, donde se vende HELM montado
-//                                  y llevado por Alex.
+//   1. HELM Academy — el héroe: «skool» enorme con los colores del logo de
+//      Skool y Alex recortado (sin fondo) delante. Toda la tarjeta es el
+//      enlace al formulario de entrada (/helm-academy), que guarda el lead en
+//      el CRM (embudo «School») y redirige al Skool.
+//   2. ¿En qué puedo ayudarte? — YouTube y «¿Eres una empresa o negocio?»
+//      (/empresas, Socio IA).
 //
-// Instagram ya no tiene botón: quien llega aquí viene de Instagram. El handle
-// sigue encima de la foto como firma.
+// AI para todo ya no sale aquí: sigue en /aiparatodo, con el acceso por
+// aprobación en /accesos. La foto del coche y el fondo «hacker» se quitaron.
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Youtube, Building2, ChevronRight, Sparkles } from 'lucide-react'
+import { Youtube, Building2, ArrowRight, ArrowUpRight } from 'lucide-react'
 import { useCabeceraPublica } from './inicio/cabecera.js'
 import { track } from './inicio/socio/track.js'
-import FondoHacker from './inicio/FondoHacker.jsx'
 import '../fonts/inter-tight.css'
+import '../fonts/montserrat.css'
 import './inicio/inicio.css'
+import './inicio/bio.css'
 
 // Lo que se cambia cada dos por tres, junto y arriba: enlaces y handle.
-const HANDLE = 'silvesttre.ia'
+const HANDLE = 'silvesttre.ai'
 const YOUTUBE = 'https://www.youtube.com/@silvesttre-ai'
 const INSTAGRAM = `https://www.instagram.com/${HANDLE}`
 const TITULO = 'Alex Silvestre — Aprende a dirigir la IA, no solo a usarla'
-const DESCRIPCION = 'IA aplicada en español, sin humo y con datos. Entra gratis en AI para todo.'
+const DESCRIPCION = 'IA aplicada en español, sin humo y con datos. Entra gratis en HELM Academy.'
+
+// «skool», cada letra con el color que lleva en el logo de Skool.
+const SKOOL = [['s', 'azul'], ['k', 'rojo'], ['o', 'oro'], ['o', 'azul'], ['l', 'rojo']]
 
 export default function Clase() {
   useCabeceraPublica({
@@ -42,84 +44,71 @@ export default function Clase() {
   }, [])
 
   return (
-    <div className="ini ini--pantera">
-      <main className="ini-card">
-        {/* El handle va DENTRO de la foto, arriba a la izquierda: es la firma
-            de la cuenta y lo primero que reconoce quien llega de Instagram. */}
-        <div className="ini-marco">
-          <a className="ini-handle" href={INSTAGRAM} target="_blank" rel="noopener noreferrer">
-            @{HANDLE}
-          </a>
-          <img
-            className="ini-foto"
-            src="/inicio/alex.jpg"
-            alt="Alex Silvestre"
-            width="1100" height="1338"
-            // La foto ocupa media pantalla y es lo primero que se ve: cargarla
-            // perezosa sería dejar un hueco gris justo donde mira todo el mundo.
-            fetchPriority="high"
-          />
-        </div>
+    <div className="ini ini--pantera ini--bio">
+      <main className="bio">
+        <header className="bio-quien">
+          <h1>Alex Silvestre</h1>
+          <p className="bio-rol">IA aplicada, en español</p>
+          <a className="bio-arroba" href={INSTAGRAM} target="_blank" rel="noopener noreferrer">@{HANDLE}</a>
+        </header>
 
-        <div className="ini-nombre">
-          <b>Alex Silvestre</b>
-          <span>IA aplicada, en español</span>
-        </div>
-
-        <h1>Aprende a <em>dirigir</em> la IA,<br />no solo a usarla</h1>
-
-        <p className="ini-lead">
-          Sin humo: sistemas y procesos que puedes repetir, con datos encima de la mesa.
-          De la base a la práctica, y de la práctica a vivir de ello.
-        </p>
-
-        <div className="ini-dato">
-          <b>+90.000 leads</b> generados con estas metodologías
-        </div>
-
-        <div className="ini-sep">Empieza aquí</div>
-
-        <div className="ini-botones">
-          {/* El primario: la comunidad gratis. El correo se pide allí. */}
-          <Link className="ini-btn on" to="/aiparatodo" onClick={() => track('clic_cta', { donde: 'bio-aiparatodo' })}>
-            <span className="ini-btn-icono"><Sparkles size={20} /></span>
-            <span className="ini-btn-txt">
-              <b>AI para todo</b>
-              <small>La comunidad gratis: skills, news y guías de Claude</small>
+        {/* El héroe entero es el enlace: se pincha en la foto, en «skool» o en
+            el botón y se va al formulario de HELM Academy. */}
+        <Link
+          className="bio-heroe"
+          to="/helm-academy"
+          aria-label="Unirme gratis a HELM Academy, la comunidad de Alex en Skool"
+          onClick={() => track('clic_cta', { donde: 'bio-skool' })}
+        >
+          <span className="bio-escena">
+            <span className="bio-skool" aria-hidden="true">
+              {SKOOL.map(([letra, color], i) => <span key={i} className={`bio-letra ${color}`}>{letra}</span>)}
             </span>
-            <ChevronRight className="ini-flecha" size={20} />
-          </Link>
+            {/* La foto va por encima de las letras: así la cabeza tapa el pie
+                de «skool», como en una portada de estudio. */}
+            <img
+              className="bio-foto"
+              src="/inicio/alex-sinfondo.webp?v=2"
+              alt=""
+              width="900" height="792"
+              fetchPriority="high"
+            />
+          </span>
+          <span className="bio-lema">Aprende a dirigir la IA, no solo a usarla.<br />Gratis, en español y con casos reales.</span>
+          <span className="bio-cta">Unirme a HELM Academy <ArrowRight size={18} /></span>
+        </Link>
 
-          <a className="ini-btn" href={YOUTUBE} target="_blank" rel="noopener noreferrer">
-            <span className="ini-btn-icono"><Youtube size={20} /></span>
-            <span className="ini-btn-txt">
+        <p className="bio-sep">¿En qué puedo ayudarte?</p>
+
+        <nav className="bio-lista" aria-label="Enlaces">
+          <a
+            className="bio-enlace" href={YOUTUBE} target="_blank" rel="noopener noreferrer"
+            onClick={() => track('clic_cta', { donde: 'bio-youtube' })}
+          >
+            <span className="bio-icono yt"><Youtube size={24} /></span>
+            <span className="bio-txt">
               <b>Mi canal de YouTube</b>
-              <small>La serie larga, paso a paso y sin paja</small>
+              <span>La serie larga, paso a paso y sin paja.</span>
+              <small>youtube.com/@silvesttre-ai</small>
             </span>
-            <ChevronRight className="ini-flecha" size={20} />
+            <ArrowUpRight className="bio-flecha" size={16} />
           </a>
 
           <a
-            className="ini-btn"
-            href="/empresas"
+            className="bio-enlace" href="/empresas"
             onClick={() => track('clic_cta', { donde: 'bio-empresa' })}
           >
-            <span className="ini-btn-icono"><Building2 size={20} /></span>
-            <span className="ini-btn-txt">
+            <span className="bio-icono"><Building2 size={22} /></span>
+            <span className="bio-txt">
               <b>¿Eres una empresa o negocio?</b>
-              <small>Monto y llevo HELM, el sistema que vende por ti</small>
+              <span>Monto y llevo HELM, el sistema que vende por ti.</span>
+              <small>s4sf.net/empresas</small>
             </span>
-            <ChevronRight className="ini-flecha" size={20} />
+            <ArrowRight className="bio-flecha" size={16} />
           </a>
-        </div>
+        </nav>
 
-        {/* Fijo detrás de todo en escritorio (position: fixed no depende de
-            dónde esté en el HTML); en el móvil, justo debajo de los botones. */}
-        <FondoHacker />
-
-        <p className="ini-pie">
-          © {new Date().getFullYear()} Alex Silvestre · IA aplicada
-        </p>
+        <p className="bio-pie">© {new Date().getFullYear()} Alex Silvestre · IA aplicada</p>
       </main>
     </div>
   )

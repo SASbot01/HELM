@@ -444,72 +444,10 @@ tr.abierta td { border-bottom-color: transparent; }
 .ag-elegir > header { flex-wrap: wrap; }
 .ag-elegir > header small { font-size: .8rem; }
 
-/* ── Ingesta de Drive ────────────────────────────────────────────────────── */
-.ag-drive-cab { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
-.ag-drive-cab > div:first-child { display: flex; flex-direction: column; gap: 4px; }
-.ag-drive-cab small { color: var(--text-secondary); font-size: .84rem; }
-.ag-drive-acc { display: flex; gap: 6px; }
-.ag-drive-acc .ag-btn { gap: 5px; }
-.ag-fases { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: start; }
-@media (max-width: 1000px) { .ag-fases { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .ag-fases { grid-template-columns: 1fr; } }
-.ag-fase { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
-.ag-fase h3 { font-size: .85rem; margin: 0 0 2px; display: flex; justify-content: space-between; }
-.ag-fase h3 span { color: var(--text-muted); font-weight: 600; }
-.ag-fase .ag-aviso { margin: 0; }
-.ag-guion-it {
-  display: flex; flex-direction: column; gap: 4px; text-align: left; font: inherit; color: var(--text);
-  background: var(--bg-card-light); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: 9px 10px; cursor: pointer;
-}
-.ag-guion-it:hover, .ag-guion-it.on { border-color: var(--border-hover); }
-.ag-guion-it b { font-size: .86rem; font-weight: 600; line-height: 1.35; }
-.ag-guion-cab { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.ag-guion-cab small { color: var(--text-muted); font-size: .74rem; }
-.ag-guion-txt { white-space: pre-wrap; font-size: .82rem; color: var(--text-secondary); line-height: 1.5; margin-top: 4px; }
 .ag-tipo { font-size: .68rem; font-weight: 700; padding: 1px 7px; border-radius: var(--radius-pill); border: 1px solid var(--border); color: var(--text-secondary); }
 .ag-tipo.t-viralidad { color: var(--orange); border-color: var(--orange); }
 .ag-tipo.t-venta { color: var(--success); border-color: var(--success); }
 .ag-tipo.t-conversion, .ag-tipo.t-autoridad { color: var(--text); }
-
-/* ── Calendario mensual de guiones ───────────────────────────────────────── */
-.ag-cal { padding: 14px; }
-.ag-cal-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
-.ag-cal-cab b { font-size: 1rem; text-transform: capitalize; min-width: 150px; text-align: center; }
-.ag-cal-leyenda { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
-.ag-cal-rejilla { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
-.ag-cal-dia-nombre { font-size: .72rem; font-weight: 700; color: var(--text-muted); text-align: center; padding-bottom: 4px; }
-.ag-cal-dia {
-  min-height: 92px; border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: 5px; display: flex; flex-direction: column; gap: 3px; min-width: 0;
-}
-.ag-cal-dia small { font-size: .72rem; color: var(--text-secondary); font-weight: 600; }
-.ag-cal-dia.fuera { opacity: .4; }
-.ag-cal-dia.hoy { border-color: var(--orange); }
-.ag-cal-dia.hoy small { color: var(--orange); }
-.ag-cal-guion {
-  display: flex; align-items: center; gap: 5px; text-align: left; width: 100%;
-  font: inherit; font-size: .72rem; line-height: 1.25; color: var(--text); cursor: pointer;
-  background: var(--bg-card-light); border: 1px solid var(--border); border-left: 3px solid var(--text-muted);
-  border-radius: 5px; padding: 3px 5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-}
-.ag-cal-guion:hover { border-color: var(--border-hover); }
-.ag-cal-guion.t-viralidad { border-left-color: var(--orange); }
-.ag-cal-guion.t-venta { border-left-color: var(--success); }
-.ag-cal-guion.t-conversion { border-left-color: var(--text); }
-.ag-cal-guion.t-autoridad { border-left-color: var(--text-secondary); }
-.ag-fase-punto { width: 7px; height: 7px; border-radius: 50%; flex: none; display: inline-block; background: var(--text-muted); }
-.ag-fase-punto.f-sin_editar { background: var(--orange); }
-.ag-fase-punto.f-editado { background: var(--text); }
-.ag-fase-punto.f-publicado { background: var(--success); }
-.ag-cal-pie { display: flex; gap: 14px; flex-wrap: wrap; font-size: .76rem; color: var(--text-secondary); margin: 10px 0 0; }
-.ag-cal-pie span { display: inline-flex; align-items: center; gap: 5px; }
-.ag-cal-titulo { font-size: 1.05rem; margin: 0; }
-@media (max-width: 700px) {
-  .ag-cal-dia { min-height: 64px; padding: 3px; }
-  .ag-cal-guion { font-size: 0; padding: 4px; }
-  .ag-cal-guion .ag-fase-punto { margin: 0 auto; }
-}
 
 /* El enlace del conector de Claude de un perfil (solo superadmin). */
 .ag-admin-fila { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 18px; }
@@ -892,3 +830,91 @@ tr.abierta td { border-bottom-color: transparent; }
 .eq-sheet-lanzar { display: inline-flex; align-items: center; gap: 6px; font: 600 12px inherit; color: var(--text-secondary, #cfcfd4); background: rgba(255,255,255,.04); border: 1px solid var(--border, #2b2b30); border-radius: 9px; padding: 7px 12px; cursor: pointer; }
 .eq-sheet-lanzar:disabled { opacity: .4; cursor: not-allowed; }
 .eq-sheet-mcp { font-size: 11px; color: var(--text-muted, #8d8d95); }
+
+/* Departamentos: cada carpeta enseña sus agentes dentro. */
+.ag-deps-titulo { margin: 22px 0 10px; }
+.ag-dep-agentes { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ag-dep-agentes li { display: flex; gap: 6px; align-items: center; font-size: .82rem; color: var(--text-secondary); }
+.ag-dep-agentes li svg { color: var(--orange); flex: none; }
+
+/* ── La oficina de un agente ─────────────────────────────────────────────── */
+.of-estado { margin: 4px 0 18px; }
+.of-bloques {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+}
+.of-bloque {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 14px 16px;
+}
+.of-bloque h3 {
+  margin: 0 0 8px; font-size: .72rem; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.of-bloque ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 7px; }
+.of-bloque li { font-size: .9rem; color: var(--text); line-height: 1.35; }
+.of-bloque.falta li {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  justify-content: space-between;
+}
+.of-bloque.vivo { border-left: 3px solid var(--orange); }
+.of-bloque.ok { border-left: 3px solid var(--success); }
+.of-bloque.falta { border-left: 3px solid var(--border-hover); }
+.of-vacio-bloque { margin: 0; font-size: .88rem; color: var(--text-muted); }
+
+.of-acciones { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.of-acciones .ag-btn { gap: 7px; }
+.of-acciones .ag-btn.on { border-color: var(--orange); color: var(--orange); }
+
+.of-girando { animation: of-girar 1s linear infinite; vertical-align: -2px; }
+@keyframes of-girar { to { transform: rotate(360deg); } }
+
+/* ── El chat con el agente ───────────────────────────────────────────────── */
+.of-chat {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+}
+.of-hilo {
+  display: flex; flex-direction: column; gap: 12px;
+  max-height: 46vh; overflow-y: auto; padding: 16px;
+}
+.of-chat-intro {
+  display: flex; align-items: flex-start; gap: 8px; margin: 0;
+  color: var(--text-secondary); font-size: .9rem; line-height: 1.4;
+}
+.of-chat-intro svg { color: var(--orange); flex: none; margin-top: 2px; }
+.of-msg { max-width: 82%; display: flex; flex-direction: column; gap: 3px; }
+.of-msg.tu { align-self: flex-end; align-items: flex-end; }
+.of-msg.agente { align-self: flex-start; }
+.of-msg-quien { font-size: .7rem; font-weight: 700; color: var(--text-muted); }
+.of-msg p {
+  margin: 0; padding: 9px 12px; border-radius: 12px; font-size: .9rem;
+  line-height: 1.42; white-space: pre-wrap; word-break: break-word;
+}
+.of-msg.tu p { background: var(--orange); color: var(--text-dark); border-bottom-right-radius: 4px; }
+.of-msg.agente p { background: var(--bg-card-light); color: var(--text); border-bottom-left-radius: 4px; }
+.of-msg.pensando {
+  flex-direction: row; align-items: center; gap: 7px;
+  color: var(--text-muted); font-size: .86rem;
+}
+
+.of-escribir { border-top: 1px solid var(--border); padding: 12px 14px; }
+.of-escribir textarea {
+  width: 100%; resize: vertical; min-height: 44px; box-sizing: border-box;
+  background: var(--input-bg); color: var(--input-text);
+  border: 1px solid var(--input-border); border-radius: var(--radius-sm);
+  padding: 9px 11px; font: inherit; font-size: .9rem; line-height: 1.4;
+}
+.of-escribir textarea:focus { outline: none; border-color: var(--border-focus); box-shadow: var(--shadow-focus); }
+.of-escribir-pie { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }
+.of-escribir-pie .ag-btn { gap: 6px; }
+.of-recordar {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  font-size: .82rem; color: var(--text-muted); user-select: none;
+}
+.of-recordar.on { color: var(--orange); }
+.of-recordar input { accent-color: var(--orange); }
+
+@media (max-width: 760px) {
+  .of-bloques { grid-template-columns: 1fr; }
+  .of-msg { max-width: 92%; }
+}

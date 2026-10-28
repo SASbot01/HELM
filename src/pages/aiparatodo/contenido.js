@@ -5,8 +5,8 @@
 //   · Guía: cada capítulo es un archivo de ./guia/ (NN-slug.js). Mientras un
 //     capítulo del índice no tenga archivo, se enseña como «pronto».
 //   · No negociables: la guía en PDF, en ./noNegociables.js.
-//   · Operaciones: cómo opera Silvestre AI a sus clientes con HELM, en
-//     ./operaciones.js (hilos con los mismos bloques que un capítulo).
+//   · Webs de referencia: el panel de webs premiadas con su prompt, en
+//     ./webs.js (datos) y ./Webs.jsx (cómo se pinta).
 //   · News: no está aquí. Es el diario que escribe la redacción automática de
 //     HELM (dos artículos al día) más las breves del agente de noticias, y se
 //     piden a /api/aiparatodo.
@@ -17,30 +17,28 @@
 // ~/.claude/skills. Comprobado contra los repos el 29/09/2026.
 
 import { MODOS_HILO } from './guiaModos.js'
-import OPERACIONES from './operaciones.js'
+import { SECTORES, WEBS_HILOS, PREMIADAS, ELEGIDAS } from './webs.js'
 
 export const FUNDADOR = {
   nombre: 'Alex Silvestre',
   rol: 'Fundador de AI para todo',
   foto: '/inicio/alex.jpg',
-  instagram: 'https://www.instagram.com/silvesttre.ia',
-  handle: '@silvesttre.ia',
+  instagram: 'https://www.instagram.com/silvesttre.ai',
+  handle: '@silvesttre.ai',
   youtube: 'https://www.youtube.com/@silvesttre-ai',
 }
 
 // Las secciones. Todas se recorren sin dejar nada: se ven los temas y los
-// hilos, como un foro. Lo que pide el pago es LEER un hilo. Operaciones va la
-// primera: es el enfoque de Silvestre AI (operar clientes con HELM).
+// hilos, como un foro. Lo que pide los datos (gratis) es LEER un hilo y, en
+// las webs, copiar el prompt o entrar en la web.
+//
+// La de Comunidad (el foro de dudas) se quitó el 20-10-2026: no tenía hilos.
 export const SECCIONES = [
   {
-    key: 'operaciones', titulo: 'Operaciones', desc: 'Cómo opera Silvestre AI a sus clientes con HELM, su propio sistema, para que lo hagas igual con los tuyos.',
-    temas: [
-      { key: 'clientes', nombre: 'Alta de clientes', desc: 'Perfil, onboarding y quién del equipo ve qué' },
-      { key: 'contenido', nombre: 'Contenido automático', desc: 'De los creadores de referencia al Drive' },
-      { key: 'claude', nombre: 'HELM en Claude', desc: 'El conector: tus clientes dentro de tu chat' },
-      { key: 'ventas', nombre: 'CRM y formularios', desc: 'Cada lead, en su sitio y con su historia' },
-      { key: 'creditos', nombre: 'Cómo se paga', desc: 'Créditos por uso, sin suscripción' },
-    ],
+    key: 'webs', titulo: 'Webs de referencia', corto: 'Webs',
+    desc: `${PREMIADAS} webs premiadas y ${ELEGIDAS.length} elegidas por Alex, con su portada a la vista y un prompt para que tu IA te haga la tuya con su estilo.`,
+    temas: SECTORES,
+    pie: (n) => `${n} webs · cada una con su prompt`,
   },
   {
     key: 'skills', titulo: 'Skills y repos', desc: 'Habilidades que se le instalan a Claude para que haga un trabajo concreto, y repos de código abierto que amplían lo que pueden hacer tus agentes.',
@@ -56,7 +54,7 @@ export const SECCIONES = [
     ],
   },
   {
-    key: 'news', titulo: 'News', desc: 'El diario de IA, tecnología y ciberseguridad: tres piezas al día, investigadas y contrastadas, y las breves de cada mañana.',
+    key: 'news', titulo: 'News', desc: 'El diario de IA, tecnología y ciberseguridad: tres piezas al día, investigadas y contrastadas, y breves cuando las haya.',
     // Los temas del diario (aip_articulos.tema). Las breves (helm_noticias) usan
     // 'ia' y 'ciberseguridad', que también están aquí.
     temas: [
@@ -66,15 +64,7 @@ export const SECCIONES = [
     ],
   },
   {
-    key: 'comunidad', titulo: 'Comunidad', desc: 'Dudas, lo que has montado y lo que te ha funcionado. Entre todos.',
-    temas: [
-      { key: 'presentate', nombre: 'Preséntate', desc: 'Quién eres y qué quieres montar' },
-      { key: 'dudas', nombre: 'Dudas', desc: 'Pregunta lo que sea' },
-      { key: 'montado', nombre: 'Lo que he montado', desc: 'Enseña tus sistemas y resultados' },
-    ],
-  },
-  {
-    key: 'guia', titulo: 'Guía completa de Claude', desc: 'De cero a dirigir Claude: los Mods, proyectos, skills, conectores, MCP y Claude Code. En PDF.',
+    key: 'guia', titulo: 'Guía completa de Claude', desc: 'De cero a dirigir Claude: los Mods, los 7 tipos de agentes, proyectos, skills, conectores, MCP y Claude Code.',
     temas: [
       { key: 'modos', nombre: 'Modos de Claude', desc: 'Los Mods: 3 usos de los que nadie habla, en PDF' },
       { key: 'capitulos', nombre: 'Capítulos', desc: 'La guía, en orden' },
@@ -94,6 +84,7 @@ export const CAPITULOS = [
   { slug: 'conectores', titulo: 'Conectores: Claude con tus herramientas' },
   { slug: 'mcp', titulo: 'MCP: el enchufe universal entre Claude y todo lo demás' },
   { slug: 'claude-code', titulo: 'Claude Code y agentes: que trabaje solo' },
+  { slug: 'agentes', titulo: 'Los 7 tipos de agentes con Claude' },
 ].map((c, i) => {
   const texto = TEXTOS_GUIA.find(t => t.slug === c.slug)
   return {
@@ -108,7 +99,7 @@ export const capituloPorSlug = (slug) => CAPITULOS.find(c => c.slug === slug)
 // negociables. Para publicar uno, se añade su slug aquí: aparece en la lista
 // con el mismo estilo de tarjeta. (El archivo y la URL del capítulo existen
 // aunque no esté en la lista.)
-export const CAPITULOS_PUBLICADOS = []
+export const CAPITULOS_PUBLICADOS = ['agentes']
 const capituloVisible = (c) => CAPITULOS_PUBLICADOS.includes(c.slug)
 
 const REPO_SKILLS = 'https://github.com/anthropics/skills'
@@ -243,5 +234,5 @@ export const NN_RUTA = `/aiparatodo/${NN_HILO.seccion}/${NN_HILO.tema}/${NN_HILO
 
 // Los hilos de una sección (y de un tema). News no está aquí: viene de la API.
 // Los capítulos solo se listan si están en CAPITULOS_PUBLICADOS.
-export const hilosDe = (seccion, tema) => [MODOS_HILO, ...OPERACIONES, ...POSTS, ...CAPITULOS.filter(capituloVisible), NN_HILO]
+export const hilosDe = (seccion, tema) => [MODOS_HILO, ...POSTS, ...CAPITULOS.filter(capituloVisible), NN_HILO, ...WEBS_HILOS]
   .filter(h => h.seccion === seccion && (!tema || h.tema === tema))

@@ -28,7 +28,7 @@
 
 import { fetchPublico } from './web.js'
 
-const UA = 'HELM-Prospeccion/1.0 (+https://helm.s4sf.net; contacto: el perfil que hace la búsqueda)'
+export const UA = 'HELM-Prospeccion/1.0 (+https://helm.s4sf.net; contacto: el perfil que hace la búsqueda)'
 
 // Una web de empresa no ocupa esto. El tope está para no tragarse un PDF de
 // 40 MB colgado en la home ni una página que devuelve datos sin fin.
@@ -55,6 +55,10 @@ const RUTAS = [
 const MAX_PAGINAS = 6
 
 const RE_EMAIL = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi
+// El mismo patrón, para comprobar UNA dirección entera. RE_EMAIL lleva /g y
+// guarda su posición entre llamadas a .test(): usado en un filter, el email que
+// va detrás de otro válido se comprobaba a medias y se perdía.
+const ES_EMAIL = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i
 // Teléfonos españoles, con o sin prefijo y con los separadores que use cada uno.
 const RE_TEL = /(?:\+34[\s.-]?|0034[\s.-]?)?(?:[6789]\d{2})[\s.-]?\d{2}[\s.-]?\d{2}[\s.-]?\d{2}/g
 const RE_CIF = /\b([A-HJNP-SUVW]\d{7}[0-9A-J]|\d{8}[A-HJ-NP-TV-Z])\b/g
@@ -115,7 +119,7 @@ async function traer(url) {
  * parser laxo que "interpreta" el robots.txt a su favor es exactamente lo que
  * no queremos que haga esto.
  */
-async function reglasRobots(origen) {
+export async function reglasRobots(origen) {
   const txt = await traer(`${origen}/robots.txt`)
   // Sin robots.txt no hay prohibición: es el caso normal en una web pequeña.
   if (!txt) return { prohibidas: [], todoFuera: false }
@@ -141,7 +145,7 @@ async function reglasRobots(origen) {
   return { prohibidas, todoFuera: false }
 }
 
-const permitida = (ruta, reglas) =>
+export const permitida = (ruta, reglas) =>
   !reglas.todoFuera && !reglas.prohibidas.some(p => ruta.startsWith(p))
 
 // ── Extracción ─────────────────────────────────────────────────────────────
@@ -155,8 +159,7 @@ function emailsDe(html, texto, dominio) {
 
   const buenos = [...vistos]
     .map(e => e.toLowerCase().trim())
-    .filter(e => RE_EMAIL.test(e) && !EMAIL_BASURA.test(e))
-  RE_EMAIL.lastIndex = 0
+    .filter(e => ES_EMAIL.test(e) && !EMAIL_BASURA.test(e))
 
   // El del propio dominio manda: "hola@peluqueria.com" es de la peluquería;
   // un gmail suelto en el pie puede ser del que le hizo la web.

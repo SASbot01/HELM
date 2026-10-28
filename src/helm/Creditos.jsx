@@ -1,9 +1,9 @@
 // HELM — créditos de la agencia.
 //
 // Se paga por uso: la agencia compra créditos y la IA de HELM los gasta al
-// trabajar para sus perfiles (en el panel, en el contenido automático y cuando
-// el conector de Claude le pide algo a HELM). Lo que Claude haga en la cuenta
-// del propio usuario no gasta créditos. Ver api/creditos.js.
+// trabajar para sus perfiles (en el panel, en el contenido automático, en el bot
+// de Telegram y cuando el conector de Claude le pide algo a HELM). Lo que Claude
+// haga en la cuenta del propio usuario no gasta créditos. Ver api/creditos.js.
 //
 // Aquí también vive el enlace del conector de Claude de la agencia entera: es
 // de la agencia, como el saldo, no de un perfil.
@@ -11,12 +11,26 @@ import { useEffect, useRef, useState } from 'react'
 import { Coins, Copy, Check, X, ArrowRight } from 'lucide-react'
 import { creditosApi } from './lib'
 import { Modal, FormNote } from './ui'
+import { CONCEPTOS, PRECIOS_FIJOS, aCreditos } from './precios'
 import './bienvenida.css'
 
 const fmt = (n) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0, useGrouping: 'always' }).format(Math.floor(Number(n) || 0))
 const fecha = (d) => new Date(d).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 const QUE = { recarga: 'Recarga', regalo: 'Regalo', ajuste: 'Ajuste', consumo: 'IA' }
-const DONDE = { panel: 'panel', mcp: 'conector de Claude', auto: 'contenido automático' }
+const DONDE = { panel: 'panel', mcp: 'conector de Claude', auto: 'contenido automático', telegram: 'Telegram' }
+
+// Un movimiento, en palabras. Los trabajos a precio fijo (Editor de reels,
+// Portada con IA, Trial reel) llevan su concepto donde la IA lleva el modelo:
+// se dicen por su nombre, sin «IA · contenido automático» ni tokens.
+function queEs(m) {
+  const fijo = m.tipo === 'consumo' ? CONCEPTOS[m.modelo] : null
+  const perfil = m.perfil ? ` · ${m.perfil}` : ''
+  if (fijo) return { titulo: `${fijo}${perfil}`, detalle: ' · precio fijo' }
+  return {
+    titulo: `${QUE[m.tipo] || m.tipo}${m.tipo === 'consumo' ? ` · ${DONDE[m.origen] || m.origen}${perfil}` : ''}`,
+    detalle: m.tokens ? ` · ${fmt(m.tokens)} tokens` : '',
+  }
+}
 
 /** El botón de la cabecera de Perfiles: el saldo a la vista. */
 export function BotonCreditos({ onAbrir, recarga }) {
@@ -59,9 +73,14 @@ export default function Creditos({ onClose, aviso }) {
                 <strong>{fmt(s.creditos)}</strong> <span>créditos</span>
               </div>
               <p className="helm-settings-lead">
-                Los gasta la IA de HELM cuando trabaja para tus perfiles: en el panel, en el contenido automático y
-                cuando el conector de Claude le pide algo a HELM. Lo que Claude hace en tu propia cuenta no gasta
-                créditos. 1 € = 100 créditos, sin cuota ni permanencia.
+                Los gasta la IA de HELM cuando trabaja para tus perfiles: en el panel, en el contenido automático, en
+                el bot de Telegram y cuando el conector de Claude le pide algo a HELM. Lo que Claude hace en tu propia
+                cuenta no gasta créditos. 1 € = 100 créditos, sin cuota ni permanencia.
+              </p>
+              <p className="helm-field-hint">
+                Algunos agentes cobran por trabajo hecho, solo si sale bien: Editor de reels,{' '}
+                {fmt(aCreditos(PRECIOS_FIJOS['editor-reels']))} créditos por cada 3 minutos de vídeo; Portada con IA,{' '}
+                {fmt(aCreditos(PRECIOS_FIJOS['portada-ia']))} por imagen; Trial reel, {fmt(aCreditos(PRECIOS_FIJOS['trial-reel']))} por variante.
               </p>
               {s.creditos <= 0 && <FormNote>Sin créditos la IA de tus perfiles está parada. Recarga para que siga trabajando.</FormNote>}
               <div className="helm-creditos-packs">
@@ -80,13 +99,16 @@ export default function Creditos({ onClose, aviso }) {
           <h4>Movimientos</h4>
           {s.movimientos.length ? (
             <ul className="helm-creditos-movs">
-              {s.movimientos.map(m => (
-                <li key={m.id}>
-                  <span>{QUE[m.tipo] || m.tipo}{m.tipo === 'consumo' ? ` · ${DONDE[m.origen] || m.origen}${m.perfil ? ` · ${m.perfil}` : ''}` : ''}</span>
-                  <small>{fecha(m.fecha)}{m.tokens ? ` · ${fmt(m.tokens)} tokens` : ''}</small>
-                  <b className={m.creditos < 0 ? 'resta' : 'suma'}>{m.creditos > 0 ? '+' : ''}{m.creditos.toLocaleString('es-ES', { maximumFractionDigits: 2 })}</b>
-                </li>
-              ))}
+              {s.movimientos.map(m => {
+                const q = queEs(m)
+                return (
+                  <li key={m.id}>
+                    <span>{q.titulo}</span>
+                    <small>{fecha(m.fecha)}{q.detalle}</small>
+                    <b className={m.creditos < 0 ? 'resta' : 'suma'}>{m.creditos > 0 ? '+' : ''}{m.creditos.toLocaleString('es-ES', { maximumFractionDigits: 2 })}</b>
+                  </li>
+                )
+              })}
             </ul>
           ) : <p className="helm-field-hint">Todavía no hay movimientos.</p>}
         </div>

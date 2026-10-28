@@ -97,11 +97,13 @@ function normalizarMensajes(messages) {
 }
 
 // HERRAMIENTAS (./acciones.js) está en formato OpenAI/Ollama, que es el que
-// entiende el modelo local. Claude las quiere con otro nombre de campos.
-const traducirHerramientas = (tools) => (tools || []).map(t => ({
+// entiende el modelo local. Claude las quiere con otro nombre de campos. El
+// conector (api/mcp/[token].js) las trae en formato MCP (`inputSchema`), así
+// que también se acepta ese.
+export const traducirHerramientas = (tools) => (tools || []).map(t => ({
   name: t.function?.name ?? t.name,
   description: t.function?.description ?? t.description ?? '',
-  input_schema: t.function?.parameters ?? t.input_schema ?? { type: 'object', properties: {} },
+  input_schema: t.function?.parameters ?? t.input_schema ?? t.inputSchema ?? { type: 'object', properties: {} },
 }))
 
 // De vez en cuando el modelo escribe un parámetro de LISTA como XML dentro de un
@@ -223,6 +225,64 @@ export async function claudeTurno({ apiKey, model, system, messages, maxTokens =
     out: res.usage?.output_tokens || 0,
   }
   return { content: texto, toolCalls, usage }
+}
+
+/**
+ * Un paso de un bucle agente: devuelve el Message de Anthropic EN CRUDO
+ * (content con sus bloques thinking/text/tool_use, stop_reason, usage), para
+ * que el que lleva el bucle reenvíe ese content tal cual al historial y pueda
+ * encadenar tool_result. A diferencia de `claudeTurno`, los `messages` van tal
+ * como llegan (bloques tool_use/tool_result incluidos): no se normalizan ni se
+ * aplanan a texto. Con la clave de HELM, se exige saldo antes y se cobra
+ * después, igual que `claudeTurno`.
+ *
+ * `tools` acepta el formato de Claude ({name, description, input_schema}) y el
+ * del conector MCP ({name, description, inputSchema}); `traducirHerramientas`
+ * normaliza ambos. Va con streaming para no toparse con el timeout cuando la
+ * respuesta es larga.
+ *
+ * Con caché de prompt: cada paso de un bucle reenvía herramientas, system e
+ * historial, y sin caché se pagarían enteros cada vez. Hay dos marcas: la del
+ * nivel superior, que Anthropic pone en el último bloque y sirve entre pasos
+ * del mismo turno, y otra al final del system, para que herramientas + system
+ * se aprovechen también entre turnos aunque el historial se rehaga. Para que
+ * acierte, el system y las herramientas tienen que llegar idénticos y en el
+ * mismo orden.
+ */
+export async function claudePaso({ apiKey, model, system, messages, tools, maxTokens = 8000, esfuerzo = 'medium' }) {
+  if (model && !modeloValido(model)) console.warn('[claude] modelo desconocido:', model, '— uso', MODELO_POR_DEFECTO)
+  const modelo = modeloValido(model) ? model : MODELO_POR_DEFECTO
+  const herramientas = traducirHerramientas(tools)
+  const sistema = typeof system === 'string'
+    ? [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }]
+    : system
+
+  const deHelm = Boolean(apiKey) && apiKey === claveHelm()
+  if (deHelm) await exigirSaldo()
+
+  let res
+  try {
+    res = await cliente(apiKey).messages.stream({
+      model: modelo,
+      max_tokens: Math.max(Number(maxTokens) || 0, SUELO_MAX_TOKENS),
+      cache_control: { type: 'ephemeral' },
+      ...(system ? { system: sistema } : {}),
+      messages: messages || [],
+      ...(herramientas.length ? { tools: herramientas } : {}),
+      ...(infoModelo(modelo)?.esfuerzo ? { output_config: { effort: esfuerzo } } : {}),
+    }).finalMessage()
+  } catch (err) {
+    throw traducirError(err)
+  }
+
+  if (deHelm) await cobrar(modelo, res.usage)
+
+  if (res.stop_reason === 'refusal') {
+    const e = new Error('Claude ha rechazado esta petición por sus filtros de seguridad. Reformúlala.')
+    e.statusCode = 422
+    throw e
+  }
+  return res
 }
 
 // ── Config por perfil ──────────────────────────────────────────────────────

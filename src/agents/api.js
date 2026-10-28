@@ -59,10 +59,6 @@ export const agentsApi = {
   guardarIdentidadPerfiles: (identityId, clientIds) =>
     pide(url('identidad-perfiles-guardar'), { method: 'POST', body: { identityId, clientIds } }),
 
-  // Ingesta de Drive
-  drivePerfiles: () => pide(url('drive')),
-  drive: (clientId) => pide(url('drive', `&clientId=${clientId}`)),
-
   // El enlace del conector de Claude de un perfil
   mcpEnlace: (clientId) => pide(url('mcp-enlace', `&clientId=${clientId}`)),
   generarMcpEnlace: (clientId) => pide(url('mcp-enlace'), { method: 'POST', body: { clientId } }),

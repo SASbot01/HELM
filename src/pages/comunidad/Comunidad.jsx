@@ -16,6 +16,11 @@
 // News no es contenido fijo: es el diario que escribe la redacción automática
 // de HELM y las breves del agente de noticias en el perfil de la comunidad,
 // leídos de su API (cfg.api).
+//
+// Una comunidad puede pintar una sección a su manera (cfg.vistas): la lista con
+// vistas.seccion[clave] y cada hilo con vistas.hilo[clave]. Las dos reciben el
+// acceso y su setter, para poner la puerta donde quieran (las webs de
+// referencia de AI para todo, por ejemplo).
 import { useEffect, useRef, useState } from 'react'
 import { Routes, Route, Link, Navigate, useParams, useLocation } from 'react-router-dom'
 import {
@@ -26,7 +31,7 @@ import { useCabeceraPublica } from '../inicio/cabecera.js'
 import { track } from '../inicio/socio/track.js'
 import { origen } from '../inicio/socio/origen.js'
 import {
-  ComunidadCtx, useComunidad, seccionPorClave, temaNombre, accesoGuardado, useNoticias, useArticulos,
+  ComunidadCtx, useComunidad, seccionPorClave, temaNombre, accesoDe, accesoGuardado, useNoticias, useArticulos,
   useArticulo, fechaCorta, fechaLarga, recorta, esBreve, sinComillas, ahoraMadrid, edicionAhora, EDICION,
 } from './datos.js'
 import { IndiceCapitulo, CuerpoCapitulo } from './bloques.jsx'
@@ -43,7 +48,7 @@ export default function Comunidad({ config: cfg }) {
   // Vuelta del pago de Stripe (?pago=ok), solo en las comunidades de pago:
   // abre el acceso; guardarlo y limpiar la URL se hace después de pintar.
   const [pagoOk] = useState(() => Boolean(cfg.cobro) && new URLSearchParams(window.location.search).get('pago') === 'ok')
-  const [acceso, setAcceso] = useState(() => (pagoOk ? { id: null, pago: true, at: new Date().toISOString() } : accesoGuardado(cfg.llave)))
+  const [acceso, setAcceso] = useState(() => (pagoOk ? { id: null, pago: true, at: new Date().toISOString() } : accesoDe(cfg)))
   const pagoAtendido = useRef(false)
   useEffect(() => {
     if (!pagoOk || pagoAtendido.current) return
@@ -61,8 +66,8 @@ export default function Comunidad({ config: cfg }) {
         <Cabecera />
         <Routes>
           <Route index element={<Portada />} />
-          <Route path=":seccion" element={<Seccion />} />
-          <Route path=":seccion/:tema" element={<Seccion />} />
+          <Route path=":seccion" element={<Seccion acceso={acceso} setAcceso={setAcceso} />} />
+          <Route path=":seccion/:tema" element={<Seccion acceso={acceso} setAcceso={setAcceso} />} />
           <Route path=":seccion/:tema/:slug" element={<HiloRuta acceso={acceso} setAcceso={setAcceso} />} />
           <Route path="*" element={<Navigate to={cfg.ruta} replace />} />
         </Routes>
@@ -80,7 +85,7 @@ function Cabecera() {
       <nav className="aip-nav">
         {cfg.secciones.map(s => {
           const Icono = cfg.iconos[s.key]
-          return <Link key={s.key} to={`${cfg.ruta}/${s.key}`}><Icono size={15} /> {s.key === 'guia' ? 'Guía' : s.titulo}</Link>
+          return <Link key={s.key} to={`${cfg.ruta}/${s.key}`}><Icono size={15} /> {s.corto || (s.key === 'guia' ? 'Guía' : s.titulo)}</Link>
         })}
         <a className="aip-nav-cta" href={cfg.fundador.instagram} target="_blank" rel="noopener noreferrer"><Instagram size={15} />{` ${cfg.textos.navCta}`}</a>
       </nav>
@@ -116,7 +121,7 @@ function Portada() {
               <h3>{s.titulo}</h3>
               <p>{s.desc}</p>
               <span className="aip-zona-pie">
-                {s.key === 'news' ? cfg.textos.zonaNews : `${s.temas.length} tema${s.temas.length === 1 ? '' : 's'} · ${n} hilo${n === 1 ? '' : 's'}`}
+                {s.key === 'news' ? cfg.textos.zonaNews : s.pie ? s.pie(n) : `${s.temas.length} tema${s.temas.length === 1 ? '' : 's'} · ${n} hilo${n === 1 ? '' : 's'}`}
                 <ArrowRight size={14} />
               </span>
             </Link>
@@ -223,6 +228,15 @@ function Hilo({ acceso, setAcceso }) {
   const noticias = recibidas === 'error' ? [] : recibidas
   const { hash } = useLocation()
   const pdf = cfg.pdfs.find(p => sk === p.hilo.seccion && tema === p.hilo.tema && slug === p.hilo.slug) || null
+  // Los PDF (lead magnet) de una comunidad con aprobación abren SOLO el PDF, con
+  // su propia llave: así descargar una guía no salta la puerta de aprobación del
+  // resto del contenido. En las comunidades sin aprobación, nada cambia.
+  const separarPdf = Boolean(pdf) && Boolean(cfg.puerta?.aprobacion)
+  // El acceso del PDF (su propia llave). Hilo se remonta por slug (key en
+  // HiloRuta), así que el init se reejecuta al cambiar de hilo y lee la llave
+  // actual: quien ya descargó el PDF no vuelve a ver la puerta de descarga.
+  const [accesoPdf, setAccesoPdf] = useState(() => (separarPdf ? accesoGuardado(`${cfg.llave}.pdf`) : null))
+  const accesoHilo = separarPdf ? (acceso || accesoPdf) : acceso
   const capitulo = sk === 'guia' && tema === 'capitulos' ? cfg.capituloPorSlug(slug) : null
   const post = cfg.posts && sk === cfg.posts.seccion ? cfg.posts.porSlug(slug) : null
   const noticia = esNews ? (noticias || []).find(n => n.slug === slug && n.tema === tema) : null
@@ -230,11 +244,11 @@ function Hilo({ acceso, setAcceso }) {
   // Un hilo con bloques (Operaciones, Recursos) se lee igual que un capítulo.
   const texto = capitulo?.texto || (!esNews && h?.bloques ? h : null)
 
-  useEffect(() => { if (h && acceso) track('vista_pagina', { pagina: `${cfg.clave}-hilo`, seccion: sk, slug }) }, [h, acceso, sk, slug, cfg.clave])
+  useEffect(() => { if (h && accesoHilo) track('vista_pagina', { pagina: `${cfg.clave}-hilo`, seccion: sk, slug }) }, [h, accesoHilo, sk, slug, cfg.clave])
   // Un enlace con #apartado abierto en frío: cuando se monta el hilo (la página
   // va en su propio archivo), ScrollToTop ya buscó el ancla y no la encontró.
   // Las anclas son ASCII (ver ancla()), así que no hace falta decodificar.
-  useEffect(() => { if (acceso && hash) document.getElementById(hash.slice(1))?.scrollIntoView() }, [acceso, slug, hash])
+  useEffect(() => { if (accesoHilo && hash) document.getElementById(hash.slice(1))?.scrollIntoView() }, [accesoHilo, slug, hash])
   if (esNews && recibidas === null) return <main className="aip-main aip-post"><p className="aip-sub">Cargando…</p></main>
   if (esNews && recibidas === 'error') return <main className="aip-main aip-post"><p className="aip-sub">No se ha podido cargar la noticia. Prueba a recargar la página en un momento.</p></main>
   if (!s || !h) return <Navigate to={`${cfg.ruta}/${sk || ''}`} replace />
@@ -242,7 +256,7 @@ function Hilo({ acceso, setAcceso }) {
 
   // La puerta: en las guías en PDF, la suya (su embudo, su texto).
   const puerta = pdf
-    ? <Puerta setAcceso={setAcceso} {...pdf.puerta} />
+    ? <Puerta setAcceso={separarPdf ? setAccesoPdf : setAcceso} llave={separarPdf ? `${cfg.llave}.pdf` : undefined} {...pdf.puerta} />
     : <Puerta setAcceso={setAcceso} pipeline={cfg.crm.embudoComunidad} nota={`entró por ${sk}/${slug}`} />
 
   let kicker = t?.nombre
@@ -279,14 +293,14 @@ function Hilo({ acceso, setAcceso }) {
       </header>
 
       {/* Lo que se ve antes de entrar: el índice, para saber qué hay dentro. */}
-      {!acceso && texto && <IndiceCapitulo c={texto} />}
-      {!acceso && PdfIndice && <PdfIndice pdf={pdf} />}
+      {!accesoHilo && texto && <IndiceCapitulo c={texto} />}
+      {!accesoHilo && PdfIndice && <PdfIndice pdf={pdf} />}
 
-      {!acceso ? puerta
+      {!accesoHilo ? puerta
         : post ? <CuerpoPost p={post} />
           : texto ? <CuerpoCapitulo c={texto} />
             : noticia ? <CuerpoNoticia n={noticia} />
-              : PdfCuerpo ? <PdfCuerpo acceso={acceso} pdf={pdf} />
+              : PdfCuerpo ? <PdfCuerpo acceso={accesoHilo} pdf={pdf} />
                 : (
                   <section className="aip-card aip-pronto-card">
                     <p>Este {sk === 'guia' ? 'capítulo' : 'hilo'} se publica pronto. Te avisamos al correo que dejaste.</p>
@@ -353,16 +367,28 @@ function Pie() {
 // breves de la mañana del agente de noticias. Las piezas tienen su página;
 // las breves, la de siempre (Hilo).
 
-/** La sección: el diario en News, el foro en las demás. */
-function Seccion() {
+/** La sección: la vista propia si la comunidad la tiene, el diario en News y
+ *  el foro en las demás. */
+function Seccion(props) {
+  const cfg = useComunidad()
   const { seccion } = useParams()
+  const Propia = cfg.vistas?.seccion && Object.hasOwn(cfg.vistas.seccion, seccion) ? cfg.vistas.seccion[seccion] : null
+  if (Propia) return <Propia {...props} />
   return seccion === 'news' ? <Diario /> : <Foro />
 }
 
-/** Un hilo: en News, el artículo; si es una breve o de otra sección, Hilo. */
+/** Un hilo: la vista propia si la hay; en News, el artículo; si es una breve
+ *  o de otra sección, Hilo. */
 function HiloRuta(props) {
-  const { seccion, slug } = useParams()
-  return seccion === 'news' && !esBreve(slug) ? <Articulo {...props} /> : <Hilo {...props} />
+  const cfg = useComunidad()
+  const { seccion, tema, slug } = useParams()
+  // La key remonta el hilo al cambiar de uno a otro dentro de la SPA (si no,
+  // React reutiliza la instancia): así el estado de cada hilo —incluido el
+  // acceso del PDF por su llave— se recalcula para el hilo que toca.
+  const clave = `${seccion}/${tema}/${slug}`
+  const Propia = cfg.vistas?.hilo && Object.hasOwn(cfg.vistas.hilo, seccion) ? cfg.vistas.hilo[seccion] : null
+  if (Propia) return <Propia key={clave} {...props} />
+  return seccion === 'news' && !esBreve(slug) ? <Articulo key={clave} {...props} /> : <Hilo key={clave} {...props} />
 }
 
 // La foto de la noticia original. Si no hay, o la web de origen no la deja

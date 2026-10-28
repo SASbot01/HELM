@@ -33,8 +33,10 @@ const UPSTREAM_PORT = Number(process.env.APEX_UPSTREAM_PORT || 5173)
 
 // El Host original se reenvía tal cual (s4sf.net / www.s4sf.net). Lo necesitan
 // dos cosas de vite.config.js: `allowedHosts`, que lista '.s4sf.net', y el
-// `cors.origin` del bloque preview, que nombra los dos hosts del apex porque
-// la página de inicio escribe en Supabase por el proxy /sb.
+// `cors.origin` del bloque preview, que nombra los dos hosts del apex (la
+// página de inicio manda sus formularios a api/leads.js). Por /sb ya no se
+// escribe nada: solo GET/HEAD de /storage/v1/object/public/…, ver
+// scripts/sb-proxy.mjs.
 const server = http.createServer((req, res) => {
   const upstream = http.request(
     { host: UPSTREAM_HOST, port: UPSTREAM_PORT, method: req.method, path: req.url, headers: req.headers },
@@ -52,9 +54,11 @@ const server = http.createServer((req, res) => {
   req.pipe(upstream)
 })
 
-// Realtime de Supabase entra por /sb con websocket (vite.config.js lo proxea
-// con ws:true). Sin esto el panel abierto desde el apex se quedaría sin los
-// cambios en vivo, aunque el resto de la app funcionase.
+// Los websockets se reenvían igual que el resto. Hoy no los usa nadie: /sb ya
+// no deja pasar Realtime (solo GET/HEAD de /storage/v1/object/public/…, con
+// `ws: false`, ver scripts/sb-proxy.mjs) y la web no tiene otros. Se queda
+// por si algún día los hay, para que el apex no se comporte distinto que
+// helm.s4sf.net.
 server.on('upgrade', (req, socket, head) => {
   const arriba = http.request({
     host: UPSTREAM_HOST,

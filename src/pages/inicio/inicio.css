@@ -194,7 +194,6 @@
 .ini-btn.on { color: rgb(var(--sobre-marca-rgb)); }
 .ini-btn.on small { color: rgba(var(--sobre-marca-rgb), 0.82); }
 .ini-btn.on:hover { background: linear-gradient(135deg, var(--marca-cima), var(--marca-alto)); border-color: transparent; }
-
 .ini-pie {
   margin-top: 10px;
   font-size: 11.5px;

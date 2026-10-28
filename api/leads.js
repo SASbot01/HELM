@@ -31,6 +31,7 @@
 import { supabase } from './lib/supabase.js'
 import { applyCors, rateLimit, getClientIp, signJwt, verifyJwt } from './_lib/auth.js'
 import { comunidadPorClave } from './_lib/comunidades.js'
+import { notificar } from './_lib/notificar.js'
 
 // El perfil de todas las landings propias (silvestre). Si mañana hay otra
 // landing de otro perfil, se añade a mano: que el slug venga del navegador
@@ -39,6 +40,11 @@ const PERFIL_SLUG = 'silvestre'
 
 const PIPELINE_INICIO = 'Página de inicio'
 const PIPELINE_LEAD_MAGNET = 'Lead magnet'
+const PIPELINE_SCHOOL = 'School'
+// La etapa de School de quien pidió acceso a una comunidad (migración 111), y
+// la de quien ya lo tiene.
+const ETAPA_PIDIO_ACCESO = 'pidio_acceso'
+const ETAPA_ACCESO_DADO = 'acceso_dado'
 const ETAPA_ENTRADA = 'lead_nuevo'
 
 // Las líneas que el navegador puede pedir que se añadan a la ficha. Son fijas:
@@ -306,11 +312,37 @@ function comunidadDe(b) {
   return c
 }
 
-async function miembro(b) {
+// La nota del alta la pone la propia página (por dónde entró, qué leyó, qué
+// guía pidió). Lo que no tenga esa forma no entra: esas notas las leen el
+// equipo y los agentes, y no son sitio para texto libre de internet.
+const NOTA_DE_ALTA = /^(entró por [a-z0-9-]+\/[a-z0-9-]+|leyó news\/[a-z0-9-]+|pidió la guía( [^\n]{1,60})?)$/
+
+// Un tope de altas por hora y comunidad, además del de cada IP: frena que
+// alguien rotando IPs llene el CRM de un cliente. En memoria, por proceso.
+// Solo cuentan las altas NUEVAS: quien ya está en el CRM y vuelve (una puerta
+// por cada «Copiar prompt», cada guía…) no llena nada, y si contara, cualquiera
+// podría agotar el tope repitiendo su propio correo y dejar fuera a los demás.
+// Las nuevas tienen además su tope por IP y comunidad.
+const ALTAS_POR_HORA = Number(process.env.HELM_ALTAS_COMUNIDAD_HORA || 200)
+const ALTAS_POR_IP_HORA = Number(process.env.HELM_ALTAS_COMUNIDAD_IP_HORA || 10)
+const altasRecientes = new Map()   // clave de la comunidad → [instantes]
+function cuentaAlta(clave) {
+  const ahoraMs = Date.now()
+  const lista = (altasRecientes.get(clave) || []).filter(t => ahoraMs - t < 3_600_000)
+  if (lista.length >= ALTAS_POR_HORA) throw fallo(429, 'Ahora mismo hay muchas altas. Prueba en un rato.')
+  lista.push(ahoraMs)
+  altasRecientes.set(clave, lista)
+}
+
+async function miembro(b, { ip } = {}) {
   const c = comunidadDe(b)
+  // El campo trampa: oculto en la página, solo lo rellena un bot.
+  if (txt(b.website, 200)) throw fallo(400, 'No se ha podido enviar')
   const correo = correoDe(b.email)
-  const ingresos = txt(b.ingresos, 40)
-  if (!Object.hasOwn(c.ingresos, ingresos)) throw fallo(400, 'Elige tus ingresos')
+  // Los ingresos, solo en las comunidades que los piden (c.ingresos); en las
+  // demás no se guardan aunque lleguen.
+  const ingresos = c.ingresos ? txt(b.ingresos, 40) : null
+  if (c.ingresos && !Object.hasOwn(c.ingresos, ingresos)) throw fallo(400, 'Elige tus ingresos')
   // La profesión: texto libre, o una de las opciones de la comunidad si las da.
   const oficio = c.profesiones ? c.profesiones[Object.hasOwn(c.profesiones, String(b.profesion)) ? b.profesion : ''] : txt(b.profesion, 120)
   if (c.profesiones && !oficio) throw fallo(400, 'Elige a qué te dedicas')
@@ -321,9 +353,12 @@ async function miembro(b) {
   const etapa = pipeline.etapas.find(s => s.key === ETAPA_ENTRADA)?.key || pipeline.etapas[0]?.key || ETAPA_ENTRADA
 
   const o = origenDe(b.origen)
-  const nota = txt(b.nota, 120)
-  const datos = { profesion: oficio, ingresos, entrada: nota, enviado: ahora() }
-  const linea = `${c.nombre} · ${nota} · profesión: ${oficio || '—'} · ingresos: ${c.ingresos[ingresos]}`
+  const nota = NOTA_DE_ALTA.test(txt(b.nota, 120)) ? txt(b.nota, 120) : ''
+  // Las UTM de ESTA entrada quedan también aquí: si la persona ya estaba en el
+  // CRM, sus columnas de UTM no se tocan (son las de su primera llegada).
+  const utm = Object.fromEntries(['utm_source', 'utm_medium', 'utm_campaign', 'utm_content'].filter(k => o[k]).map(k => [k, o[k]]))
+  const datos = { profesion: oficio, ...(ingresos ? { ingresos } : {}), entrada: nota, enviado: ahora(), ...(Object.keys(utm).length ? { utm } : {}) }
+  const linea = [c.nombre, nota, `profesión: ${oficio || '—'}`, ingresos && `ingresos: ${c.ingresos[ingresos]}`].filter(Boolean).join(' · ')
 
   const fila = {
     client_id: clientId,
@@ -342,15 +377,182 @@ async function miembro(b) {
     updated_at: ahora(),
   }
 
-  const previo = await buscar(clientId, correo, 'id, notes, custom_fields')
+  const previo = await buscar(clientId, correo, 'id, name, notes, custom_fields, utm_source, utm_medium, utm_campaign, utm_content')
   if (previo) {
-    const { pipeline_id: _e, status: _s, source: _src, ...cambios } = fila
-    cambios.notes = sumaNota(previo.notes, linea)
-    cambios.custom_fields = { ...(previo.custom_fields || {}), [c.clave]: datos }
+    // Quien ya estaba (un lead del lanzamiento, un formulario…) no pierde nada:
+    // como en formularios.js, solo se rellenan los huecos. Su nombre y sus UTM
+    // son los de su primera llegada, y de esas UTM cuelga la atribución de los
+    // anuncios (api/_lib/ads.js).
+    const cambios = {
+      notes: sumaNota(previo.notes, linea),
+      // Lo que dejó en otra visita (p. ej. los ingresos de cuando se pedían)
+      // se queda; lo de esta entrada lo pisa.
+      custom_fields: { ...(previo.custom_fields || {}), [c.clave]: { ...(previo.custom_fields?.[c.clave] || {}), ...datos } },
+      last_activity_at: ahora(), updated_at: ahora(),
+    }
+    if (!previo.name) cambios.name = fila.name
+    for (const k of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content']) {
+      if (!previo[k] && fila[k]) cambios[k] = fila[k]
+    }
     await actualizar(previo.id, cambios)
     return { id: await ficha(clientId, previo.id) }
   }
+  if (!rateLimit({ key: `alta:${c.clave}:${ip || 'anon'}`, max: ALTAS_POR_IP_HORA, windowMs: 3_600_000 }).ok) {
+    throw fallo(429, 'Ahora mismo hay muchas altas. Prueba en un rato.')
+  }
+  cuentaAlta(c.clave)
   return { id: await ficha(clientId, await crear(fila)) }
+}
+
+// ── HELM Academy (Skool): el formulario de entrada ──────────────────────────
+// Antes de ir al Skool, la gente pasa por un formulario (nombre, correo, a qué
+// se dedica, edad, dónde vive, teléfono). Se guarda en el CRM de silvestre, en
+// el embudo «School», y después el navegador redirige al Skool. Así Alex sabe
+// quién se ha apuntado y puede cruzarlo con las solicitudes de /accesos.
+async function school(b, { ip } = {}) {
+  if (txt(b.website, 200)) throw fallo(400, 'No se ha podido enviar')
+  const correo = correoDe(b.email)
+  const nombre = txt(b.nombre, 80)
+  if (!nombre) throw fallo(400, 'Dinos cómo te llamas')
+  const extra = {
+    dedico: txt(b.dedico, 120),
+    edad: txt(b.edad, 12),
+    residencia: txt(b.residencia, 120),
+    telefono: txt(b.telefono, 40),
+    apuntado: ahora(),
+  }
+  const c = comunidadPorClave('aiparatodo')
+  const clientId = await perfil(c.perfil)
+  const linea = ['HELM Academy · se apuntó', extra.dedico && `dedica: ${extra.dedico}`, extra.residencia && `de ${extra.residencia}`, extra.edad && `${extra.edad} años`].filter(Boolean).join(' · ')
+  const previo = await buscar(clientId, correo, 'id, name, notes, phone, custom_fields, pipeline_id, status')
+  // Apuntarse a HELM Academy da el acceso a AI para todo al momento (Alex,
+  // 27-oct): para entrar basta con poner este mismo correo. Sin solicitud ni
+  // aprobación. La ficha va en la respuesta para abrirlo ya en este navegador.
+  const acceso = (antes) => ({ ...(antes || {}), acceso: 'aprobado', aprobado_at: antes?.aprobado_at || ahora(), via: antes?.via || 'helm-academy' })
+  const [school, inicio] = await Promise.all([embudo(clientId, PIPELINE_SCHOOL), embudo(clientId, PIPELINE_INICIO)])
+  const etapa = school.etapas.some(s => s.key === ETAPA_ACCESO_DADO) ? ETAPA_ACCESO_DADO : school.etapas[0]?.key || 'apuntado'
+
+  if (previo) {
+    // A School · «Acceso dado» si venía de School, de la página de inicio o de
+    // ningún embudo; uno de otro embudo (un cliente) se queda donde está.
+    const mover = school.id && (!previo.pipeline_id || previo.pipeline_id === inicio.id || previo.pipeline_id === school.id)
+    await actualizar(previo.id, {
+      ...(previo.name ? {} : { name: nombre }),
+      ...(previo.phone || !extra.telefono ? {} : { phone: extra.telefono }),
+      notes: sumaNota(previo.notes, linea),
+      custom_fields: {
+        ...(previo.custom_fields || {}),
+        school: { ...(previo.custom_fields?.school || {}), ...extra },
+        [c.clave]: acceso(previo.custom_fields?.[c.clave]),
+      },
+      ...(mover ? { pipeline_id: school.id, status: etapa } : {}),
+      last_activity_at: ahora(), updated_at: ahora(),
+    })
+    return { ok: true, id: await ficha(clientId, previo.id) }
+  }
+  if (!rateLimit({ key: `school:${ip || 'anon'}`, max: ALTAS_POR_IP_HORA, windowMs: 3_600_000 }).ok) {
+    throw fallo(429, 'Ahora mismo hay muchas altas. Prueba en un rato.')
+  }
+  cuentaAlta('school')
+  const id = await crear({
+    client_id: clientId, name: nombre, email: correo,
+    ...(extra.telefono ? { phone: extra.telefono } : {}),
+    source: 'HELM Academy', notes: linea,
+    pipeline_id: school.id, status: etapa,
+    utm_source: 'helm-academy', utm_medium: 'skool',
+    custom_fields: { school: extra, [c.clave]: acceso(null) },
+    last_activity_at: ahora(), updated_at: ahora(),
+  })
+  return { ok: true, id: await ficha(clientId, id) }
+}
+
+// ── AI para todo: acceso con aprobación ─────────────────────────────────────
+// Desde el 22-10-2026 el acceso a AI para todo no es automático: se solicita
+// (nombre y correo) y lo aprueba Alex a quien ya está en HELM Academy (el
+// Skool). El estado vive en el propio contacto, en custom_fields.<clave>.acceso
+// ('pendiente' | 'aprobado' | 'rechazado'): así el panel lo ve como un lead más
+// y no hace falta otra tabla. Mientras no está aprobado no se devuelve ficha,
+// así que la puerta del navegador no se abre.
+const estadoAcceso = (contacto, clave) => contacto?.custom_fields?.[clave]?.acceso || null
+
+async function solicitarAcceso(b, { ip } = {}) {
+  // El campo trampa, como en las altas: oculto, solo lo rellena un bot.
+  if (txt(b.website, 200)) throw fallo(400, 'No se ha podido enviar')
+  const c = comunidadDe(b)
+  const correo = correoDe(b.email)
+  const nombre = txt(b.nombre, 80)
+  if (!nombre) throw fallo(400, 'Dinos cómo te llamas')
+
+  const clientId = await perfil(c.perfil)
+  const previo = await buscar(clientId, correo, 'id, name, notes, custom_fields, pipeline_id, status')
+  // Si ya está aprobado, entra directo: volver a pedir acceso no lo echa.
+  if (estadoAcceso(previo, c.clave) === 'aprobado') {
+    return { estado: 'aprobado', id: await ficha(clientId, previo.id) }
+  }
+
+  const yaPendiente = estadoAcceso(previo, c.clave) === 'pendiente'
+  const datos = { ...(previo?.custom_fields?.[c.clave] || {}), acceso: 'pendiente', solicitado: ahora() }
+  const linea = `${c.nombre} · pidió acceso`
+
+  // La solicitud va a School, el embudo de HELM Academy (Alex: «no vienen de la
+  // página de inicio»), en «Pidió acceso». Un contacto que ya estaba solo se
+  // mueve si venía de la página de inicio, de ningún embudo o del propio School:
+  // uno de otro embudo (un cliente, un lead magnet) se queda donde está.
+  const [school, inicio] = await Promise.all([embudo(clientId, PIPELINE_SCHOOL), embudo(clientId, PIPELINE_INICIO)])
+  const etapaSchool = school.etapas.some(s => s.key === ETAPA_PIDIO_ACCESO) ? ETAPA_PIDIO_ACCESO : school.etapas[0]?.key || 'apuntado'
+
+  if (previo) {
+    const mover = school.id && previo.status !== 'acceso_dado'
+      && (!previo.pipeline_id || previo.pipeline_id === inicio.id || previo.pipeline_id === school.id)
+    await actualizar(previo.id, {
+      custom_fields: { ...(previo.custom_fields || {}), [c.clave]: datos },
+      notes: sumaNota(previo.notes, linea),
+      ...(mover ? { pipeline_id: school.id, status: etapaSchool } : {}),
+      last_activity_at: ahora(), updated_at: ahora(),
+    })
+  } else {
+    if (!rateLimit({ key: `acceso:${c.clave}:${ip || 'anon'}`, max: ALTAS_POR_IP_HORA, windowMs: 3_600_000 }).ok) {
+      throw fallo(429, 'Ahora mismo hay muchas solicitudes. Prueba en un rato.')
+    }
+    cuentaAlta(c.clave)
+    // Sin School en el perfil, a la página de inicio, como antes.
+    const pipeline = school.id ? school : inicio
+    const etapa = school.id
+      ? etapaSchool
+      : pipeline.etapas.find(s => s.key === ETAPA_ENTRADA)?.key || pipeline.etapas[0]?.key || ETAPA_ENTRADA
+    await crear({
+      client_id: clientId, name: nombre || correo.split('@')[0], email: correo,
+      source: `${c.nombre} · acceso`, notes: linea,
+      pipeline_id: pipeline.id, status: etapa,
+      utm_source: c.clave, utm_medium: 'acceso',
+      custom_fields: { [c.clave]: datos },
+      last_activity_at: ahora(), updated_at: ahora(),
+    })
+  }
+
+  // Aviso a Alex (campana del panel + Telegram), solo cuando la solicitud es
+  // nueva: si recarga o reintenta, no se repite.
+  if (!yaPendiente) {
+    await notificar(supabase, clientId, {
+      tipo: 'lead', nivel: 'info',
+      titulo: `Acceso a ${c.nombre}: ${nombre}`,
+      cuerpo: `${nombre} (${correo}) pide acceso. Apruébalo en Perfiles → Accesos cuando se haya unido a HELM Academy.`,
+      clave: `acceso:${c.clave}`,
+    })
+  }
+  return { estado: 'pendiente' }
+}
+
+async function comprobarAcceso(b) {
+  const c = comunidadDe(b)
+  const correo = correoDe(b.email)
+  const clientId = await perfil(c.perfil)
+  const previo = await buscar(clientId, correo, 'id, custom_fields')
+  if (estadoAcceso(previo, c.clave) === 'aprobado') return { estado: 'aprobado', id: await ficha(clientId, previo.id) }
+  // No se distingue 'pendiente' de 'no lo pidió nunca': responder distinto
+  // dejaría sondear qué correos están en el CRM. Mientras no esté aprobado, para
+  // quien pregunta es 'pendiente'.
+  return { estado: 'pendiente' }
 }
 
 // ── Primer paso del diagnóstico y del formulario de valor ───────────────────
@@ -508,7 +710,7 @@ async function nota(b) {
   return { ok: true }
 }
 
-const ACCIONES = { masterclass, socio, miembro, puerta, completar, nota }
+const ACCIONES = { masterclass, socio, miembro, puerta, completar, nota, school, 'solicitar-acceso': solicitarAcceso, 'comprobar-acceso': comprobarAcceso }
 
 export default async function handler(req, res) {
   applyCors(req, res)
@@ -526,7 +728,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET' && action === 'apuntados') return res.status(200).json(await apuntados(req.query))
     if (req.method === 'POST' && ACCIONES[action]) {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
-      return res.status(200).json(await ACCIONES[action](body))
+      return res.status(200).json(await ACCIONES[action](body, { ip }))
     }
     return res.status(405).json({ error: 'Método no permitido' })
   } catch (err) {

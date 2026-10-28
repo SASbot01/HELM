@@ -91,3 +91,106 @@ describe('cada perfil, con sus temas', () => {
     expect(args.messages[0].content).toContain('(ciberseguridad · BleepingComputer ·')
   })
 })
+
+describe('qué diarios largos corren', () => {
+  it('por defecto solo el de AI para todo; el resto, solo si se dice en HELM_DIARIOS', async () => {
+    const { diarioActivo } = await import('../api/_lib/noticias-perfiles.js')
+    const antes = process.env.HELM_DIARIOS
+    delete process.env.HELM_DIARIOS
+    expect(diarioActivo('silvestre')).toBe(true)
+    expect(diarioActivo('detras-de-camra')).toBe(false)
+    process.env.HELM_DIARIOS = 'silvestre, detras-de-camra'
+    expect(diarioActivo('detras-de-camra')).toBe(true)
+    process.env.HELM_DIARIOS = 'detras-de-camra'
+    expect(diarioActivo('silvestre')).toBe(false)
+    if (antes === undefined) delete process.env.HELM_DIARIOS
+    else process.env.HELM_DIARIOS = antes
+  })
+})
+
+// Breves y radar a demanda (27/10/2026): el worker ya no los lanza solos cada
+// mañana salvo donde hace falta. Detrás de Cámara sigue con su pasada diaria
+// porque sus breves son lo único que actualiza su web pública.
+describe('qué pasadas lanza solas el worker', () => {
+  // Una base mínima: helm_permissions y clients para leer, agent_jobs para
+  // encolar. Lo que se encola queda en `encolados`.
+  async function baseFalsa({ permisos = [], clientes = [] } = {}) {
+    const { supabase } = await import('../api/lib/supabase.js')
+    const encolados = [], leidas = []
+    supabase.from = (tabla) => {
+      leidas.push(tabla)
+      const filtros = {}
+      const q = {
+        select: () => q,
+        eq: (c, v) => { filtros[c] = v; return q },
+        maybeSingle: async () => ({ data: clientes.find(c => c.slug === filtros.slug) || null, error: null }),
+        upsert: async (fila) => { encolados.push(fila); return { error: null } },
+        then: (ok, ko) => Promise.resolve({ data: tabla === 'helm_permissions' ? permisos : [], error: null }).then(ok, ko),
+      }
+      return q
+    }
+    return { encolados, leidas }
+  }
+  // Con la variable de entorno como se pida, y devuelta como estaba.
+  async function con(nombre, valor, fn) {
+    const antes = process.env[nombre]
+    if (valor === undefined) delete process.env[nombre]
+    else process.env[nombre] = valor
+    try { return await fn() } finally {
+      if (antes === undefined) delete process.env[nombre]
+      else process.env[nombre] = antes
+    }
+  }
+  // Las 10:00 de Madrid: ya han pasado las 5:30 de las breves y las 7:00 del radar.
+  async function aLasDiez(fn) {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-27T09:00:00Z'))
+    try { return await fn() } finally { vi.useRealTimers() }
+  }
+
+  it('por defecto, silvestre y estudio-nova van a demanda; Detrás de Cámara no', async () => {
+    const { brevesADemanda } = await import('../api/_lib/noticias-perfiles.js')
+    await con('HELM_NOTICIAS_A_DEMANDA', undefined, () => {
+      expect(brevesADemanda('silvestre')).toBe(true)
+      expect(brevesADemanda('estudio-nova')).toBe(true)
+      expect(brevesADemanda('detras-de-camra')).toBe(false)
+      expect(brevesADemanda(undefined)).toBe(false)
+    })
+    await con('HELM_NOTICIAS_A_DEMANDA', ' estudio-nova , detras-de-camra ', () => {
+      expect(brevesADemanda('silvestre')).toBe(false)
+      expect(brevesADemanda('detras-de-camra')).toBe(true)
+    })
+    // Vacía: todos vuelven a la pasada diaria.
+    await con('HELM_NOTICIAS_A_DEMANDA', '', () => {
+      for (const slug of ['silvestre', 'estudio-nova', 'detras-de-camra']) expect(brevesADemanda(slug)).toBe(false)
+    })
+  })
+
+  it('las breves de cada mañana solo se encolan para los perfiles que no van a demanda', async () => {
+    const { miraNoticias } = await import('../api/_lib/noticias.js')
+    const { encolados } = await baseFalsa({ permisos: [
+      { client_id: 'id-silvestre', sections: { noticias: true }, clients: { slug: 'silvestre' } },
+      { client_id: 'id-nova', sections: { noticias: true }, clients: { slug: 'estudio-nova' } },
+      { client_id: 'id-ddc', sections: { noticias: true }, clients: { slug: 'detras-de-camra' } },
+      { client_id: 'id-apagado', sections: { noticias: false }, clients: { slug: 'otro' } },
+    ] })
+    await con('HELM_NOTICIAS_A_DEMANDA', undefined, () => aLasDiez(miraNoticias))
+    expect(encolados.map(j => j.payload.clientId)).toEqual(['id-ddc'])
+    expect(encolados[0]).toMatchObject({ tipo: 'noticias', clave: 'noticias:id-ddc:2026-10-27', payload: { origen: 'horario' } })
+  })
+
+  it('el radar no se lanza solo salvo con RADAR_DIARIO=1', async () => {
+    const { miraRadar } = await import('../api/_lib/radar.js')
+    const clientes = [{ id: 'id-silvestre', slug: 'silvestre' }]
+
+    let base = await baseFalsa({ clientes })
+    await con('RADAR_DIARIO', undefined, () => aLasDiez(miraRadar))
+    expect(base.leidas).toEqual([])
+    expect(base.encolados).toEqual([])
+
+    base = await baseFalsa({ clientes })
+    await con('RADAR_DIARIO', '1', () => aLasDiez(miraRadar))
+    expect(base.encolados).toHaveLength(1)
+    expect(base.encolados[0]).toMatchObject({ tipo: 'radar', clave: 'radar:id-silvestre:2026-10-27', payload: { clientId: 'id-silvestre', origen: 'horario' } })
+  })
+})

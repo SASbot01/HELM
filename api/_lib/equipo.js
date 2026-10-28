@@ -37,6 +37,7 @@ import { notificar } from './notificar.js'
 import { puntuarGancho, clasificaGancho } from './ig-calidad.js'
 import { apifyListo, rastreaCuentas } from './apify.js'
 import { validaArgs } from './esquema.js'
+import { esPropio } from './creadores.js'
 
 export const AGENTES = ['director', 'investigador', 'analista', 'productor', 'comercial', 'informe', 'guionista']
 // En el orden en que corren: el guionista el último, para leer lo de los demás.
@@ -59,7 +60,7 @@ const MODELOS = {
   virales: process.env.AGENTS_MODELO_VIRALES || 'claude-sonnet-5',
 }
 
-// Agentes que se pueden LANZAR a mano (o por MCP/Drive) pero que no entran en el
+// Agentes que se pueden LANZAR a mano (o por el MCP) pero que no entran en el
 // reparto diario del director: el editor de reels es uno.
 export const AGENTES_LANZABLES = [...AGENTES, 'editor', 'programador', 'virales']
 
@@ -144,10 +145,13 @@ export async function cierraHuerfanas() {
 
 // ── La memoria compartida ───────────────────────────────────────────────────
 
+// Sin las notas de creador que Claude guarda por el MCP (tipo 'creador'):
+// llevan el perfil para saber de qué agencia son, pero no son memoria del
+// equipo y se comerían el tope (y con él, las reglas del dueño más antiguas).
 async function memoriaDe(clientId) {
   const { data, error } = await supabase.from('agent_memory')
     .select('id, clave, agente, tipo, para_agente, estado, contenido, updated_at')
-    .eq('client_id', clientId).order('updated_at', { ascending: false }).limit(200)
+    .eq('client_id', clientId).neq('tipo', 'creador').order('updated_at', { ascending: false }).limit(200)
   if (error) throw error
   return data || []
 }
@@ -514,7 +518,7 @@ ${REGLAS_COMUNES}`,
 async function investigador(ctx) {
   const { clientId } = ctx
   // Los creadores «Propio» son el perfil mismo, no una referencia.
-  const creadores = (await creadoresDe(clientId)).filter(c => c.categoria !== 'Propio')
+  const creadores = (await creadoresDe(clientId)).filter(c => !esPropio(c))
   if (!creadores.length) {
     await ctx.log('Este perfil no tiene creadores de referencia asignados. No hay nada que investigar.')
     return 'Sin creadores de referencia: no hice nada.'
@@ -722,7 +726,7 @@ async function escribeGuiones(ctx, { fechas, tipoForzado = null, nota = null, av
   const { clientId } = ctx
   const hoy = diaMadrid()
   if (!fechas?.length) { await ctx.log('Sin fechas libres: no escribo.'); return [] }
-  const creadores = (await creadoresDe(clientId)).filter(c => c.categoria !== 'Propio')
+  const creadores = (await creadoresDe(clientId)).filter(c => !esPropio(c))
   const ids = creadores.map(c => c.id)
   const [reels, estudios, guia, biblia, propios, cal, notas] = await Promise.all([
     reelsDe(ids),
@@ -831,7 +835,7 @@ ${REGLAS_COMUNES}`,
   }
   if (avisar && escritos.length) {
     await notificar(supabase, clientId, {
-      tipo: 'agentes', destino: 'agentes',
+      tipo: 'agentes', destino: 'contenido',
       titulo: `${escritos.length} ${escritos.length === 1 ? 'guion nuevo' : 'guiones nuevos'} en borrador`,
       cuerpo: `${escritos.map(e => `${e.fecha} · ${e.titulo}`).join('\n')}\nRevísalos en Agentes → Equipo → Borradores.`,
     })
@@ -1103,51 +1107,34 @@ ${REGLAS_COMUNES}`,
   await ctx.log('Informe guardado en la memoria.')
   await notificar(supabase, clientId, {
     tipo: 'agentes', titulo: `Informe de la semana del ${desde}`,
-    cuerpo: `${texto.slice(0, 280)}…\nEntero en Agentes → Equipo → Memoria.`, destino: 'agentes',
+    cuerpo: `${texto.slice(0, 280)}…\nEntero en Agentes → Equipo → Memoria.`, destino: 'contenido',
   })
   await escribeMemoria(ctx, out)
   return String(out.hecho || 'Informe semanal escrito.').slice(0, 400)
 }
 
 // ── Editor de reels ─────────────────────────────────────────────────────────
-// Sigue el manual de edición que Alex guardó en la memoria (agent_memory,
-// ambito 'editor'). El motor de render (ffmpeg/composición) está en
-// construcción; por ahora el agente ENSEÑA el proceso paso a paso, para verlo
-// en vivo. Se dispara a mano, por el conector de Claude (MCP) o por Drive: las
-// tres vías encolan este mismo trabajo y el proceso se ve igual en el Registro.
-const dormir = (ms) => new Promise(r => setTimeout(r, ms))
-const PASOS_EDITOR = [
-  ['Inspeccionar', 'ffprobe: duración, resolución, fps, rotación y audio; hoja de fotogramas cada 3 s.'],
-  ['Transcribir', 'audio a 16 kHz mono; STT con tiempos por palabra (sherpa-onnx).'],
-  ['Limpiar', 'detectar trabas, repeticiones y silencios de más de 0,6 s; cortar vídeo y audio en el mismo valle.'],
-  ['Leer el contexto', 'una frase de qué defiende el vídeo; marcar palabras ancla: herramientas, cifras, pasos y la llamada a la acción.'],
-  ['Elegir el formato', 'puntuar las frases visualizables: ≥60% → A (pantalla partida), ≤40% → B (b-roll).'],
-  ['Plan de escenas', 'escenas de 2–4 s, una idea cada una; cada animación 0,05–0,15 s antes de su palabra ancla.'],
-  ['Capturar lo real', 'las webs y repos que se nombran, con el navegador y a resolución nativa, en la tarjeta de navegador.'],
-  ['Animar y componer', 'el estilo de la casa (#0A0A0C / rojo #E4362B / dorado #E8B93A); fotogramas con Pillow.'],
-  ['Subtítulos y sonido', 'palabra a palabra en Inter ExtraBold; efectos por código 20 dB por debajo de la voz.'],
-  ['Control de calidad', 'cada animación sobre su palabra (±0,15 s), zonas seguras de Instagram, voz ≈ -18 dB.'],
-]
-
+// El editor de verdad no es un agente de Claude: el vídeo se sube en Agentes →
+// Editor de reels (api/editor.js) y lo edita el worker con Whisper y ffmpeg
+// (trabajo `editor-render`, api/_lib/editor/). Si alguien lo lanza como agente
+// (a mano, por el bot o por el conector), no se finge ningún proceso: se dice
+// dónde está y cómo van los vídeos de este perfil.
 async function editor(ctx) {
-  const video = ctx.encargo && /drive|https?:|\.mp4|\.mov|v[ií]deo|reel/i.test(ctx.encargo) ? ctx.encargo : null
-  const { data: manual } = await supabase.from('agent_memory').select('contenido')
-    .eq('ambito', 'editor').eq('clave', 'editor-reels').is('client_id', null).maybeSingle()
-  await ctx.log(manual?.contenido
-    ? `Manual de edición cargado de la memoria de HELM (${manual.contenido.length} caracteres).`
-    : 'No encontré el manual de edición en la memoria. Guárdalo para que lo siga.')
-  await ctx.log(video
-    ? `Vídeo recibido: ${String(video).slice(0, 200)}.`
-    : 'Prueba en seco: todavía sin vídeo. Te enseño el proceso que seguiré cuando entre uno (por el conector de Claude o por la carpeta de Drive).')
-  for (const [titulo, que] of PASOS_EDITOR) {
-    await dormir(650)
-    await ctx.log(`${titulo} — ${que}`)
-  }
-  await dormir(400)
-  await ctx.log('Motor de render (ffmpeg + composición): EN CONSTRUCCIÓN. El plan y las decisiones salen; el montaje final llega por fases.')
-  return video
-    ? 'Proceso recorrido sobre el vídeo recibido. El render se monta por fases (motor en construcción).'
-    : 'Demostración del proceso, sin vídeo. Motor de render en construcción.'
+  const { data } = await supabase.from('helm_ediciones').select('estado, created_at')
+    .eq('client_id', ctx.clientId).gte('created_at', new Date(Date.now() - 7 * 86_400_000).toISOString())
+  const filas = data || []
+  const cuenta = (estados) => filas.filter(f => estados.includes(f.estado)).length
+  const listos = cuenta(['listo'])
+  const enMarcha = cuenta(['subiendo', 'en_cola', 'transcribiendo', 'montando'])
+  const errores = cuenta(['error'])
+  await ctx.log('El Editor de reels está en Agentes → Editor de reels: subes el vídeo en bruto (y, si quieres, imágenes o clips de apoyo, tu logo y una música) y HELM devuelve el MP4 editado (sin tomas repetidas, muletillas ni silencios, 1080×1920 y con subtítulos).')
+  // El precio, de donde sale el cobro (si Alex lo cambia, esto no se queda viejo).
+  const { PRECIOS_FIJOS, CREDITOS_POR_EURO, BLOQUE_EDITOR_S } = await import('../../src/helm/precios.js')
+  const euros = PRECIOS_FIJOS['editor-reels']
+  const bloque = BLOQUE_EDITOR_S % 60 ? `${BLOQUE_EDITOR_S} segundos` : `${BLOQUE_EDITOR_S / 60} minutos`
+  await ctx.log(`Cuesta ${Math.round(euros * CREDITOS_POR_EURO)} créditos (${euros.toFixed(2).replace('.', ',')} €) por cada bloque de ${bloque} empezado del vídeo en bruto; se cobra solo si sale bien.`)
+  await ctx.log(`Últimos 7 días en ${ctx.perfil?.name || 'este perfil'}: ${listos} listos, ${enMarcha} editándose, ${errores} con error.`)
+  return `Editor de reels: ${listos} vídeos listos y ${enMarcha} en marcha esta semana. Se sube desde Agentes → Editor de reels.`
 }
 
 // ── El agente de virales (lunes 7:00 · o a mano) ─────────────────────────────
@@ -1160,7 +1147,7 @@ async function editor(ctx) {
 async function virales(ctx) {
   const { clientId } = ctx
   if (!apifyListo()) { await ctx.log('No hay APIFY_TOKEN en el worker: no puedo rastrear Instagram.'); return 'Sin APIFY_TOKEN.' }
-  const creadores = (await creadoresDe(clientId)).filter(c => c.categoria !== 'Propio')
+  const creadores = (await creadoresDe(clientId)).filter(c => !esPropio(c))
   // El nombre de la identidad es el usuario de IG (p. ej. "soybedia", "hormozi").
   const cuentas = creadores.map(c => c.nombre).filter(h => /^[a-z0-9._]{1,30}$/i.test(h || ''))
   if (!cuentas.length) { await ctx.log('El perfil no tiene creadores de referencia con cuenta de Instagram.'); return 'Sin cuentas de referencia.' }

@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Plus, Trash2, LayoutGrid, List, Search, Phone, Mail, Building2, Send,
-  Instagram, Globe, SlidersHorizontal, Package,
+  Instagram, Globe, SlidersHorizontal, Package, MapPin,
 } from 'lucide-react'
 import {
   supabase, fetchRows, fetchRowsOrError, insertRow, updateRow, deleteRow, fetchActivities,
@@ -29,6 +29,14 @@ const ACT_TYPES = [
   { key: 'meeting', label: 'Reunión' },
   { key: 'whatsapp', label: 'WhatsApp' },
 ]
+
+// La ficha de Google Maps del negocio, si el contacto vino del Scraper (o de un
+// lote de prospección). Solo enlaces de Google: custom_fields lo puede tocar
+// cualquiera con acceso al CRM, y esto acaba en un href.
+const mapsDe = (c) => {
+  const u = String(c?.custom_fields?.maps_url || '')
+  return /^https:\/\/(www\.|maps\.)?(google\.[a-z.]+|goo\.gl|maps\.app\.goo\.gl)\//i.test(u) ? u : ''
+}
 
 export default function Crm({ clientId }) {
   const [rows, setRows] = useState(null)
@@ -344,6 +352,12 @@ export default function Crm({ clientId }) {
                       <div className="helm-kcard-meta">
                         {r.phone && <span><Phone size={11} />{r.phone}</span>}
                         {r.email && <span><Mail size={11} />{r.email}</span>}
+                        {mapsDe(r) && (
+                          <a href={mapsDe(r)} target="_blank" rel="noopener noreferrer"
+                            draggable={false} onClick={e => e.stopPropagation()}>
+                            <MapPin size={11} />Google Maps
+                          </a>
+                        )}
                       </div>
                       {/* Las subetapas se ven en la propia tarjeta: ese era el
                           objetivo — saber a cuánto vista es cada seguimiento
@@ -741,6 +755,11 @@ function ContactDrawer({
           </a>
         )}
         {contact.website && <a className="helm-btn sm" target="_blank" rel="noreferrer" href={contact.website}><Globe size={13} />Web</a>}
+        {mapsDe(contact) && (
+          <a className="helm-btn sm" target="_blank" rel="noopener noreferrer" href={mapsDe(contact)}>
+            <MapPin size={13} />Google Maps
+          </a>
+        )}
         {servicio?.recursos?.map((r, i) => (
           <a key={i} className="helm-btn sm" target="_blank" rel="noreferrer" href={r.url}>
             <Package size={13} />{r.label || 'Recurso'}

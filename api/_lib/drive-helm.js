@@ -51,9 +51,19 @@ async function pide(ruta, { method = 'GET', query = {}, body } = {}) {
     ...(body ? { body: JSON.stringify(body) } : {}),
   })
   const d = await r.json().catch(() => ({}))
-  if (!r.ok) throw new Error(`Drive ${r.status}: ${d.error?.message || 'error'}`)
+  if (!r.ok) {
+    // Con el código a la vista: quien llama distingue un 404 (no existe o
+    // helm-drive no lo ve) de un fallo de Drive o de la llave.
+    const e = new Error(`Drive ${r.status}: ${d.error?.message || 'error'}`)
+    e.status = r.status
+    throw e
+  }
   return d
 }
+
+// Los ids van en la ruta: escapados, para que uno raro no cambie la URL
+// (p. ej. "x/../otro" o "x?fields=…").
+const rutaArchivo = (id) => `/files/${encodeURIComponent(id)}`
 
 const CAMPOS = 'id,name,mimeType,size,parents,createdTime,modifiedTime,description,videoMediaMetadata(durationMillis)'
 
@@ -76,24 +86,25 @@ export async function hijos(carpetaId) {
   return out
 }
 
-export const archivo = (id) => pide(`/files/${id}`, { query: { fields: CAMPOS } })
+/** Un archivo por su id, también si está en la papelera (viene `trashed`). */
+export const archivo = (id) => pide(rutaArchivo(id), { query: { fields: `${CAMPOS},trashed` } })
 
 /** Mueve un archivo o una carpeta entera de `desde` a `hasta`. */
 export const mover = (id, desde, hasta) =>
-  pide(`/files/${id}`, { method: 'PATCH', query: { addParents: hasta, removeParents: desde, fields: 'id,parents' }, body: {} })
+  pide(rutaArchivo(id), { method: 'PATCH', query: { addParents: hasta, removeParents: desde, fields: 'id,parents' }, body: {} })
 
 export const crearCarpeta = (nombre, padre, descripcion = '') =>
   pide('/files', { method: 'POST', query: { fields: 'id,name' }, body: { name: nombre, mimeType: CARPETA, parents: [padre], description: descripcion } })
 
 export const describir = (id, descripcion) =>
-  pide(`/files/${id}`, { method: 'PATCH', query: { fields: 'id' }, body: { description: descripcion } })
+  pide(rutaArchivo(id), { method: 'PATCH', query: { fields: 'id' }, body: { description: descripcion } })
 
 /** Descarga un archivo al disco. Devuelve los bytes escritos. */
 export async function descargar(id, destino) {
   const { createWriteStream } = await import('node:fs')
   const { pipeline } = await import('node:stream/promises')
   const { Readable } = await import('node:stream')
-  const r = await fetch(`${API}/files/${id}?alt=media&supportsAllDrives=true`, {
+  const r = await fetch(`${API}${rutaArchivo(id)}?alt=media&supportsAllDrives=true`, {
     headers: { Authorization: `Bearer ${await acceso()}` },
   })
   if (!r.ok) throw new Error(`Drive ${r.status} al descargar`)

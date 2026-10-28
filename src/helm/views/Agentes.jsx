@@ -1,6 +1,8 @@
 // HELM — Agentes. La ventana de un perfil al Agent OS.
 //
-// Primero el menú de agentes (casillas); el de contenido enseña los creadores
+// Primero los departamentos (contenido, ventas…), como oficinas; dentro de
+// cada uno, sus agentes en casillas. El Equipo de agentes, para el
+// administrador, va aparte arriba. El de contenido enseña los creadores
 // de referencia de ESTE perfil, y cada uno abre su ficha con sus reels y su
 // guion frase a frase. Es lo que Claude lee cuando le pides estrategia o
 // guiones para el perfil.
@@ -8,25 +10,32 @@
 // Todo en solo lectura. Solo el superadmin elige qué creadores lleva el perfil
 // y tiene a mano el taller global (/agents), que es donde se editan.
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, Settings2, Link2, Copy, Check, Sparkles, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Settings2, Link2, Copy, Check } from 'lucide-react'
 import { creadoresApi } from '../lib'
 import { agentsApi } from '../../agents/api'
-import { AGENTES } from '../../agents/agentes'
-import { MenuAgentes, CreadoresGrid } from '../../agents/Piezas'
+import { AGENTES, DEPARTAMENTOS } from '../../agents/agentes'
+import { MenuAgentes, MenuDepartamentos, CreadoresGrid } from '../../agents/Piezas'
 import Ficha from '../../agents/Ficha'
-import PanelDrive from '../../agents/Drive'
 import Equipo from '../../agents/Equipo'
+import Oficina from '../../agents/Oficina'
 import EstudioInstagram from './EstudioInstagram'
 import EditorReel from '../../agents/EditorReel'
+import Portadas from '../../agents/Portadas'
+import SetterIG from '../../agents/SetterIG'
+import TrialReels from '../../agents/TrialReels'
+import WebCreator from '../../agents/WebCreator'
 import '../../agents/agentos.css'
 import './estudioIg.css'
 
 const esAdmin = () => Boolean(localStorage.getItem('bw_superadmin'))
 
 export default function Agentes({ clientId, client }) {
-  // 'menu' → 'contenido' (→ el slug de un creador) o 'drive'. Sin rutas
+  // 'menu' → un departamento (dep:) → la oficina de un agente (of:) → su panel
+  // ('contenido' → el slug de un creador, 'editor', 'portadas'…). Sin rutas
   // propias: la sección vive dentro de /<perfil> y HELM ya lleva la suya.
   const [vista, setVista] = useState('menu')
+  // El departamento por el que se entró: al salir de un agente se vuelve a él.
+  const [dep, setDep] = useState(null)
   const [creadores, setCreadores] = useState(null)
   const [error, setError] = useState('')
 
@@ -37,36 +46,88 @@ export default function Agentes({ clientId, client }) {
   useEffect(() => { cargar() }, [cargar])
 
   const cargarFicha = useCallback(() => creadoresApi.ficha(clientId, vista), [clientId, vista])
-  const cargarDrive = useCallback(() => creadoresApi.drive(clientId), [clientId])
+
+  const visibles = AGENTES.filter(a => (!a.soloAdmin || esAdmin()) && (!a.soloPerfiles || a.soloPerfiles.includes(client?.slug)))
+  const departamentos = DEPARTAMENTOS
+    .map(d => ({ ...d, agentes: visibles.filter(a => a.departamento === d.key) }))
+    .filter(d => d.agentes.length)
+  const metricaDe = (a) => (a.key === 'contenido' && creadores
+    ? { n: creadores.length, lb: creadores.length === 1 ? 'creador' : 'creadores' }
+    : null)
+  const volver = () => setVista(dep ? `dep:${dep}` : 'menu')
+  // Al pulsar un agente se entra en su oficina (of:<key>), no directo al panel.
+  const aLaOficina = (k) => `of:${k}`
 
   if (vista === 'menu') {
+    const sueltos = visibles.filter(a => !a.departamento)
     return (
       <div className="ag embebido">
-        <MenuAgentes
-          agentes={AGENTES.filter(a => !a.soloAdmin || esAdmin())}
-          onAbrir={setVista}
-          metricaDe={(a) => (a.key === 'contenido' && creadores
-            ? { n: creadores.length, lb: creadores.length === 1 ? 'creador' : 'creadores' }
-            : null)}
-        />
-        <button type="button" className="ag-estudio-btn" onClick={() => setVista('estudio')}>
-          <span className="ag-estudio-ico"><Sparkles size={18} /></span>
-          <span className="ag-estudio-txt">
-            <b>Estudio de Instagram</b>
-            <small>Puntúa el gancho, linta la caption, audita el perfil y quita el olor a IA. Sin publicar nada.</small>
-          </span>
-          <ChevronRight size={18} />
-        </button>
+        {sueltos.length > 0 && <MenuAgentes agentes={sueltos} onAbrir={(k) => { setDep(null); setVista(aLaOficina(k)) }} metricaDe={metricaDe} />}
+        <h2 className="ag-seccion ag-deps-titulo">Departamentos</h2>
+        <MenuDepartamentos departamentos={departamentos} onAbrir={(k) => { setDep(k); setVista(`dep:${k}`) }} />
+      </div>
+    )
+  }
+
+  if (vista.startsWith('of:')) {
+    const a = visibles.find(x => `of:${x.key}` === vista)
+    if (!a) return (
+      <div className="ag embebido">
+        <p className="ag-vacio">Ese agente no está en este perfil.</p>
+        <button type="button" className="ag-btn" onClick={volver}>Volver</button>
+      </div>
+    )
+    return <Oficina clientId={clientId} agente={a} onVolver={volver} onAbrir={(k) => setVista(k)} />
+  }
+
+  if (vista.startsWith('dep:')) {
+    const d = departamentos.find(x => `dep:${x.key}` === vista)
+    if (!d) {
+      return (
+        <div className="ag embebido">
+          <p className="ag-vacio">Ese departamento no está en este perfil.</p>
+          <button type="button" className="ag-btn" onClick={() => { setDep(null); setVista('menu') }}>Volver a Agentes</button>
+        </div>
+      )
+    }
+    return (
+      <div className="ag embebido">
+        <header className="ag-top dentro">
+          <div>
+            <button type="button" className="ag-volver" onClick={() => { setDep(null); setVista('menu') }}>
+              <ArrowLeft size={14} strokeWidth={2.2} /> Agentes
+            </button>
+            <h1>{d.nombre}</h1>
+            <p>{d.resumen}</p>
+          </div>
+        </header>
+        <MenuAgentes agentes={d.agentes} onAbrir={(k) => setVista(aLaOficina(k))} metricaDe={metricaDe} />
       </div>
     )
   }
 
   if (vista === 'estudio') {
-    return <EstudioInstagram clientId={clientId} client={client} onVolver={() => setVista('menu')} />
+    return <EstudioInstagram clientId={clientId} client={client} onVolver={() => setVista('of:estudio')} />
   }
 
   if (vista === 'editor') {
-    return <EditorReel clientId={clientId} client={client} onVolver={() => setVista('menu')} />
+    return <EditorReel clientId={clientId} client={client} onVolver={() => setVista('of:editor')} />
+  }
+
+  if (vista === 'portadas') {
+    return <Portadas clientId={clientId} client={client} onVolver={() => setVista('of:portadas')} />
+  }
+
+  if (vista === 'setter-ig') {
+    return <SetterIG clientId={clientId} client={client} onVolver={() => setVista('of:setter-ig')} />
+  }
+
+  if (vista === 'trial-reels') {
+    return <TrialReels clientId={clientId} client={client} onVolver={() => setVista('of:trial-reels')} />
+  }
+
+  if (vista === 'web-creator') {
+    return <WebCreator clientId={clientId} client={client} onVolver={() => setVista('of:web-creator')} />
   }
 
   if (vista === 'equipo') {
@@ -74,7 +135,7 @@ export default function Agentes({ clientId, client }) {
       <div className="ag embebido">
         <header className="ag-top dentro">
           <div>
-            <button type="button" className="ag-volver" onClick={() => setVista('menu')}>
+            <button type="button" className="ag-volver" onClick={() => setVista('of:equipo')}>
               <ArrowLeft size={14} strokeWidth={2.2} /> Agentes
             </button>
             <h1>Equipo de agentes</h1>
@@ -82,23 +143,6 @@ export default function Agentes({ clientId, client }) {
           </div>
         </header>
         <Equipo clientId={clientId} />
-      </div>
-    )
-  }
-
-  if (vista === 'drive') {
-    return (
-      <div className="ag embebido">
-        <header className="ag-top dentro">
-          <div>
-            <button type="button" className="ag-volver" onClick={() => setVista('menu')}>
-              <ArrowLeft size={14} strokeWidth={2.2} /> Agentes
-            </button>
-            <h1>Calendario de guiones</h1>
-            <p>Los guiones de {client?.name || 'este perfil'} y en qué fase está cada uno. Lo que se sube a Drive se ordena solo.</p>
-          </div>
-        </header>
-        <PanelDrive cargar={cargarDrive} />
       </div>
     )
   }
@@ -118,7 +162,7 @@ export default function Agentes({ clientId, client }) {
     <div className="ag embebido">
       <header className="ag-top dentro">
         <div>
-          <button type="button" className="ag-volver" onClick={() => setVista('menu')}>
+          <button type="button" className="ag-volver" onClick={() => setVista('of:contenido')}>
             <ArrowLeft size={14} strokeWidth={2.2} /> Agentes
           </button>
           <h1>Agente de contenido</h1>

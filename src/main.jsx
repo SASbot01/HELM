@@ -35,9 +35,12 @@ const FormularioPublico = perezoso(() => import('./pages/FormularioPublico.jsx')
 const PrimerMapa = perezoso(() => import('./pages/PrimerMapa.jsx'))
 const SilvestreValor = perezoso(() => import('./pages/SilvestreValor.jsx'))
 const PortalDocumentos = perezoso(() => import('./pages/PortalDocumentos.jsx'))
+const AltaHelm = perezoso(() => import('./pages/AltaHelm.jsx'))
 const PaginaInicio = perezoso(() => import('./pages/PaginaInicio.jsx'))
 const PaginaInicioHugo = perezoso(() => import('./pages/PaginaInicioHugo.jsx'))
 const Clase = perezoso(() => import('./pages/Clase.jsx'))
+const HelmAcademy = perezoso(() => import('./pages/HelmAcademy.jsx'))
+const Accesos = perezoso(() => import('./pages/Accesos.jsx'))
 const SocioIA = perezoso(() => import('./pages/inicio/socio/SocioIA.jsx'))
 const Gracias = perezoso(() => import('./pages/inicio/socio/Gracias.jsx'))
 const Legal = perezoso(() => import('./pages/inicio/socio/Legal.jsx'))
@@ -153,6 +156,15 @@ createRoot(document.getElementById('root')).render(
               El token del enlace es lo que autentica; va ANTES de /:slug/* como
               todas las publicas. */}
           <Route path="/d/:token" element={<PortalDocumentos />} />
+          {/* El alta en HELM que rellena el cliente nuevo desde el enlace que le
+              manda su agencia (Onboarding → Alta en HELM). El token del enlace
+              es lo que autentica. Solo en el dominio del panel, como /registro,
+              y ANTES de /:slug/*, que si no leería "alta" como slug de perfil. */}
+          <Route path="/alta/:token" element={<SoloEnElPanel><AltaHelm /></SoloEnElPanel>} />
+          {/* La misma alta sin enlace (helm.s4sf.net/alta): para el negocio que
+              aún no tiene perfil. Deja sus datos, responde, y le llega a la
+              agencia de ?a=<slug>, que le crea el perfil desde Perfiles → Altas. */}
+          <Route path="/alta" element={<SoloEnElPanel><AltaHelm publica /></SoloEnElPanel>} />
           {/* Formulario de valor de Silvestre IA. Los leads entran al CRM del
               perfil indicado en silvestreai/guardar.js. También va ANTES de
               /:slug/*, que si no leería "silvestreai" como slug de perfil. */}
@@ -172,6 +184,11 @@ createRoot(document.getElementById('root')).render(
               formulario. Públicas, así que ANTES de /:slug/*. */}
           <Route path="/clase" element={<Clase />} />
           <Route path="/empresas" element={<SocioIA />} />
+          {/* HELM Academy: el formulario de entrada al Skool (guarda en el CRM y
+              redirige al Skool). Y /accesos: la solicitud de acceso a AI para
+              todo (nombre y correo) que aprueba Alex. Públicas. */}
+          <Route path="/helm-academy" element={<Suspense fallback={null}><HelmAcademy /></Suspense>} />
+          <Route path="/accesos" element={<Suspense fallback={null}><Accesos /></Suspense>} />
           {/* AI para todo: la comunidad gratis de la bio, con sus rutas dentro. */}
           <Route path="/aiparatodo/*" element={<AIParaTodo />} />
           {/* Filmmaking para todo: la comunidad de Detrás de Cámara (Abel), con

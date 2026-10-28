@@ -44,6 +44,7 @@ import {
   verificarToken, registrarWebhook, borrarWebhook, infoWebhook, publicarComandos,
   accionEscribiendo, enviarMensaje, generarCodigo, igual, normalizarCodigo, nombreDelChat,
   getTelegramConfig, saveTelegramConfig, deleteTelegramConfig, configPublica, MINUTOS_VINCULO,
+  idBotAgencia,
 } from './_lib/telegram.js'
 
 function urlPublica() {
@@ -264,6 +265,11 @@ export default async function handler(req, res) {
       bot = await verificarToken(token)
     } catch (err) {
       return res.status(400).json({ error: `Telegram rechazó el token: ${err.message}` })
+    }
+    // Un bot solo tiene un webhook: enlazar aquí el bot de HELM para agencias
+    // le quitaría el suyo (api/telegram-agencia.js) y se quedaría mudo.
+    if (String(bot.botId) === await idBotAgencia()) {
+      return res.status(400).json({ error: 'Ese es el bot de HELM para agencias y no se puede enlazar a un perfil. Crea uno propio en @BotFather.' })
     }
 
     // Si ya había config (re-enlazar con el mismo bot), se conservan los chats

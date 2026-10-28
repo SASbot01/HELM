@@ -52,9 +52,14 @@ export const DEFAULT_MATRIX = {
 // configuran los permisos, así que solo entra quien tiene nivel de acceso total.
 export const SECCIONES = [
   { key: 'informe', label: 'Informe', desc: 'Resumen y KPIs del negocio' },
+  // El avatar de ventas ya no tiene entrada en el menú: es una pestaña del
+  // Informe. Pero sigue teniendo su clave aquí, porque no lo ve cualquiera que
+  // entre al Informe: cada estudio gasta créditos y retrata a los clientes del
+  // negocio. Ningún rol lo trae de serie; quien manda en todo lo ve mientras el
+  // negocio no lo apague en Secciones.
+  { key: 'avatar', label: 'Avatar de ventas', desc: 'La pestaña del Informe con el cliente tipo, sacado del CRM' },
   { key: 'onboarding', label: 'Onboarding', desc: 'Formularios y Biblia' },
   { key: 'crm', label: 'CRM', desc: 'Contactos y pipeline' },
-  { key: 'avatar', label: 'Avatar', desc: 'Estudio del cliente tipo a partir del CRM' },
   { key: 'radar', label: 'Radar', desc: 'Tecnología e ideas nuevas para investigar (privado)' },
   { key: 'servicios', label: 'Servicios', desc: 'Catálogo de servicios' },
   { key: 'documentos', label: 'Documentos', desc: 'Presupuestos y facturas' },
@@ -64,7 +69,7 @@ export const SECCIONES = [
   { key: 'diario', label: 'Diario', desc: 'Reportes diarios' },
   { key: 'finanzas', label: 'Finanzas', desc: 'Ingresos, gastos y comisiones' },
   { key: 'dia', label: 'Mi día', desc: 'Rituales diarios con la IA' },
-  { key: 'noticias', label: 'Noticias', desc: 'Las tres noticias del día de IA y ciberseguridad, cada mañana a las 6:00' },
+  { key: 'noticias', label: 'Noticias', desc: 'Las tres noticias del día de los temas del perfil; también cuando quieras con «Buscar ahora»' },
   { key: 'contenido', label: 'Agentes', desc: 'Agentes de IA y creadores de referencia' },
   { key: 'roadmap', label: 'Roadmap', desc: 'Plan del negocio a seis meses, mes a mes y semana a semana' },
   { key: 'ads', label: 'Ads', desc: 'Anuncios y su test de 5 días por conversiones' },
@@ -88,8 +93,9 @@ export const DEFAULT_VISIBLE = {
   closer: ['crm', 'diario', 'tareas'],
   setter: ['crm', 'diario', 'tareas'],
   csm: ['crm', 'diario', 'tareas', 'formularios', 'biblioteca'],
-  // El editor ve la estrategia que ejecuta: sin ella graba a ciegas.
-  editor: ['contenido', 'tareas', 'biblioteca', 'equipos-ia'],
+  // El editor ve la estrategia que ejecuta: sin ella graba a ciegas. Y el
+  // Informe de contenido, que es cómo le ha ido a lo que ha editado.
+  editor: ['contenido', 'tareas', 'biblioteca', 'equipos-ia', 'metricas'],
   otro: ['tareas'],
 }
 
@@ -210,8 +216,11 @@ export const SECCIONES_FIJAS = ['ajustes', 'secciones']
 //   · de SECTOR — una asesoría quiere el control de plazos fiscales; un
 //     infoproducto vería una sección con modelos del 303 que no abrirá jamás.
 //     Las noticias de IA y ciberseguridad son de quien hace contenido de eso,
-//     y encenderlas pone además a trabajar a su agente cada mañana.
-//     El informe de contenido solo dice algo con Instagram conectado.
+//     y encenderlas pone además a trabajar a su agente cada mañana, salvo en
+//     los perfiles que van a demanda (brevesADemanda en
+//     api/_lib/noticias-perfiles.js), que solo buscan al pulsar «Buscar ahora».
+//     (El informe de contenido estuvo aquí hasta que lo quisimos en todos los
+//     perfiles: sin Instagram conectado enseña qué trae y cómo pedirlo.)
 //   · MÓDULOS — lo que antes era el catálogo de "Plugins". Se fusionó aquí
 //     porque tener dos pantallas para lo mismo (qué usa este negocio) confundía,
 //     y porque los plugins se guardaban en el localStorage del navegador: quien
@@ -219,7 +228,7 @@ export const SECCIONES_FIJAS = ['ajustes', 'secciones']
 //     aparecían. Ahora van en la base, como el resto.
 //
 // Las normales se apagan si molestan; estas se encienden si hacen falta.
-export const SECCIONES_SECTOR = ['fiscal', 'noticias', 'metricas']
+export const SECCIONES_SECTOR = ['fiscal', 'noticias']
 export const SECCIONES_MODULO = ['tareas', 'actividad', 'biblioteca', 'formularios', 'prospeccion', 'equipos-ia']
 const OPT_IN = new Set([...SECCIONES_SECTOR, ...SECCIONES_MODULO])
 

@@ -14,6 +14,7 @@ import { applyCors, rateLimit, getClientIp, writeAudit } from './_lib/auth.js'
 import { requireProfileAccess } from './_lib/access.js'
 import { stripeFor, getStripeConfig, saveStripeConfig, maskKey } from './_lib/stripe.js'
 import { importStripeWindow, analyzeStripeWindow } from './_lib/stripe-import.js'
+import { configAutomatico, ponerStripeAlDia, enSerie } from './_lib/stripe-automatico.js'
 
 /**
  * ¿La SUPABASE_SERVICE_KEY del servidor es realmente de servicio?
@@ -171,6 +172,40 @@ export default async function handler(req, res) {
     if (!apiKey) return res.status(400).json({ error: 'Esta cuenta no tiene Stripe enlazado' })
 
     const days = Math.min(Math.max(Number(req.body?.days) || 60, 1), 365)
+
+    // Perfil llevado por la tarea diaria: se pone al día con ella (sus enlaces
+    // de pago, una venta por cliente) en vez de importar cada cobro suelto.
+    // El resumen tiene la forma de siempre para que Ajustes lo pinte igual.
+    // Si la base falla al mirarlo, error: tomarlo por «no» importaría 60 días de
+    // todo el Stripe (compartido) como ventas sueltas.
+    let auto
+    try {
+      auto = await configAutomatico(supabase, clientId)
+    } catch {
+      return res.status(503).json({ error: 'No se pudo leer la configuración de la tarea diaria. Prueba otra vez en un momento.' })
+    }
+    if (auto) {
+      let r
+      try {
+        // En la misma fila que las del webhook: nunca dos a la vez.
+        r = await enSerie(clientId, () => ponerStripeAlDia({ supabase, clientId, config: auto, apiKeyEnlazada: apiKey }))
+      } catch (err) {
+        // Nunca el 401/403 de Stripe tal cual: el panel lo tomaría por la
+        // sesión del usuario caducada y le echaría.
+        const clave = err.statusCode === 401 || err.statusCode === 403
+        return res.status(502).json({ error: clave ? 'Stripe rechazó la clave de la tarea diaria (HELM_STRIPE_SECRET_KEY o la enlazada)' : `Stripe: ${err.message}` })
+      }
+      const resumen = {
+        days, automatico: true,
+        ventas: { nuevas: r.ventas.nuevas, yaEstaban: r.ventas.yaEstaban + r.ventas.actualizadas + r.ventas.vinculadas },
+        finanzas: { apuntes: r.finanzas },
+        leads: { nuevos: 0, yaEstaban: 0 },
+        productos: { nuevos: 0, actualizados: 0 },
+        ingresos: r.cobrado, moneda: 'EUR', cambios: r.ops, errores: r.errores,
+      }
+      await writeAudit({ clientId, action: 'stripe.sync', req, metadata: { automatico: true, ventas: r.ventas, finanzas: r.finanzas, ops: r.ops } })
+      return res.status(200).json({ ...resumen, analysis: null })
+    }
 
     let summary
     try {

@@ -1,7 +1,8 @@
 // HELM — capa de datos. Lee/escribe directo a Supabase (RLS "allow all" + anon key).
 import { supabase } from '../utils/supabase'
 import { esDeEsteProducto, productoActual } from './producto'
-import { DEFAULT_STAGES, DEFAULT_SUBSTAGES } from './crm/pipeline'
+import { SLUG_RE, slugify, RUTAS_DE_LA_WEB, filaPerfilNuevo, pipelineInicial } from './perfilNuevo'
+import { tipoDeArchivo, NO_ADMITIDO } from '../../api/_lib/almacen.js'
 
 export { supabase }
 
@@ -10,7 +11,14 @@ export const money = (n) =>
 
 export const fmtDate = (d) => {
   if (!d) return '—'
-  try { return new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) } catch { return d }
+  try {
+    // Una fecha sola (AAAA-MM-DD) se lee como medianoche UTC: en una zona con
+    // desfase negativo (Latinoamérica) saldría el día anterior.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      return new Date(`${d}T12:00:00Z`).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' })
+    }
+    return new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
+  } catch { return d }
 }
 
 export const todayISO = () => new Date().toISOString().slice(0, 10)
@@ -33,18 +41,10 @@ export async function listClients() {
 
 // ── Perfiles (clientes) ────────────────────────────────────────────────────
 
-const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])?$/
-
-
-export function slugify(text) {
-  return String(text || '')
-    .toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
-    .replace(/-+$/g, '')
-}
+// La URL, la fila y el pipeline de un perfil nuevo salen de perfilNuevo.js,
+// lo mismo que cuando lo crea el servidor (api/perfiles.js, al convertir un
+// alta pública).
+export { slugify }
 
 // Crea un perfil de negocio (fila en clients) + su pipeline por defecto y,
 // opcionalmente, un usuario de acceso (team admin). Todo scoped a Supabase
@@ -54,16 +54,15 @@ export async function createProfile({ name, slug, client_type = 'growth', primar
   if (!cleanName) throw new Error('El nombre del perfil es obligatorio')
   const cleanSlug = slugify(slug || cleanName)
   if (!SLUG_RE.test(cleanSlug)) throw new Error('URL inválida: usa a-z, 0-9 y guiones (3-40)')
+  if (RUTAS_DE_LA_WEB.has(cleanSlug)) throw new Error(`La URL "${cleanSlug}" es de la propia web: elige otra.`)
 
   // Unicidad de slug.
   const { data: dup } = await supabase.from('clients').select('id').eq('slug', cleanSlug).maybeSingle()
   if (dup) throw new Error(`Ya existe un perfil con la URL "${cleanSlug}"`)
 
   // 1) Cliente
-  const row = { slug: cleanSlug, name: cleanName, client_type, active: true, is_demo: false }
-  if (primary_color) row.primary_color = primary_color
   const { data: client, error } = await supabase
-    .from('clients').insert(row)
+    .from('clients').insert(filaPerfilNuevo({ slug: cleanSlug, name: cleanName, clientType: client_type, primaryColor: primary_color }))
     .select('id, slug, name, client_type, primary_color').single()
   if (error) {
     console.warn('[helm] createProfile', error.message)
@@ -78,10 +77,7 @@ export async function createProfile({ name, slug, client_type = 'growth', primar
     // Las mismas etapas que usa el CRM, no una copia aparte: cuando eran dos
     // listas distintas, los perfiles nuevos nacían con claves en inglés y sin
     // la etapa de seguimiento.
-    await supabase.from('crm_pipelines').insert({
-      client_id: client.id, name: 'Pipeline', is_default: true,
-      stages: DEFAULT_STAGES, substages: DEFAULT_SUBSTAGES,
-    })
+    await supabase.from('crm_pipelines').insert(pipelineInicial(client.id))
   } catch (e) { console.warn('[helm] createProfile pipeline', e?.message) }
 
   // 3) Usuario de acceso opcional (login del cliente)
@@ -195,6 +191,10 @@ export async function uploadFile(clientId, folder, file) {
     throw new Error(`El archivo pesa más de ${MAX_UPLOAD_MB} MB`)
   }
   const path = `${clientId}/${folder}/${safeName(file.name)}`
+  // La misma lista que mira la pasarela (api/_lib/almacen.js), y sobre el
+  // mismo nombre que verá ella: lo que no va a entrar se avisa aquí, antes de
+  // mandar sus megas para nada.
+  if (!tipoDeArchivo(path)) throw new Error(NO_ADMITIDO)
   const { error } = await supabase.storage.from('helm').upload(path, file, {
     cacheControl: '3600', upsert: false, contentType: file.type || undefined,
   })
@@ -249,8 +249,11 @@ export const brandOf = (client) => ({
 // Sube el logo al bucket público. Se usa desde Ajustes (con perfil ya creado)
 // y desde el registro público, donde todavía no hay id: en ese caso cuelga de
 // `registro/` y se queda ahí, que es una carpeta y no un problema.
+//
+// SVG no: es XML, puede llevar script y el bucket se sirve desde nuestro
+// dominio. La pasarela (api/_lib/almacen.js) tampoco lo deja subir.
 export async function uploadLogo(file, clientId) {
-  if (!/^image\//.test(file.type || '')) throw new Error('El logo tiene que ser una imagen (PNG, JPG o SVG)')
+  if (!/^image\/(png|jpeg|webp)$/.test(file.type || '')) throw new Error('El logo tiene que ser PNG, JPG o WebP (SVG no)')
   if (file.size > MAX_LOGO_MB * 1024 * 1024) throw new Error(`El logo pesa más de ${MAX_LOGO_MB} MB`)
   const { url } = await uploadFile(clientId || 'registro', 'marca', file)
   return url
@@ -419,8 +422,8 @@ export const adsApi = {
   borrar: (clientId, id) => apiFetch(`/api/ads?action=borrar&clientId=${clientId}&id=${id}`, { method: 'DELETE' }),
 }
 
-// Contenido: marcar un guion como grabado (dispara la detección del vídeo en
-// Drive y lo archiva en su pieza) y leer en qué fase de Drive está cada guion.
+// Contenido: marcar un guion como grabado (solo lo marca: el vídeo ya no se
+// busca solo en Drive) y leer en qué fase de Drive está cada guion (Roadmap).
 export const contenidoApi = {
   grabar: (clientId, guionId, grabado = true) =>
     apiFetch(`/api/agentes-perfil?action=grabar&clientId=${clientId}`, { method: 'POST', body: { guionId, grabado } }),
@@ -529,23 +532,80 @@ export async function getOnboarding(clientId, form = 'contenido') {
   return data || null
 }
 
-// Guarda (o crea) el borrador. Upsert por (client_id, form).
-export async function saveOnboardingDraft(clientId, answers, form = 'contenido') {
-  const { data, error } = await supabase.from('helm_onboarding').upsert({
-    client_id: clientId, form, answers, status: 'draft', updated_at: new Date().toISOString(),
-  }, { onConflict: 'client_id,form' }).select().single()
+// Guarda (o crea) el borrador. Upsert por (client_id, form). Con
+// conservarEstado no toca el estado: una fila nueva nace en 'draft' (lo pone la
+// tabla) y una completada sigue completada. Lo usa el alta, que el cliente
+// también guarda desde su enlace sin tocar el estado (api/onboarding.js,
+// action=alta): retocarla aquí no puede devolverla a borrador.
+export async function saveOnboardingDraft(clientId, answers, form = 'contenido', { conservarEstado = false } = {}) {
+  const fila = { client_id: clientId, form, answers, updated_at: new Date().toISOString() }
+  if (!conservarEstado) fila.status = 'draft'
+  const { data, error } = await supabase.from('helm_onboarding')
+    .upsert(fila, { onConflict: 'client_id,form' }).select().single()
   if (error) { console.warn('[helm] saveOnboardingDraft', error.message); throw error }
   return data
 }
 
 // Generación y gestión de la Biblia (pasa por el servidor: el modelo local solo
 // escucha en el backend). El onboarding se marca completado al generar.
+// enlaceAlta firma el enlace público del alta (/alta/<token>, 30 días) para
+// mandárselo al cliente: { url, caduca }. La página del enlace no pasa por
+// aquí, que no tiene sesión (ver src/pages/AltaHelm.jsx).
 export const onboardingApi = {
   biblia: (clientId) => apiFetch(`/api/onboarding?action=biblia&clientId=${clientId}`),
-  generate: (clientId, kind, dossier) =>
-    apiFetch('/api/onboarding?action=generate', { method: 'POST', body: { clientId, kind, dossier } }),
+  // `form`: de qué formulario sale el dossier. Solo el de contenido (o sin
+  // decir, como antes) lo da por completado el servidor.
+  generate: (clientId, kind, dossier, { form } = {}) =>
+    apiFetch('/api/onboarding?action=generate', { method: 'POST', body: { clientId, kind, dossier, ...(form ? { form } : {}) } }),
   saveBiblia: (clientId, kind, content) =>
     apiFetch('/api/onboarding?action=save', { method: 'POST', body: { clientId, kind, content } }),
+  enlaceAlta: (clientId) => apiFetch('/api/onboarding?action=enlace', { method: 'POST', body: { clientId } }),
+}
+
+// ── Altas recibidas: el alta pública sin perfil (helm.s4sf.net/alta) ───────
+// Un negocio que aún no tiene perfil rellena las 40 preguntas en /alta (sin
+// sesión: src/pages/AltaHelm.jsx). Le llegan a la agencia de ?a=<slug> —sin
+// él, a la de la casa—, que las ve en el tablero de Perfiles y desde ahí le
+// crea el perfil con las respuestas ya dentro (api/onboarding.js).
+//   lista()           → { altas: [{ id, agencia: { id, nombre, slug }, nombre, email,
+//                         telefono, negocio, estado, enviado_at, created_at, client_id, answers }] }
+//   convertir(altaId) → { clientId, slug }: crea el perfil (si ya lo tenía, el mismo)
+//   descartar(altaId) → deja de salir en la bandeja
+export const altasApi = {
+  lista: () => apiFetch('/api/onboarding?action=altas'),
+  convertir: (altaId) => apiFetch('/api/onboarding?action=alta-convertir', { method: 'POST', body: { altaId } }),
+  descartar: (altaId) => apiFetch('/api/onboarding?action=alta-descartar', { method: 'POST', body: { altaId } }),
+}
+
+// Accesos con aprobación (AI para todo): las solicitudes pendientes y su visto
+// bueno. Solo superadmin (api/accesos.js lo exige). Al aprobar, la persona entra
+// en la web con su mismo correo; si hay correo saliente, además se le avisa.
+// La parte de las ventas de otros perfiles que se lleva este (api/participaciones.js).
+export const participacionesApi = {
+  de: (clientId) => apiFetch(`/api/participaciones?clientId=${encodeURIComponent(clientId)}`),
+}
+
+export const accesosApi = {
+  pendientes: (comunidad = 'aiparatodo') => apiFetch(`/api/accesos?action=pendientes&comunidad=${comunidad}`),
+  aprobar: (id, comunidad = 'aiparatodo') => apiFetch(`/api/accesos?action=aprobar&comunidad=${comunidad}`, { method: 'POST', body: { id } }),
+  rechazar: (id, comunidad = 'aiparatodo') => apiFetch(`/api/accesos?action=rechazar&comunidad=${comunidad}`, { method: 'POST', body: { id } }),
+}
+
+// El enlace público del alta de una agencia. Siempre con su slug: sin él, lo
+// que se rellene le llega a la agencia de la casa, no a la que lo mandó.
+const ALTA_PUBLICA = 'https://helm.s4sf.net/alta'
+export const enlaceAltaPublica = (agenciaSlug) =>
+  agenciaSlug ? `${ALTA_PUBLICA}?a=${encodeURIComponent(agenciaSlug)}` : ALTA_PUBLICA
+
+// El de la agencia a la que pertenece un perfil (para Onboarding). La
+// plataforma puede estar mirando un perfil de otra agencia: por eso se pregunta
+// por la del perfil y no por la de quien mira. null si no se sabe: un enlace
+// sin slug mandaría el alta a otra agencia.
+export async function enlaceAltaPublicaDelPerfil(clientId) {
+  const { data, error } = await supabase.from('clients').select('agencia_id').eq('id', clientId).maybeSingle()
+  if (error) throw error
+  const r = await creditosApi.saldo(data?.agencia_id || undefined)
+  return r?.agencia?.slug ? enlaceAltaPublica(r.agencia.slug) : null
 }
 
 // Sección Agentes: los creadores de referencia de este perfil (api/agentes-perfil.js).
@@ -554,7 +614,18 @@ export const creadoresApi = {
   lista: (clientId) => apiFetch(`/api/agentes-perfil?action=creadores&clientId=${clientId}`),
   ficha: (clientId, slug) =>
     apiFetch(`/api/agentes-perfil?action=ficha&clientId=${clientId}&slug=${encodeURIComponent(slug)}`),
-  drive: (clientId) => apiFetch(`/api/agentes-perfil?action=drive&clientId=${clientId}`),
+}
+
+// La oficina de un agente: su estado vivo y el chat con él.
+export const oficinaApi = {
+  estado: (clientId, agente) =>
+    apiFetch(`/api/agente-oficina?action=estado&clientId=${clientId}&agente=${encodeURIComponent(agente)}`),
+  historial: (clientId, agente) =>
+    apiFetch(`/api/agente-oficina?action=historial&clientId=${clientId}&agente=${encodeURIComponent(agente)}`),
+  hablar: (clientId, agente, texto, recordar = false) =>
+    apiFetch('/api/agente-oficina?action=hablar', { method: 'POST', body: { clientId, agente, texto, recordar } }),
+  instruir: (clientId, agente, texto) =>
+    apiFetch('/api/agente-oficina?action=instruir', { method: 'POST', body: { clientId, agente, texto } }),
 }
 
 // Equipos IA — equipo de Contenido: Agente Persona (base) + Agente 1 (ideas diarias).
@@ -605,9 +676,27 @@ export const creditosApi = {
   bienvenida: () => apiFetch('/api/creditos?action=bienvenida', { method: 'POST', body: {} }),
   agencias: () => apiFetch('/api/creditos?action=agencias'),
   ajuste: (agenciaId, euros, nota) => apiFetch('/api/creditos?action=ajuste', { method: 'POST', body: { agenciaId, euros, nota } }),
+  // Lo que cuesta cada trabajo a precio fijo y si este perfil paga:
+  // { paga, saldo (€ o null), precios: PRECIOS_FIJOS (€) }. La cuenta del
+  // Editor por duración, con precioEditor de ./precios.js.
+  precios: (clientId) => apiFetch(`/api/creditos?action=precios&clientId=${encodeURIComponent(clientId)}`),
   // El enlace del conector de Claude de la agencia entera (sin perfil).
   enlaceMcp: () => apiFetch('/api/agents?action=mcp-enlace'),
   nuevoEnlaceMcp: () => apiFetch('/api/agents?action=mcp-enlace', { method: 'POST', body: {} }),
+}
+
+// ── El bot de Telegram de la agencia (api/telegram-agencia.js) ─────────────
+// Un solo bot para la agencia y todos sus perfiles. Cada superadmin vincula su
+// propio Telegram con un código de un solo uso; la plataforma registra el
+// webhook. El token del bot no llega nunca al navegador. `vinculo` es el estado
+// ligero (si estás vinculado y si tu agencia tiene el bot, sin preguntar a
+// Telegram): para el botón del tablero y para esperar al código.
+export const telegramAgenciaApi = {
+  estado: () => apiFetch('/api/telegram-agencia?action=estado'),
+  vinculo: () => apiFetch('/api/telegram-agencia?action=estado&solo=vinculo'),
+  codigo: () => apiFetch('/api/telegram-agencia?action=codigo', { method: 'POST', body: {} }),
+  desvincular: () => apiFetch('/api/telegram-agencia?action=vinculo', { method: 'DELETE' }),
+  registrar: () => apiFetch('/api/telegram-agencia?action=registrar', { method: 'POST', body: {} }),
 }
 
 // ── Plataforma: las agencias de HELM (solo superadmins de plataforma) ──────
@@ -638,4 +727,159 @@ export const avatarApi = {
 export const radarApi = {
   lista: (clientId) => apiFetch(`/api/radar?action=lista&clientId=${clientId}`),
   ahora: (clientId) => apiFetch(`/api/radar?action=ahora&clientId=${clientId}`, { method: 'POST' }),
+}
+
+// Portadas de reels (api/portadas.js). El vídeo y la portada llegan como
+// archivo, no como JSON: van por apiBlob, con la misma sesión que apiFetch.
+async function apiBlob(path) {
+  const token = localStorage.getItem('bw_admin_jwt')
+  const r = await fetch(path, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  if (!r.ok) {
+    const d = await r.json().catch(() => ({}))
+    throw new Error(d?.error || `Error ${r.status}`)
+  }
+  return r.blob()
+}
+
+export const portadasApi = {
+  marca: (clientId) => apiFetch(`/api/portadas?action=marca&clientId=${clientId}`),
+  guardarMarca: (clientId, marca) =>
+    apiFetch('/api/portadas?action=marca', { method: 'POST', body: { clientId, marca } }),
+  textos: (clientId, mediaId) =>
+    apiFetch('/api/portadas?action=textos', { method: 'POST', body: { clientId, mediaId } }),
+  video: (clientId, mediaId) => apiBlob(`/api/portadas?action=video&clientId=${clientId}&mediaId=${encodeURIComponent(mediaId)}`),
+  imagen: (clientId, mediaId) => apiBlob(`/api/portadas?action=imagen&clientId=${clientId}&mediaId=${encodeURIComponent(mediaId)}`),
+  capacidad: (clientId) => apiFetch(`/api/portadas?action=capacidad&clientId=${clientId}`),
+  fondoPrompt: (clientId, mediaId, tema) =>
+    apiFetch('/api/portadas?action=fondo-prompt', { method: 'POST', body: { clientId, mediaId, tema } }),
+  fondoIa: (clientId, prompt) =>
+    apiFetch('/api/portadas?action=fondo-ia', { method: 'POST', body: { clientId, prompt } }),
+  // Portada entera con IA en un estilo (estilos de src/agents/portadas/estilosIa.js
+  // o «ej:<id>» para un ejemplo subido). `fotograma`: data URL de la imagen real.
+  // fondoIa y portadaIa cuestan PRECIOS_FIJOS['portada-ia'] por imagen (402 si
+  // no llega) y devuelven { imagen, ia, cobrado (€), saldo (€ o null) }.
+  portadaIa: (clientId, { fotograma, titulo, estilo, detalle, mediaId }) =>
+    apiFetch('/api/portadas?action=portada-ia', { method: 'POST', body: { clientId, fotograma, titulo, estilo, detalle, mediaId } }),
+  ejemplos: (clientId) => apiFetch(`/api/portadas?action=ejemplos&clientId=${clientId}`),
+  subirEjemplo: (clientId, nombre, imagen) =>
+    apiFetch('/api/portadas?action=ejemplo', { method: 'POST', body: { clientId, nombre, imagen } }),
+  borrarEjemplo: (clientId, id) =>
+    apiFetch('/api/portadas?action=ejemplo-borrar', { method: 'POST', body: { clientId, id } }),
+}
+
+// Trial reels (api/trial-reels.js): variantes editadas de un reel propio para
+// probarlas como «Reel de prueba». El MP4 llega como archivo, por apiBlob.
+// El vídeo de partida es un reel (mediaId) o uno subido ({ fuenteId }): la
+// subida empieza con fuente() y los trozos van a urlTrozo() con subePorTrozos
+// (./subida.js); recibidos() dice cuánto tiene ya el servidor, para seguir una
+// subida cortada con el mismo fuenteId. lista → { trabajos, fuentes }.
+export const trialReelsApi = {
+  lista: (clientId) => apiFetch(`/api/trial-reels?action=lista&clientId=${clientId}`),
+  // Sin reel (un vídeo subido), `texto` cuenta de qué va el vídeo.
+  ganchos: (clientId, mediaId, texto) =>
+    apiFetch('/api/trial-reels?action=ganchos', { method: 'POST', body: { clientId, ...(mediaId ? { mediaId } : { texto }) } }),
+  crear: (clientId, origen, variantes) =>
+    apiFetch('/api/trial-reels?action=crear', {
+      method: 'POST',
+      body: { clientId, ...(origen && typeof origen === 'object' ? { fuenteId: origen.fuenteId } : { mediaId: origen }), variantes },
+    }),
+  fuente: (clientId, { nombre, bytes, tipo, duracion }) =>
+    apiFetch('/api/trial-reels?action=fuente', { method: 'POST', body: { clientId, nombre, bytes, tipo, duracion } }),
+  urlTrozo: (clientId, id) => `/api/trial-reels?action=trozo&clientId=${encodeURIComponent(clientId)}&id=${encodeURIComponent(id)}`,
+  recibidos: (clientId, id) => apiFetch(`/api/trial-reels?action=trozo&clientId=${encodeURIComponent(clientId)}&id=${encodeURIComponent(id)}`),
+  videoFuente: (clientId, id) => apiBlob(`/api/trial-reels?action=fuente-video&clientId=${clientId}&id=${encodeURIComponent(id)}`),
+  borrarFuente: (clientId, id) => apiFetch('/api/trial-reels?action=borrar-fuente', { method: 'POST', body: { clientId, id } }),
+  estado: (clientId, id) => apiFetch(`/api/trial-reels?action=estado&clientId=${clientId}&id=${encodeURIComponent(id)}`),
+  descarga: (clientId, id) => apiBlob(`/api/trial-reels?action=descarga&clientId=${clientId}&id=${encodeURIComponent(id)}`),
+  borrar: (clientId, id) => apiFetch('/api/trial-reels?action=borrar', { method: 'POST', body: { clientId, id } }),
+}
+
+// Editor de reels (api/editor.js): subes el vídeo en bruto (y, si quieres,
+// recursos: imágenes y clips de apoyo, el logo y la música) y HELM lo devuelve
+// editado, cobrando su precio fijo al terminar bien (src/helm/precios.js).
+// El vídeo va por trozos y cada recurso en una sola petición, los dos en crudo
+// (el archivo es el cuerpo, no JSON) con subePorTrozos / mandaTrozo de
+// ./subida.js; aquí van las urls y lo que es JSON. El flujo:
+//   const { edicion } = await editorApi.crear(clientId, { nombre, bytes, tipo, duracion, estilo_ref, params })
+//   await subePorTrozos({ url: editorApi.urlTrozo(clientId, edicion.id), archivo, alProgreso, senal })
+//   const { recurso } = await mandaTrozo({ url: editorApi.urlRecurso(clientId, edicion.id, 'broll', archivo.name), cuerpo: archivo })
+//   await editorApi.lanzar(clientId, edicion.id, [{ id: recurso.id, palabra: 'factura' }])
+// Sin saldo, crear y lanzar contestan 402 con el mensaje para enseñar (y se
+// abre la recarga). `recibidos` dice cuánto tiene ya el servidor, para seguir
+// una subida cortada.
+//
+// Lo JSON del editor va por pideEditor, que es apiFetch con una cosa más: el
+// error lleva `status` y `datos` (el JSON de la respuesta). El taller tiene
+// que saber QUÉ ha fallado al lanzar: un 409 con `recibidos` es que al vídeo
+// le falta un trozo (se sigue subiendo); un 410 o un 422, que ya no tiene
+// arreglo (se empieza otra vez); y un 404 al borrar, que ya no estaba.
+async function pideEditor(path, { method = 'GET', body } = {}) {
+  const token = localStorage.getItem('bw_admin_jwt')
+  const r = await fetch(path, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  })
+  const data = await r.json().catch(() => ({}))
+  // La sesión caducada y el sin saldo, igual que en apiFetch.
+  if (r.status === 401) {
+    localStorage.removeItem('bw_admin_jwt')
+    localStorage.removeItem('bw_superadmin')
+    localStorage.removeItem('bw_client')
+    if (typeof window !== 'undefined') window.location.href = '/login'
+    throw Object.assign(new Error('Tu sesión ha caducado. Vuelve a iniciar sesión.'), { status: 401, datos: data })
+  }
+  if (r.status === 402 && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('helm:sin-saldo', { detail: data?.error || null }))
+  }
+  if (!r.ok) throw Object.assign(new Error(data?.error || `Error ${r.status}`), { status: r.status, datos: data })
+  return data
+}
+
+const enEditor = (clientId, id) => `clientId=${encodeURIComponent(clientId)}&id=${encodeURIComponent(id)}`
+export const editorApi = {
+  crear: (clientId, datos) => pideEditor('/api/editor?action=crear', { method: 'POST', body: { clientId, ...datos } }),
+  urlTrozo: (clientId, id) => `/api/editor?action=trozo&${enEditor(clientId, id)}`,
+  recibidos: (clientId, id) => pideEditor(`/api/editor?action=trozo&${enEditor(clientId, id)}`),
+  urlRecurso: (clientId, id, tipo, nombre) =>
+    `/api/editor?action=recurso&${enEditor(clientId, id)}&tipo=${encodeURIComponent(tipo)}&nombre=${encodeURIComponent(nombre || '')}`,
+  quitarRecurso: (clientId, id, recurso) =>
+    pideEditor('/api/editor?action=quitar-recurso', { method: 'POST', body: { clientId, id, recurso } }),
+  lanzar: (clientId, id, recursos = []) => pideEditor('/api/editor?action=lanzar', { method: 'POST', body: { clientId, id, recursos } }),
+  lista: (clientId) => pideEditor(`/api/editor?action=lista&clientId=${clientId}`),
+  estado: (clientId, id) => pideEditor(`/api/editor?action=estado&clientId=${clientId}&id=${encodeURIComponent(id)}`),
+  descarga: (clientId, id) => apiBlob(`/api/editor?action=descarga&clientId=${clientId}&id=${encodeURIComponent(id)}`),
+  estilos: (clientId) => pideEditor(`/api/editor?action=estilos&clientId=${clientId}`),
+  guardarEstilo: (clientId, params) => pideEditor('/api/editor?action=estilo', { method: 'POST', body: { clientId, params } }),
+  borrar: (clientId, id) => pideEditor('/api/editor?action=borrar', { method: 'POST', body: { clientId, id } }),
+}
+
+// Web Creator (api/web-creator.js): las webs de los clientes en fabricación.
+export const webCreatorApi = {
+  lista: (clientId) => apiFetch(`/api/web-creator?action=lista&clientId=${clientId}`),
+  ficha: (clientId, id) => apiFetch(`/api/web-creator?action=ficha&clientId=${clientId}&id=${encodeURIComponent(id)}`),
+  estudiar: (clientId, id) => apiFetch('/api/web-creator?action=estudiar', { method: 'POST', body: { clientId, id } }),
+  publicacion: (clientId, id, datos) =>
+    apiFetch('/api/web-creator?action=publicacion', { method: 'POST', body: { clientId, id, ...datos } }),
+}
+
+// El setter de Instagram (api/setter-ig.js).
+export const setterIgApi = {
+  estado: (clientId) => apiFetch(`/api/setter-ig?action=estado&clientId=${clientId}`),
+  guardar: (clientId, config) => apiFetch('/api/setter-ig?action=config', { method: 'POST', body: { clientId, config } }),
+  conectar: (clientId) => apiFetch(`/api/setter-ig?action=conectar&clientId=${clientId}`),
+  conversaciones: (clientId) => apiFetch(`/api/setter-ig?action=conversaciones&clientId=${clientId}`),
+  hilo: (clientId, id) => apiFetch(`/api/setter-ig?action=hilo&clientId=${clientId}&id=${encodeURIComponent(id)}`),
+  aprobar: (clientId, conversacionId, textos) =>
+    apiFetch('/api/setter-ig?action=aprobar', { method: 'POST', body: { clientId, conversacionId, textos } }),
+  descartar: (clientId, conversacionId) =>
+    apiFetch('/api/setter-ig?action=descartar', { method: 'POST', body: { clientId, conversacionId } }),
+  enviar: (clientId, conversacionId, texto) =>
+    apiFetch('/api/setter-ig?action=enviar', { method: 'POST', body: { clientId, conversacionId, texto } }),
+  control: (clientId, conversacionId, estado) =>
+    apiFetch('/api/setter-ig?action=control', { method: 'POST', body: { clientId, conversacionId, estado } }),
+  responder: (clientId, conversacionId) =>
+    apiFetch('/api/setter-ig?action=responder', { method: 'POST', body: { clientId, conversacionId } }),
+  probar: (clientId, mensajes, config) =>
+    apiFetch('/api/setter-ig?action=probar', { method: 'POST', body: { clientId, mensajes, config } }),
 }

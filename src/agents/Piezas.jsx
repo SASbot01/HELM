@@ -3,13 +3,15 @@
 // cambia quién puede editar, no cómo se lee.
 import { Link } from 'react-router-dom'
 import {
-  ScatterChart, PenLine, FolderSync, FileBarChart, UserSquare, Brain, Clapperboard, Workflow, ArrowRight, Scissors } from 'lucide-react'
+  ScatterChart, PenLine, FileBarChart, UserSquare, Brain, Clapperboard, Workflow, ArrowRight, Scissors, Image as ImagenIcono,
+  MessagesSquare, Shuffle, Hammer } from 'lucide-react'
 import { ESTADOS as ESTADOS_AGENTE } from './agentes'
 import { ROLES, rol, compacto } from './ganchos'
 
 const ICONOS = {
-  grafica: ScatterChart, pluma: PenLine, carpeta: FolderSync, informe: FileBarChart,
-  persona: UserSquare, memoria: Brain, contenido: Clapperboard, equipo: Workflow, editor: Scissors,
+  grafica: ScatterChart, pluma: PenLine, informe: FileBarChart,
+  persona: UserSquare, memoria: Brain, contenido: Clapperboard, equipo: Workflow, editor: Scissors, portadas: ImagenIcono,
+  setter: MessagesSquare, trial: Shuffle, web: Hammer,
 }
 
 // ── El menú de agentes: una casilla por agente ──────────────────────────────
@@ -23,11 +25,39 @@ export function MenuAgentes({ agentes, metricaDe = () => null, onAbrir }) {
   )
 }
 
+// ── Los departamentos: una carpeta por oficina, con sus agentes dentro ──────
+export function MenuDepartamentos({ departamentos, onAbrir }) {
+  return (
+    <div className="ag-rejilla ag-deps">
+      {departamentos.map(d => {
+        const Icono = ICONOS[d.icono] || ScatterChart
+        return (
+          <button key={d.key} type="button" className="ag-casilla ag-dep" onClick={() => onAbrir(d.key)}>
+            <span className="ag-cas-ico"><Icono size={20} strokeWidth={1.8} aria-hidden="true" /></span>
+            <h3>{d.nombre}</h3>
+            <p>{d.resumen}</p>
+            <ul className="ag-dep-agentes">
+              {d.agentes.map(a => {
+                const I = ICONOS[a.icono] || ScatterChart
+                return <li key={a.key}><I size={13} strokeWidth={1.9} aria-hidden="true" /> {a.nombre}</li>
+              })}
+            </ul>
+            <footer>
+              <span className="ag-cas-num"><b>{d.agentes.length}</b> {d.agentes.length === 1 ? 'agente' : 'agentes'}</span>
+              <ArrowRight size={15} strokeWidth={2} className="ag-cas-flecha" aria-hidden="true" />
+            </footer>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function Casilla({ a, metrica, onAbrir }) {
   const Icono = ICONOS[a.icono] || ScatterChart
   const est = ESTADOS_AGENTE[a.estado] || ESTADOS_AGENTE.construido
   // `abrible` deja abrir una casilla aún «en construcción» para ver su proceso,
-  // sin enseñarla como activa: lo usa el editor de reels (el render aún no está).
+  // sin enseñarla como activa (hoy no la lleva ninguno).
   const entrable = a.estado === 'activo' || a.abrible
 
   // Todas las casillas tienen la misma anatomía y en el mismo orden: icono,

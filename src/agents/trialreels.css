@@ -1,0 +1,120 @@
+/* HELM — Trial reels (vista del agente). Tokens del Agent OS; neutro (rgba)
+   donde hace falta para claro y oscuro. En móvil, una columna. Mismo patrón
+   que portadas.css, con prefijo tr-. */
+.tr-root { --tr-borde: rgba(128,128,128,.22); }
+.tr-ayuda { color: var(--text-secondary); font-size: 13px; line-height: 1.5; margin: 6px 0; display: block; }
+.tr-mal { color: var(--danger, #ef4444); font-size: 12.5px; line-height: 1.45; display: block; }
+.tr-ok { color: var(--success, #22c55e); font-size: 13px; line-height: 1.45; margin: 0; }
+.tr-gira { animation: tr-gira 1s linear infinite; vertical-align: -2px; }
+@keyframes tr-gira { to { transform: rotate(360deg); } }
+.tr-titulo { margin: 18px 0 6px; font-size: 15px; font-weight: 700; }
+.tr-bloque { margin: 14px 0 4px; }
+.tr-bloque h3 { margin: 0 0 8px; font-size: 15px; font-weight: 700; }
+
+/* Cómo funciona */
+.tr-explica { border: 1px solid var(--tr-borde); border-radius: 12px; margin: 8px 0 4px; overflow: hidden; }
+.tr-explica-cab { width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 14px; min-height: 44px;
+  background: transparent; border: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.tr-explica-cab b { font-size: 14px; flex: 1; }
+.tr-explica-cab span { color: var(--orange); font-size: 13px; font-weight: 600; }
+.tr-explica-txt { padding: 0 14px 12px; border-top: 1px solid var(--tr-borde); }
+.tr-explica-txt p { margin: 10px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--text-secondary); }
+.tr-explica-txt b { color: var(--text); }
+
+/* Formularios */
+.tr-root label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--text-secondary); }
+.tr-root label.tr-check { flex-direction: row; align-items: center; gap: 8px; cursor: pointer; }
+.tr-root input:not([type]), .tr-root input[type="text"], .tr-root select {
+  font: inherit; font-size: 14px; color: var(--text); background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px); padding: 9px 10px; min-height: 40px; width: 100%; box-sizing: border-box; }
+.tr-root input[type="range"] { width: 100%; }
+
+/* La lista de reels */
+.tr-reels { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.tr-reel { border: 1px solid var(--tr-borde); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; background: var(--bg-card); }
+.tr-reel > .ag-btn { margin: 0 12px 12px; justify-content: center; min-height: 40px; }
+.tr-mini { aspect-ratio: 3 / 4; background: rgba(128,128,128,.12); display: grid; place-items: center; overflow: hidden; }
+.tr-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tr-mini span { color: var(--text-muted); font-size: 12px; padding: 10px; text-align: center; }
+.tr-reel-txt { padding: 10px 12px; flex: 1; }
+.tr-reel-txt small { color: var(--text-muted); font-size: 11.5px; }
+.tr-reel-txt p { margin: 4px 0 0; font-size: 13px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Las variantes creadas */
+.tr-trabajos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.tr-trabajo { display: flex; align-items: center; gap: 12px; border: 1px solid var(--tr-borde); border-radius: 10px; padding: 10px 12px; background: var(--bg-card); }
+.tr-estado { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--text-secondary); min-width: 92px; }
+.tr-trabajo.listo .tr-estado { color: var(--success, #22c55e); }
+.tr-trabajo.error .tr-estado { color: var(--danger, #ef4444); }
+.tr-trabajo.procesando .tr-estado { color: var(--orange); }
+.tr-trabajo-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tr-trabajo-txt b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-trabajo-txt small { color: var(--text-muted); font-size: 12px; }
+.tr-trabajo-acc { display: flex; gap: 6px; flex: 0 0 auto; }
+.tr-trabajo-acc .ag-btn { min-height: 36px; }
+
+/* El taller */
+.tr-taller { display: grid; grid-template-columns: minmax(240px, 360px) 1fr; gap: 22px; align-items: start; margin-top: 10px; }
+.tr-col-previa { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.tr-lienzo { width: 100%; height: auto; aspect-ratio: 9 / 16; border-radius: 14px; border: 1px solid var(--tr-borde); background: #0A0A0C; display: block; }
+/* El vídeo del que se sacan los fotogramas: cargado, pero fuera de la vista
+   (con display:none algunos navegadores no llegan a pintar el fotograma). */
+.tr-oculto { position: absolute; width: 2px; height: 2px; opacity: 0; pointer-events: none; }
+.tr-original summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); min-height: 32px; display: flex; align-items: center; }
+.tr-original video { width: 100%; max-height: 320px; border-radius: 10px; background: #000; object-fit: contain; margin-top: 6px; }
+.tr-crear { justify-content: center; min-height: 46px; }
+.tr-controles { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.tr-controles section { border: 1px solid var(--tr-borde); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.tr-controles h3 { margin: 0; font-size: 14px; font-weight: 700; }
+
+.tr-tarjetas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.tr-tarjeta { border: 1px solid var(--tr-borde); border-radius: 12px; display: flex; flex-direction: column; background: var(--bg-card); }
+.tr-tarjeta.on { border-color: var(--orange); box-shadow: 0 0 0 1px var(--orange) inset; }
+.tr-tarjeta.fuera { opacity: .55; }
+.tr-tarjeta-cab { font: inherit; color: inherit; background: transparent; border: 0; cursor: pointer; text-align: left;
+  padding: 10px 12px 6px; display: flex; flex-direction: column; gap: 6px; min-height: 44px; }
+.tr-tarjeta-cab b { font-size: 14px; }
+.tr-tarjeta-cab small { color: var(--text-secondary); font-size: 12px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.tr-tarjeta > .tr-check { padding: 0 12px 10px; font-size: 12px; }
+.tr-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.tr-chips span { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: rgba(128,128,128,.14); color: var(--text-secondary); white-space: nowrap; }
+
+.tr-pildoras { display: flex; flex-wrap: wrap; gap: 6px; }
+.tr-pildoras button {
+  font: inherit; font-size: 13px; color: inherit; background: transparent; border: 1px solid var(--border);
+  border-radius: 999px; padding: 8px 12px; min-height: 40px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.tr-pildoras button.on { border-color: var(--orange); color: var(--orange); background: rgba(245,158,11,.08); }
+
+.tr-opciones { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tr-opciones button { width: 100%; text-align: left; font: inherit; color: inherit; background: transparent; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.tr-opciones button.on { border-color: var(--orange); }
+.tr-opciones small { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.tr-opciones b { font-size: 15px; }
+.tr-opciones span { color: var(--text-secondary); font-size: 12.5px; line-height: 1.4; }
+
+/* Subir un vídeo propio: el botón (un label con el input escondido), la
+   línea de cómo va y su barra. */
+.tr-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 12px 0 4px; }
+.tr-acciones .tr-ayuda { flex: 1 1 260px; margin: 0; }
+.tr-root label.tr-subir { flex-direction: row; align-items: center; gap: 6px; color: inherit; font-size: 14px; cursor: pointer; position: relative; }
+.tr-subir input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.tr-subir:focus-within { outline: 2px solid var(--orange); outline-offset: 2px; }
+.tr-subida { display: flex; align-items: center; gap: 10px; border: 1px solid var(--tr-borde); border-radius: 10px; padding: 10px 12px; margin: 10px 0; background: var(--bg-card); }
+.tr-subida.error { border-color: var(--danger, #ef4444); }
+.tr-subida.lista { border-color: var(--success, #22c55e); }
+.tr-subida-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.tr-subida-txt b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-subida-txt small { color: var(--text-muted); font-size: 12px; }
+.tr-barra { display: block; height: 6px; border-radius: 999px; background: rgba(128,128,128,.18); overflow: hidden; }
+.tr-barra i { display: block; height: 100%; background: var(--orange); transition: width .3s ease; }
+.tr-precio { font-weight: 500; opacity: .85; }
+.tr-root textarea { font: inherit; font-size: 14px; color: var(--text); background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px); padding: 9px 10px; width: 100%; box-sizing: border-box; resize: vertical; }
+
+@media (max-width: 760px) {
+  .tr-taller { grid-template-columns: 1fr; }
+  .tr-col-previa { position: static; max-width: 340px; margin: 0 auto; width: 100%; }
+  .tr-tarjetas { grid-template-columns: 1fr; }
+  .tr-trabajo { flex-wrap: wrap; }
+}

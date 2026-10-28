@@ -18,14 +18,15 @@
 import { timingSafeEqual, createHash } from 'node:crypto'
 import { supabase } from '../lib/supabase.js'
 import { rateLimit, getClientIp } from '../_lib/auth.js'
-import { anotar } from '../_lib/contexto.js'
+import { anotar, contexto, enContexto } from '../_lib/contexto.js'
 import { agenciaDe } from '../_lib/access.js'
 import { anadeReels, hashUrl, esEnlace } from '../agents.js'
-import { calendario, ordenar, TIPOS, FASES } from '../_lib/ingesta.js'
+import { calendario, ordenar, enEntrada, carpetasDe, TIPOS, FASES } from '../_lib/ingesta.js'
 import { archivo as archivoDrive } from '../_lib/drive-helm.js'
 import { sincronizar as sincronizarIg } from '../instagram.js'
 import { informeIg } from '../_lib/instagram.js'
 import { validaArgs, explicaErrores, pagina, recorta, resumeArgs } from '../_lib/esquema.js'
+import { todasLasFilas } from '../_lib/filas.js'
 
 const VERSIONES = ['2025-06-18', '2025-03-26', '2024-11-05']
 
@@ -154,7 +155,7 @@ const TOOLS = [
   },
   {
     name: 'calendario',
-    description: `El calendario de guiones de un perfil de HELM: cada guion con su id, fecha, título, tipo (viralidad, conversión, autoridad, venta), el texto y en qué fase está (por grabar, sin editar, editado, publicado; la fase sale de la carpeta de Drive donde está la pieza). Incluye en "sin_ordenar" los vídeos que llegaron a "0 · Entrada" y no se supo de qué guion eran, para ordenarlos con "ordenar_video". Úsalo para "¿qué grabo esta semana?", "¿qué está listo para publicar?" o antes de programar guiones nuevos (para no repetir temas). Por defecto el texto de cada guion va recortado; con detalle="completo", entero. ${PAGINACION}`,
+    description: `El calendario de guiones de un perfil de HELM: cada guion con su id, fecha, título, tipo (viralidad, conversión, autoridad, venta), el texto y en qué fase está (por grabar, sin editar, editado, publicado; la fase sale de la carpeta de Drive donde está la pieza). Incluye en "sin_ordenar" los vídeos que hay ahora mismo en "0 · Entrada" de su Drive (con su id, nombre, cuándo llegó y, si se transcribió, lo que dice), para llevarlos a su carpeta con "ordenar_video"; si no se pudo mirar Drive, en su lugar viene "aviso_drive" con el motivo. Úsalo para "¿qué grabo esta semana?", "¿qué está listo para publicar?" o antes de programar guiones nuevos (para no repetir temas). Por defecto el texto de cada guion va recortado; con detalle="completo", entero. ${PAGINACION}`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -170,7 +171,7 @@ const TOOLS = [
   },
   {
     name: 'programar_guiones',
-    description: `Mete guiones en el calendario de un perfil (hasta 30 por llamada), o corrige uno pasando su id. Cada guion lleva su tipo, que decide su carpeta en Drive: cuando se grabe y se suba a "0 · Entrada", HELM lo reconocerá por lo que se dice y lo moverá solo a "1 · Sin editar / <tipo>". Escribe el guion completo, tal como se va a decir: es lo que permite reconocer el vídeo. Un guion con la misma fecha y el mismo título que uno que ya está en el calendario de ese perfil lo actualiza en vez de duplicarlo. ${ESCRITURA}`,
+    description: `Mete guiones en el calendario de un perfil (hasta 30 por llamada), o corrige uno pasando su id. Cada guion lleva su tipo, que decide su carpeta en Drive: cuando se grabe y se suba a "0 · Entrada", lo colocas en "1 · Sin editar / <tipo>" con "ordenar_video". Escribe el guion completo, tal como se va a decir. Un guion con la misma fecha y el mismo título que uno que ya está en el calendario de ese perfil lo actualiza en vez de duplicarlo. ${ESCRITURA}`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -198,17 +199,18 @@ const TOOLS = [
   },
   {
     name: 'ordenar_video',
-    description: `Coloca un vídeo que se quedó en "0 · Entrada" porque HELM no supo de qué guion era. Con guion_id va a la pieza de ese guion; sin guion, con el tipo, va a "1 · Sin editar / <tipo>" en una pieza nueva. Uno que ya está donde se pide no se vuelve a mover. ${ESCRITURA}`,
+    description: `Coloca en su carpeta un vídeo que está en "0 · Entrada" de Drive. Pasa el drive_id (el id del archivo, que sale en "calendario" → sin_ordenar): solo se puede ordenar un vídeo que esté en la Entrada de ESE perfil. Con guion_id va a la pieza de ese guion y lo marca grabado; si el nombre del archivo (o lo que dice) no deja claro de qué guion es, pregúntalo; no adivines. Sin guion, con el tipo, va a "1 · Sin editar / <tipo>", a la pieza "Sin guion · AAAA-MM-DD" de hoy (la misma para todos los que ordenes hoy; la crea si no existe). Uno que ya está en su "1 · Sin editar" no se vuelve a tocar. ${ESCRITURA}`,
     inputSchema: {
       type: 'object',
       properties: {
         perfil: PERFIL,
-        video_id: { type: 'string', description: 'El video_id que sale en "calendario" → sin_ordenar.' },
+        drive_id: { type: 'string', description: 'El id del archivo que está en "0 · Entrada" de su Drive, tal como sale en "calendario" → sin_ordenar ("video_id").' },
+        video_id: { type: 'string', description: 'Igual que drive_id, el nombre antiguo del campo; vale cualquiera de los dos.' },
         guion_id: { type: 'string', description: 'El id del guion (de "calendario") al que pertenece el vídeo.' },
         tipo: { type: 'string', enum: Object.keys(TIPOS), description: 'Solo si no es de ningún guion: a qué carpeta va.' },
         prueba: PRUEBA,
       },
-      required: ['perfil', 'video_id'],
+      required: ['perfil'],
     },
   },
   {
@@ -228,7 +230,7 @@ const TOOLS = [
   },
   {
     name: 'guardar_memoria',
-    description: `Guarda una nota en la memoria a largo plazo: una conclusión del análisis, una regla de estilo, algo que funciona o que no. Con identidad queda asociada a ella; sin identidad es global (solo con el enlace del operador). Lo guardado vuelve a salir en "corpus" (primera página). Una nota idéntica a una que ya está no se duplica. ${ESCRITURA}`,
+    description: `Guarda una nota en la memoria a largo plazo: una conclusión del análisis, una regla de estilo, algo que funciona o que no. Con identidad queda asociada a ella; sin identidad es global (solo con el enlace del operador). Con el enlace de un perfil o de una agencia, la nota solo la ven los enlaces de esa agencia. Lo guardado vuelve a salir en "corpus" (primera página). Una nota idéntica a una que ya está no se duplica. ${ESCRITURA}`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -243,34 +245,80 @@ const TOOLS = [
 ]
 
 // Las que escriben: aceptan prueba y quedan en el registro del perfil.
-const ESCRIBEN = ['anadir_reels', 'asignar_creadores', 'etiquetar_reels', 'programar_guiones', 'ordenar_video', 'guardar_memoria']
+export const ESCRIBEN = ['anadir_reels', 'asignar_creadores', 'etiquetar_reels', 'programar_guiones', 'ordenar_video', 'guardar_memoria']
+
+// Lo que fija el enlace de un perfil o de una agencia (llamaComoCliente): el
+// perfil ya resuelto por id, que no se vuelve a buscar por texto, y de qué
+// perfiles son las notas de creador que puede leer. Va con una clave Symbol:
+// ningún JSON de argumentos la puede traer.
+const FIJO = Symbol('alcance fijado')
+
+const idsDe = async (hacer) => (await todasLasFilas(hacer)).map(r => r.id)
+
+// Los perfiles de la agencia de este perfil: sus notas de creador son de todos ellos.
+async function perfilesDeSuAgencia(clientId) {
+  const agencia = await agenciaDe(clientId)
+  if (!agencia) return [clientId]
+  return idsDe(() => supabase.from('clients').select('id').eq('agencia_id', agencia).order('id'))
+}
+
+// Los perfiles de la agencia (o agencias) de la plataforma: lo que lee el
+// enlace del operador además de lo común.
+async function perfilesDeLaPlataforma() {
+  const { data, error } = await supabase.from('superadmins').select('agencia_id').eq('plataforma', true).eq('active', true)
+  if (error) throw error
+  const agencias = [...new Set((data || []).map(r => r.agencia_id).filter(Boolean))]
+  if (!agencias.length) return []
+  return idsDe(() => supabase.from('clients').select('id').in('agencia_id', agencias).order('id'))
+}
+
+// Una fila por su slug, que es único: la busca la base, no una lista que
+// PostgREST corta en 1000. Tal cual y en minúsculas.
+async function porSlug(tabla, columnas, tal) {
+  for (const slug of new Set([tal, tal.toLowerCase()])) {
+    const { data, error } = await supabase.from(tabla).select(columnas).eq('slug', slug).maybeSingle()
+    if (error) throw error
+    if (data) return data
+  }
+  return null
+}
 
 // El nombre o el slug, sin distinguir mayúsculas: Claude escribe "Samzia" tan
 // a menudo como "samzia".
 async function identidadDe(nombre) {
-  const n = String(nombre || '').trim().toLowerCase()
-  if (!n) return null
-  const { data, error } = await supabase.from('agent_identities').select('*')
-  if (error) throw error
-  const ident = (data || []).find(i => i.slug === n || i.nombre.toLowerCase() === n)
-  if (!ident) {
-    throw new Error(`No hay ninguna identidad "${nombre}". Las que hay: ${(data || []).map(i => i.nombre).join(', ') || 'ninguna'}`)
+  const tal = String(nombre || '').trim()
+  if (!tal) return null
+  // Primero el slug: un creador que se llamara como el slug de otro no se lo
+  // puede quedar. Por nombre, solo si es de uno.
+  const ident = await porSlug('agent_identities', '*', tal)
+  if (ident) return ident
+  const todas = await todasLasFilas(() => supabase.from('agent_identities').select('*').order('id'))
+  const n = tal.toLowerCase()
+  const asi = todas.filter(i => String(i.nombre || '').toLowerCase() === n)
+  if (asi.length > 1) throw new Error(`Hay ${asi.length} creadores que se llaman "${nombre}": usa su slug (${asi.map(i => i.slug).join(', ')}).`)
+  if (!asi.length) {
+    throw new Error(`No hay ninguna identidad "${nombre}". Las que hay: ${todas.map(i => i.nombre).join(', ') || 'ninguna'}`)
   }
-  return ident
+  return asi[0]
 }
 
 // El perfil de HELM por slug o nombre, igual de tolerante que identidadDe.
-async function perfilDe(nombre) {
-  const n = String(nombre || '').trim().toLowerCase()
-  const { data, error } = await supabase.from('clients').select('id, slug, name')
-  if (error) throw error
-  // Primero el slug, que es único; el nombre solo si no hay slug que case. Al
-  // revés, otra agencia que llamara a su perfil como el slug de uno ajeno se
-  // quedaría con lo que el enlace de ese perfil lee y escribe.
-  const c = (data || []).find(x => x.slug === n)
-    || (data || []).find(x => String(x.name || '').toLowerCase() === n)
-  if (!c) throw new Error(`No hay ningún perfil "${nombre}" en HELM.`)
-  return c
+// Con el enlace de un perfil o de una agencia viene ya fijado (`fijo`) y no se
+// busca: buscar por texto dejaba que otra agencia que llamara a su perfil como
+// el slug de uno ajeno (o lo escribiera en mayúsculas) se quedara con lo que
+// el enlace de ese perfil lee y escribe.
+async function perfilDe(nombre, fijo) {
+  if (fijo) return fijo.cliente
+  const tal = String(nombre || '').trim()
+  if (!tal) throw new Error('Di qué perfil.')
+  const c = await porSlug('clients', 'id, slug, name', tal)
+  if (c) return c
+  const n = tal.toLowerCase()
+  const asi = (await todasLasFilas(() => supabase.from('clients').select('id, slug, name').order('id')))
+    .filter(x => String(x.name || '').toLowerCase() === n)
+  if (asi.length > 1) throw new Error(`Hay ${asi.length} perfiles que se llaman "${nombre}": usa su slug (${asi.map(x => x.slug).join(', ')}).`)
+  if (!asi.length) throw new Error(`No hay ningún perfil "${nombre}" en HELM.`)
+  return asi[0]
 }
 
 // Lo de un creador: su ficha, su memoria y una página de sus reels, de más a
@@ -278,7 +326,9 @@ async function perfilDe(nombre) {
 // memoria solo en la primera página: en las siguientes ya las tiene.
 const vistasDe = (x) => Number(x.metricas?.vistas) || 0
 
-async function corpusDe(ident, { limite = 10, cursor = 0, detalle = 'completo' } = {}) {
+// `notas`: los perfiles cuyas notas de creador se leen además de las de la
+// plataforma (las que no llevan perfil). Las de otra agencia nunca.
+async function corpusDe(ident, { limite = 10, cursor = 0, detalle = 'completo' } = {}, notas = []) {
   const filtra = (q) => {
     q = q.in('estado', ['transcrito', 'etiquetado', 'error']).neq('transcripcion', '')
     return ident ? q.eq('identity_id', ident.id) : q.is('identity_id', null)
@@ -286,15 +336,18 @@ async function corpusDe(ident, { limite = 10, cursor = 0, detalle = 'completo' }
   // Primero solo id y métricas de todos, para ordenar y paginar; luego las
   // filas enteras de la página.
   const primera = !cursor
-  const [todos, m] = await Promise.all([
+  const memoria = (q) => q.eq('identity_id', ident.id).order('updated_at', { ascending: false }).limit(200)
+  const [todos, comun, suyas] = await Promise.all([
     filtra(supabase.from('agent_reels').select('id, metricas')).limit(1000),
     ident && primera
-      ? supabase.from('agent_memory').select('contenido, updated_at')
-        .eq('identity_id', ident.id).order('updated_at', { ascending: false }).limit(200)
+      ? memoria(supabase.from('agent_memory').select('contenido, updated_at').is('client_id', null))
+      : Promise.resolve({ data: [] }),
+    ident && primera && notas.length
+      ? memoria(supabase.from('agent_memory').select('contenido, updated_at').in('client_id', notas))
       : Promise.resolve({ data: [] }),
   ])
-  if (todos.error) throw todos.error
-  if (m.error) throw m.error
+  for (const r of [todos, comun, suyas]) if (r.error) throw r.error
+  const m = { data: [...(comun.data || []), ...(suyas.data || [])].sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at))) }
   const pag = pagina((todos.data || []).sort((a, b) => vistasDe(b) - vistasDe(a)), { cursor, limite })
 
   let filas = []
@@ -350,13 +403,32 @@ const comprobar = (herramienta, argumentos, nota) => ({ herramienta, argumentos,
 // espacios de más) en el mismo perfil es el mismo guion.
 const claveGuion = (fecha, titulo) => `${fecha}|${String(titulo || '').trim().replace(/\s+/g, ' ').toLowerCase()}`
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// Un id de archivo de Drive: letras, números, "_" y "-". Se mira antes de
+// preguntar a Drive, para que nada raro llegue a su URL.
+const DRIVE_ID = /^[A-Za-z0-9_-]{10,128}$/
+
+// Si un archivo ya está colocado en "1 · Sin editar" de ese perfil: dónde (p. ej.
+// "1 · Sin editar / Venta"), o null. Lo normal es que esté dentro de una pieza
+// "AAAA-MM-DD · Título" del tipo, así que se mira también el padre de su carpeta.
+async function yaEnSinEditar(padre, carpetas) {
+  if (!padre) return null
+  const tipos = Object.entries(carpetas.sinEditarTipo || {}).filter(([, id]) => id)
+  const dice = (id) => {
+    if (id === carpetas.sinEditar) return '1 · Sin editar'
+    const t = tipos.find(([, carpeta]) => carpeta === id)?.[0]
+    return t ? `1 · Sin editar / ${TIPOS[t]}` : null
+  }
+  if (dice(padre)) return dice(padre)
+  const abuelo = (await archivoDrive(padre).catch(() => null))?.parents?.[0]
+  return abuelo ? dice(abuelo) : null
+}
 
 const HERRAMIENTAS = {
-  async identidades({ perfil, tipo } = {}) {
+  async identidades({ perfil, tipo, [FIJO]: fijo } = {}) {
     const [ids, reels, suyos] = await Promise.all([
-      supabase.from('agent_identities').select('nombre, slug, categoria, descripcion, activa').order('nombre'),
+      supabase.from('agent_identities').select('id, nombre, slug, categoria, descripcion, activa').order('nombre'),
       supabase.from('agent_reels').select('identity_id, agent_identities(slug)'),
-      perfil ? perfilDe(perfil).then(c => asignadosDe(c.id)) : null,
+      perfil ? perfilDe(perfil, fijo).then(c => asignadosDe(c.id)) : null,
     ])
     if (ids.error) throw ids.error
     if (reels.error) throw reels.error
@@ -366,11 +438,14 @@ const HERRAMIENTAS = {
       cuenta[slug] = (cuenta[slug] || 0) + 1
     }
     const t = String(tipo || '').trim().toLowerCase()
-    const lista = (ids.data || [])
-      .filter(i => !suyos || esDe(suyos, i.slug))
-      .filter(i => !t || (i.categoria || '').toLowerCase() === t)
+    // Los del perfil, por id: por nombre, un creador suyo que se llamara como
+    // el slug de otro colaba a ese otro en la lista.
+    const deEste = suyos && new Set(suyos.map(i => i.id))
+    const posibles = (ids.data || []).filter(i => !deEste || deEste.has(i.id))
+    const lista = posibles.filter(i => !t || (i.categoria || '').toLowerCase() === t)
     if (t && !lista.length) {
-      const hay = [...new Set((ids.data || []).map(i => i.categoria).filter(Boolean))]
+      // Los tipos de los que puede ver: no los de creadores de otros perfiles.
+      const hay = [...new Set(posibles.map(i => i.categoria).filter(Boolean))]
       throw new Error(`No hay creadores de tipo "${tipo}"${perfil ? ' en ese perfil' : ''}. Los tipos que hay: ${hay.join(', ') || 'ninguno'}.`)
     }
     // Agrupadas por tipo de contenido, que es como se eligen: "los de filmmaking".
@@ -400,7 +475,7 @@ const HERRAMIENTAS = {
       : { perfiles, nota: 'Ningún perfil tiene creadores asignados. Se asignan en HELM → Ajustes → IA.' }
   },
 
-  async corpus({ identidad, perfil, tipo, limite, cursor = 0, detalle }) {
+  async corpus({ identidad, perfil, tipo, limite, cursor = 0, detalle, [FIJO]: fijo }) {
     // Con varios creadores, por defecto una vista de conjunto; con uno, entero.
     const varios = Boolean(perfil || tipo)
     limite ??= varios ? 5 : 10
@@ -411,7 +486,7 @@ const HERRAMIENTAS = {
     // cualquier guion: va una vez, fuera de cada creador, en la primera página.
     const global = primera
       ? await supabase.from('agent_memory').select('contenido, updated_at')
-        .eq('ambito', 'global').order('updated_at', { ascending: false }).limit(100)
+        .eq('ambito', 'global').is('client_id', null).order('updated_at', { ascending: false }).limit(100)
       : { data: null }
     if (global.error) throw global.error
     const conMemoria = global.data ? { memoria_global: global.data } : {}
@@ -421,8 +496,11 @@ const HERRAMIENTAS = {
       return { creadores, hay_mas: hayMas, ...(hayMas ? { siguiente: cursor + limite } : {}) }
     }
 
+    // Además de las de la plataforma, las notas de creador de su agencia (con
+    // el enlace del operador, las de la agencia de la plataforma).
+    const notas = primera ? await (fijo ? fijo.notas() : perfilesDeLaPlataforma()) : []
     if (perfil) {
-      const cliente = await perfilDe(perfil)
+      const cliente = await perfilDe(perfil, fijo)
       const { data, error } = await supabase.from('agent_identity_clients')
         .select('agent_identities(*)').eq('client_id', cliente.id)
       if (error) throw error
@@ -433,7 +511,7 @@ const HERRAMIENTAS = {
       return {
         perfil: { slug: cliente.slug, nombre: cliente.name },
         ...conMemoria,
-        ...junta(await Promise.all(creadores.map(c => corpusDe(c, opciones)))),
+        ...junta(await Promise.all(creadores.map(c => corpusDe(c, opciones, notas)))),
       }
     }
 
@@ -449,12 +527,12 @@ const HERRAMIENTAS = {
       return {
         tipo: creadores[0].categoria,
         ...conMemoria,
-        ...junta(await Promise.all(creadores.map(c => corpusDe(c, opciones)))),
+        ...junta(await Promise.all(creadores.map(c => corpusDe(c, opciones, notas)))),
       }
     }
 
     const ident = await identidadDe(identidad)
-    const r = await corpusDe(ident, opciones)
+    const r = await corpusDe(ident, opciones, notas)
     return { ...conMemoria, ...r, ...(r.hay_mas ? { siguiente: cursor + limite } : {}) }
   },
 
@@ -570,17 +648,50 @@ const HERRAMIENTAS = {
     }
   },
 
-  async calendario({ perfil, desde, hasta, detalle = 'resumen', limite = 60, cursor = 0 }) {
-    const c = await perfilDe(perfil)
+  async calendario({ perfil, desde, hasta, detalle = 'resumen', limite = 60, cursor = 0, [FIJO]: fijo }) {
+    const c = await perfilDe(perfil, fijo)
     const dia = (d) => new Date(Date.now() + d * 86_400_000).toISOString().slice(0, 10)
     const rango = { desde: desde || dia(-7), hasta: hasta || dia(30) }
     if (rango.desde > rango.hasta) throw new Error(`"desde" (${rango.desde}) es posterior a "hasta" (${rango.hasta}).`)
     const guiones = await calendario(c.id, rango)
     const pag = pagina(guiones, { cursor, limite })
-    const { data: sueltos, error } = await supabase.from('agent_drive_videos')
-      .select('drive_id, nombre, transcripcion, created_at').eq('client_id', c.id).eq('estado', 'sin_guion')
-    if (error) throw error
     const completo = detalle === 'completo'
+
+    // "sin_ordenar": lo que HAY AHORA en la "0 · Entrada" del perfil, mirado en
+    // vivo (ya no lo escribe ningún automático), para llevarlo a su carpeta con
+    // "ordenar_video". Las filas antiguas de agent_drive_videos (de cuando se
+    // emparejaba solo) no se listan aparte: solo completan con lo que se dice
+    // en el vídeo y cuándo llegó a los archivos que siguen en la Entrada; uno
+    // que ya salió de ella no se puede ordenar. Si Drive falla se dice, en vez
+    // de dar una lista vacía que parezca "no hay nada". Solo en la primera
+    // página: la Entrada se mira una vez.
+    let sinOrdenar = null
+    let avisoDrive = null
+    if (!cursor) {
+      let enLaEntrada = null
+      try { enLaEntrada = await enEntrada(c.id) } catch (e) {
+        avisoDrive = `No pude mirar la Entrada: ${String(e?.message || e).slice(0, 160)}`
+      }
+      if (enLaEntrada) {
+        const ids = enLaEntrada.map(f => f.id)
+        const viejas = ids.length
+          ? await supabase.from('agent_drive_videos')
+            .select('drive_id, transcripcion, created_at').eq('client_id', c.id).in('drive_id', ids)
+          : { data: [] }
+        if (viejas.error) throw viejas.error
+        const deAntes = new Map((viejas.data || []).map(v => [v.drive_id, v]))
+        sinOrdenar = enLaEntrada.map(f => {
+          const v = deAntes.get(f.id)
+          // Cuándo llegó: lo que apuntó el automático al verlo en la Entrada,
+          // si lo vio; si no, cuándo se creó el archivo en Drive.
+          return {
+            video_id: f.id, nombre: f.name, llego: v?.created_at || f.createdTime,
+            ...(v?.transcripcion ? { dice: recorta(v.transcripcion, completo ? 600 : 300) } : {}),
+          }
+        })
+      }
+    }
+
     return {
       perfil: c.slug,
       ...rango,
@@ -592,17 +703,13 @@ const HERRAMIENTAS = {
       hay_mas: pag.hay_mas,
       ...(pag.hay_mas ? { siguiente: pag.siguiente } : {}),
       ...(!completo && guiones.some(g => (g.body || '').length > 200) ? { nota: 'Guiones recortados: con detalle="completo" van enteros.' } : {}),
-      // Los vídeos sueltos van siempre, solo en la primera página.
-      ...(cursor ? {} : {
-        sin_ordenar: (sueltos || []).map(v => ({
-          video_id: v.drive_id, nombre: v.nombre, llego: v.created_at, dice: recorta(v.transcripcion, completo ? 600 : 300),
-        })),
-      }),
+      ...(sinOrdenar ? { sin_ordenar: sinOrdenar } : {}),
+      ...(avisoDrive ? { aviso_drive: avisoDrive } : {}),
     }
   },
 
-  async programar_guiones({ perfil, guiones, prueba }) {
-    const c = await perfilDe(perfil)
+  async programar_guiones({ perfil, guiones, prueba, [FIJO]: fijo }) {
+    const c = await perfilDe(perfil, fijo)
     const lista = Array.isArray(guiones) ? guiones : []
     if (!lista.length) throw new Error('No has pasado ningún guion')
     const malos = lista.filter(g => g.id && !UUID.test(g.id))
@@ -665,12 +772,14 @@ const HERRAMIENTAS = {
     return { perfil: c.slug, programados: hechos, hecho: frase, comprobar: ver }
   },
 
-  async ordenar_video({ perfil, video_id, guion_id, tipo, prueba }) {
-    const c = await perfilDe(perfil)
-    const { data: v, error } = await supabase.from('agent_drive_videos')
-      .select('drive_id, nombre, estado, destino, calendario_id').eq('drive_id', video_id).eq('client_id', c.id).maybeSingle()
-    if (error) throw error
-    if (!v) throw new Error(`El vídeo "${video_id}" no está entre los de ${c.slug}. Los video_id salen en "calendario" → sin_ordenar.`)
+  async ordenar_video({ perfil, video_id, drive_id, guion_id, tipo, prueba, [FIJO]: fijo }) {
+    const c = await perfilDe(perfil, fijo)
+    // drive_id y video_id son lo mismo (el id del archivo en Drive): vale
+    // cualquiera de los dos.
+    const fileId = String(drive_id || video_id || '').trim()
+    if (!fileId) throw new Error('Pasa drive_id (el id del archivo que está en "0 · Entrada" de Drive; sale en "calendario" → sin_ordenar).')
+    if (!DRIVE_ID.test(fileId)) throw new Error('drive_id no válido: es el id del archivo en Drive (letras, números, "_" y "-"), tal como sale en "calendario" → sin_ordenar.')
+
     let guion = null
     if (guion_id) {
       if (!UUID.test(guion_id)) throw new Error(`guion_id no válido: "${guion_id}". Es el id (uuid) que sale en "calendario".`)
@@ -681,30 +790,64 @@ const HERRAMIENTAS = {
       guion = r.data
     } else if (!TIPOS[tipo]) throw new Error(`Pasa guion_id (el id del guion, de "calendario") o, si no es de ningún guion, tipo: ${Object.keys(TIPOS).join(', ')}.`)
 
+    // Dónde está el archivo AHORA lo dice Drive, y manda sobre lo que apuntara
+    // una fila antigua del automático: solo se coloca un vídeo que esté en la
+    // "0 · Entrada" de ESTE perfil, para que nadie mueva algo de otro perfil ni
+    // saque un vídeo de otra fase. Uno que ya está en su "1 · Sin editar" se da
+    // por colocado.
+    const carpetas = await carpetasDe(c.id)
+    if (!carpetas) throw new Error(`El perfil ${c.slug} no tiene carpeta en HELM Contenido.`)
+    let meta
+    try {
+      meta = await archivoDrive(fileId)
+    } catch (e) {
+      if (e?.status === 404) throw new Error(`No encuentro el archivo "${fileId}" en Drive. Pasa el id que sale en "calendario" → sin_ordenar.`)
+      throw new Error(`No pude mirar el archivo en Drive (${String(e?.message || e).slice(0, 160)}). Prueba otra vez en un rato.`)
+    }
+    const padre = meta.parents?.[0]
+    const colocado = padre === carpetas.entrada ? null : await yaEnSinEditar(padre, carpetas)
+    // Sin el nombre del archivo: puede ser de otro perfil.
+    if (padre !== carpetas.entrada && !colocado) {
+      throw new Error(`Ese archivo no está en la "0 · Entrada" de ${c.slug}. Solo puedo colocar lo que esté en su Entrada: los ids salen en "calendario" → sin_ordenar.`)
+    }
+    const nombre = meta.name || fileId
+    if (meta.trashed) throw new Error(`"${nombre}" está en la papelera de Drive: recupéralo antes de ordenarlo.`)
+    if (!String(meta.mimeType || '').startsWith('video/')) throw new Error(`"${nombre}" no es un vídeo (${meta.mimeType || 'sin tipo'}): solo se ordenan vídeos.`)
+
     const t = guion?.tipo || tipo || 'autoridad'
     const destino = `1 · Sin editar / ${TIPOS[t]}`
     const ver = comprobar('calendario', { perfil: c.slug, ...(guion ? { desde: guion.date, hasta: guion.date } : {}) },
       guion ? 'El guion sale en fase "Sin editar" y el vídeo ya no está en sin_ordenar.' : 'El vídeo ya no está en sin_ordenar.')
-    // Si ya está donde se pide, no se mueve otra vez.
-    if (v.estado === 'ordenado' && v.destino === destino && (v.calendario_id || null) === (guion?.id || null)) {
-      return { video: v.nombre, video_id, ya_estaba: true, movido_a: v.destino, hecho: `"${v.nombre}" ya estaba en ${v.destino}; no se mueve.`, comprobar: ver }
+    if (colocado) {
+      const otro = colocado !== destino ? ` Pediste ${destino}: si va ahí, muévelo a mano en Drive.` : ''
+      return { video: nombre, video_id: fileId, ya_estaba: true, movido_a: colocado, hecho: `"${nombre}" ya está en ${colocado}; no se mueve.${otro}`, comprobar: ver }
     }
-    const adonde = guion ? `la pieza del guion ${guion.date} · ${guion.title} (${destino})` : `${destino}, en una pieza nueva`
-    if (prueba) return { prueba: true, video: v.nombre, video_id, iria_a: adonde, hecho: `Ensayo, nada movido. "${v.nombre}" iría a ${adonde}.`, comprobar: ver }
+    // Sin guion va a la pieza del día, la misma para todos los de ese día (ver
+    // ordenar en api/_lib/ingesta.js).
+    const adonde = guion
+      ? `la pieza del guion ${guion.date} · ${guion.title} (${destino})`
+      : `${destino}, en la pieza "Sin guion · ${new Date().toISOString().slice(0, 10)}"`
+    if (prueba) return { prueba: true, video: nombre, video_id: fileId, iria_a: adonde, hecho: `Ensayo, nada movido. "${nombre}" iría a ${adonde}.`, comprobar: ver }
 
-    const { parents = [] } = await archivoDrive(video_id)
-    const r = await ordenar({ clientId: c.id, driveId: video_id, desde: parents[0], guion, tipo })
-    await supabase.from('agent_drive_videos').update({
-      estado: 'ordenado', calendario_id: guion?.id || null, destino: r.destino, updated_at: new Date().toISOString(),
-    }).eq('drive_id', video_id)
+    // Solo una fila antigua se marca 'ordenado'; un archivo sin fila no deja
+    // rastro en agent_drive_videos (esa tabla ya no se escribe).
+    const { data: v, error } = await supabase.from('agent_drive_videos')
+      .select('drive_id').eq('drive_id', fileId).eq('client_id', c.id).maybeSingle()
+    if (error) throw error
+    const r = await ordenar({ clientId: c.id, driveId: fileId, desde: padre, guion, tipo })
+    if (v) {
+      await supabase.from('agent_drive_videos').update({
+        estado: 'ordenado', calendario_id: guion?.id || null, destino: r.destino, updated_at: new Date().toISOString(),
+      }).eq('drive_id', fileId).eq('client_id', c.id)
+    }
     return {
-      video: v.nombre, video_id, guion_id: guion?.id || null, movido_a: r.destino, pieza: r.pieza,
-      hecho: `"${v.nombre}" movido a ${adonde}.`, comprobar: ver,
+      video: nombre, video_id: fileId, guion_id: guion?.id || null, movido_a: r.destino, pieza: r.pieza,
+      hecho: `"${nombre}" movido a ${adonde}.`, comprobar: ver,
     }
   },
 
-  async metricas({ perfil, limite, dias, actualizar, detalle = 'resumen' }) {
-    const c = await perfilDe(perfil)
+  async metricas({ perfil, limite, dias, actualizar, detalle = 'resumen', [FIJO]: fijo }) {
+    const c = await perfilDe(perfil, fijo)
     // Si la sincronización falla (cuota de Meta, token caducado) se responde
     // con lo último guardado y se dice: un análisis con datos de ayer vale más
     // que ninguno.
@@ -733,16 +876,26 @@ const HERRAMIENTAS = {
     }
   },
 
-  async guardar_memoria({ contenido, identidad, prueba }) {
+  async guardar_memoria({ contenido, identidad, prueba, [FIJO]: fijo }) {
     const texto = String(contenido || '').trim()
     if (!texto) throw new Error('La nota está vacía')
     const ident = await identidadDe(identidad)
-    const en = ident ? ident.nombre : 'memoria global'
+    // Con el enlace de un perfil o de una agencia la nota es de su agencia: va
+    // marcada con el perfil y solo la leen los enlaces de esa agencia. Sin
+    // marcar, la leía el Claude de cualquier agencia que usara ese creador (y
+    // podía traer instrucciones). Las sin perfil son de la plataforma.
+    const suya = fijo ? fijo.cliente.id : null
+    if (suya && !ident) throw new Error('Di en qué creador guardarlo.')
+    const clave = suya ? `creador/${ident.slug}/${createHash('sha256').update(texto).digest('hex').slice(0, 16)}` : ''
+    const en = ident ? `${ident.nombre}${suya ? ' (solo para tu agencia)' : ''}` : 'memoria global'
     const ver = comprobar('corpus', ident ? { identidad: ident.slug, limite: 1 } : { limite: 1 },
       ident ? 'Sale en "memoria" de la primera página.' : 'Sale en "memoria_global" de la primera página, con cualquier identidad o perfil.')
-    // Una nota idéntica no se guarda dos veces.
-    let q = supabase.from('agent_memory').select('id').eq('contenido', texto).limit(1)
-    q = ident ? q.eq('identity_id', ident.id) : q.eq('ambito', 'global')
+    // Una nota idéntica no se guarda dos veces: la de una agencia, en ninguno
+    // de sus perfiles (se leen juntas). Por la clave, que lleva el creador y el
+    // hash del texto: el texto entero no cabría en la URL.
+    let q = supabase.from('agent_memory').select('id').limit(1)
+    q = suya ? q.eq('clave', clave).in('client_id', await fijo.notas())
+      : (ident ? q.eq('identity_id', ident.id) : q.eq('ambito', 'global')).eq('contenido', texto).is('client_id', null)
     const { data: ya, error: e0 } = await q
     if (e0) throw e0
     if (ya?.length) return { guardado: true, ya_estaba: true, id: ya[0].id, en, hecho: `La nota ya estaba en ${en}; no se duplica.`, comprobar: ver }
@@ -752,6 +905,7 @@ const HERRAMIENTAS = {
       ambito: ident ? 'identidad' : 'global',
       identity_id: ident?.id || null,
       contenido: texto,
+      ...(suya ? { client_id: suya, clave, agente: 'conector', tipo: 'creador' } : {}),
     }).select('id').single()
     if (error) throw error
     return { guardado: true, id: data.id, en, hecho: `Nota de ${texto.length} caracteres guardada en ${en}.`, comprobar: ver }
@@ -799,7 +953,8 @@ async function alcanceDe(dado) {
 function perfilDeAgencia(a, pedido) {
   const n = String(pedido || '').trim().toLowerCase()
   return n
-    ? a.perfiles.find(x => x.slug === n) || a.perfiles.find(x => String(x.name || '').toLowerCase() === n) || null
+    ? a.perfiles.find(x => x.slug === pedido) || a.perfiles.find(x => x.slug === n)
+      || a.perfiles.find(x => String(x.name || '').toLowerCase() === n) || null
     : a.perfiles.length === 1 ? a.perfiles[0] : null
 }
 
@@ -823,7 +978,7 @@ async function llamaComoAgencia(nombre, args, a) {
 // Leer y usar SU parte: sus creadores, su calendario, sus vídeos. Lo que toca
 // el corpus de todos (añadir reels, reetiquetar, asignar creadores) es del
 // operador y ni siquiera aparece.
-const DEL_CLIENTE = ['identidades', 'perfiles', 'corpus', 'calendario', 'programar_guiones', 'ordenar_video', 'metricas', 'guardar_memoria']
+export const DEL_CLIENTE = ['identidades', 'perfiles', 'corpus', 'calendario', 'programar_guiones', 'ordenar_video', 'metricas', 'guardar_memoria']
 
 async function asignadosDe(clientId) {
   const { data, error } = await supabase.from('agent_identity_clients')
@@ -831,43 +986,39 @@ async function asignadosDe(clientId) {
   if (error) throw error
   return (data || []).map(r => r.agent_identities).filter(Boolean)
 }
-const esDe = (lista, nombre) => {
+// El de la lista, por slug antes que por nombre: a la herramienta se le pasa su
+// slug, no lo que escribió Claude, para que no se resuelva a otro creador.
+const unoDe = (lista, nombre) => {
   const n = String(nombre || '').trim().toLowerCase()
-  return lista.some(i => i.slug === n || i.nombre.toLowerCase() === n)
+  return n ? lista.find(i => i.slug === n) || lista.find(i => i.nombre.toLowerCase() === n) || null : null
 }
 
 async function llamaComoCliente(nombre, args, a) {
   if (!DEL_CLIENTE.includes(nombre)) throw new Error('Esa herramienta no está disponible con este enlace.')
+  if (!a.clientId || !a.slug) throw new Error('Este enlace no tiene perfil.')
   const mios = await asignadosDe(a.clientId)
-  const x = { ...args, perfil: a.slug }
+  const fijo = { cliente: { id: a.clientId, slug: a.slug, name: a.nombre }, notas: () => perfilesDeSuAgencia(a.clientId) }
+  const x = { ...args, perfil: a.slug, [FIJO]: fijo }
 
   if (nombre === 'perfiles') return { perfiles: [{ perfil: a.slug, nombre: a.nombre, creadores: mios.map(i => i.nombre) }] }
-  if (nombre === 'identidades') return HERRAMIENTAS.identidades({ perfil: a.slug, tipo: x.tipo })
+  if (nombre === 'identidades') return HERRAMIENTAS.identidades({ perfil: a.slug, tipo: x.tipo, [FIJO]: fijo })
   if (nombre === 'corpus') {
     // Un creador suyo por nombre; si no, todos los de su perfil. Nunca "tipo":
     // sería leer creadores que no son suyos.
-    const opciones = { limite: x.limite, cursor: x.cursor, detalle: x.detalle }
-    if (x.identidad && esDe(mios, x.identidad)) return HERRAMIENTAS.corpus({ identidad: x.identidad, ...opciones })
+    const opciones = { limite: x.limite, cursor: x.cursor, detalle: x.detalle, [FIJO]: fijo }
+    const ident = unoDe(mios, x.identidad)
+    if (ident) return HERRAMIENTAS.corpus({ identidad: ident.slug, ...opciones })
     if (x.identidad) throw new Error(`"${x.identidad}" no es uno de los creadores de ${a.nombre}. Los suyos: ${mios.map(i => i.nombre).join(', ') || 'ninguno'}.`)
     return HERRAMIENTAS.corpus({ perfil: a.slug, ...opciones })
   }
   if (nombre === 'guardar_memoria') {
-    if (!x.identidad || !esDe(mios, x.identidad)) {
+    // En uno de sus creadores; la nota queda solo para su agencia (ver
+    // HERRAMIENTAS.guardar_memoria).
+    const ident = unoDe(mios, x.identidad)
+    if (!ident) {
       throw new Error(`Di en qué creador guardarlo: ${mios.map(i => i.nombre).join(', ')}.`)
     }
-    // La memoria de un creador la leen todos los perfiles que lo usan. Si
-    // alguno es de otra agencia, escribir aquí sería escribir en lo que lee
-    // esa otra agencia: entonces solo la cambia la plataforma.
-    const ident = mios.find(i => esDe([i], x.identidad))
-    const [mia, { data: usos, error }] = await Promise.all([
-      agenciaDe(a.clientId),
-      supabase.from('agent_identity_clients').select('clients(agencia_id)').eq('identity_id', ident.id),
-    ])
-    if (error) throw error
-    if (!mia || (usos || []).some(u => u.clients?.agencia_id !== mia)) {
-      throw new Error(`"${ident.nombre}" lo usan también perfiles de otras agencias: su memoria solo la cambia la plataforma.`)
-    }
-    return HERRAMIENTAS.guardar_memoria(x)
+    return HERRAMIENTAS.guardar_memoria({ ...x, identidad: ident.slug })
   }
   return HERRAMIENTAS[nombre](x)
 }
@@ -893,12 +1044,12 @@ async function registra(alcance, { herramienta, args, r, err, empezado }) {
   try {
     const clientId = await perfilDelRegistro(alcance, args)
     if (!clientId) return
-    const quien = alcance.operador ? 'enlace del operador' : alcance.agenciaId ? `enlace de la agencia ${alcance.nombre}` : 'enlace del perfil'
+    const quien = alcance.quien || (alcance.operador ? 'enlace del operador' : alcance.agenciaId ? `enlace de la agencia ${alcance.nombre}` : 'enlace del perfil')
     const texto = err ? `${herramienta}: ${String(err.message || err)}` : `${herramienta}: ${r?.hecho || 'hecho'}`
     await supabase.from('agent_ejecuciones').insert({
       client_id: clientId,
       agente: 'conector',
-      origen: 'mcp',
+      origen: alcance.origen || 'mcp',
       estado: err ? 'error' : 'hecho',
       encargo: `${herramienta} (${quien})${Object.keys(args || {}).length ? ` · ${resumeArgs(args)}` : ''}`.slice(0, 600),
       resumen: err ? '' : String(r?.hecho || '').slice(0, 1000),
@@ -913,6 +1064,81 @@ async function registra(alcance, { herramienta, args, r, err, empezado }) {
   }
 }
 
+// ── El motor, reutilizable fuera del MCP ────────────────────────────────────
+// Lo que ve y lo que puede hacer un alcance, sin el envoltorio JSON-RPC: lo usa
+// tanto este endpoint como el bot de Telegram (api/_lib/bot-herramientas.js),
+// para que una misma llamada se comporte igual venga de donde venga.
+
+// Las herramientas visibles para este alcance: todas con el enlace del
+// operador, solo las del cliente con el de un perfil o una agencia.
+export function herramientasDe(alcance) {
+  return alcance.operador ? TOOLS : TOOLS.filter(t => DEL_CLIENTE.includes(t.name))
+}
+
+// Ejecuta una herramienta y devuelve el resultado en crudo (el cuerpo de
+// tools/call sin JSON-RPC). Mismos permisos, misma validación, mismo registro
+// que por el MCP; el origen del registro lo pone el alcance (por defecto 'mcp').
+// Un fallo de la herramienta no se lanza: viene en { ok:false, texto }, para
+// que quien llame lo enseñe o se lo devuelva a Claude y pueda corregir.
+export async function ejecutaHerramienta(nombre, argumentos, alcance) {
+  const tool = TOOLS.find(t => t.name === nombre)
+  if (!tool || !HERRAMIENTAS[nombre]) {
+    const hay = herramientasDe(alcance).map(t => t.name)
+    return { ok: false, desconocida: true, ensayo: false, args: {}, resultado: undefined, texto: `Herramienta desconocida: ${nombre}. Las que hay: ${hay.join(', ')}.` }
+  }
+  const fn = alcance.operador
+    ? HERRAMIENTAS[nombre]
+    : alcance.agenciaId
+      ? (args) => llamaComoAgencia(nombre, args, alcance)
+      : (args) => llamaComoCliente(nombre, args, alcance)
+
+  // Con el enlace de un perfil el perfil es siempre el suyo; con el de una
+  // agencia que solo tiene uno, también. Igual que en el MCP.
+  const dados = { ...(argumentos || {}) }
+  const llevaPerfil = 'perfil' in (tool.inputSchema.properties || {})
+  if (alcance.clientId && llevaPerfil) dados.perfil = alcance.slug
+  if (alcance.agenciaId && llevaPerfil && !dados.perfil && alcance.perfiles.length === 1) dados.perfil = alcance.perfiles[0].slug
+  const empezado = Date.now()
+  const { args, errores, avisos } = validaArgs(tool.inputSchema, dados)
+
+  let r, err
+  if (errores.length) {
+    const pista = alcance.agenciaId && llevaPerfil ? `\nLos perfiles de ${alcance.nombre}: ${alcance.perfiles.map(x => x.slug).join(', ') || 'ninguno todavía'}.` : ''
+    err = new Error(explicaErrores(nombre, errores) + pista)
+  } else {
+    // La herramienta corre en una copia del contexto: el perfil que anote
+    // (llamaComoAgencia) no se queda pegado a lo que haga después quien llama,
+    // p. ej. los siguientes pasos de Claude del bot, que paga la agencia.
+    const c = contexto()
+    try { r = await (c ? enContexto({ ...c }, () => fn(args)) : fn(args)) } catch (e) { err = e }
+  }
+  // Un ensayo (prueba=true) no deja rastro, ni cuando falla.
+  const ensayo = args.prueba === true || dados.prueba === true || dados.prueba === 'true'
+  if (!ensayo && (err || ESCRIBEN.includes(nombre))) {
+    await registra(alcance, { herramienta: nombre, args, r, err, empezado })
+  }
+  if (err) return { ok: false, ensayo, args, resultado: undefined, texto: String(err?.message || err) }
+  const resultado = avisos.length && r && typeof r === 'object' && !Array.isArray(r) ? { ...r, avisos } : r
+  return { ok: true, ensayo, args, resultado, texto: JSON.stringify(resultado) }
+}
+
+// El alcance de una agencia sin pasar por un token: a partir de su agencia_id,
+// la misma forma que alcanceDe da para un token de agencia (nombre y perfiles
+// activos). Lo usa el bot, que resuelve la agencia desde el vínculo guardado,
+// nunca desde lo que diga el mensaje.
+export async function alcanceDesdeContexto({ agenciaId } = {}, { origen = 'telegram', quien } = {}) {
+  if (!agenciaId) return null
+  const { data: ag, error: e1 } = await supabase.from('agencias').select('nombre').eq('id', agenciaId).maybeSingle()
+  if (e1) throw e1
+  if (!ag) return null
+  const { data: perfiles, error } = await supabase.from('clients')
+    .select('id, slug, name').eq('agencia_id', agenciaId).eq('active', true).order('name')
+  if (error) throw error
+  // Lo que se gaste en IA por este alcance se cobra a la agencia.
+  anotar({ agenciaId, origen })
+  return { agenciaId, nombre: ag.nombre, perfiles: perfiles || [], origen, quien }
+}
+
 async function responde(msg, alcance) {
   const { id, method, params } = msg || {}
   switch (method) {
@@ -925,57 +1151,23 @@ async function responde(msg, alcance) {
         instructions: (alcance.agenciaId
           ? `Conector de HELM de la agencia ${alcance.nombre}. Trabaja con los perfiles de sus clientes: empieza por "perfiles" para ver cuáles hay y sus creadores de referencia, y pasa siempre el argumento "perfil" (su slug) en las demás herramientas. Para escribir guiones de un perfil: lee su "corpus" (la memoria_global trae la guía de formatos de montaje), escribe con la voz de su creador "Propio" sin repetir temas que ya haya tratado, y guárdalos con "programar_guiones" (con su tipo). Su calendario, en "calendario"; lo que funciona en su Instagram, en "metricas". Lo que escribes queda en el registro del perfil (HELM → Agentes → Equipo).`
           : alcance.operador
-          ? 'Corpus de reels de referencia del Agent OS de HELM. Para analizar a un creador o escribir guiones con su estilo: "identidades" y luego "corpus" de esa identidad. Para escribir para una marca de HELM: "perfiles" y luego "corpus" con ese perfil. Los guiones se guardan con "programar_guiones" (con su tipo) y se consultan con "calendario"; al grabarlos y subirlos a "0 · Entrada" de su Drive, HELM los mueve solos a su carpeta. Para estudiar qué le funciona a un perfil en su propia cuenta de Instagram: "metricas". Las conclusiones que merezca la pena conservar, con "guardar_memoria". El etiquetado del "modelo local" es poco fiable: al analizar, corrige con "etiquetar_reels" las etiquetas que no encajen con el guion. Si piden un guion "en B-roll" o de un formato de montaje concreto, sigue la guía de formatos que viene en memoria_global. Pasa "perfil" también en las escrituras que no lo piden para que queden en el registro de ese perfil (HELM → Agentes → Equipo).'
-          : `Conector de contenido de ${alcance.nombre} en HELM (perfil "${alcance.slug}"). Sus creadores de referencia y su propio historial están en "corpus"; su calendario de guiones, en "calendario". Las visitas, guardados y retención de lo que ya ha publicado, en "metricas". Para escribir guiones: lee "corpus" (la memoria_global trae la guía de formatos de montaje, como el B-roll), escribe con la voz del creador "Propio" sin repetir temas que ya haya tratado, y guárdalos con "programar_guiones" (con su tipo). Al grabarlos y subirlos a "0 · Entrada" de su Drive, HELM los ordena solos. Lo que escribes queda en el registro del perfil (HELM → Agentes → Equipo).`)
+          ? 'Corpus de reels de referencia del Agent OS de HELM. Para analizar a un creador o escribir guiones con su estilo: "identidades" y luego "corpus" de esa identidad. Para escribir para una marca de HELM: "perfiles" y luego "corpus" con ese perfil. Los guiones se guardan con "programar_guiones" (con su tipo) y se consultan con "calendario"; al grabarlos, se suben a "0 · Entrada" de su Drive y se colocan en su carpeta con "ordenar_video". Para estudiar qué le funciona a un perfil en su propia cuenta de Instagram: "metricas". Las conclusiones que merezca la pena conservar, con "guardar_memoria". El etiquetado del "modelo local" es poco fiable: al analizar, corrige con "etiquetar_reels" las etiquetas que no encajen con el guion. Si piden un guion "en B-roll" o de un formato de montaje concreto, sigue la guía de formatos que viene en memoria_global. Pasa "perfil" también en las escrituras que no lo piden para que queden en el registro de ese perfil (HELM → Agentes → Equipo).'
+          : `Conector de contenido de ${alcance.nombre} en HELM (perfil "${alcance.slug}"). Sus creadores de referencia y su propio historial están en "corpus"; su calendario de guiones, en "calendario". Las visitas, guardados y retención de lo que ya ha publicado, en "metricas". Para escribir guiones: lee "corpus" (la memoria_global trae la guía de formatos de montaje, como el B-roll), escribe con la voz del creador "Propio" sin repetir temas que ya haya tratado, y guárdalos con "programar_guiones" (con su tipo). Al grabarlos, súbelos a "0 · Entrada" de su Drive y colócalos en su carpeta con "ordenar_video". Lo que escribes queda en el registro del perfil (HELM → Agentes → Equipo).`)
           + COMO_SE_USA,
       })
     }
     case 'ping':
       return ok(id, {})
     case 'tools/list':
-      return ok(id, { tools: alcance.operador ? TOOLS : TOOLS.filter(t => DEL_CLIENTE.includes(t.name)) })
+      return ok(id, { tools: herramientasDe(alcance) })
     case 'tools/call': {
-      const nombre = params?.name
-      const tool = TOOLS.find(t => t.name === nombre)
-      if (!tool || !HERRAMIENTAS[nombre]) {
-        const hay = (alcance.operador ? TOOLS : TOOLS.filter(t => DEL_CLIENTE.includes(t.name))).map(t => t.name)
-        return fallo(id, -32602, `Herramienta desconocida: ${nombre}. Las que hay: ${hay.join(', ')}.`)
-      }
-      const fn = alcance.operador
-        ? HERRAMIENTAS[nombre]
-        : alcance.agenciaId
-          ? (args) => llamaComoAgencia(nombre, args, alcance)
-          : (args) => llamaComoCliente(nombre, args, alcance)
-
-      // Con el enlace de un perfil, el perfil es siempre el suyo: no hace
-      // falta que Claude lo pase, y si pasa otro se ignora (como antes).
-      const dados = { ...(params?.arguments || {}) }
-      // Con el de una agencia que solo tiene uno, igual.
-      const llevaPerfil = 'perfil' in (tool.inputSchema.properties || {})
-      if (alcance.clientId && llevaPerfil) dados.perfil = alcance.slug
-      if (alcance.agenciaId && llevaPerfil && !dados.perfil && alcance.perfiles.length === 1) dados.perfil = alcance.perfiles[0].slug
-      const empezado = Date.now()
-      const { args, errores, avisos } = validaArgs(tool.inputSchema, dados)
-
       // Un fallo de la herramienta va como resultado con isError, no como
       // error JSON-RPC: así Claude lo lee y puede corregir (p. ej. el nombre
-      // de la identidad) en vez de dar la llamada por rota.
-      let r, err
-      if (errores.length) {
-        const pista = alcance.agenciaId && llevaPerfil ? `\nLos perfiles de ${alcance.nombre}: ${alcance.perfiles.map(x => x.slug).join(', ') || 'ninguno todavía'}.` : ''
-        err = new Error(explicaErrores(nombre, errores) + pista)
-      }
-      else {
-        try { r = await fn(args) } catch (e) { err = e }
-      }
-      // Un ensayo (prueba=true) no deja rastro, ni cuando falla.
-      const ensayo = args.prueba === true || dados.prueba === true || dados.prueba === 'true'
-      if (!ensayo && (err || ESCRIBEN.includes(nombre))) {
-        await registra(alcance, { herramienta: nombre, args, r, err, empezado })
-      }
-      return err
-        ? ok(id, { content: [{ type: 'text', text: String(err?.message || err) }], isError: true })
-        : ok(id, { content: [{ type: 'text', text: JSON.stringify(avisos.length && r && typeof r === 'object' && !Array.isArray(r) ? { ...r, avisos } : r) }] })
+      // de la identidad) en vez de dar la llamada por rota. Solo una
+      // herramienta desconocida es error de protocolo.
+      const x = await ejecutaHerramienta(params?.name, params?.arguments, alcance)
+      if (x.desconocida) return fallo(id, -32602, x.texto)
+      return ok(id, { content: [{ type: 'text', text: x.texto }], ...(x.ok ? {} : { isError: true }) })
     }
     default:
       return fallo(id, -32601, `Método no soportado: ${method}`)

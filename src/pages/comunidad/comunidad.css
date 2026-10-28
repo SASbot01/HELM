@@ -353,7 +353,8 @@ a.aip-hilo:hover .aip-candado { color: var(--rosa); }
 .aip-cap-pasos p { margin: 0; font-size: 15.5px; line-height: 1.6; color: var(--papel-2); }
 .aip-aviso { display: grid; grid-template-columns: 22px 1fr; gap: 12px; margin: 6px 0 20px; padding: 16px 18px; border-radius: 14px; border: 1px solid var(--linea-2); background: rgba(var(--granate-rgb), 0.16); }
 .aip-aviso > svg { margin-top: 2px; color: var(--rosa); }
-.aip-aviso b { display: block; margin-bottom: 4px; font-size: 15.5px; }
+/* Solo el título del aviso va en su línea: la negrita del texto sigue en la frase. */
+.aip-aviso > div > b { display: block; margin-bottom: 4px; font-size: 15.5px; }
 .aip-aviso p { margin: 0; font-size: 15.5px; line-height: 1.6; color: var(--papel-2); }
 .aip-aviso.truco { border-color: rgba(74, 222, 128, 0.35); background: rgba(74, 222, 128, 0.06); }
 .aip-aviso.truco > svg { color: var(--verde); }
@@ -520,6 +521,46 @@ a.aip-hilo:hover .aip-candado { color: var(--rosa); }
 .aip-helm-btns { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 .aip-post .aip-helm { margin: 28px 0 0; max-width: none; }
 .aip-portada .aip-zonas { grid-template-columns: repeat(3, 1fr); }
-.aip-portada .aip-zona.operaciones { grid-column: span 2; }
 @media (max-width: 980px) { .aip-portada .aip-zonas { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 560px) { .aip-portada .aip-zonas { grid-template-columns: 1fr; } .aip-portada .aip-zona.operaciones { grid-column: auto; } }
+@media (max-width: 560px) { .aip-portada .aip-zonas { grid-template-columns: 1fr; } }
+
+/* Un archivo para descargar dentro de un recurso (bloque «descarga» del motor
+   común, bloques.jsx): vale para cualquier comunidad. */
+.aip-descarga-bloque { display: grid; grid-template-columns: 22px 1fr auto; gap: 12px; align-items: center; margin: 6px 0 20px; padding: 16px 18px; border-radius: 14px; border: 1px solid var(--linea-2); background: var(--panel); }
+.aip-descarga-bloque > svg { color: var(--rosa); }
+.aip-descarga-bloque b { display: block; font-size: 15.5px; }
+.aip-descarga-bloque p { margin: 4px 0 0; font-size: 14.5px; line-height: 1.5; color: var(--papel-2); }
+@media (max-width: 520px) { .aip-descarga-bloque { grid-template-columns: 22px 1fr; } .aip-descarga-bloque > :last-child { grid-column: 2; justify-self: start; } }
+
+/* El campo trampa de la puerta de datos (Puerta.jsx): fuera de la vista, del
+   lector de pantalla y del tabulador. */
+.aip-trampa { position: absolute !important; left: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+/* El enlace de una tarjeta de skill a su hilo propio (piezas.jsx). */
+.aip-a-hilo { margin: 4px 0 18px; }
+
+/* Entrada con el correo (AI para todo): el enlace a HELM Academy (Skool) para
+   quien aún no está. El violeta es el de Skool. */
+.aip-skool-paso {
+  display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%;
+  margin: 16px auto 0; padding: 10px 16px;
+  border-radius: 999px; text-decoration: none;
+  background: rgba(124, 58, 237, 0.14); border: 1px solid rgba(124, 58, 237, 0.45);
+  color: var(--papel); font-weight: 700; font-size: 14px;
+  transition: background .15s;
+}
+.aip-skool-paso:hover { background: rgba(124, 58, 237, 0.24); }
+.aip-skool-n {
+  display: inline-grid; place-items: center; flex-shrink: 0;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #7c3aed; color: #fff; font-size: 12px; font-weight: 800;
+}
+.aip-aprobada .aip-btn.grande { margin-top: 18px; }
+.aip-aprobada .aip-btn.sec { margin-top: 10px; }
+/* Ese correo no está en HELM Academy: el aviso y el botón al formulario. */
+.aip-no-esta {
+  display: grid; justify-items: center; gap: 12px;
+  margin-top: 16px; padding: 16px 18px; border-radius: 16px;
+  background: rgba(124, 58, 237, 0.10); border: 1px solid rgba(124, 58, 237, 0.4);
+}
+.aip-no-esta p { margin: 0; text-align: center; color: var(--papel); }

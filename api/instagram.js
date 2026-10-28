@@ -25,7 +25,7 @@ import { applyCors, rateLimit, getClientIp, writeAudit, signJwt, verifyJwt } fro
 import { requireProfileAccess } from './_lib/access.js'
 import {
   igAuthUrl, igRedirectUri, igCredsMissing, exchangeCode, exchangeLongLived,
-  getPerfil, listMedia, getInsights, getIgConfig, saveIgConfig, getToken, maskToken, informeIg,
+  getPerfil, listMedia, getInsights, getIgConfig, saveIgConfig, getToken, maskToken, informeIg, suscribirMensajes,
 } from './_lib/instagram.js'
 
 const TABLA = 'helm_ig_media'
@@ -177,8 +177,14 @@ export default async function handler(req, res) {
         picture: perfil.profile_picture_url || prev.picture || null,
         followers: perfil.followers_count ?? prev.followers ?? null,
         mediaCount: perfil.media_count ?? prev.mediaCount ?? null,
+        // Si esta conexión era para el setter, la cuenta se suscribe al webhook
+        // de DM ahora mismo; si Meta no lo deja (app sin el permiso aprobado),
+        // se apunta el motivo para enseñarlo en el setter.
+        ...(payload.mensajes ? await suscribirMensajes(largo.access_token)
+          .then(() => ({ mensajes: true, mensajesError: null, mensajesDesde: new Date().toISOString() }))
+          .catch(e => ({ mensajes: false, mensajesError: e.message || 'Meta no ha dejado activar los mensajes' })) : {}),
       })
-      await writeAudit({ clientId: payload.clientId, action: 'instagram.linked', req, metadata: { username: perfil.username || null } })
+      await writeAudit({ clientId: payload.clientId, action: 'instagram.linked', req, metadata: { username: perfil.username || null, mensajes: Boolean(payload.mensajes) } })
       return volver(payload.slug, { instagram: 'ok' })
     } catch (err) {
       return volver(payload.slug, { instagram: 'error', msg: err.message || 'Instagram ha rechazado la conexión.' })
@@ -236,8 +242,11 @@ export default async function handler(req, res) {
           error: 'Al servidor le faltan IG_APP_ID e IG_APP_SECRET. Mientras tanto, conecta la cuenta pegando un token de larga duración.',
         })
       }
-      const state = await signJwt({ kind: 'instagram-oauth', clientId, slug: client.slug }, { expiresIn: 600 })
-      return res.status(200).json({ url: igAuthUrl({ state, redirectUri: igRedirectUri(req) }) })
+      // ?mensajes=1 lo pide el setter de Instagram: además de las métricas,
+      // permiso para leer y contestar los DM de la cuenta.
+      const mensajes = req.query.mensajes === '1'
+      const state = await signJwt({ kind: 'instagram-oauth', clientId, slug: client.slug, mensajes }, { expiresIn: 600 })
+      return res.status(200).json({ url: igAuthUrl({ state, redirectUri: igRedirectUri(req), mensajes }) })
     }
 
     // ── POST ?action=link ──────────────────────────────────────────────────

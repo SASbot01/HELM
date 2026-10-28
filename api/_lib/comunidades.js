@@ -10,7 +10,8 @@
 //   perfil      el slug del perfil de HELM (su CRM, sus noticias, su diario)
 //   nombre      cómo firma (notas del CRM, el diario, los avisos)
 //   web         dónde vive la comunidad (los enlaces de los avisos)
-//   ingresos    los tramos que se aceptan en la puerta de datos
+//   ingresos    los tramos que se aceptan en la puerta de datos; null = no se
+//               piden
 //   profesiones las que se aceptan, si la puerta da opciones; null = texto libre
 //   notas       las líneas fijas que el navegador puede pedir para la ficha
 //
@@ -22,11 +23,14 @@ export const COMUNIDADES = {
     perfil: 'silvestre',
     nombre: 'AI para todo',
     web: 'https://s4sf.net/aiparatodo',
-    ingresos: {
-      menos_1000: 'Menos de 1.000 €/mes',
-      mas_1000: 'Más de 1.000 €/mes',
+    // Gratis desde el 20-10-2026: nombre, correo y a qué te dedicas, nada más.
+    ingresos: null,
+    profesiones: {
+      negocio: 'Tengo un negocio',
+      freelance: 'Freelance o creador',
+      empresa: 'Trabajo en una empresa',
+      empezando: 'Estoy empezando',
     },
-    profesiones: null,
     notas: [
       'AI para todo · descargó la guía Mis 8 no negociables (PDF)',
       'AI para todo · descargó la guía Los Mods de Claude (PDF)',
@@ -37,7 +41,7 @@ export const COMUNIDADES = {
   filmmakingparatodo: {
     perfil: 'detras-de-camra',
     nombre: 'Filmmaking para todo',
-    web: 'https://s4sf.net/filmmakingparatodo',
+    web: 'https://detrasdecamara.org/filmmakingparatodo',
     // TODO-ABEL: tramos propuestos; confirmar con Abel.
     ingresos: {
       menos_500: 'Menos de 500 €/mes',

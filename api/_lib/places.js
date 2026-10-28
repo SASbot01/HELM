@@ -26,6 +26,10 @@ const CAMPOS = [
   'places.primaryTypeDisplayName',
   'places.businessStatus',
   'places.location',
+  // Sin esto Google no devuelve el testigo de la página siguiente (la API
+  // nueva solo manda lo que está en la máscara) y toda búsqueda se quedaba en
+  // los 20 primeros, por mucho que se pidieran 60. No se factura aparte.
+  'nextPageToken',
 ].join(',')
 
 // Google devuelve 20 por página como mucho, y no da más de 3 páginas (60).

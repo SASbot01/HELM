@@ -37,6 +37,26 @@ function resolveHandlerFile(pathname) {
 
 const MAX_CUERPO = 30 * 1024 * 1024
 
+// Las subidas en crudo (un vídeo entero, un trozo de 32 MB de uno o un recurso
+// del Editor de reels: el archivo es el cuerpo, no JSON): no se leen aquí (no
+// caben en MAX_CUERPO ni en memoria, y pasadas por readBody se pierde el
+// stream); el handler recibe la petición sin tocar y la escribe a disco según
+// llega, con su propio tope (api/_lib/subida-trozos.js).
+const EN_CRUDO = {
+  '/api/editor': ['subir', 'trozo', 'recurso'],
+  '/api/trial-reels': ['trozo'],
+}
+const subidaEnCrudo = (pathname, query) =>
+  (EN_CRUDO[pathname.replace(/\/+$/, '')] || []).includes(query.action)
+
+// Lo que se lee como texto: JSON (también los *+json), formularios y text/*.
+// Lo demás (un fichero del portal de documentos, application/octet-stream) se
+// queda en bytes en req.rawBody y req.body va vacío: pasado a UTF-8 se rompía
+// cualquier byte que no fuera texto, y nadie lo lee de ahí (api/documentos.js y
+// los webhooks leen los bytes; /api/db ni pasa por aquí). Sin content-type, como
+// antes, texto.
+const ES_TEXTO = /^\s*(application\/(json|x-www-form-urlencoded|[\w.+-]+\+json)|text\/|;|$)/i
+
 function readBody(req) {
   return new Promise((resolve) => {
     const chunks = []
@@ -51,9 +71,9 @@ function readBody(req) {
       // El cuerpo tal cual llegó: las firmas de los webhooks (Stripe) se
       // calculan sobre estos bytes, no sobre el JSON vuelto a escribir.
       req.rawBody = Buffer.concat(chunks)
-      const raw = req.rawBody.toString('utf8')
       const ct = (req.headers['content-type'] || '')
-      if (!raw) return resolve(undefined)
+      if (!req.rawBody.length || !ES_TEXTO.test(ct)) return resolve(undefined)
+      const raw = req.rawBody.toString('utf8')
       if (ct.includes('application/json')) { try { return resolve(JSON.parse(raw)) } catch { return resolve(undefined) } }
       if (ct.includes('application/x-www-form-urlencoded')) return resolve(Object.fromEntries(new URLSearchParams(raw)))
       resolve(raw)
@@ -91,7 +111,7 @@ async function atiende(req, res) {
     const query = Object.fromEntries(u.searchParams)
     if (typeof resolved === 'object' && resolved.param) query[resolved.param] = resolved.value
     req.query = query
-    req.body = await readBody(req)
+    req.body = subidaEnCrudo(u.pathname, query) ? undefined : await readBody(req)
     const mod = await import(pathToFileURL(file).href)
     const handler = mod.default || mod.handler
     if (typeof handler !== 'function') { res.status(500).json({ error: `Handler in ${path.basename(file)} is not a function` }); return }
@@ -108,3 +128,9 @@ async function atiende(req, res) {
 }
 
 server.listen(PORT, '127.0.0.1', () => console.log(`[api] listening on 127.0.0.1:${PORT} -> ${API_ROOT}`))
+
+// Trial reels limpia su disco (7 días) y reintenta los cobros sin apuntar cada
+// hora (api/trial-reels.js · mantenimiento): se carga ya, aunque nadie abra el
+// agente. Con la misma URL que usa atiende(), para que sea el mismo módulo.
+import(pathToFileURL(path.join(API_ROOT, 'trial-reels.js')).href)
+  .catch(e => console.error('[api] no pude cargar trial-reels:', e?.message || e))

@@ -1,0 +1,94 @@
+/* HELM — Setter de Instagram (vista del agente). Tokens del Agent OS; neutro
+   (rgba) donde hace falta para claro y oscuro. En móvil, una columna. */
+.sig-root { --sig-borde: rgba(128,128,128,.22); --sig-suave: rgba(128,128,128,.10); }
+.sig-ayuda { color: var(--text-secondary); font-size: 13px; line-height: 1.5; margin: 6px 0; display: block; }
+.sig-gira { animation: sig-gira 1s linear infinite; vertical-align: -2px; }
+@keyframes sig-gira { to { transform: rotate(360deg); } }
+.sig-ok { color: var(--success, #22c55e); font-size: 13px; }
+.sig-fila { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+
+/* Qué falta para que funcione */
+.sig-estado { list-style: none; margin: 8px 0 12px; padding: 10px 14px; border: 1px solid var(--sig-borde); border-radius: 12px; display: grid; gap: 6px; }
+.sig-estado li { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 1.4; }
+.sig-estado li svg { flex: 0 0 auto; margin-top: 2px; }
+.sig-estado li.ok svg { color: var(--success, #22c55e); }
+.sig-estado li.falta { color: var(--text-secondary); }
+.sig-estado li.falta svg { color: var(--orange); }
+
+.sig-pestanas { display: flex; gap: 6px; margin: 4px 0 14px; flex-wrap: wrap; }
+.sig-pestanas button { display: inline-flex; gap: 6px; align-items: center; min-height: 40px; padding: 8px 14px; border-radius: 999px;
+  border: 1px solid var(--border); background: transparent; color: var(--text-secondary); font: inherit; font-size: 13.5px; cursor: pointer; }
+.sig-pestanas button.on { background: var(--sig-suave); color: var(--text); border-color: var(--orange); }
+
+.sig-chip { font-style: normal; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--sig-borde); color: var(--text-secondary); white-space: nowrap; }
+.sig-chip.rojo { border-color: var(--danger, #ef4444); color: var(--danger, #ef4444); }
+.sig-chip.suave { background: var(--sig-suave); border-color: transparent; }
+
+/* Bandeja */
+.sig-hilos { list-style: none; margin: 0; padding: 0; border: 1px solid var(--sig-borde); border-radius: 12px; overflow: hidden; }
+.sig-hilos li + li { border-top: 1px solid var(--sig-borde); }
+.sig-hilos button { width: 100%; display: flex; gap: 12px; align-items: center; padding: 12px 14px; background: transparent; border: 0;
+  color: inherit; font: inherit; text-align: left; cursor: pointer; min-height: 60px; }
+.sig-hilos button:hover { background: var(--sig-suave); }
+.sig-hilos button.pendiente { box-shadow: inset 3px 0 0 var(--danger, #ef4444); }
+.sig-avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; flex: 0 0 auto;
+  background: var(--sig-suave); font-weight: 700; font-size: 15px; }
+.sig-hilo-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sig-hilo-txt b { font-size: 14px; }
+.sig-hilo-txt small { color: var(--text-secondary); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sig-hilo-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: 0 0 auto; }
+.sig-hilo-meta small { color: var(--text-muted); font-size: 11.5px; }
+
+/* Un hilo */
+.sig-hilo-cab { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 8px; }
+.sig-hilo-cab h2 { margin: 0; font-size: 18px; flex: 1 1 auto; }
+.sig-aviso { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text-secondary); background: var(--sig-suave);
+  border-radius: 10px; padding: 8px 12px; }
+.sig-chat { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--sig-borde); border-radius: 12px;
+  max-height: 52vh; min-height: 140px; overflow-y: auto; margin: 10px 0; }
+.sig-msj { max-width: 82%; display: flex; flex-direction: column; gap: 3px; }
+.sig-msj p { margin: 0; padding: 9px 12px; border-radius: 16px; font-size: 14px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+.sig-msj small { font-size: 11px; color: var(--text-muted); padding: 0 6px; }
+.sig-msj.lead { align-self: flex-start; }
+.sig-msj.lead p { background: var(--sig-suave); border-bottom-left-radius: 4px; }
+.sig-msj.ia, .sig-msj.humano, .sig-msj.instagram { align-self: flex-end; align-items: flex-end; }
+.sig-msj.ia p { background: color-mix(in srgb, var(--orange) 22%, transparent); border-bottom-right-radius: 4px; }
+.sig-msj.humano p, .sig-msj.instagram p { background: color-mix(in srgb, var(--text) 12%, transparent); border-bottom-right-radius: 4px; }
+.sig-msj.fallo p { outline: 1px dashed var(--danger, #ef4444); opacity: .7; }
+
+.sig-borradores { border: 1px solid var(--orange); border-radius: 12px; padding: 12px; margin: 10px 0; }
+.sig-borradores h3, .sig-ficha h3 { display: flex; gap: 6px; align-items: center; font-size: 14px; margin: 0 0 8px; }
+.sig-root textarea, .sig-config input:not([type]), .sig-config select {
+  font: inherit; font-size: 14px; color: var(--text); background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px); padding: 9px 10px; width: 100%; box-sizing: border-box; resize: vertical; min-height: 40px; }
+.sig-borradores textarea { margin-bottom: 6px; }
+.sig-escribir { display: flex; gap: 8px; align-items: flex-end; margin: 10px 0; }
+.sig-escribir textarea { flex: 1; }
+.sig-escribir .ag-btn { min-height: 44px; }
+
+.sig-ficha { border: 1px solid var(--sig-borde); border-radius: 12px; padding: 12px 14px; margin: 10px 0; font-size: 13.5px; line-height: 1.5; }
+.sig-ficha p { margin: 4px 0; }
+.sig-ficha dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px 14px; margin: 8px 0 0; }
+.sig-ficha dt { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+.sig-ficha dd { margin: 0; }
+
+/* Configuración */
+.sig-config { display: flex; flex-direction: column; gap: 14px; max-width: 760px; }
+.sig-config > label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-secondary); }
+.sig-config fieldset { border: 1px solid var(--sig-borde); border-radius: 12px; padding: 10px 14px 14px; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.sig-config legend { font-weight: 700; font-size: 14px; padding: 0 6px; }
+.sig-opcion, .sig-interruptor { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.sig-opcion input, .sig-interruptor input { margin-top: 3px; width: 18px; height: 18px; flex: 0 0 auto; }
+.sig-opcion span, .sig-interruptor span { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.sig-opcion small, .sig-interruptor small { color: var(--text-secondary); font-size: 12.5px; }
+.sig-interruptor { border: 1px solid var(--sig-borde); border-radius: 12px; padding: 12px 14px; }
+.sig-caja { border: 1px dashed var(--orange); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.sig-caja p { margin: 0; display: flex; gap: 8px; align-items: center; font-size: 14px; }
+
+.sig-probar { max-width: 760px; }
+
+@media (max-width: 640px) {
+  .sig-msj { max-width: 92%; }
+  .sig-escribir { flex-direction: column; align-items: stretch; }
+  .sig-hilo-meta .sig-chip.suave { display: none; }
+}

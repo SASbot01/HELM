@@ -3,9 +3,12 @@
 // directo al suyo (ver HelmApp).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, ArrowUpRight, LogOut, Users, MoreHorizontal, EyeOff, Trash2, RotateCcw, Building2 } from 'lucide-react'
-import { brandOf, notificacionesApi, perfilesApi, creditosApi } from './lib'
+import { Plus, Search, ArrowUpRight, LogOut, Users, MoreHorizontal, EyeOff, Trash2, RotateCcw, Building2, Send, Inbox, KeyRound } from 'lucide-react'
+import { brandOf, notificacionesApi, perfilesApi, creditosApi, telegramAgenciaApi, altasApi, accesosApi, enlaceAltaPublica } from './lib'
 import Creditos, { BotonCreditos, Bienvenida } from './Creditos'
+import TelegramAgencia from './TelegramAgencia'
+import AltasRecibidas, { DetalleAlta } from './AltasRecibidas'
+import AccesosRecibidos from './AccesosRecibidos'
 import { Modal, Field, Input, FormNote } from './ui'
 import './perfiles.css'
 
@@ -16,10 +19,21 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
   const [menu, setMenu] = useState(null)            // id del perfil con el menú abierto
   const [borrando, setBorrando] = useState(null)    // perfil en el modal de borrado
   const [error, setError] = useState(null)
-  const [agencia, setAgencia] = useState(null)      // { id, nombre, plataforma }
+  const [agencia, setAgencia] = useState(null)      // { id, nombre, slug, plataforma }
   const [verCreditos, setVerCreditos] = useState(false)
+  const [verTelegram, setVerTelegram] = useState(false)
+  const [conTelegram, setConTelegram] = useState(false)  // el botón del bot: solo si la agencia lo tiene
   const [bienvenida, setBienvenida] = useState(null)  // { saldo, pagado }: la oferta de la agencia nueva
   const [recarga, setRecarga] = useState(0)         // para que el botón relea el saldo
+  // Las altas del enlace público (helm.s4sf.net/alta): la bandeja y la que está abierta.
+  const [altas, setAltas] = useState(null)
+  const [falloAltas, setFalloAltas] = useState(null)
+  const [verAltas, setVerAltas] = useState(false)
+  const [altaAbierta, setAltaAbierta] = useState(null)
+  // Las solicitudes de acceso a AI para todo (puerta con aprobación).
+  const [accesos, setAccesos] = useState(null)
+  const [falloAccesos, setFalloAccesos] = useState(null)
+  const [verAccesos, setVerAccesos] = useState(false)
   const caja = useRef(null)
   const navigate = useNavigate()
 
@@ -35,10 +49,23 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
   }, [propios, q])
 
   const cargarInactivos = () => perfilesApi.inactivos().then(r => setInactivos(r.perfiles)).catch(() => {})
+  const cargarAltas = () => altasApi.lista()
+    .then(r => { setAltas(r.altas || []); setFalloAltas(null) })
+    .catch(e => setFalloAltas(e.message || 'No se han podido cargar las altas.'))
+  const cargarAccesos = () => accesosApi.pendientes()
+    .then(r => { setAccesos(r.accesos || []); setFalloAccesos(null) })
+    .catch(e => setFalloAccesos(e.message || 'No se han podido cargar los accesos.'))
+  const accesosPendientes = (accesos || []).length
+  // Las que esperan a que alguien las mire: el número del botón.
+  const nuevas = useMemo(() => (altas || []).filter(a => a.estado === 'enviada').length, [altas])
+  // La plataforma ve las de todas las agencias: entonces cada una dice de cuál es.
+  const variasAgencias = useMemo(() => new Set((altas || []).map(a => a.agencia?.id).filter(Boolean)).size > 1, [altas])
   useEffect(() => {
     if (!localStorage.getItem('bw_admin_jwt')) return
     notificacionesApi.resumen().then(r => setAvisos(r.porPerfil || {})).catch(() => {})
     cargarInactivos()
+    cargarAltas()
+    cargarAccesos()
     // Vuelta de pagar en Stripe: se confirma el pago (el servidor se lo
     // pregunta a Stripe) antes de leer el saldo, para enseñar el nuevo.
     const p = new URLSearchParams(window.location.search)
@@ -48,7 +75,12 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
       ? creditosApi.confirmar(sesion).then(() => true).catch(e => { setError(e.message); return false })
       : Promise.resolve(false)
     pago.then(pagado => creditosApi.saldo().then(r => {
-      setAgencia({ id: r.agencia?.id, nombre: r.agencia?.nombre, plataforma: r.plataforma })
+      setAgencia({ id: r.agencia?.id, nombre: r.agencia?.nombre, slug: r.agencia?.slug, plataforma: r.plataforma })
+      // El bot de Telegram solo lo tienen las agencias de HELM_TELEGRAM_AGENCIAS
+      // (y la plataforma, que lo activa). Quien quedó vinculado de antes lo
+      // sigue viendo para poder desvincularse.
+      if (r.plataforma) setConTelegram(true)
+      else telegramAgenciaApi.vinculo().then(e => setConTelegram(Boolean(e?.permitido || e?.vinculado))).catch(() => {})
       // Agencia recién llegada: primero la oferta de compra (o, si viene de
       // pagar, directamente el regalo de bienvenida).
       if (r.bienvenida?.pendiente) setBienvenida({ saldo: r, pagado })
@@ -86,6 +118,23 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
             </label>
           )}
           <BotonCreditos onAbrir={() => setVerCreditos(true)} recarga={recarga} />
+          <button
+            type="button" className="helm-btn" onClick={() => { setVerAltas(true); cargarAltas() }}
+            title={nuevas ? `${nuevas} ${nuevas === 1 ? 'alta nueva' : 'altas nuevas'} del enlace público` : 'Las altas del enlace público'}
+          >
+            <Inbox size={15} /> Altas{nuevas > 0 && <span className="helm-altas-num">{nuevas}</span>}
+          </button>
+          <button
+            type="button" className="helm-btn" onClick={() => { setVerAccesos(true); cargarAccesos() }}
+            title={accesosPendientes ? `${accesosPendientes} ${accesosPendientes === 1 ? 'solicitud' : 'solicitudes'} de acceso a AI para todo` : 'Solicitudes de acceso a AI para todo'}
+          >
+            <KeyRound size={15} /> Accesos{accesosPendientes > 0 && <span className="helm-altas-num">{accesosPendientes}</span>}
+          </button>
+          {conTelegram && (
+            <button type="button" className="helm-btn" onClick={() => setVerTelegram(true)} title="El bot de Telegram de la agencia">
+              <Send size={15} /> Telegram
+            </button>
+          )}
           {agencia?.plataforma && (
             <button type="button" className="helm-btn" onClick={() => navigate('/plataforma')}><Building2 size={15} /> Agencias</button>
           )}
@@ -96,6 +145,35 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
 
       <FormNote>{error}</FormNote>
       {verCreditos && <Creditos onClose={() => { setVerCreditos(false); setRecarga(n => n + 1) }} />}
+      {verTelegram && (
+        <Modal title="Bot de Telegram" onClose={() => setVerTelegram(false)} wide>
+          <TelegramAgencia />
+        </Modal>
+      )}
+      {/* La bandeja y, encima, el cajón del alta que se abre: mientras está
+          el cajón, el modal se quita (Escape cierra solo el cajón y se vuelve a la lista). */}
+      {verAltas && !altaAbierta && (
+        <Modal title="Altas recibidas" onClose={() => setVerAltas(false)} wide>
+          <AltasRecibidas
+            altas={altas} fallo={falloAltas} varias={variasAgencias}
+            enlace={agencia?.slug ? enlaceAltaPublica(agencia.slug) : null}
+            onAbrir={setAltaAbierta} onReintentar={cargarAltas}
+          />
+        </Modal>
+      )}
+      {verAccesos && (
+        <Modal title="Accesos a AI para todo" onClose={() => setVerAccesos(false)} wide>
+          <AccesosRecibidos accesos={accesos} fallo={falloAccesos} onCambio={cargarAccesos} />
+        </Modal>
+      )}
+      {altaAbierta && (
+        <DetalleAlta
+          key={altaAbierta.id} alta={altaAbierta} varias={variasAgencias}
+          onCerrar={() => setAltaAbierta(null)}
+          onCambio={() => { cargarAltas(); onChanged() }}
+          onAbrirPerfil={p => { setAltaAbierta(null); setVerAltas(false); onPick(p) }}
+        />
+      )}
       {bienvenida && (
         <Bienvenida
           saldo={bienvenida.saldo} pagado={bienvenida.pagado}

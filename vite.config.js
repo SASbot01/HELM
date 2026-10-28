@@ -27,11 +27,10 @@ export default defineConfig({
     // funciones api/ (Vercel-style) que corre en :5182 contra la Supabase local.
     proxy: {
       '/api': 'http://localhost:5182',
-      // Supabase local servida desde el mismo origen que la app. Necesario
-      // al entrar por un túnel HTTPS: el navegador no puede llamar a
-      // http://<ip-tailscale>:54321 (mixed content + IP privada).
-      // VITE_SUPABASE_URL debe apuntar entonces a <origen>/sb.
-      // Solo tablas y archivos, y solo con la clave pública: scripts/sb-proxy.mjs.
+      // /sb: solo GET/HEAD de /storage/v1/object/public/… (los enlaces viejos
+      // a archivos guardados en la base), ver scripts/sb-proxy.mjs. Sin
+      // escrituras ni Realtime. El panel habla con la base por /api/db
+      // (api/_lib/pasarela.js) y las páginas públicas por sus endpoints.
       '/sb': sbProxy(),
     },
   },
@@ -57,12 +56,13 @@ export default defineConfig({
       origin: [
         'https://detrasdecamara.org', 'https://www.detrasdecamara.org',
         'https://web.enformaconhugo.com', 'https://enformaconhugo.com',
-        // La página de inicio de Alex (www.s4sf.net/paginainicio). Esta no
-        // llama a api/formularios.js: escribe en `crm_contacts` por Supabase,
-        // o sea por el proxy /sb de aquí abajo — y el preflight se comía igual,
-        // porque este CORS corre ANTES de cualquier proxy. Los dos hosts: el
-        // túnel sirve el dominio con y sin www, y el navegador manda el que
-        // haya escrito la persona en la barra.
+        // La página de inicio de Alex (www.s4sf.net/paginainicio). Manda sus
+        // formularios a api/leads.js (antes escribía en `crm_contacts` por el
+        // proxy /sb, que hoy ya no escribe nada: solo GET/HEAD de
+        // /storage/v1/object/public/…, ver scripts/sb-proxy.mjs). Este CORS
+        // corre ANTES de cualquier proxy, así que el preflight se decide aquí.
+        // Los dos hosts: el túnel sirve el dominio con y sin www, y el
+        // navegador manda el que haya escrito la persona en la barra.
         'https://www.s4sf.net', 'https://s4sf.net',
         // herrerafilm.com — la web de bodas de Aitor López, en Hostinger. Su
         // formulario de contacto manda a api/formularios.js igual que las
@@ -83,7 +83,8 @@ export default defineConfig({
     },
     proxy: {
       '/api': 'http://localhost:5182',
-      // Solo tablas y archivos, y solo con la clave pública: scripts/sb-proxy.mjs.
+      // /sb: solo GET/HEAD de /storage/v1/object/public/…, ver
+      // scripts/sb-proxy.mjs. Sin escrituras ni Realtime.
       '/sb': sbProxy(),
     },
   },

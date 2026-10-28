@@ -17,6 +17,10 @@
 //   HELM_PUBLIC_URL → URL pública de HELM (https://helm.s4sf.net). Es a donde
 //                     Telegram manda los mensajes; sin ella no hay webhook que
 //                     registrar y la tarjeta de Ajustes lo dice en vez de fallar.
+//
+// Además del bot de cada perfil está el bot ÚNICO de HELM para las agencias
+// (api/telegram-agencia.js): su token y el secreto de su webhook van en el
+// entorno (HELM_TELEGRAM_TOKEN, HELM_TELEGRAM_SECRETO), no en la base.
 import crypto from 'node:crypto'
 
 const API = 'https://api.telegram.org'
@@ -46,6 +50,8 @@ export async function tg(token, method, body) {
     const e = new Error(r.status === 401 || r.status === 404 ? 'Token del bot no válido.' : desc)
     e.statusCode = r.status === 401 || r.status === 404 ? 401 : 502
     e.telegramCode = data?.error_code || r.status
+    // En un 429 Telegram dice cuántos segundos esperar.
+    if (data?.parameters?.retry_after != null) e.retryAfter = data.parameters.retry_after
     throw e
   }
   return data.result
@@ -62,12 +68,16 @@ export async function verificarToken(token) {
   return { botId: me.id, username: me.username, firstName: me.first_name }
 }
 
-/** Registra (o quita) el webhook. `secret` viaja en cada update como cabecera. */
-export function registrarWebhook(token, url, secret) {
+/**
+ * Registra (o quita) el webhook. `secret` viaja en cada update como cabecera.
+ * El bot de un perfil solo necesita mensajes; el de agencia, también las
+ * pulsaciones de sus botones (`callback_query`).
+ */
+export function registrarWebhook(token, url, secret, allowedUpdates = ['message']) {
   return tg(token, 'setWebhook', {
     url,
     secret_token: secret,
-    allowed_updates: ['message'],
+    allowed_updates: allowedUpdates,
     // Lo que se acumuló mientras no había webhook no interesa: podría ser de
     // otro perfil o de otra instalación que usó el mismo bot.
     drop_pending_updates: true,
@@ -86,6 +96,8 @@ export async function infoWebhook(token) {
     pendientes: i.pending_update_count || 0,
     ultimoError: i.last_error_message || null,
     ultimoErrorFecha: i.last_error_date ? new Date(i.last_error_date * 1000).toISOString() : null,
+    // Lo que se le entrega. Sin la lista, Telegram entrega de todo (salvo chat_member).
+    tipos: Array.isArray(i.allowed_updates) ? i.allowed_updates : null,
   }
 }
 
@@ -135,19 +147,99 @@ export function aMarkdownTelegram(md) {
     .replace(/^\s*[-·•]\s+/gm, '• ')             // viñetas uniformes
 }
 
+// Si Telegram pide esperar (429) como mucho esto, se espera y se reintenta una
+// vez: una tarjeta de aprobación o una respuesta perdidas por una ráfaga se
+// notan más que unos segundos de retraso.
+const MAX_ESPERA_429 = 10
+
+/** sendMessage, con un reintento tras un 429 corto. */
+async function mandar(token, cuerpo) {
+  try {
+    return await tg(token, 'sendMessage', cuerpo)
+  } catch (err) {
+    const espera = Number(err?.retryAfter)
+    if (err?.telegramCode !== 429 || !Number.isFinite(espera) || espera > MAX_ESPERA_429) throw err
+    await new Promise(r => setTimeout(r, Math.max(0, espera) * 1000))
+    return tg(token, 'sendMessage', cuerpo)
+  }
+}
+
 /** Manda un mensaje (troceado si hace falta) a un chat. Devuelve cuántos trozos salieron. */
 export async function enviarMensaje(token, chatId, texto) {
   const trozos = trocear(aMarkdownTelegram(texto))
   for (const trozo of trozos) {
     try {
-      await tg(token, 'sendMessage', { chat_id: chatId, text: trozo, parse_mode: 'Markdown', disable_web_page_preview: true })
+      await mandar(token, { chat_id: chatId, text: trozo, parse_mode: 'Markdown', disable_web_page_preview: true })
     } catch (err) {
       // 400 = no ha podido parsear las entidades. Sin formato y adelante.
       if (err.telegramCode !== 400) throw err
-      await tg(token, 'sendMessage', { chat_id: chatId, text: trozo, disable_web_page_preview: true })
+      await mandar(token, { chat_id: chatId, text: trozo, disable_web_page_preview: true })
     }
   }
   return trozos.length
+}
+
+/**
+ * Como `enviarMensaje`, pero con botones (inline_keyboard) en el último trozo,
+ * que es el que queda a la vista. Devuelve el Message de ese trozo: su
+ * `message_id` es lo que luego se edita para quitar los botones.
+ * Con `plano`, el texto sale tal cual, sin Markdown: una tarjeta de
+ * aprobación tiene que enseñar literalmente lo que se va a escribir (un
+ * `_` de un email o un [texto](url) no pueden cambiar lo que se ve).
+ */
+export async function enviarConBotones(token, chatId, texto, inline_keyboard, { plano = false } = {}) {
+  const trozos = trocear(plano ? String(texto || '') : aMarkdownTelegram(texto))
+  let ultimo = null
+  for (let i = 0; i < trozos.length; i++) {
+    const botones = i === trozos.length - 1 && inline_keyboard?.length ? { reply_markup: { inline_keyboard } } : {}
+    const base = { chat_id: chatId, text: trozos[i], disable_web_page_preview: true, ...botones }
+    if (plano) {
+      ultimo = await mandar(token, base)
+      continue
+    }
+    try {
+      ultimo = await mandar(token, { ...base, parse_mode: 'Markdown' })
+    } catch (err) {
+      if (err.telegramCode !== 400) throw err
+      ultimo = await mandar(token, base)
+    }
+  }
+  return ultimo
+}
+
+// Errores de Telegram que no son fallos: editar con el mismo texto que ya
+// había, o contestar a un botón pulsado hace demasiado.
+const SIN_IMPORTANCIA = /message is not modified|query is too old/i
+
+/** Contesta a la pulsación de un botón (si no, el botón se queda con el reloj girando). */
+export async function responderCallback(token, id, texto) {
+  try {
+    return await tg(token, 'answerCallbackQuery', { callback_query_id: id, ...(texto ? { text: String(texto).slice(0, 200) } : {}) })
+  } catch (err) {
+    if (SIN_IMPORTANCIA.test(err.message)) return null
+    throw err
+  }
+}
+
+/** Cambia el texto de un mensaje ya enviado. Sin `inline_keyboard`, se quitan los botones. Con `plano`, sin Markdown. */
+export async function editarMensaje(token, chatId, messageId, texto, inline_keyboard, { plano = false } = {}) {
+  const base = {
+    chat_id: chatId, message_id: messageId,
+    text: (plano ? String(texto || '') : aMarkdownTelegram(texto)).slice(0, MAX_MENSAJE), disable_web_page_preview: true,
+    ...(inline_keyboard?.length ? { reply_markup: { inline_keyboard } } : {}),
+  }
+  try {
+    if (plano) return await tg(token, 'editMessageText', base)
+    try {
+      return await tg(token, 'editMessageText', { ...base, parse_mode: 'Markdown' })
+    } catch (err) {
+      if (err.telegramCode !== 400 || SIN_IMPORTANCIA.test(err.message)) throw err
+      return await tg(token, 'editMessageText', base)
+    }
+  } catch (err) {
+    if (SIN_IMPORTANCIA.test(err.message)) return null
+    throw err
+  }
 }
 
 // ── Vinculación ────────────────────────────────────────────────────────────
@@ -182,6 +274,48 @@ export function nombreDelChat(msg) {
   const usuario = from.username ? `@${from.username}` : ''
   if (chat.type && chat.type !== 'private') return chat.title || persona || String(chat.id)
   return [persona, usuario].filter(Boolean).join(' ') || String(chat.id)
+}
+
+// ── El bot de agencia ──────────────────────────────────────────────────────
+// Uno solo para todas las agencias que lo tengan permitido. Lo usan
+// api/telegram-agencia.js (conversación y aprobaciones) y notificar.js (avisos).
+
+export const tokenAgencia = () => (process.env.HELM_TELEGRAM_TOKEN || '').trim()
+
+/** Slugs de las agencias que pueden usar el bot (HELM_TELEGRAM_AGENCIAS, separados por comas). */
+export const agenciasTelegram = () => (process.env.HELM_TELEGRAM_AGENCIAS || 'silvestreai')
+  .split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+
+/** ¿Esa agencia puede usar el bot? Devuelve la agencia ({ id, nombre, slug }) o null. */
+export async function agenciaPermitida(supabase, agenciaId) {
+  if (!agenciaId) return null
+  const { data, error } = await supabase.from('agencias').select('id, nombre, slug').eq('id', agenciaId).maybeSingle()
+  if (error) throw error
+  return data && agenciasTelegram().includes(String(data.slug || '').toLowerCase()) ? data : null
+}
+
+// getMe no cambia: se recuerda diez minutos.
+let botVisto = { token: '', bot: null, exp: 0 }
+
+/** Los datos del bot de agencia ({ botId, username, firstName }), o null si no hay token. */
+export async function botAgencia() {
+  const token = tokenAgencia()
+  if (!token) return null
+  if (botVisto.token === token && botVisto.exp > Date.now()) return botVisto.bot
+  const bot = await verificarToken(token)
+  botVisto = { token, bot, exp: Date.now() + 10 * 60_000 }
+  return bot
+}
+
+/** El id del bot de agencia. Si Telegram no contesta, el que va delante de los dos puntos del token, que es el mismo. */
+export async function idBotAgencia() {
+  const token = tokenAgencia()
+  if (!token) return null
+  try {
+    return String((await botAgencia()).botId)
+  } catch {
+    return token.split(':')[0] || null
+  }
 }
 
 // ── Config por perfil ──────────────────────────────────────────────────────

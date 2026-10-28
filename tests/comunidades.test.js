@@ -56,9 +56,9 @@ describe('la lista cerrada de comunidades', () => {
     }
   })
 
-  it('cada comunidad acepta sus tramos de ingresos y nada más', () => {
+  it('cada comunidad acepta sus tramos de ingresos (o no los pide) y nada más', () => {
     for (const c of Object.values(COMUNIDADES)) {
-      expect(Object.keys(c.ingresos).length).toBeGreaterThan(1)
+      if (c.ingresos !== null) expect(Object.keys(c.ingresos).length).toBeGreaterThan(1)
       expect(Array.isArray(c.notas)).toBe(true)
     }
   })
@@ -106,7 +106,7 @@ describe('la puerta del navegador y la del servidor piden lo mismo', () => {
     for (const [clave, cfg] of Object.entries(configs)) {
       expect(cfg.clave).toBe(clave)
       const servidor = COMUNIDADES[clave]
-      // AI para todo hoy es solo de pago: su puerta no pide datos.
+      // Una comunidad solo de pago no pide datos (hoy ninguna).
       if (!cfg.puerta.datos) continue
       expect(cfg.puerta.datos.ingresos).toEqual(servidor.ingresos)
       expect(cfg.puerta.datos.profesiones ?? null).toEqual(servidor.profesiones)

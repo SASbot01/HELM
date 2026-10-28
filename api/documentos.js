@@ -1,8 +1,8 @@
 // HELM — el portal donde el cliente de una asesoría sube su documentación.
 //
 //   GET  ?action=estado&t=<token>   → qué le falta por entregar
-//   POST ?action=firmar             → una URL de un solo uso para subir un fichero
-//   POST ?action=subir              → registra un documento ya subido al bucket
+//   POST ?action=subir&nombre=…     → sube un fichero (el cuerpo, tal cual) y lo
+//                                     registra; el enlace va en X-Enlace
 //
 // El dolor que resuelve: 25 personas persiguiendo facturas por WhatsApp, email
 // y teléfono cada trimestre. Aquí el cliente entra por SU enlace, ve qué le
@@ -18,6 +18,96 @@ import { applyCors, rateLimit, getClientIp, signJwt, verifyJwt } from './_lib/au
 import { requireProfileAccess } from './_lib/access.js'
 
 const txt = (v, max = 300) => String(v == null ? '' : v).trim().slice(0, max)
+
+// Los mismos que el portal (src/pages/PortalDocumentos.jsx) y que el check de
+// la tabla helm_fiscal_documentos.
+const TIPOS = new Set(['factura_emitida', 'factura_recibida', 'extracto', 'nomina', 'contrato', 'otro'])
+
+export const MAX_MB = 25
+
+// El mismo texto que enseña el portal antes de subir (PortalDocumentos.jsx).
+export const NO_ADMITIDO = 'solo se admiten PDF, fotos (JPG, PNG, WebP, HEIC, TIFF), Excel, Word, OpenDocument (ODS, ODT), '
+  + 'CSV, TXT, ZIP, facturas electrónicas (XML, XSIG) o extractos del banco (Norma 43)'
+
+// Lo que manda un cliente a su asesoría: PDF, fotos y escaneos, hojas de
+// cálculo, algún Word, los extractos del banco (Norma 43), las facturas
+// electrónicas (Facturae) y, si son muchas, un ZIP. El tipo con el que se guarda
+// lo pone esta tabla por la extensión, no el navegador, y los primeros bytes
+// tienen que cuadrar con ella. El bucket es público: sin esto, cualquiera con un
+// enlace podía colgar una página web (un .html, un .svg con script) servida
+// desde nuestro dominio.
+const empieza = (firma, desde = 0) => (b) =>
+  b.length >= desde + firma.length && b.toString('latin1', desde, desde + firma.length) === firma
+const ZIP = empieza('PK\x03\x04')                       // zip, xlsx, docx, ods, odt
+const OLE = empieza('\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1')   // xls, doc
+const JPG = { tipo: 'image/jpeg', cuadra: empieza('\xff\xd8\xff') }
+const HEIC = { tipo: 'image/heic', cuadra: empieza('ftyp', 4) }
+const TIFF = { tipo: 'image/tiff', cuadra: (b) => empieza('II*\x00')(b) || empieza('MM\x00*')(b) }
+
+// Texto: no hay firma, pero un binario con ceros no es texto. Salvo en UTF-16
+// (Excel lo guarda así con «Texto Unicode»), que lleva un cero en cada letra
+// y empieza por su BOM: FF FE o FE FF.
+const UTF16 = (b) => empieza('\xff\xfe')(b) || empieza('\xfe\xff')(b)
+const esTexto = (b) => UTF16(b) || !b.includes(0)
+// Un XML empieza por `<` (tras el BOM y algún espacio, si los lleva).
+const esXml = (b) => {
+  if (!esTexto(b)) return false
+  let ini
+  if (UTF16(b)) {
+    const trozo = Buffer.from(b.subarray(2, 2 + (Math.min(b.length - 2, 400) & ~1)))
+    ini = (b[0] === 0xff ? trozo : trozo.swap16()).toString('utf16le')
+  } else {
+    ini = b.subarray(0, 200).toString('utf8').replace(/^\uFEFF/, '')
+  }
+  return ini.trimStart().startsWith('<')
+}
+// Lo que se importa en el programa de contabilidad y no hace falta ver en el
+// navegador va como binario: se descarga tal cual. Un XML NUNCA como
+// application/xml ni text/xml: el navegador lo pintaría y un XML puede llevar
+// script (XHTML, SVG) con nuestro origen.
+const BINARIO = 'application/octet-stream'
+const NORMA43 = { tipo: BINARIO, cuadra: esTexto }
+const FACTURAE = { tipo: BINARIO, cuadra: esXml }
+
+export const FORMATOS = {
+  // La cabecera de un PDF puede llevar algo de basura delante.
+  pdf: { tipo: 'application/pdf', cuadra: (b) => b.subarray(0, 1024).includes('%PDF-') },
+  jpg: JPG,
+  jpeg: JPG,
+  png: { tipo: 'image/png', cuadra: empieza('\x89PNG\r\n\x1a\n') },
+  webp: { tipo: 'image/webp', cuadra: (b) => empieza('RIFF')(b) && empieza('WEBP', 8)(b) },
+  heic: HEIC,
+  heif: { ...HEIC, tipo: 'image/heif' },
+  // Lo que sale de muchos escáneres de oficina.
+  tif: TIFF,
+  tiff: TIFF,
+  xlsx: { tipo: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', cuadra: ZIP },
+  xls: { tipo: 'application/vnd.ms-excel', cuadra: OLE },
+  ods: { tipo: 'application/vnd.oasis.opendocument.spreadsheet', cuadra: ZIP },
+  // Sin charset: los .txt y .csv de muchos bancos van en Latin-1, y con
+  // `charset=utf-8` forzado salían con los acentos rotos.
+  csv: { tipo: 'text/csv', cuadra: esTexto },
+  txt: { tipo: 'text/plain', cuadra: esTexto },
+  // Extractos bancarios en Norma 43 (el «Cuaderno 43» que da cada banco).
+  n43: NORMA43,
+  q43: NORMA43,
+  aeb: NORMA43,
+  // Factura electrónica Facturae, sin firmar (.xml) o firmada (.xsig).
+  xml: FACTURAE,
+  xsig: FACTURAE,
+  docx: { tipo: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', cuadra: ZIP },
+  doc: { tipo: 'application/msword', cuadra: OLE },
+  odt: { tipo: 'application/vnd.oasis.opendocument.text', cuadra: ZIP },
+  zip: { tipo: 'application/zip', cuadra: ZIP },
+}
+
+// El fichero llega en crudo: scripts/api-server.mjs deja los bytes en
+// req.rawBody (en Vercel vendrían ya como Buffer en req.body).
+function cuerpoCrudo(req) {
+  if (Buffer.isBuffer(req.rawBody)) return req.rawBody
+  if (Buffer.isBuffer(req.body)) return req.body
+  return null
+}
 
 // Un año de validez: la relación con una asesoría dura años y un enlace que
 // caduca cada mes obliga a reenviarlo, que es justo el trabajo que queríamos
@@ -95,65 +185,84 @@ export default async function handler(req, res) {
       })
     }
 
-    // ── Dónde subirlo ──────────────────────────────────────────────────────
-    // El fichero viaja del navegador al bucket directamente: pasar megas por
-    // esta función sería lento y caro sin ganar nada. Pero la clave pública ya
-    // no puede escribir en el bucket, así que aquí se firma una URL de subida
-    // para UNA ruta concreta, dentro de la carpeta de este contacto. La ruta la
-    // pone el servidor, no el navegador: así no hay forma de subir a la carpeta
-    // de otro.
-    if (req.method === 'POST' && action === 'firmar') {
-      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
-      const contacto = await contactoDelToken(body.t)
-      const limpio = txt(body.nombre, 400).replace(/[^\w.\-() ]+/g, '_').slice(-120)
-      if (!limpio) return res.status(400).json({ error: 'Falta el nombre del fichero' })
-      const ruta = `fiscal/${contacto.client_id}/${contacto.id}/${Date.now()}-${limpio}`
-
-      const { data, error } = await supabase.storage.from('helm').createSignedUploadUrl(ruta)
-      if (error) return res.status(500).json({ error: 'No se pudo preparar la subida: ' + error.message })
-      // El servidor habla con Supabase en local; el navegador solo llega a ella
-      // por la pasarela /sb del mismo origen (scripts/sb-proxy.mjs), que deja
-      // pasar estas URLs porque las autoriza el token que llevan dentro.
-      const firmada = new URL(data.signedUrl)
-      return res.status(200).json({ ruta, url: `/sb${firmada.pathname}${firmada.search}` })
-    }
-
-    // ── Registrar lo subido ────────────────────────────────────────────────
-    // Aquí solo se anota que el fichero existe y se mueve el estado.
+    // ── Subir un documento ─────────────────────────────────────────────────
+    // El fichero llega aquí y lo escribe en el bucket el servidor, con la clave
+    // de servicio. Antes iba del navegador al bucket por una URL firmada a
+    // través de /sb, pero esa firma la hace storage con su secreto JWT, que en
+    // la Supabase local es el de ejemplo y es público: cualquiera podía
+    // fabricarse una URL para cualquier ruta del bucket. Ahora /sb solo deja
+    // ver archivos (scripts/sb-proxy.mjs).
+    //
+    // El cuerpo es el fichero tal cual, así que el resto va fuera: el nombre,
+    // el tipo y la obligación en la URL, y el enlace en la cabecera X-Enlace
+    // (en la URL acabaría en los registros). La ruta la pone el servidor, no
+    // el navegador: no hay forma de subir a la carpeta de otro.
     if (req.method === 'POST' && action === 'subir') {
-      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
-      const contacto = await contactoDelToken(body.t)
+      const contacto = await contactoDelToken(req.headers?.['x-enlace'])
 
-      const nombre = txt(body.nombre, 200)
-      const ruta = txt(body.ruta, 400)
-      if (!nombre || !ruta) return res.status(400).json({ error: 'Faltan el nombre y la ruta' })
-      // Que nadie use este endpoint para apuntarse ficheros de otra carpeta.
-      if (!ruta.startsWith(`fiscal/${contacto.client_id}/${contacto.id}/`)) {
-        return res.status(403).json({ error: 'Ruta no permitida' })
+      const nombre = txt(req.query.nombre, 200)
+      const limpio = txt(req.query.nombre, 400).replace(/[^\w.\-() ]+/g, '_').slice(-120)
+      if (!nombre || !limpio) return res.status(400).json({ error: 'Falta el nombre del fichero' })
+      const ext = limpio.includes('.') ? limpio.split('.').pop().toLowerCase() : ''
+      const formato = Object.hasOwn(FORMATOS, ext) ? FORMATOS[ext] : null
+      if (!formato) {
+        return res.status(415).json({ error: `${nombre}: ${NO_ADMITIDO}` })
       }
 
+      const bytes = cuerpoCrudo(req)
+      if (!bytes?.length) return res.status(400).json({ error: `${nombre} está vacío` })
+      if (bytes.length > MAX_MB * 1024 * 1024) return res.status(413).json({ error: `${nombre} pesa más de ${MAX_MB} MB` })
+      if (!formato.cuadra(bytes)) {
+        return res.status(415).json({ error: `${nombre} no parece un archivo de ese tipo. Ábrelo y vuelve a guardarlo antes de subirlo.` })
+      }
+
+      // Que nadie cuelgue lo suyo de la obligación de otro contacto.
+      const obligacionId = txt(req.query.obligacion, 64) || null
+      if (obligacionId) {
+        const { data: obl } = await supabase.from('helm_fiscal_obligaciones')
+          .select('id').eq('id', obligacionId).eq('contact_id', contacto.id).maybeSingle()
+        if (!obl) return res.status(403).json({ error: 'Esa obligación no es tuya' })
+      }
+
+      const ruta = `fiscal/${contacto.client_id}/${contacto.id}/${Date.now()}-${limpio}`
+      const { error: errUp } = await supabase.storage.from('helm').upload(ruta, bytes, {
+        contentType: formato.tipo, cacheControl: '3600', upsert: false,
+      })
+      if (errUp) return res.status(500).json({ error: 'No se pudo subir: ' + errUp.message })
+
+      const tipo = TIPOS.has(req.query.tipo) ? req.query.tipo : 'otro'
       const { data, error } = await supabase.from('helm_fiscal_documentos').insert({
         client_id: contacto.client_id,
         contact_id: contacto.id,
-        obligacion_id: txt(body.obligacionId, 64) || null,
+        obligacion_id: obligacionId,
         nombre,
         ruta,
-        tipo: txt(body.tipo, 40) || 'otro',
+        tipo,
         origen: 'portal',
       }).select('id').single()
-      if (error) return res.status(500).json({ error: 'No se pudo registrar: ' + error.message })
+      if (error) {
+        // Un fichero sin su fila no lo ve nadie: mejor no dejarlo en el bucket.
+        await supabase.storage.from('helm').remove([ruta])
+        return res.status(500).json({ error: 'No se pudo registrar: ' + error.message })
+      }
 
       // Que el cliente haya entregado algo es la señal de que el despacho puede
       // ponerse: la obligación deja de estar "pendiente de docs" sola. Es el
       // paso que evita la llamada de "¿me lo has mandado ya?".
-      if (body.obligacionId) {
+      if (obligacionId) {
         await supabase.from('helm_fiscal_obligaciones')
           .update({ estado: 'en_proceso', updated_at: new Date().toISOString() })
-          .eq('id', body.obligacionId).eq('contact_id', contacto.id)
+          .eq('id', obligacionId).eq('contact_id', contacto.id)
           .eq('estado', 'pendiente_docs')
       }
 
-      return res.status(200).json({ ok: true, id: data.id })
+      return res.status(200).json({ ok: true, id: data.id, ruta })
+    }
+
+    // La URL firmada de antes ya no existe. Quien tenga el portal abierto desde
+    // antes del cambio tiene el JS viejo: que sepa qué hacer.
+    if (req.method === 'POST' && action === 'firmar') {
+      return res.status(410).json({ error: 'El portal se ha actualizado. Recarga la página y vuelve a subir el archivo.' })
     }
 
     // ── El enlace de un cliente, para el panel ─────────────────────────────

@@ -3,9 +3,10 @@
 // contenido automático de HELM encendido), para que quien lee lo use con sus
 // clientes.
 //
-// Los mismos bloques que un capítulo. Lo que se cuenta de HELM sale del hilo
-// de contenido de AI para todo (src/pages/aiparatodo/operaciones.js),
-// comprobado contra el código el 12/10/2026: si cambia allí, se cambia aquí.
+// Los mismos bloques que un capítulo. Lo que se cuenta de HELM salió del hilo
+// de contenido que tuvo la sección Operaciones de AI para todo (retirada el
+// 14/10/2026; está en git: src/pages/aiparatodo/operaciones.js en 774b77e),
+// comprobado contra el código el 12/10/2026.
 // TODO-ABEL: revisar el texto y contarlo con su experiencia.
 
 export const HELM_REGISTRO = 'https://helm.s4sf.net/registro'
@@ -18,8 +19,8 @@ export default [
     tema: 'sistema',
     fecha: '2026-10-13',
     titulo: 'Cómo se crea el contenido de Detrás de Cámara con HELM',
-    gancho: 'Guiones escritos, calendario lleno y vídeos que se ordenan solos',
-    resumen: 'La cadena con la que sale el contenido: creadores de referencia transcritos, agentes que escriben los guiones de la semana, y un Drive donde subes el vídeo y HELM lo coloca.',
+    gancho: 'Guiones escritos, calendario lleno y vídeos colocados en su sitio con Claude',
+    resumen: 'La cadena con la que sale el contenido: creadores de referencia transcritos, agentes que escriben los guiones de la semana, y un Drive donde subes el vídeo y lo colocas en su sitio con Claude.',
     lectura: '6 min',
     bloques: [
       { tipo: 'p', texto: 'El contenido de Detrás de Cámara sale de **HELM**, un sistema que convierte el contenido en una cadena con cuatro eslabones: **referencias → guiones → calendario → Drive**. Así funciona cada uno, para que puedas montarlo igual con tu marca o con la de tus clientes.' },
@@ -37,11 +38,11 @@ export default [
       { tipo: 'h2', texto: 'Del rodaje al Drive' },
       { tipo: 'p', texto: 'Cada guion pasa por **borrador → por grabar → sin editar → editado → publicado**. Y cada perfil tiene su carpeta de Drive, donde la carpeta en la que está una pieza ES su estado:' },
       { tipo: 'pasos', items: [
-        { titulo: 'Rueda y sube a «0 · Entrada»', texto: 'El vídeo tal cual, sin renombrarlo.' },
-        { titulo: 'HELM lo escucha', texto: 'Cada cinco minutos mira la Entrada, transcribe el principio del vídeo y lo compara con los guiones del calendario.' },
-        { titulo: 'Lo coloca en su pieza', texto: 'Si sabe de qué guion es, lo mueve a «1 · Sin editar». Si no lo sabe, lo deja en Entrada: mejor quieto que mal puesto.' },
+        { titulo: 'Rueda y sube a «0 · Entrada»', texto: 'El vídeo tal cual, a la carpeta de Entrada de su Drive.' },
+        { titulo: 'Ordénalo con Claude', texto: 'Por el conector de HELM le dices a Claude de qué guion es el vídeo que hay en la Entrada.' },
+        { titulo: 'Queda en su pieza', texto: 'Claude lo mueve a «1 · Sin editar», a la carpeta del guion, y lo marca como grabado.' },
       ] },
-      { tipo: 'aviso', variante: 'truco', titulo: 'Rueda el guion como está escrito', texto: 'HELM reconoce el vídeo por lo que se dice: cuanto más se parezca lo grabado al guion, mejor lo coloca solo.' },
+      { tipo: 'aviso', variante: 'truco', titulo: 'Tú marcas de qué guion es', texto: 'Al ordenarlo con Claude le dices a qué guion pertenece el vídeo: va directo a su pieza, sin adivinar.' },
 
       { tipo: 'h2', texto: 'Úsalo con tus clientes' },
       { tipo: 'p', texto: 'La cadena es la misma para cualquier perfil que des de alta en HELM: el tuyo o el de cada cliente al que le llevas el contenido. Créate la cuenta, asigna los creadores de referencia y deja que el programador te llene la semana.' },
@@ -49,7 +50,7 @@ export default [
     claves: [
       'Referencias transcritas y etiquetadas → guiones con su tipo → calendario → Drive.',
       'Los agentes dejan borradores; nadie publica ni borra nada sin ti.',
-      'Subes el vídeo a «0 · Entrada» y HELM lo mueve a su pieza.',
+      'Subes el vídeo a «0 · Entrada» y lo colocas en su pieza con Claude por el conector.',
     ],
   },
 ]

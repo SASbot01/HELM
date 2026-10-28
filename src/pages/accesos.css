@@ -1,0 +1,6 @@
+/* /accesos — la solicitud suelta de acceso a AI para todo. El `.aip` trae las
+   variables y el fondo; esto solo centra la tarjeta. */
+.acc-pagina { min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 32px 16px; }
+.acc-main { width: 100%; max-width: 480px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.acc-logo { display: flex; align-items: baseline; gap: 6px; font-weight: 800; font-size: 20px; letter-spacing: -0.4px; }
+.acc-main .aip-puerta { width: 100%; }

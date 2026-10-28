@@ -1,0 +1,207 @@
+/* HELM — el alta pública (/alta/<token> y /alta, AltaHelm.jsx). Pinta con los tokens
+   de .helm (tema.css): el mismo lienzo y las mismas piezas que el panel.
+
+   Pensada primero para el móvil, que es donde la va a rellenar el cliente:
+   16 px de margen, nada que empuje a lo ancho, botones de 44 px o más y
+   letra de 16 px en los campos (con menos, iOS hace zoom al tocarlos).
+
+   Los campos son los del panel (onboarding/Campos.jsx). Aquí solo se agrandan
+   para el dedo: van con `.helm.alta` delante para mandar sobre tema.css, que
+   carga en el archivo principal y empata en especificidad con `.alta …`. */
+
+.alta { min-height: 100vh; min-height: 100dvh; overflow-x: clip; }
+.alta-pagina {
+  max-width: 680px; margin: 0 auto;
+  padding: calc(20px + env(safe-area-inset-top, 0px)) 16px calc(48px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; gap: 16px;
+}
+.alta-pagina > * { min-width: 0; }
+
+/* ── La marca ──────────────────────────────────────────────────────────── */
+.alta-marca { display: flex; align-items: center; gap: 10px; }
+.alta-marca img { width: 32px; height: 32px; border-radius: 9px; box-shadow: var(--shadow-sm); }
+.alta-marca b { font-family: var(--titular); font-size: 15px; font-weight: 600; letter-spacing: .04em; }
+
+/* ── Cabecera ──────────────────────────────────────────────────────────── */
+.alta-cab h1 {
+  margin: 6px 0 0; font-size: 28px; line-height: 1.12; font-weight: 600; letter-spacing: -.03em;
+  overflow-wrap: anywhere;
+}
+.alta-intro { margin: 12px 0 0; color: var(--text-dim); font-size: 15.5px; line-height: 1.6; }
+
+.alta-aviso {
+  display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px;
+  border-radius: 14px; background: var(--panel-2); border: 1px solid var(--border-2);
+}
+.alta-aviso svg { color: var(--green); flex-shrink: 0; margin-top: 2px; }
+.alta-aviso p { margin: 0; color: var(--text-dim); font-size: 14.5px; line-height: 1.55; }
+.alta-aviso p b { color: var(--text); font-weight: 600; }
+/* El ?a= del enlace no es de ninguna agencia: los datos irían a otra. */
+.alta-aviso-mal { border-color: color-mix(in srgb, var(--amber) 45%, transparent); }
+.alta-aviso-mal svg { color: var(--amber); }
+
+/* ── /alta: «Tus datos», el primer paso sin enlace ─────────────────────── */
+.alta-datos { display: flex; flex-direction: column; gap: 16px; }
+.alta-datos > * { min-width: 0; }
+.alta-check {
+  display: flex; align-items: flex-start; gap: 12px; padding: 20px 0 4px;
+  border-top: 1px solid var(--border);
+}
+.alta-check input {
+  flex-shrink: 0; width: 22px; height: 22px; margin: 1px 0 0;
+  accent-color: var(--oro); cursor: pointer;
+}
+.alta-check label { font-size: 14px; line-height: 1.55; color: var(--text-dim); cursor: pointer; }
+.alta-check.mal input { outline: 2px solid color-mix(in srgb, var(--red) 65%, transparent); outline-offset: 2px; }
+.alta-check + .alta-q-error { margin-top: 8px; }
+.alta-pie { margin: 0; text-align: center; font-size: 13px; line-height: 1.5; color: var(--text-mut); }
+/* El campo trampa: fuera de la vista, del tabulador y del lector de pantalla. */
+.alta-trampa {
+  position: absolute !important; left: -10000px; top: auto;
+  width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none;
+}
+
+/* Quién está rellenando y el «¿No eres tú?», discreto. */
+.alta-quien {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px;
+  margin: 4px 0 0; font-size: 14px; color: var(--text-dim);
+}
+/* Aspecto de enlace, pero con los 44 px de alto que pide el dedo. */
+.alta-enlace {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 2px;
+  border: 0; background: none; cursor: pointer;
+  font: inherit; font-size: 13px; color: var(--text-mut);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.alta-enlace:hover { color: var(--text); }
+.alta-enlace:focus-visible { outline: 2px solid var(--oro); outline-offset: 2px; border-radius: 4px; }
+.alta-enlace:disabled { cursor: default; opacity: .6; }
+.alta-borrar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0 6px; }
+
+/* ── La barra de progreso: un tramo por sección, que se llena según se
+   responde. Cada tramo es también el atajo para saltar a esa sección. ───── */
+.alta-barra {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30;
+  margin: 0 -16px; padding: 8px 16px 10px;
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+.alta-pasos { display: grid; grid-template-columns: repeat(var(--n, 7), minmax(0, 1fr)); gap: 6px; }
+.alta-paso {
+  display: flex; align-items: center; height: 36px; padding: 0; margin: 0;
+  border: 0; background: none; cursor: pointer; border-radius: 6px;
+}
+.alta-paso span {
+  position: relative; display: block; width: 100%; height: 6px; overflow: hidden;
+  border-radius: 99px; background: var(--panel-2);
+}
+.alta-paso span::after {
+  content: ''; position: absolute; inset: 0; background: var(--oro);
+  transform-origin: left; transform: scaleX(var(--p, 0));
+  transition: transform var(--t-lento, 280ms) var(--ease, ease);
+}
+.alta-paso.actual span { height: 8px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--oro) 70%, transparent); }
+.alta-paso:focus-visible { outline: 2px solid var(--oro); outline-offset: 2px; }
+.alta-barra-txt {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 2px; font-size: 12.5px; color: var(--text-mut); font-variant-numeric: tabular-nums;
+}
+.alta-guardado { display: inline-flex; align-items: center; gap: 5px; min-height: 16px; }
+.alta-guardado.ok svg { color: var(--green); }
+.alta-guardado.mal { color: var(--amber); }
+
+/* ── La sección ────────────────────────────────────────────────────────── */
+.alta-seccion {
+  padding: 20px 16px;
+  background: var(--superficie) padding-box, var(--borde) border-box;
+  border: 1px solid transparent; border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.alta-kicker { display: block; font-size: 13px; font-weight: 500; color: var(--oro); }
+.alta-seccion-cab { padding-bottom: 18px; }
+.alta-seccion-cab h2 { margin: 4px 0 0; font-size: 22px; font-weight: 600; line-height: 1.2; }
+.alta-seccion-cab p { margin: 6px 0 0; color: var(--text-mut); font-size: 14px; line-height: 1.5; }
+
+.alta-q { display: flex; flex-direction: column; gap: 10px; padding: 20px 0; border-top: 1px solid var(--border); }
+.alta-q:last-child { padding-bottom: 4px; }
+.alta-q > label { font-size: 15.5px; font-weight: 500; line-height: 1.45; color: var(--text); }
+.alta-q.done > label { color: var(--text-dim); }
+.alta-pista { margin: -4px 0 0; font-size: 13px; line-height: 1.5; color: var(--text-mut); }
+.alta-q-error { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--red); }
+.helm.alta .alta-q.mal .helm-input { border-color: color-mix(in srgb, var(--red) 65%, transparent); }
+
+/* ── Los campos, a la medida del dedo ──────────────────────────────────── */
+.helm.alta .helm-input { font-size: 16px; padding: 12px 14px; }
+.helm.alta .helm-onb-area { min-height: 104px; }
+.helm.alta .helm-onb-opts { gap: 8px; }
+.helm.alta .helm-onb-opt {
+  min-height: 44px; padding: 10px 15px; font-size: 14.5px; line-height: 1.3;
+  text-align: left; white-space: normal;
+}
+.helm.alta .helm-onb-opt svg { flex-shrink: 0; }
+.helm.alta .helm-onb-scale-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.helm.alta .helm-onb-scale-n { min-width: 0; height: 46px; font-size: 15px; }
+.helm.alta .helm-onb-scale-ends { font-size: 12.5px; }
+.helm.alta .helm-onb-trow {
+  padding: 10px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-1);
+}
+.helm.alta .helm-onb-tcells { grid-template-columns: 1fr; }
+.helm.alta .helm-onb-trow-del { width: 44px; height: 44px; }
+.helm.alta .helm-onb-addrow { min-height: 44px; }
+
+/* ── El final ──────────────────────────────────────────────────────────── */
+.alta-cierre { padding: 18px 16px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--border-2); }
+.alta-cierre h2 { margin: 0; font-size: 19px; font-weight: 600; }
+.alta-cierre p { margin: 8px 0 0; color: var(--text-dim); font-size: 14.5px; line-height: 1.55; }
+.alta-cierre .alta-nota { margin-top: 12px; font-size: 13px; color: var(--text-mut); }
+.alta-faltan { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.alta-falta {
+  min-height: 44px; padding: 8px 14px; border-radius: 99px; cursor: pointer;
+  border: 1px dashed var(--border-2); background: transparent; color: var(--text);
+  font: inherit; font-size: 13.5px; text-align: left;
+}
+.alta-falta:hover { border-color: var(--oro); }
+.alta-falta:focus-visible { outline: 2px solid var(--oro); outline-offset: 2px; }
+.helm.alta .alta-error { margin: 0; }
+
+/* ── Anterior / Siguiente / Enviar ─────────────────────────────────────── */
+.alta-nav { display: flex; gap: 10px; }
+.helm.alta .alta-btn {
+  flex: 1; justify-content: center; min-height: 50px; padding: 12px 18px;
+  font-size: 15.5px; border-radius: 12px;
+}
+.helm.alta .alta-btn svg { width: 16px; height: 16px; }
+
+/* ── Cargando, enlace caducado y gracias ───────────────────────────────── */
+.alta-centro {
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  padding: 48px 4px; text-align: center;
+}
+.alta-centro h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -.02em; }
+.alta-centro p { margin: 0; max-width: 440px; color: var(--text-dim); font-size: 15px; line-height: 1.6; }
+.helm.alta .alta-centro .alta-btn { flex: 0 0 auto; width: 100%; max-width: 320px; margin-top: 8px; }
+.alta-centro > svg { color: var(--oro); }
+.alta-sello {
+  display: grid; place-items: center; width: 56px; height: 56px; border-radius: 16px;
+  background: var(--panel-2); border: 1px solid var(--border-2);
+}
+.alta-sello.ok { color: var(--green); }
+.alta-sello.mal { color: var(--amber); }
+
+/* ── Pantallas anchas: más aire, la escala en una fila y la tabla en columnas */
+@media (min-width: 600px) {
+  .alta-pagina { padding-top: calc(40px + env(safe-area-inset-top, 0px)); gap: 20px; }
+  .alta-cab h1 { font-size: 34px; }
+  .alta-barra { margin: 0; padding-left: 0; padding-right: 0; }
+  .alta-seccion { padding: 28px 26px; }
+  .alta-cierre { padding: 22px 24px; }
+  .helm.alta .helm-onb-scale-row { grid-template-columns: repeat(10, minmax(0, 1fr)); }
+  .helm.alta .helm-onb-tcells { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .helm.alta .alta-nav .alta-btn { flex: 0 1 auto; min-width: 160px; }
+  .alta-nav { justify-content: space-between; }
+  .alta-nav .alta-btn:only-child { margin-left: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alta-paso span::after { transition: none; }
+}
