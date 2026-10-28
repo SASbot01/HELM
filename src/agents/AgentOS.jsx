@@ -111,7 +111,7 @@ function Lanzador({ estado, identidades }) {
       </div>
 
       <h2 className="ag-seccion">Agentes</h2>
-      <MenuAgentes agentes={AGENTES.filter(a => !a.soloPerfil)} metricaDe={metricaDe} />
+      <MenuAgentes agentes={AGENTES.filter(a => !a.soloPerfiles)} metricaDe={metricaDe} />
     </>
   )
 }

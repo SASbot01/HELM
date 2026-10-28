@@ -4,7 +4,9 @@
 import { Link } from 'react-router-dom'
 import {
   ScatterChart, PenLine, FileBarChart, UserSquare, Brain, Clapperboard, Workflow, ArrowRight, Scissors, Image as ImagenIcono,
-  MessagesSquare, Shuffle, Hammer } from 'lucide-react'
+  MessagesSquare, Shuffle, Hammer, Headset, Wallet, Megaphone, Send, MessageCircleReply, Repeat, PhoneCall, Search, Gift,
+  FileText, HeartHandshake, Phone, Sunrise, ClipboardList, Bot, Eraser, ListChecks, HandCoins, Scale, TrendingUp, Percent,
+  Star, MapPin, Sparkles } from 'lucide-react'
 import { ESTADOS as ESTADOS_AGENTE } from './agentes'
 import { ROLES, rol, compacto } from './ganchos'
 
@@ -12,6 +14,12 @@ const ICONOS = {
   grafica: ScatterChart, pluma: PenLine, informe: FileBarChart,
   persona: UserSquare, memoria: Brain, contenido: Clapperboard, equipo: Workflow, editor: Scissors, portadas: ImagenIcono,
   setter: MessagesSquare, trial: Shuffle, web: Hammer,
+  // Departamentos y agentes de los seis departamentos (28-oct-2026).
+  atencion: Headset, finanzas: Wallet, anuncios: Megaphone, publicar: Send, palabra: MessageCircleReply,
+  seguimiento: Repeat, llamada: PhoneCall, buscar: Search, bienvenida: Gift, documentos: FileText,
+  postventa: HeartHandshake, telefono: Phone, director: Sunrise, produccion: ClipboardList, bot: Bot,
+  limpieza: Eraser, recetas: ListChecks, cobros: HandCoins, conciliacion: Scale, caja: TrendingUp,
+  comisiones: Percent, resenas: Star, ficha: MapPin, visibilidad: Sparkles,
 }
 
 // ── El menú de agentes: una casilla por agente ──────────────────────────────
