@@ -168,7 +168,7 @@ WHERE NOT EXISTS (
 );
 
 -- ─── 7b. Admin seed — credenciales iniciales para Alejandro ─────────────
--- email: alejandro.cto@blackwolfsec.io  ·  password: Infoproducto2026!
+-- La contraseña inicial no se escribe aquí: se comunica aparte y se cambia.
 -- Hash scrypt generado a partir de password_hash de api/_lib/passwords.js.
 -- ON CONFLICT (tenant_slug, lower(email)) — re-correr no duplica.
 -- Cambiar la password tras primer login (no hay UI todavía: SQL UPDATE manual

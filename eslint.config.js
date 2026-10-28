@@ -5,7 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', '.dist-*']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [
@@ -23,16 +23,26 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]', argsIgnorePattern: '^[A-Z_]' }],
     },
   },
   // El backend (funciones de api/ y scripts) corre en Node, no en el navegador:
   // `process`, `Buffer` y compañía son globales legítimos ahí.
   {
-    files: ['api/**/*.js', 'scripts/**/*.{js,mjs}', 'vite.config.js'],
+    files: ['api/**/*.js', 'scripts/**/*.{js,mjs}', 'vite.config.js', 'vite.suelta.config.js'],
     languageOptions: { globals: globals.node },
     rules: {
       'react-refresh/only-export-components': 'off',
     },
+  },
+  // El punto de entrada monta la app y no exporta nada: la recarga en caliente
+  // por componente no aplica ahí. Los tests corren en Node.
+  {
+    files: ['src/main.jsx'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
+  {
+    files: ['tests/**/*.js'],
+    languageOptions: { globals: globals.node },
   },
 ])

@@ -1,0 +1,669 @@
+/* ============================================================================
+   PÁGINA INICIO — el "empieza aquí" de la marca personal.
+   www.s4sf.net/paginainicio
+
+   Es la página a la que apunta el enlace de la bio de Instagram: se abre en un
+   móvil, dentro del navegador de la propia app, y tiene tres segundos para
+   decir quién es y a dónde ir. De ahí todas las decisiones de abajo:
+
+     · Una sola columna de 440px. En escritorio se ve estrecha a propósito —
+       el 95 % del tráfico entra por el móvil y una maqueta ancha se diseña
+       para el 5 %.
+     · Los botones son lo más grande y contrastado de la pantalla. Todo lo
+       demás está para que se pulse uno de los dos.
+     · Granate en todo: es el color de la marca y aquí no compite con nada,
+       porque no hay panel ni datos, solo la foto y dos enlaces.
+
+   No usa las variables de HELM (theme.css) a propósito: esto no es el panel,
+   es la cara pública, y no debe cambiar de color porque alguien cambie el tema
+   de su panel.
+   ============================================================================ */
+
+.ini {
+  /* Los nombres son del PAPEL que hace cada color, no del color que es: esta
+     misma hoja viste dos marcas (el granate de Alex y el naranja de Hugo) y
+     con `--granate` valiendo naranja no habría quien la leyera. Cambiar de
+     marca es redefinir estas nueve líneas y nada más — ver `.ini--hugo`.
+     Los `-rgb` existen porque las rgba() de abajo necesitan los canales
+     sueltos para llevar su propia opacidad. */
+  --marca:        #7E1F35;   /* el de los botones y los acentos */
+  --marca-alto:   #A62B46;   /* el mismo, subido, para hover y degradados */
+  --marca-cima:   #BE3252;   /* el tope, solo para el hover del botón primario */
+  --marca-rgb:    166, 43, 70;
+  --marca-claro:  #FF8FA3;   /* sobre fondo oscuro: la palabra subrayada */
+  --marca-claro-rgb: 255, 143, 163;
+  --marca-palido: #FFC2CC;   /* el texto de la píldora del dato */
+  --fondo:        #2A0A13;   /* casi negro con la marca dentro */
+  --tinta:        #17060C;
+  --papel:        #F6EAEC;   /* el texto: blanco roto cálido, no blanco puro */
+  --papel-dim:    #D3AFB7;
+  --papel-mut:    #A47C86;
+  --papel-rgb:    246, 234, 236;
+  /* El texto DENTRO del botón primario. Es variable porque depende de lo
+     oscura que sea la marca: sobre el granate va claro, sobre un naranja
+     encendido tiene que ir oscuro o se queda en 4:1 y no se lee. */
+  --sobre-marca-rgb: var(--papel-rgb);
+  --borde:        rgba(var(--papel-rgb), 0.14);
+
+  min-height: 100vh;
+  min-height: 100dvh;        /* el 100vh del móvil se mete debajo de la barra */
+  display: flex;
+  justify-content: center;
+  padding: 26px 20px 36px;
+  background:
+    radial-gradient(760px 520px at 50% -6%, rgba(var(--marca-rgb), 0.38), transparent 62%),
+    radial-gradient(620px 460px at 110% 108%, rgba(var(--marca-rgb), 0.22), transparent 58%),
+    var(--fondo);
+  color: var(--papel);
+  font-family: 'Inter Tight', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.01em;
+}
+
+.ini-card {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  /* 14 y no 18: con 18, el segundo botón se quedaba justo por debajo del borde
+     de un iPhone y parecía que solo había uno. */
+  gap: 14px;
+}
+
+/* ── La foto ────────────────────────────────────────────────────────────────
+   Vertical y entera, no un avatar redondo: la foto es de cuerpo entero con el
+   coche, y recortarla a un círculo de 96px tira justo lo que cuenta algo. */
+.ini-foto {
+  width: 100%;
+  /* `height: auto` no es decorativo: sin él manda el atributo height del <img>
+     (que está para reservar el hueco y evitar el salto al cargar) y la foto se
+     pintaba a 1.338 px de alto, dejando los botones a tres pantallas de scroll.
+     Con esto vuelve a mandar la proporción de aquí. */
+  height: auto;
+  aspect-ratio: 1 / 1;
+  /* Y un techo: en esta página lo que tiene que verse sin hacer scroll son los
+     dos botones. La foto presenta, no protagoniza. */
+  max-height: 34vh;
+  object-fit: cover;
+  object-position: 50% 40%;   /* la cara está en el tercio de arriba */
+  border-radius: 22px;
+  border: 1px solid var(--borde);
+  /* La sombra granate pega la foto al fondo en vez de dejarla flotando como
+     un recorte pegado encima. */
+  box-shadow: 0 22px 60px -24px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(var(--marca-rgb), 0.25);
+  background: var(--tinta);
+}
+
+.ini-nombre {
+  display: flex; flex-direction: column; gap: 3px; margin-top: 2px;
+}
+.ini-nombre b { font-size: 19px; font-weight: 700; letter-spacing: -0.02em; }
+.ini-nombre span { font-size: 13px; color: var(--papel-mut); }
+
+.ini-card h1 {
+  font-size: clamp(25px, 7.2vw, 31px);
+  line-height: 1.16;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  margin: 0;
+  text-wrap: balance;
+}
+/* "dirigir" es la palabra de la tesis entera: si algo se subraya, es eso. */
+.ini-card h1 em {
+  font-style: normal;
+  color: var(--marca-claro);
+}
+
+.ini-lead {
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--papel-dim);
+  margin: 0;
+  max-width: 38ch;
+}
+
+/* El dato va en su propia píldora y no dentro del párrafo: es la prueba, y
+   metido en medio de una frase se lee como una frase más. */
+.ini-dato {
+  /* inline-block y no flex: en flex, el <b> y el texto de al lado son dos
+     cajas y el `gap` abría un hueco raro en medio de la frase. */
+  display: inline-block;
+  padding: 8px 15px;
+  border: 1px solid rgba(var(--marca-claro-rgb), 0.32);
+  border-radius: 999px;
+  background: rgba(var(--marca-rgb), 0.16);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--marca-palido);
+}
+.ini-dato b { font-weight: 800; }
+
+/* ── El "empieza aquí" ──────────────────────────────────────────────────────
+   Una línea con el rótulo en medio. Marca dónde acaba el discurso y dónde
+   empieza lo que hay que pulsar. */
+.ini-sep {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; margin-top: 4px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--papel-mut);
+}
+.ini-sep::before, .ini-sep::after {
+  content: ''; flex: 1; height: 1px; background: var(--borde);
+}
+
+.ini-botones { width: 100%; display: flex; flex-direction: column; gap: 11px; }
+
+.ini-btn {
+  display: flex; align-items: center; gap: 11px;
+  width: 100%;
+  padding: 15px 18px;
+  border: 1px solid var(--borde);
+  border-radius: 15px;
+  background: rgba(var(--papel-rgb), 0.05);
+  color: var(--papel);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  text-align: left;
+  transition: transform .16s cubic-bezier(.2,.8,.2,1), background .16s, border-color .16s;
+}
+.ini-btn small {
+  display: block;
+  font-size: 12px; font-weight: 500; color: var(--papel-mut); margin-top: 1px;
+}
+.ini-btn svg { flex-shrink: 0; }
+/* La flecha se va al final y solo se mueve en el hover: en el móvil no hay
+   hover y el botón tiene que verse igual de claro sin él. */
+.ini-btn .ini-flecha { margin-left: auto; opacity: .55; transition: transform .16s, opacity .16s; }
+.ini-btn:hover { background: rgba(var(--papel-rgb), 0.09); border-color: rgba(var(--marca-claro-rgb), 0.4); transform: translateY(-2px); }
+.ini-btn:hover .ini-flecha { opacity: 1; transform: translateX(3px); }
+/* La charla despliega su formulario: la flecha apunta abajo mientras está abierto. */
+.ini-btn .ini-flecha.abierta, .ini-btn:hover .ini-flecha.abierta { opacity: 1; transform: rotate(90deg); }
+.ini-btn:active { transform: translateY(0); }
+
+/* El primario es UNO. Dos botones igual de fuertes son cero botones fuertes:
+   el destino de toda la marca es YouTube y el resto acompaña. */
+.ini-btn.on {
+  background: linear-gradient(135deg, var(--marca-alto), var(--marca));
+  border-color: transparent;
+  box-shadow: 0 14px 34px -14px rgba(var(--marca-rgb), 0.9);
+}
+.ini-btn.on { color: rgb(var(--sobre-marca-rgb)); }
+.ini-btn.on small { color: rgba(var(--sobre-marca-rgb), 0.82); }
+.ini-btn.on:hover { background: linear-gradient(135deg, var(--marca-cima), var(--marca-alto)); border-color: transparent; }
+
+.ini-pie {
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--papel-mut);
+  line-height: 1.6;
+}
+
+/* Entrada suave, una vez. Sin animación por elemento en cascada: esto se abre
+   en un móvil con conexión de móvil y lo que se agradece es que aparezca ya. */
+@keyframes ini-sube {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+.ini-card > * { animation: ini-sube .5s cubic-bezier(.16,1,.3,1) backwards; }
+.ini-card > *:nth-child(2) { animation-delay: .05s; }
+.ini-card > *:nth-child(3) { animation-delay: .09s; }
+.ini-card > *:nth-child(4) { animation-delay: .13s; }
+.ini-card > *:nth-child(5) { animation-delay: .17s; }
+.ini-card > *:nth-child(6) { animation-delay: .21s; }
+.ini-card > *:nth-child(7) { animation-delay: .25s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ini-card > * { animation: none; }
+  .ini-btn, .ini-btn .ini-flecha { transition: none; }
+}
+
+/* En escritorio la foto no crece con la columna: una foto de 440px de ancho y
+   550 de alto obliga a hacer scroll para llegar a los botones, que es lo único
+   que importa de esta página. */
+@media (min-width: 700px) {
+  .ini { align-items: center; padding: 48px 20px; }
+  .ini-foto { max-height: 320px; }
+}
+
+/* ── El handle, DENTRO de la foto ──────────────────────────────────────────
+   Encima de la imagen y a la izquierda, grande y en blanco: es la firma de la
+   cuenta. Solo la usa la página de Alex — Hugo sigue con la foto sin marco. */
+.ini-marco { position: relative; width: 100%; line-height: 0; }
+.ini-handle {
+  position: absolute; top: 18px; left: 20px; right: 20px;
+  z-index: 2;
+  color: #FFFFFF;
+  font-size: clamp(24px, 7vw, 30px); font-weight: 800; letter-spacing: -0.035em;
+  line-height: 1.1;
+  text-align: left;
+  text-decoration: none;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.65), 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.ini-marco::after {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: 38%;
+  border-radius: 22px 22px 0 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.6), transparent);
+  pointer-events: none;
+}
+
+/* ── Botones con icono en caja ───────────────────────────────────────────────
+   Variante del `.ini-btn` de base, con el icono metido en una caja y la
+   etiqueta en mayúsculas. Conviven con los `.ini-btn` "planos" (svg suelto +
+   <span>) que sigue usando la página de Hugo: son clases nuevas, no un
+   reemplazo, así que no le tocan nada. */
+.ini-btn-icono {
+  display: grid; place-items: center;
+  width: 44px; height: 44px; flex-shrink: 0;
+  border-radius: 13px;
+  background: rgba(var(--papel-rgb), 0.08);
+  color: var(--papel);
+}
+.ini-btn-txt { flex: 1; min-width: 0; }
+.ini-btn-txt b {
+  display: block;
+  font-size: 15px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.01em;
+}
+.ini-btn-txt small {
+  display: block;
+  font-size: 12px; font-weight: 500; color: var(--papel-mut); margin-top: 2px;
+  text-transform: none; letter-spacing: 0;
+}
+.ini-btn.on .ini-btn-icono { background: rgba(var(--papel-rgb), 0.16); }
+.ini-btn.on .ini-btn-txt small { color: rgba(var(--sobre-marca-rgb), 0.82); }
+
+/* ── La lista de correo ─────────────────────────────────────────────────────
+   Va DESPUÉS de los botones a propósito: pedir el email en el primer segundo,
+   antes de haber dado nada, es lo que hunde la conversión de estas páginas.
+   Aquí llega quien ya ha leído quién eres y no le ha bastado con seguirte. */
+.ini-lista {
+  width: 100%;
+  display: flex; flex-direction: column; gap: 9px;
+  padding: 16px;
+  border: 1px solid var(--borde);
+  border-radius: 15px;
+  background: rgba(var(--papel-rgb), 0.045);
+  text-align: left;
+}
+.ini-lista-cab { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.ini-lista-cab svg { color: var(--marca-claro); }
+.ini-lista p { margin: 0 0 2px; font-size: 12.5px; line-height: 1.5; color: var(--papel-mut); }
+.ini-lista-cuando { color: var(--marca-palido) !important; font-weight: 600; font-size: 13px !important; margin-bottom: 4px !important; }
+.ini-lista input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--borde);
+  border-radius: 11px;
+  background: rgba(var(--papel-rgb), 0.05);
+  color: var(--papel);
+  font: inherit; font-size: 15px;   /* 15px o menos hace zoom solo en iOS */
+  outline: none;
+  transition: border-color .14s, background .14s;
+}
+.ini-lista input::placeholder { color: var(--papel-mut); }
+.ini-lista input:focus { border-color: rgba(var(--marca-claro-rgb), 0.55); background: rgba(var(--papel-rgb), 0.08); }
+.ini-lista button.ini-btn { justify-content: center; padding: 15px; }
+.ini-lista button.ini-btn b { text-transform: uppercase; font-size: 14.5px; font-weight: 700; letter-spacing: .02em; }
+.ini-lista button.ini-btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+.ini-error { font-size: 12.5px; color: var(--marca-palido); }
+
+/* ── El botón de la comunidad ───────────────────────────────────────────────
+   Va en el color de Discord y no en el de la marca: aquí la marca ya es el
+   fondo del bloque de confirmado, y un botón del mismo color dentro de su
+   propio color desaparece. El azulón, además, es el que la gente reconoce sin
+   leer. */
+.ini-btn.discord {
+  background: linear-gradient(160deg, #5865F2, #4451D6);
+  border-color: transparent;
+  box-shadow: 0 16px 38px -18px rgba(88, 101, 242, 0.9);
+}
+.ini-btn.discord .ini-btn-icono { background: rgba(255, 255, 255, 0.18); }
+.ini-btn.discord .ini-btn-txt small { color: rgba(233, 236, 255, 0.85); }
+.ini-btn.discord .ini-flecha { opacity: .85; }
+.ini-btn.discord:hover { background: linear-gradient(160deg, #6B77FF, #4E5CE8); border-color: transparent; }
+
+/* ── El portal ─────────────────────────────────────────────────────────────
+   La transición entre enviar el formulario y entrar en la sala. Es el único
+   momento de la página que rompe el marco de la tarjeta a propósito — el
+   efecto es justo "salir de aquí" — y por eso es `fixed` y no vive dentro de
+   `.ini-card`. Dura 1.1s: lo justo para sentirse un salto, no una espera. */
+.ini-warp {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  background: #000;
+}
+.ini-warp-anillo {
+  position: absolute; width: 60px; height: 60px; border-radius: 50%;
+  border: 2px solid var(--marca-claro); opacity: 0;
+  animation: ini-warp-zoom 1.1s cubic-bezier(.2, .7, .3, 1) forwards;
+}
+@keyframes ini-warp-zoom {
+  0%   { opacity: 0;  transform: scale(.05); }
+  15%  { opacity: .9; }
+  100% { opacity: 0;  transform: scale(9); }
+}
+.ini-warp-texto {
+  position: relative; z-index: 2;
+  font-size: 13px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--papel-mut);
+}
+
+/* ── La sala ───────────────────────────────────────────────────────────────
+   Ya no es un bloque dentro de la tarjeta: es la pantalla entera, como el
+   portal. El teatro de asientos vive detrás (fondo, `aria-hidden`) y el panel
+   con el nombre, la agenda y los botones flota encima, centrado. */
+.ini-sala {
+  position: fixed; inset: 0; z-index: 55;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  gap: 22px;
+  padding: 36px 20px 40px;
+  overflow-y: auto;
+  background:
+    radial-gradient(ellipse 640px 420px at 50% 0%, rgba(var(--marca-claro-rgb), .16), transparent 70%),
+    #0B0407;
+}
+.ini-sala-foco {
+  position: fixed; top: -120px; left: 50%; transform: translateX(-50%);
+  width: 520px; height: 340px; pointer-events: none; z-index: -1;
+  background: radial-gradient(ellipse at center, rgba(var(--marca-claro-rgb), .18), transparent 72%);
+  animation: ini-foco-respira 5s ease-in-out infinite;
+}
+@keyframes ini-foco-respira {
+  0%, 100% { opacity: .85; transform: translateX(-50%) scale(1); }
+  50%      { opacity: 1;   transform: translateX(-50%) scale(1.08); }
+}
+
+/* El teatro: sillas de verdad — el icono Armchair de Lucide — con un pasillo
+   entre la 2ª y la 3ª silla de cada fila, como en una sala real. */
+.ini-teatro {
+  display: flex; flex-direction: column; align-items: center; gap: 11px;
+  width: 100%; max-width: 300px;
+}
+.ini-fila { display: flex; gap: 10px; align-items: flex-end; }
+.ini-fila > .ini-asiento:nth-child(3) { margin-left: 18px; }
+.ini-asiento {
+  position: relative;
+  display: flex; align-items: flex-end; justify-content: center;
+  width: 24px; height: 26px;
+  color: rgba(var(--papel-rgb), .4);
+  opacity: 0; transform: scale(.4);
+  animation: ini-asiento-in .5s cubic-bezier(.2, .8, .2, 1) forwards;
+}
+@keyframes ini-asiento-in { to { opacity: 1; transform: scale(1); } }
+/* La tuya: la silla se pinta del acento y brilla. `filter: drop-shadow` y no
+   `box-shadow`: es un icono con huecos (los brazos de la silla), y una sombra
+   de caja rellenaría esos huecos de un cuadrado en vez de seguir el contorno. */
+.ini-asiento.tuyo {
+  color: var(--marca-claro);
+  animation-name: ini-asiento-in, ini-tuyo-glow;
+  animation-duration: .5s, 2.1s;
+  animation-timing-function: cubic-bezier(.2, .8, .2, 1), ease-in-out;
+  animation-iteration-count: 1, infinite;
+  animation-fill-mode: forwards, none;
+}
+@keyframes ini-tuyo-glow {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(var(--marca-claro-rgb), .65)); }
+  50%      { filter: drop-shadow(0 0 9px rgba(var(--marca-claro-rgb), .95)); }
+}
+
+/* La personilla: cae desde arriba y aterriza sentada en la silla, con un
+   pequeño rebote. Aparece después de que la sala entera ya esté puesta
+   (.85s), para que se lea como una llegada. */
+.ini-personilla {
+  position: absolute; left: 50%; bottom: 40%; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  opacity: 0;
+  animation: ini-personilla-llega .6s cubic-bezier(.34, 1.4, .4, 1) forwards;
+  animation-delay: .85s;
+}
+.ini-personilla svg {
+  color: #FFFFFF;
+  background: linear-gradient(160deg, var(--marca-claro), var(--marca-alto));
+  border-radius: 50%;
+  padding: 4px;
+  box-shadow: 0 6px 14px -4px rgba(var(--marca-claro-rgb), .85);
+}
+.ini-personilla em {
+  font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .03em;
+  color: var(--marca-palido); white-space: nowrap; text-shadow: 0 1px 6px rgba(0, 0, 0, .7);
+  max-width: 110px; overflow: hidden; text-overflow: ellipsis;
+}
+@keyframes ini-personilla-llega {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(-26px) scale(.5); }
+  70%  { opacity: 1; transform: translateX(-50%) translateY(4px) scale(1.08); }
+  100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+/* El panel: bienvenida, agenda, cuenta atrás y botones, flotando sobre la
+   sala. Entra con un pelín de retraso respecto a los asientos, para que se
+   lea "primero la sala, luego tu sitio en ella". */
+.ini-sala-panel {
+  position: relative;
+  width: 100%; max-width: 420px;
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 22px 22px 24px;
+  border: 1px solid rgba(var(--marca-claro-rgb), .28);
+  border-radius: 20px;
+  background: rgba(23, 6, 12, .72);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .85);
+  text-align: center;
+  opacity: 0; transform: translateY(14px);
+  animation: ini-panel-in .5s cubic-bezier(.2, .8, .2, 1) forwards;
+  animation-delay: .25s;
+}
+@keyframes ini-panel-in { to { opacity: 1; transform: translateY(0); } }
+
+.ini-sala-cab {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--marca-palido);
+}
+.ini-sala-check {
+  display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  background: rgba(var(--marca-claro-rgb), .18); color: var(--marca-claro); flex-shrink: 0;
+}
+.ini-sala-bienvenida { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -0.02em; }
+.ini-sala-bienvenida em { color: var(--marca-claro); font-style: normal; }
+.ini-sala-sub { margin: -4px 0 0; font-size: 13px; line-height: 1.55; color: var(--papel-dim); }
+
+.ini-agenda { position: relative; list-style: none; margin: 2px 0 0; padding: 0; text-align: left; }
+.ini-agenda li {
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 13px; line-height: 1.5; color: var(--papel);
+  padding: 9px 0; border-top: 1px solid var(--borde);
+}
+.ini-agenda li:first-child { border-top: none; padding-top: 0; }
+.ini-agenda li .ini-agenda-n {
+  display: grid; place-items: center; flex-shrink: 0;
+  width: 22px; height: 22px; margin-top: 1px;
+  border-radius: 50%; border: 1px solid rgba(var(--marca-claro-rgb), .4);
+  background: rgba(var(--marca-claro-rgb), .1);
+  color: var(--marca-claro); font-size: 11px; font-weight: 700;
+}
+.ini-agenda li > span:last-child { flex: 1; min-width: 0; }
+.ini-agenda li em { color: var(--marca-palido); font-style: normal; }
+
+.ini-cuenta { position: relative; display: flex; gap: 8px; justify-content: center; }
+.ini-cuenta div {
+  flex: 1; padding: 8px 4px; text-align: center; border-radius: 10px;
+  background: rgba(var(--marca-claro-rgb), .06); border: 1px solid rgba(var(--marca-claro-rgb), .2);
+}
+.ini-cuenta b { display: block; font-size: 17px; color: var(--marca-palido); }
+.ini-cuenta span { display: block; font-size: 9.5px; color: var(--papel-mut); text-transform: uppercase; letter-spacing: .04em; margin-top: 1px; }
+
+/* La acción principal de esta pantalla, más grande que un ini-btn normal:
+   cuando se llega aquí es lo único que de verdad hace falta pulsar. Va suelto
+   de `.on` y de `.discord` porque el botón que manda cambia según la pantalla
+   —el vídeo tras dejar el correo, el Discord en la sala del directo— y el
+   tamaño no debería depender del color. */
+.ini-btn.grande { padding: 16px; }
+.ini-btn.grande .ini-btn-icono { width: 48px; height: 48px; }
+.ini-btn.grande .ini-btn-txt b { font-size: 16px; }
+.ini-btn.on.grande { box-shadow: 0 18px 40px -16px rgba(var(--marca-rgb), 0.95); }
+.ini-btn.discord.grande { box-shadow: 0 18px 40px -16px rgba(88, 101, 242, .95); }
+
+/* El calendario baja de categoría a propósito: es un enlace de texto, no un
+   botón del mismo peso que Discord. */
+.ini-sala-cal {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  font-size: 12.5px; font-weight: 600; color: var(--papel-dim);
+  text-decoration: none; padding: 4px;
+}
+.ini-sala-cal:hover { color: var(--papel); }
+.ini-sala-cal svg { color: var(--marca-claro); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ini-warp-anillo, .ini-sala-foco, .ini-asiento, .ini-personilla, .ini-sala-panel { animation: none; opacity: 1; }
+}
+
+/* ── EN FORMA CON HUGO ──────────────────────────────────────────────────────
+   enformaconhugo.com. Los colores salen de su propia web (el naranja #FF4500
+   sobre el casi negro #08090A), para que quien llegue desde Instagram y luego
+   pulse no note que ha cambiado de sitio.
+
+   Solo se redefine la paleta: ni una regla de maqueta. Si alguna hiciera falta
+   aquí, es señal de que la de arriba estaba escrita para una marca y no para
+   la pieza. */
+.ini--hugo {
+  --marca:        #E63E00;
+  --marca-alto:   #FF4500;
+  --marca-cima:   #FF6B35;
+  --marca-rgb:    255, 69, 0;
+  --marca-claro:  #FF8A4C;
+  --marca-claro-rgb: 255, 138, 76;
+  --marca-palido: #FFCDB2;
+  --fondo:        #08090A;
+  --tinta:        #0F1419;
+  --papel:        #F2F4F5;   /* su blanco es frío, no el roto cálido de Alex */
+  --papel-dim:    #C3CACE;
+  --papel-mut:    #8E979D;
+  --papel-rgb:    242, 244, 245;
+  /* Negro sobre el naranja: 9:1 largos. Con el blanco de arriba se quedaba en
+     4,2:1, por debajo del mínimo legible para un texto de 15px. */
+  --sobre-marca-rgb: 10, 11, 12;
+}
+
+/* ── La bio de Alex: pantera ───────────────────────────────────────────────
+   Negro casi puro con el granate entrando como luz por los bordes, y detrás
+   una figura encapuchada en ASCII (FondoHacker.jsx) con los ojos en rojo.
+   Solo en `.ini--pantera`: la página de Hugo comparte esta hoja y no lo lleva. */
+.ini--pantera {
+  --fondo: #050203;
+  position: relative;
+  isolation: isolate;
+  overflow-x: clip;
+  background:
+    radial-gradient(900px 560px at 50% -12%, rgba(126, 31, 53, 0.55), transparent 62%),
+    radial-gradient(720px 520px at 108% 112%, rgba(126, 31, 53, 0.34), transparent 60%),
+    radial-gradient(560px 520px at -14% 58%, rgba(70, 10, 24, 0.5), transparent 62%),
+    var(--fondo);
+}
+.ini-hacker {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden;
+  display: grid; place-items: center;
+}
+/* Líneas de monitor viejo por encima de todo el fondo. */
+.ini-hacker::after {
+  content: ''; position: absolute; inset: 0;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.28) 0 1px, transparent 1px 3px);
+}
+.ini-ascii {
+  margin: 0;
+  font: 700 clamp(7.5px, 2.05vw, 13px)/1.06 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.02em;
+  white-space: pre;
+  color: rgba(190, 50, 82, 0.2);
+  text-shadow: 0 0 8px rgba(166, 43, 70, 0.35);
+  -webkit-mask-image: radial-gradient(ellipse 70% 75% at 50% 42%, #000 45%, transparent 100%);
+  mask-image: radial-gradient(ellipse 70% 75% at 50% 42%, #000 45%, transparent 100%);
+  transform: translateY(-6vh);
+  animation: ini-parpadeo 7s steps(1) infinite;
+}
+.ini-ojo {
+  color: #ff2446;
+  text-shadow: 0 0 6px #ff2446, 0 0 22px rgba(255, 36, 70, 0.85), 0 0 48px rgba(255, 36, 70, 0.45);
+  animation: ini-ojos 5.5s ease-in-out infinite;
+}
+.ini-term {
+  position: absolute; margin: 0;
+  font: 600 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: rgba(255, 143, 163, 0.32);
+  letter-spacing: 0.04em;
+}
+.ini-term.arriba { top: 14px; right: 16px; }
+.ini-term.abajo { bottom: 12px; left: 16px; }
+.ini-cursor { animation: ini-cursor 1s steps(1) infinite; }
+@keyframes ini-cursor { 50% { opacity: 0; } }
+/* Un fallo de señal de vez en cuando: casi siempre quieto. */
+@keyframes ini-parpadeo {
+  0%, 91%, 100% { opacity: 1; transform: translateY(-6vh); }
+  92% { opacity: .55; transform: translate(-3px, -6vh); }
+  93% { opacity: 1; transform: translate(2px, -6vh); }
+  94% { opacity: .8; transform: translateY(-6vh); }
+}
+/* Los ojos respiran y parpadean una vez por ciclo. */
+@keyframes ini-ojos {
+  0%, 100% { opacity: 1; }
+  45% { opacity: .7; }
+  60%, 62% { opacity: .05; }
+}
+/* «AI» al otro lado de la máscara: de lado, pegado al borde izquierdo, como
+   un logo integrado. Mismo color y mismos caracteres que la máscara. */
+.ini-ai {
+  margin: 0; white-space: pre;
+  font: 700 clamp(8px, 2.6vw, 14px)/1.06 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.02em;
+  color: rgba(190, 50, 82, 0.3);
+  text-shadow: 0 0 8px rgba(166, 43, 70, 0.35);
+}
+@media (min-width: 980px) {
+  /* Ya viene de lado en ai.txt (la imagen se gira antes de pasarla a ASCII,
+     así los caracteres quedan derechos): aquí solo se coloca y se escala. */
+  .ini-ai {
+    position: absolute; top: 50%; left: 3vw;
+    font-size: min(2vh, 1.1vw);
+    color: rgba(200, 56, 90, 0.36);
+    transform: translateY(-50%);
+  }
+}
+/* Cristal oscuro en lo que se lee encima del fondo: sin él, la figura se ve a
+   través de los botones y el texto pierde contraste. */
+.ini--pantera .ini-btn:not(.on),
+.ini--pantera .ini-lista,
+.ini--pantera .ini-dato {
+  background: rgba(12, 4, 7, 0.74);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+.ini--pantera .ini-btn:not(.on):hover { background: rgba(28, 8, 14, 0.8); }
+/* En el móvil la tarjeta ocupa todo el ancho y no queda hueco a los lados:
+   detrás, la figura solo manchaba el texto. Así que va en el flujo, justo
+   debajo de los botones: el «AI» y la máscara mirando. */
+@media (max-width: 979px) {
+  /* Dentro de la tarjeta, que está centrada: con 100vw asoma lo mismo por
+     los dos lados y el overflow-x de .ini--pantera evita el scroll. */
+  .ini-hacker {
+    position: relative; inset: auto; z-index: 0;
+    width: 100vw; margin: 6px 0 0; padding: 30px 0 40px;
+    place-items: end center;
+  }
+  .ini-ascii { transform: none; animation: none; font-size: 2.05vw; color: rgba(190, 50, 82, 0.3); }
+  .ini-hacker { gap: 22px; }
+  .ini-term.arriba { top: 6px; right: 16px; }
+  .ini-term.abajo { bottom: 14px; }
+}
+/* En escritorio la figura sale del centro, donde la tapa la tarjeta, y se
+   planta a la derecha, grande. */
+@media (min-width: 980px) {
+  .ini-hacker { place-items: center end; padding-right: 3vw; }
+  .ini-ascii { font-size: clamp(9px, 0.8vw, 13px); color: rgba(200, 56, 90, 0.42); -webkit-mask-image: none; mask-image: none; }
+  .ini-term { font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ini-ascii, .ini-ojo, .ini-cursor { animation: none; }
+}

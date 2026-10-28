@@ -16,7 +16,7 @@
 //   usuario cambia el toggle, no este context. Mantiene este module
 //   agnóstico de auth/identity.
 
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useEffect, useState, useCallback } from 'react'
 
 const STORAGE_KEY = 'blackwolf-theme'
 const VALID = new Set(['light', 'dark'])
@@ -81,8 +81,4 @@ export function ThemeProvider({ children }) {
       {children}
     </ThemeContext.Provider>
   )
-}
-
-export function useTheme() {
-  return useContext(ThemeContext)
 }

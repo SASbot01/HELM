@@ -1,0 +1,380 @@
+/* Diagnóstico operativo — hoja de estilo del lead magnet.
+   Sale de HELM a propósito: es una página pública con su propia identidad, no
+   el panel. Todo va namespaced bajo .dg-root para que no se toque con theme.css
+   si algún día conviven.
+
+   La identidad es la misma que la del formulario de valor de Silvestre IA
+   (Space Grotesk + lima sobre negro, ver silvestreai/valor.css): las dos
+   páginas se enseñan al mismo público y con la misma marca, y antes cada una
+   iba por su lado. Los nombres de las variables se quedan como estaban —
+   `--amber` es el acento, aunque ya no sea ámbar — porque renombrarlos era
+   tocar veintiún sitios sin ganar nada. */
+@import url('../../fonts/space-grotesk.css');
+@import url('../../fonts/inter.css');
+@import url('../../fonts/jetbrains-mono.css');
+
+.dg-root{
+  --ink:#07080A;
+  --ink-2:#0D0F13;
+  --ink-3:#151920;
+  --ivory:#F2F4F3;
+  --ivory-dim:#8A9490;
+  --amber:#C6F24E;
+  --clay:#FF6B5B;
+  --mint:#5BE3D4;
+  /* El acento hace de "bien" y de "acento" a la vez, así que el tramo de en
+     medio de las escalas necesita un color propio: si no, un 50/100 se pinta
+     igual de verde que un 90 y el diagnóstico deja de decir nada. */
+  --warn:#F5C542;
+  --line:rgba(242,244,243,.13);
+  --line-2:rgba(242,244,243,.27);
+  --display:'Space Grotesk',system-ui,sans-serif;
+  --body:'Inter',system-ui,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+
+  background:var(--ink);
+  color:var(--ivory);
+  font-family:var(--body);
+  font-size:16px;
+  line-height:1.5;
+  min-height:100%;
+  position:relative;
+  -webkit-font-smoothing:antialiased;
+}
+.dg-root *{box-sizing:border-box;}
+.dg-root :focus-visible{outline:2px solid var(--amber);outline-offset:3px;border-radius:4px;}
+
+/* ---------- shell ---------- */
+.dg-shell{display:grid;grid-template-columns:210px 1fr;min-height:100vh;}
+.dg-rail{
+  border-right:1px solid var(--line);
+  padding:30px 22px;
+  display:flex;flex-direction:column;gap:26px;
+  background:linear-gradient(180deg,var(--ink-2),var(--ink));
+}
+.dg-brand{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ivory-dim);}
+.dg-brand b{display:block;font-family:var(--display);font-size:18px;letter-spacing:-.02em;color:var(--ivory);text-transform:none;margin-top:8px;font-weight:800;line-height:1.15;}
+.dg-spine{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;}
+.dg-spine li{
+  font-family:var(--mono);font-size:11px;letter-spacing:.04em;
+  color:var(--ivory-dim);opacity:.5;
+  padding:7px 0 7px 16px;border-left:2px solid var(--line);
+  transition:opacity .3s,color .3s,border-color .3s;
+}
+.dg-spine li.on{opacity:1;color:var(--ivory);border-left-color:var(--amber);}
+.dg-spine li.done{opacity:.85;color:var(--mint);border-left-color:var(--mint);}
+.dg-signals{margin-top:auto;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ivory-dim);}
+.dg-signals b{display:block;font-size:30px;color:var(--amber);letter-spacing:-.02em;margin-top:4px;font-weight:700;}
+
+.dg-main{padding:44px 52px;display:flex;flex-direction:column;position:relative;}
+.dg-bar{position:absolute;top:0;left:0;height:2px;background:var(--amber);width:0;transition:width .45s cubic-bezier(.2,.8,.2,1);}
+
+/* ---------- screens ---------- */
+.dg-screen{max-width:620px;width:100%;margin:auto 0;animation:dgIn .32s cubic-bezier(.2,.8,.2,1);}
+@keyframes dgIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.dg-eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:16px;}
+.dg-q{font-family:var(--display);font-size:clamp(24px,3.1vw,33px);font-weight:600;letter-spacing:-.025em;line-height:1.18;margin:0 0 10px;}
+.dg-help{color:var(--ivory-dim);font-size:14.5px;margin:0 0 26px;max-width:52ch;}
+
+.dg-opts{display:flex;flex-direction:column;gap:9px;}
+.dg-opt{
+  width:100%;text-align:left;cursor:pointer;
+  background:rgba(241,237,226,.035);
+  border:1px solid var(--line);border-radius:9px;
+  color:var(--ivory);font-family:var(--body);font-size:15.5px;
+  padding:15px 17px;display:flex;align-items:center;gap:13px;
+  transition:background .16s,border-color .16s,transform .16s;
+}
+.dg-opt:hover{background:rgba(241,237,226,.075);border-color:var(--line-2);transform:translateX(3px);}
+.dg-opt .k{
+  font-family:var(--mono);font-size:10.5px;color:var(--ivory-dim);
+  border:1px solid var(--line-2);border-radius:4px;
+  width:21px;height:21px;flex:0 0 21px;display:grid;place-items:center;transition:.16s;
+}
+.dg-opt.sel{background:rgba(198,242,78,.12);border-color:var(--amber);}
+.dg-opt.sel .k{background:var(--amber);color:var(--ink);border-color:var(--amber);font-weight:700;}
+
+.dg-scale{display:flex;gap:6px;flex-wrap:wrap;}
+.dg-scale button{
+  flex:1;min-width:44px;cursor:pointer;
+  background:rgba(241,237,226,.035);border:1px solid var(--line);
+  color:var(--ivory);font-family:var(--mono);font-size:15px;
+  padding:16px 0;border-radius:8px;transition:.16s;
+}
+.dg-scale button:hover{background:rgba(241,237,226,.09);}
+.dg-scale button.sel{background:var(--amber);color:var(--ink);border-color:var(--amber);font-weight:700;}
+.dg-ends{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10.5px;color:var(--ivory-dim);margin-top:10px;letter-spacing:.03em;}
+
+.dg-field{
+  width:100%;background:rgba(241,237,226,.035);border:1px solid var(--line);
+  border-radius:9px;color:var(--ivory);font-family:var(--body);font-size:15.5px;
+  padding:15px 17px;margin-bottom:9px;
+}
+.dg-field::placeholder{color:rgba(168,181,175,.6);}
+.dg-field:focus{border-color:var(--amber);outline:none;}
+.dg-field.bad{border-color:var(--clay);}
+textarea.dg-field{min-height:104px;resize:vertical;}
+.dg-err{font-family:var(--mono);font-size:10.5px;color:var(--clay);letter-spacing:.04em;margin:-4px 0 10px;}
+
+.dg-nav{display:flex;align-items:center;gap:14px;margin-top:28px;}
+.dg-cta{
+  background:var(--amber);color:var(--ink);border:none;cursor:pointer;
+  font-family:var(--body);font-weight:600;font-size:15px;
+  padding:14px 26px;border-radius:8px;transition:.16s;
+}
+.dg-cta:hover{filter:brightness(1.09);}
+.dg-cta:disabled{opacity:.32;cursor:not-allowed;filter:none;}
+.dg-back{
+  background:none;border:none;cursor:pointer;color:var(--ivory-dim);
+  font-family:var(--mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;padding:8px 0;
+}
+.dg-back:hover{color:var(--ivory);}
+.dg-hint{font-family:var(--mono);font-size:10.5px;color:var(--ivory-dim);letter-spacing:.06em;margin-left:auto;}
+
+/* ---------- intro / puerta ---------- */
+.dg-intro h1{font-family:var(--display);font-size:clamp(32px,5vw,52px);font-weight:800;letter-spacing:-.038em;line-height:1.02;margin:0 0 20px;}
+.dg-intro h1 em{font-style:normal;color:var(--amber);}
+.dg-intro p{color:var(--ivory-dim);font-size:16.5px;max-width:50ch;margin:0 0 14px;}
+.dg-meta{display:flex;gap:28px;margin:30px 0 8px;flex-wrap:wrap;}
+.dg-meta div{font-family:var(--mono);font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--ivory-dim);}
+.dg-meta b{display:block;font-family:var(--display);font-size:26px;color:var(--ivory);letter-spacing:-.02em;margin-top:5px;text-transform:none;font-weight:600;}
+.dg-gate{display:grid;gap:0;max-width:440px;margin-top:26px;}
+.dg-gate label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ivory-dim);margin-bottom:7px;display:block;}
+.dg-gate .campo{margin-bottom:14px;}
+
+/* ---------- results ---------- */
+.dg-res{max-width:760px;width:100%;margin:0 auto;animation:dgIn .4s ease;}
+.dg-gauge{border:1px solid var(--line-2);border-radius:13px;padding:32px;background:linear-gradient(150deg,var(--ink-2),var(--ink));margin-bottom:14px;}
+.dg-money{font-family:var(--display);font-size:clamp(38px,7vw,68px);font-weight:800;letter-spacing:-.045em;color:var(--amber);line-height:1;}
+.dg-money small{font-size:.36em;color:var(--ivory-dim);letter-spacing:0;font-weight:400;display:block;margin-top:12px;font-family:var(--body);}
+.dg-year{font-family:var(--mono);font-size:12.5px;color:var(--ivory);margin-top:16px;padding-top:16px;border-top:1px solid var(--line);letter-spacing:.03em;}
+.dg-year b{color:var(--amber);}
+
+.dg-idx{display:grid;grid-template-columns:1fr 1.25fr;gap:14px;margin-bottom:26px;}
+.dg-card{border:1px solid var(--line);border-radius:13px;padding:24px;background:rgba(241,237,226,.025);}
+.dg-score{font-family:var(--display);font-size:60px;font-weight:800;letter-spacing:-.04em;line-height:1;}
+.dg-profile{font-family:var(--display);font-size:19px;font-weight:600;margin:12px 0 7px;letter-spacing:-.015em;}
+.dg-dims{display:flex;flex-direction:column;gap:11px;}
+.dg-dim{display:grid;grid-template-columns:118px 1fr 34px;align-items:center;gap:11px;font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;color:var(--ivory-dim);text-transform:uppercase;}
+.dg-track{display:block;height:5px;background:rgba(241,237,226,.1);border-radius:3px;overflow:hidden;}
+/* display:block es imprescindible: son <span>, y un elemento en línea ignora
+   width y height, así que la barra se quedaba a 0 px por mucho porcentaje que
+   se le pusiera. */
+.dg-fill{display:block;height:100%;border-radius:3px;width:0;transition:width .9s cubic-bezier(.2,.8,.2,1);}
+
+.dg-h2{font-family:var(--display);font-size:22px;font-weight:600;letter-spacing:-.02em;margin:34px 0 6px;}
+.dg-sub{color:var(--ivory-dim);font-size:14px;margin:0 0 18px;max-width:60ch;}
+
+.dg-leak{border:1px solid var(--line);border-left:3px solid var(--clay);border-radius:0 11px 11px 0;padding:20px 22px;margin-bottom:10px;background:rgba(241,237,226,.022);}
+.dg-leak-top{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;}
+.dg-leak-name{font-family:var(--display);font-size:17.5px;font-weight:600;letter-spacing:-.015em;}
+.dg-leak-eur{font-family:var(--mono);font-size:15px;color:var(--amber);font-weight:700;white-space:nowrap;}
+.dg-leak-area{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ivory-dim);margin-bottom:7px;}
+.dg-leak p{font-size:14px;color:var(--ivory-dim);margin:9px 0 0;}
+.dg-leak p.fix{color:var(--ivory);border-top:1px solid var(--line);padding-top:11px;margin-top:13px;}
+.dg-leak p.fix b{color:var(--mint);font-weight:600;}
+.dg-tags{display:flex;gap:7px;margin-top:11px;flex-wrap:wrap;}
+.dg-tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ivory-dim);border:1px solid var(--line);border-radius:20px;padding:4px 10px;}
+
+.dg-ok{border-left-color:var(--mint);}
+.dg-ok .dg-leak-eur{color:var(--mint);}
+
+.dg-note{font-size:12.5px;color:var(--ivory-dim);border:1px dashed var(--line-2);border-radius:10px;padding:16px 18px;margin:22px 0;line-height:1.65;}
+.dg-note b{color:var(--ivory);font-weight:600;}
+
+.dg-capture{border:1px solid var(--amber);border-radius:13px;padding:28px;background:rgba(198,242,78,.07);margin-top:26px;}
+.dg-check{display:flex;gap:11px;align-items:flex-start;font-size:13px;color:var(--ivory-dim);margin:13px 0;cursor:pointer;}
+.dg-check input{margin-top:3px;accent-color:var(--amber);width:16px;height:16px;flex:0 0 16px;}
+.dg-done{text-align:center;padding:60px 20px;}
+
+@media (max-width:820px){
+  .dg-shell{grid-template-columns:1fr;min-height:0;}
+  .dg-rail{flex-direction:row;align-items:center;gap:16px;padding:15px 20px;border-right:none;border-bottom:1px solid var(--line);}
+  .dg-spine{display:none;}
+  .dg-signals{margin-top:0;margin-left:auto;text-align:right;}
+  .dg-signals b{font-size:20px;}
+  .dg-brand b{font-size:15px;margin-top:3px;}
+  .dg-main{padding:30px 22px 40px;}
+  .dg-idx{grid-template-columns:1fr;}
+  .dg-dim{grid-template-columns:92px 1fr 30px;}
+  .dg-gauge{padding:24px;}
+}
+
+/* ── Móvil · calibrado sobre iPhone 15 Pro (393 × 852 pt, 3×) ──────────────
+   Cuatro cosas que solo se notan en el teléfono de verdad y no en el
+   emulador del escritorio:
+
+   1. ÁREAS SEGURAS. La isla dinámica se come la franja de arriba y el
+      indicador de inicio la de abajo. Con viewport-fit=cover (ya está en el
+      index.html) hay que descontarlas a mano o el contador de señales queda
+      debajo de la isla y el botón, debajo de la barra del gesto.
+   2. ZOOM AL ENFOCAR. Safari amplía la página entera si un campo tiene la
+      letra por debajo de 16 px, y al ampliar ya no vuelve solo: el formulario
+      se queda descuadrado el resto de la sesión. 16 px exactos, no 15,5.
+   3. dvh EN LUGAR DE vh. En iOS, 100vh cuenta con la barra de direcciones
+      oculta, así que deja un hueco al final. dvh mide lo que de verdad se ve.
+   4. FLASH GRIS AL TOCAR. Safari pinta un recuadro gris sobre cada botón al
+      pulsarlo; con fondo oscuro se ve como un parpadeo sucio. */
+@media (max-width:820px){
+  html, body { overscroll-behavior-y:none; }
+
+  .dg-root{
+    min-height:100dvh;
+    /* El fondo llega hasta debajo de las áreas seguras: si no, asoma el
+       blanco del navegador por arriba y por abajo. */
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .dg-root *{ -webkit-tap-highlight-color:transparent; }
+  .dg-shell{ min-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+
+  /* La cabecera se queda fija: el contador de señales subiendo mientras
+     respondes es la mitad de la tensión de esta pieza, y scrolleado no se ve. */
+  .dg-rail{
+    position:sticky; top:0; z-index:5;
+    padding:14px 20px; gap:14px;
+    background:var(--ink-2);
+  }
+  .dg-main{ padding:26px 20px 34px; }
+  .dg-bar{ position:sticky; top:0; }
+
+  /* 16 px exactos en todo lo que se escribe. */
+  .dg-field, textarea.dg-field{ font-size:16px; padding:14px 16px; }
+  .dg-opt{ font-size:16px; }
+
+  .dg-intro h1{ font-size:34px; line-height:1.05; }
+  .dg-intro p{ font-size:15.5px; }
+  .dg-meta{ gap:0; justify-content:space-between; margin:24px 0 4px; }
+  .dg-meta div{ font-size:9.5px; }
+  .dg-meta b{ font-size:22px; }
+
+  .dg-q{ font-size:23px; }
+  .dg-help{ font-size:14px; margin-bottom:20px; }
+
+  /* Diez botones repartidos en dos filas de cinco. Con flex quedaban 7 y 3,
+     que se lee fatal en una escala. */
+  .dg-scale{ display:grid; grid-template-columns:repeat(5,1fr); gap:7px; }
+  .dg-scale button{ min-width:0; padding:14px 0; font-size:16px; }
+
+  /* El botón principal, a lo ancho y con la pista debajo: en una columna de
+     393 px, poner los dos en fila deja el botón demasiado estrecho. */
+  .dg-nav{ flex-wrap:wrap; gap:10px; margin-top:22px; }
+  .dg-cta{ width:100%; padding:16px 22px; font-size:16px; }
+  .dg-hint{ margin-left:0; width:100%; text-align:center; }
+  .dg-back{ padding:6px 0; }
+
+  .dg-gate{ max-width:none; }
+
+  .dg-money{ font-size:34px; letter-spacing:-.03em; }
+  .dg-money small{ font-size:13px; }
+  .dg-year{ font-size:11px; }
+  .dg-card{ padding:20px; }
+  .dg-score{ font-size:46px; }
+  .dg-leak{ padding:17px 18px; }
+  .dg-leak-top{ gap:6px; }
+  .dg-leak-name{ font-size:16px; }
+  .dg-leak-eur{ font-size:14px; }
+  .dg-capture{ padding:22px; }
+  .dg-pdf{ width:100%; justify-content:center; padding:15px 20px; font-size:15px; }
+}
+
+/* Móviles estrechos (iPhone SE, 375 pt y menos). */
+@media (max-width:380px){
+  .dg-main{ padding:22px 16px 30px; }
+  .dg-intro h1{ font-size:30px; }
+  .dg-q{ font-size:21px; }
+  .dg-meta b{ font-size:19px; }
+  .dg-dim{ grid-template-columns:78px 1fr 26px; font-size:9.5px; }
+}
+
+/* iPhone en horizontal: la altura útil se queda en 393 px, así que la
+   cabecera fija robaría media pantalla. Vuelve a scrollear con el resto. */
+@media (max-width:900px) and (orientation:landscape){
+  .dg-rail{ position:static; }
+  .dg-main{ padding-top:20px; }
+  .dg-intro h1{ font-size:28px; }
+}
+
+@media (prefers-reduced-motion:reduce){
+  .dg-root *,.dg-screen,.dg-res{animation:none!important;transition:none!important;}
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   IMPRESIÓN · el informe en PDF
+   ═══════════════════════════════════════════════════════════════════════════
+   Se genera con el «Guardar como PDF» del propio navegador en vez de con una
+   librería. Dos razones, y ninguna es la pereza:
+     · El texto sale VECTORIAL y seleccionable. jsPDF + html2canvas rasteriza
+       la pantalla: pesa más, se ve borroso al ampliar y no se puede copiar.
+     · Cero kilobytes al bundle, que ya iba justo.
+
+   Se invierte a tinta oscura sobre blanco a propósito: los navegadores no
+   imprimen fondos por defecto, así que el texto claro del diseño saldría
+   invisible sobre el papel. Además, imprimir un fondo verde oscuro a sangre
+   se come un cartucho por informe. */
+@media print {
+  @page { size: A4; margin: 14mm 12mm; }
+
+  .dg-root{
+    --ink:#FFFFFF; --ink-2:#FFFFFF; --ink-3:#FFFFFF;
+    --ivory:#10201E; --ivory-dim:#4A5C57;
+    --line:rgba(16,32,30,.16); --line-2:rgba(16,32,30,.3);
+    --amber:#B46A12; --clay:#A8402C; --mint:#2E7D5B;
+    background:#FFFFFF !important; color:#10201E;
+    font-size:11pt;
+  }
+  .dg-root *{ background-image:none !important; box-shadow:none !important; }
+
+  /* Fuera todo lo que no es el informe. */
+  .dg-rail, .dg-bar, .dg-capture, .dg-nav, .dg-pdf { display:none !important; }
+  .dg-shell{ display:block; min-height:0; }
+  .dg-main{ padding:0; }
+  .dg-res{ max-width:none; margin:0; animation:none; }
+
+  /* Cabecera que solo existe en el papel: sin ella, el PDF no dice de quién es. */
+  .dg-print-head{ display:block !important; margin-bottom:14mm; padding-bottom:5mm; border-bottom:2px solid var(--amber); }
+  .dg-print-head h1{ font-family:var(--display); font-size:22pt; font-weight:800; letter-spacing:-.03em; margin:0 0 3mm; }
+  .dg-print-head .quien{ font-size:11pt; color:var(--ivory-dim); }
+  .dg-print-head .quien b{ color:#10201E; }
+
+  .dg-gauge{ border:1.5pt solid var(--amber); background:none !important; padding:8mm; page-break-inside:avoid; }
+  .dg-money{ font-size:30pt; color:var(--amber); }
+  .dg-money small{ font-size:10.5pt; color:var(--ivory-dim); }
+  .dg-year{ font-size:10pt; }
+
+  .dg-idx{ grid-template-columns:1fr 1.2fr; gap:6mm; page-break-inside:avoid; }
+  .dg-card{ border:.8pt solid var(--line-2); background:none !important; padding:6mm; }
+  .dg-score{ font-size:34pt; }
+  .dg-track{ background:rgba(16,32,30,.12) !important; }
+  /* La barra de color sí se imprime: es el dato, no decoración. */
+  .dg-fill{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+
+  .dg-h2{ font-size:14pt; margin:8mm 0 2mm; page-break-after:avoid; }
+  .dg-sub{ font-size:10pt; }
+
+  /* Cada fuga entera en la misma página: partir una por la mitad hace que se
+     lea como dos cosas distintas. */
+  .dg-leak{ page-break-inside:avoid; border:.8pt solid var(--line); border-left:2.5pt solid var(--clay); background:none !important; padding:5mm 6mm; margin-bottom:4mm; }
+  .dg-leak-name{ font-size:12.5pt; }
+  .dg-leak-eur{ font-size:11pt; color:var(--amber); }
+  .dg-leak p{ font-size:10pt; }
+  .dg-tag{ font-size:8pt; }
+
+  /* En pantalla solo se enseñan las cinco primeras; en el PDF van todas. */
+  .dg-leak.extra{ display:block !important; }
+
+  .dg-note{ font-size:9pt; page-break-inside:avoid; }
+  .dg-print-foot{ display:block !important; margin-top:10mm; padding-top:4mm; border-top:.8pt solid var(--line); font-size:8.5pt; color:var(--ivory-dim); }
+}
+
+/* Fuera de la impresión, las piezas de papel no existen. */
+.dg-print-head, .dg-print-foot { display:none; }
+.dg-leak.extra { display:none; }
+
+/* Botón de descarga, junto al bloque de resultados. */
+.dg-pdf{
+  display:inline-flex; align-items:center; gap:9px; cursor:pointer;
+  background:none; border:1px solid var(--line-2); border-radius:8px;
+  color:var(--ivory); font-family:var(--body); font-size:14px;
+  padding:12px 20px; margin-top:18px; transition:.16s;
+}
+.dg-pdf:hover{ background:rgba(241,237,226,.07); border-color:var(--amber); color:var(--amber); }

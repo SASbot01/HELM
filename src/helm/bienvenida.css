@@ -1,0 +1,119 @@
+/* HELM — la bienvenida de una agencia nueva (Bienvenida en Creditos.jsx) y el
+   aviso de «sin créditos». Pinta con los tokens de .helm (tema.css): una pieza
+   que flota sobre el lienzo, el timón que gira despacio y el oro solo en lo
+   que se puede pulsar o celebrar. */
+
+.helm-creditos-aviso {
+  margin: 0 0 14px; padding: 12px 14px; border-radius: 12px;
+  color: var(--text); font-size: 14px;
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
+}
+
+.bv-velo {
+  position: fixed; inset: 0; z-index: 80;
+  display: grid; place-items: center; padding: 20px;
+  background: rgba(0, 0, 0, 0.74);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  animation: bv-aparece .35s ease both;
+}
+.bv-caja {
+  position: relative; width: min(560px, 100%); max-height: calc(100dvh - 40px); overflow: auto;
+  padding: 40px 32px 28px; text-align: center;
+  background: linear-gradient(180deg, #18181a, #0f0f10) padding-box, var(--borde) border-box;
+  border: 1px solid transparent; border-radius: 24px;
+  box-shadow: var(--shadow), 0 60px 140px -50px #000, 0 0 120px -60px rgba(217, 182, 107, 0.45);
+  animation: bv-sube .5s cubic-bezier(.2, .9, .25, 1.15) both;
+}
+.bv-cerrar {
+  position: absolute; top: 14px; right: 14px;
+  display: grid; place-items: center; width: 34px; height: 34px;
+  border: 0; border-radius: 10px; background: transparent; color: var(--text-mut); cursor: pointer;
+}
+.bv-cerrar:hover { background: var(--hover); color: var(--text); }
+
+/* El timón: gira despacio y respira; al regalar, da una vuelta entera. */
+.bv-timon { position: relative; width: 76px; height: 76px; margin: 0 auto 22px; }
+.bv-timon img { position: relative; width: 100%; height: 100%; border-radius: 19px; animation: bv-gira 18s linear infinite; }
+.bv-halo {
+  position: absolute; inset: -18px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(217, 182, 107, 0.38), transparent 65%);
+  animation: bv-respira 3.2s ease-in-out infinite;
+}
+.bv-regalo .bv-timon img { animation: bv-vuelta 1.1s cubic-bezier(.3, .9, .3, 1) both, bv-gira 18s linear 1.1s infinite; }
+
+.bv-caja h2 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.15; }
+.bv-lead { max-width: 420px; margin: 12px auto 0; color: var(--text-dim); font-size: 14.5px; line-height: 1.6; }
+.bv-nota { margin: 22px 0 0; color: var(--text-mut); font-size: 13.5px; }
+.bv-error { margin: 14px 0 0; color: var(--red); font-size: 13.5px; }
+
+.bv-packs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 26px; }
+.bv-pack {
+  display: grid; gap: 2px; justify-items: start; text-align: left;
+  padding: 16px 16px 14px; border-radius: 16px; cursor: pointer;
+  font: inherit; color: var(--text);
+  background: var(--superficie-2) padding-box, var(--borde-neutro) border-box;
+  border: 1px solid transparent; box-shadow: var(--shadow-sm);
+  animation: bv-sube .45s cubic-bezier(.2, .9, .25, 1.1) both;
+  animation-delay: calc(120ms + var(--i) * 60ms);
+  transition: transform .16s ease, background .16s ease;
+}
+.bv-pack:hover:not(:disabled) { transform: translateY(-2px); background: var(--superficie-2) padding-box, var(--borde) border-box; }
+.bv-pack:disabled { opacity: .55; cursor: wait; }
+.bv-pack-eur { font-size: 24px; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.bv-pack-cr { color: var(--text-mut); font-size: 13px; }
+.bv-pack-ir { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; color: var(--oro); font-size: 13px; font-weight: 500; }
+
+.bv-saltar {
+  margin-top: 22px; padding: 10px 14px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--text-mut); font: inherit; font-size: 14px; cursor: pointer;
+  text-decoration: underline; text-decoration-color: rgba(255, 255, 255, 0.2); text-underline-offset: 4px;
+}
+.bv-saltar:hover { color: var(--text); background: var(--hover); }
+
+/* El regalo. */
+.bv-eti { margin: 0 0 6px; color: var(--oro); font-size: 13px; font-weight: 500; letter-spacing: 0.04em; }
+.bv-cifra {
+  font-size: 56px !important; letter-spacing: -0.045em !important; font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, #f3e3b8, var(--oro) 70%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.bv-cifra span { font-size: 22px; letter-spacing: -0.02em; }
+.bv-empezar {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: 24px;
+  padding: 12px 22px; border: 0; border-radius: 12px; cursor: pointer;
+  font: inherit; font-weight: 600; font-size: 15px; color: var(--on-accent);
+  background: linear-gradient(180deg, var(--violet), var(--oro));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 10px 30px -10px rgba(217, 182, 107, 0.6);
+}
+.bv-empezar:hover { filter: brightness(1.07); }
+.bv-empezar:disabled { opacity: .6; cursor: wait; }
+
+/* Chispas que salen del timón al regalar. */
+.bv-chispas { position: absolute; left: 50%; top: 78px; width: 0; height: 0; pointer-events: none; }
+.bv-chispas i {
+  position: absolute; width: 6px; height: 6px; margin: -3px; border-radius: 50%;
+  background: var(--oro); box-shadow: 0 0 10px var(--oro);
+  --a: calc(var(--i) * 25.7deg);
+  animation: bv-chispa 1.1s cubic-bezier(.15, .8, .3, 1) both;
+  animation-delay: calc(var(--i) * 18ms);
+}
+.bv-chispas i:nth-child(3n) { width: 4px; height: 4px; background: #f3e3b8; }
+
+@keyframes bv-aparece { from { opacity: 0; } }
+@keyframes bv-sube { from { opacity: 0; transform: translateY(14px) scale(.98); } }
+@keyframes bv-gira { to { transform: rotate(360deg); } }
+@keyframes bv-vuelta { from { transform: rotate(-360deg) scale(.6); } }
+@keyframes bv-respira { 50% { opacity: .55; transform: scale(.92); } }
+@keyframes bv-chispa {
+  0% { opacity: 1; transform: rotate(var(--a)) translateY(0) scale(1); }
+  100% { opacity: 0; transform: rotate(var(--a)) translateY(-130px) scale(.4); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bv-velo, .bv-caja, .bv-pack, .bv-timon img, .bv-halo, .bv-chispas i { animation: none !important; }
+}
+@media (max-width: 520px) {
+  .bv-caja { padding: 34px 18px 22px; border-radius: 20px; }
+  .bv-caja h2 { font-size: 22px; }
+  .bv-cifra { font-size: 46px !important; }
+}

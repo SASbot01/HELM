@@ -1,0 +1,125 @@
+/* HELM — el puesto de la plataforma (Plataforma.jsx). Pinta con los tokens de
+   .helm (tema.css): el mismo lienzo y las mismas piezas que el tablero de
+   perfiles. La tabla pasa a tarjetas en móvil. */
+.pl { max-width: 1180px; margin: 0 auto; padding: 56px 24px 80px; }
+.pl-cab {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; flex-wrap: wrap;
+  margin-bottom: 26px;
+}
+.pl-titulo { display: flex; align-items: center; gap: 16px; }
+.pl-logo { width: 48px; height: 48px; border-radius: 12px; box-shadow: var(--shadow-sm); }
+.pl-titulo h1 { margin: 0; font-size: 34px; font-weight: 600; letter-spacing: -.035em; line-height: 1.05; }
+.pl-titulo p { margin: 6px 0 0; font-size: 14px; color: var(--text-mut); }
+.pl-acc { display: flex; gap: 8px; flex-wrap: wrap; }
+.pl-gira { animation: pl-gira 0.9s linear infinite; }
+@keyframes pl-gira { to { transform: rotate(360deg); } }
+
+.pl-kpis { margin-bottom: 18px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (min-width: 1140px) { .pl-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .pl-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pl .helm-kpi .val.danger { color: var(--red); }
+.pl-buscar { min-width: 0; width: min(280px, 100%); }
+.pl-nota { margin: 14px 4px 0; font-size: 12.5px; color: var(--text-mut); }
+
+/* ── Tabla ─────────────────────────────────────────────────────────────── */
+.pl-tabla { display: grid; margin: 4px -6px 0; }
+.pl-fila {
+  display: grid;
+  grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr) 70px minmax(0, 1fr) 96px 104px 104px;
+  gap: 12px; align-items: center;
+  padding: 12px 10px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--text); font: inherit; font-size: 13.5px; text-align: left;
+  cursor: pointer; transition: background .14s ease;
+}
+.pl-fila + .pl-fila { box-shadow: inset 0 1px 0 var(--border); }
+.pl-fila:hover { background: var(--hover); box-shadow: none; }
+.pl-fila:hover + .pl-fila { box-shadow: none; }
+.pl-fila--cab {
+  cursor: default; padding-top: 4px; padding-bottom: 8px;
+  color: var(--text-mut); font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+}
+.pl-fila--cab:hover { background: transparent; }
+.pl-num { text-align: right; font-variant-numeric: tabular-nums; }
+.pl-resta { color: var(--red); }
+.pl-agencia { display: grid; gap: 2px; min-width: 0; }
+.pl-agencia b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-agencia small { color: var(--text-mut); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-marcas { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 3px; }
+.pl-marcas:empty { display: none; }
+.pl-marca {
+  font-style: normal; font-size: 11px; line-height: 1; padding: 4px 7px; border-radius: 999px;
+  color: var(--oro); background: color-mix(in srgb, var(--oro) 12%, transparent);
+}
+.pl-marca--mal { color: var(--red); background: color-mix(in srgb, var(--red) 12%, transparent); }
+
+@media (max-width: 860px) {
+  .pl { padding: 28px 16px 60px; }
+  .pl-titulo h1 { font-size: 28px; }
+  .pl-fila--cab { display: none; }
+  .pl-fila {
+    grid-template-columns: 1fr 1fr; gap: 8px 14px; padding: 14px 10px;
+  }
+  .pl-agencia { grid-column: 1 / -1; }
+  .pl-fila > [data-l] { display: grid; gap: 1px; text-align: left; }
+  .pl-fila > [data-l]::before {
+    content: attr(data-l); color: var(--text-mut); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+  }
+}
+
+/* ── Cajón de una agencia ──────────────────────────────────────────────── */
+.pl-cifras { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 6px; }
+.pl-cifras > div {
+  display: grid; gap: 4px; padding: 12px 14px; border-radius: 12px;
+  background: var(--bg-1); border: 1px solid var(--border);
+}
+.pl-cifras span { color: var(--text-mut); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.pl-cifras b { font-size: 20px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+
+.pl-h { margin: 22px 0 8px; font-size: 14px; font-weight: 600; }
+.pl-h small { margin-left: 6px; color: var(--text-mut); font-weight: 400; }
+.pl-vacio { margin: 0; font-size: 13px; color: var(--text-mut); }
+.pl-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pl-lista li {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px; border-radius: 12px; background: var(--bg-1); border: 1px solid var(--border);
+}
+.pl-lista li > span { display: grid; gap: 2px; min-width: 0; }
+.pl-lista b { font-weight: 500; font-size: 13.5px; overflow-wrap: anywhere; }
+.pl-lista small { color: var(--text-mut); font-size: 12px; overflow-wrap: anywhere; }
+.pl-lista .helm-btn { flex-shrink: 0; }
+.pl-lista--fallos li { align-items: flex-start; }
+.pl-perfil { display: flex !important; align-items: center; gap: 10px; }
+.pl-perfil > span { display: grid; gap: 2px; min-width: 0; }
+.pl-perfil-logo {
+  display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; overflow: hidden;
+  border-radius: 9px; background: var(--panel-2); font-style: normal; font-weight: 600; font-size: 13px;
+}
+.pl-perfil-logo img { width: 100%; height: 100%; object-fit: cover; }
+
+.pl-barras { display: grid; gap: 8px; }
+.pl-barras + .pl-barras { margin-top: 14px; }
+.pl-barras > div {
+  display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  font-size: 13px;
+}
+.pl-barras span { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-barras i { display: block; height: 6px; border-radius: 99px; background: var(--panel-2); position: relative; overflow: hidden; }
+.pl-barras i::after {
+  content: ''; position: absolute; inset: 0 auto 0 0; width: var(--w); border-radius: inherit;
+  background: linear-gradient(90deg, var(--oro), var(--violet));
+}
+.pl-barras b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.pl-barras--fino i::after { background: var(--plata); }
+
+.pl-ajuste { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 10px; align-items: end; width: 100%; }
+.pl-ajuste .helm-field { margin: 0; }
+.pl-ajuste-nota { grid-column: 1 / -1; color: var(--text-mut); font-size: 12px; }
+@media (max-width: 600px) { .pl-ajuste { grid-template-columns: 1fr; } }
+
+/* Zona de borrar la agencia: al final del cajón, separada del resto. */
+.pl-peligro { margin-top: 28px; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--red) 30%, transparent); }
+.pl-peligro .pl-h { color: var(--red); }
+.pl-peligro > p { margin-bottom: 12px; }
+.pl-borrar { display: grid; gap: 10px; }
+.pl-borrar .helm-field { margin: 0; }
+.pl-borrar-acc { display: flex; justify-content: flex-end; gap: 8px; }

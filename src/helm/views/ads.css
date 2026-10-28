@@ -1,0 +1,47 @@
+/* HELM — Ads: anuncios y su test de 5 días */
+.ads { max-width: 1100px; }
+.ads-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.ads-sub { margin: 0; max-width: 640px; color: var(--text-dim, #c9c9ce); font-size: 14px; line-height: 1.55; }
+.ads-sub b { color: var(--text, #eee); }
+.ads-error { color: #f87171; font-size: 13px; margin: 0 0 12px; }
+.ads-vacio { color: var(--text-muted, #8d8d95); font-size: 14px; padding: 24px 0; }
+
+.ads-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }
+.ad-card { background: var(--bg-card, #16161a); border: 1px solid var(--border, #2b2b30); border-left: 3px solid var(--c, #8d8d95); border-radius: 13px; padding: 15px 16px; display: flex; flex-direction: column; gap: 10px; }
+.ad-card-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.ad-card-cab h3 { margin: 0; font-size: 16px; font-weight: 700; }
+.ad-meta { margin: 2px 0 0; font-size: 12.5px; color: var(--text-muted, #8d8d95); }
+.ad-estado { flex: 0 0 auto; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; color: var(--c, #8d8d95); background: color-mix(in srgb, var(--c, #8d8d95) 14%, transparent); border: 1px solid color-mix(in srgb, var(--c, #8d8d95) 40%, transparent); }
+.ad-objetivo { margin: 0; font-size: 13.5px; color: var(--text-dim, #c9c9ce); }
+.ad-utm { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 12px; color: var(--text-muted, #8d8d95); }
+.ad-utm span { font-weight: 700; letter-spacing: .04em; }
+.ad-utm code { background: var(--bg, #0d0d0e); border: 1px solid var(--border, #26262b); border-radius: 5px; padding: 2px 6px; font-size: 11.5px; color: var(--text-dim, #c9c9ce); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; }
+.ad-utm button { background: none; border: 0; color: var(--text-muted, #8d8d95); cursor: pointer; padding: 2px; }
+
+.ad-test { background: var(--bg, #0d0d0e); border: 1px solid var(--border, #26262b); border-radius: 10px; padding: 11px 12px; }
+.ad-test-cab { font-size: 12.5px; color: var(--text-dim, #c9c9ce); margin-bottom: 7px; }
+.ad-test-cab b { color: var(--text, #eee); }
+.ad-barra { height: 6px; border-radius: 999px; background: rgba(255,255,255,.07); overflow: hidden; margin-bottom: 10px; }
+.ad-barra span { display: block; height: 100%; background: #7aa5f8; border-radius: 999px; transition: width .4s; }
+.ad-cifras { display: flex; gap: 16px; margin: 0; }
+.ad-cifras dt { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted, #8d8d95); }
+.ad-cifras dd { margin: 1px 0 0; font-size: 17px; font-weight: 700; }
+
+.ad-veredicto { background: color-mix(in srgb, var(--c, #4ade80) 9%, transparent); border: 1px solid color-mix(in srgb, var(--c, #4ade80) 30%, transparent); border-radius: 10px; padding: 10px 12px; }
+.ad-veredicto-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--c, #4ade80); }
+.ad-veredicto p { margin: 7px 0 0; font-size: 13px; color: var(--text-dim, #c9c9ce); line-height: 1.5; }
+
+.ad-acc { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.ad-acc .helm-btn { flex: 1; justify-content: center; }
+.ad-borrar { flex: 0 0 auto; background: none; border: 1px solid var(--border, #2b2b30); border-radius: 8px; color: var(--text-muted, #8d8d95); padding: 7px 9px; cursor: pointer; }
+.ad-borrar:hover { color: #f87171; border-color: color-mix(in srgb, #f87171 50%, transparent); }
+
+/* Modal de nuevo anuncio */
+.ads-modal-fondo { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.6); backdrop-filter: blur(3px); display: grid; place-items: center; padding: 22px; }
+.ads-modal { width: min(460px, 100%); background: var(--bg-card, #16161a); border: 1px solid var(--border, #2b2b30); border-radius: 15px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+.ads-modal header { display: flex; align-items: center; justify-content: space-between; }
+.ads-modal h3 { margin: 0; font-size: 18px; font-weight: 800; }
+.ads-x { background: none; border: 0; color: var(--text-muted, #8d8d95); font-size: 22px; cursor: pointer; }
+.ads-modal label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--text-dim, #c9c9ce); }
+.ads-modal-pie { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+.ads-nota { margin: 0; font-size: 11.5px; color: var(--text-muted, #8d8d95); }

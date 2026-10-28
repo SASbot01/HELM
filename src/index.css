@@ -5,88 +5,62 @@
 
 /* Theme system — añadido feature/vt-hover (Valen 2026-05-10) */
 @import url('./styles/themes.css');
+@import url('./fonts/inter.css');
+@import url('./fonts/montserrat.css');
+@import url('./fonts/archivo.css');
+@import url('./fonts/jetbrains-mono.css');
 *,
 *::before,
 *::after { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
-  --orange: #FF6B00;
-  --yellow: #FFB800;
-  --black: #000000;
-  --white: #F5F5F5;
-  --bg: #050510;
-  --bg-card: rgba(255,255,255,0.02);
-  --bg-card-hover: rgba(255,255,255,0.05);
-  --bg-card-solid: #0a0a14;
-  --bg-card-light: rgba(255,255,255,0.04);
-  --bg-sidebar: rgba(5,5,16,0.95);
-  --border: rgba(255,255,255,0.06);
-  --border-hover: rgba(255,255,255,0.12);
-  --border-focus: #F5F5F5;
-  --text: #E4E4E7;
-  --text-secondary: rgba(255,255,255,0.5);
-  --text-muted: rgba(255,255,255,0.25);
-  --text-dark: #000000;
-  --gradient: linear-gradient(135deg, var(--orange), color-mix(in srgb, var(--orange) 70%, #000));
-  --glow: rgba(245, 245, 245, 0.08);
-  --radius: 16px;
-  --radius-sm: 10px;
-  --radius-lg: 20px;
+  /* ── La paleta de HELM ────────────────────────────────────────────────────
+     La misma que helm/theme.css, para que la aplicación sea UNA. Antes esta
+     hoja era el panel antiguo de Black Wolf, con su propia paleta oscura: por
+     eso el login, el registro, los formularios públicos y el portal se veían
+     de otro color que el panel, y cambiar el tema de HELM no los tocaba.
+
+     Los NOMBRES se quedan como estaban (--orange, --bg-card, --text-dark…):
+     los usan cientos de reglas de este fichero. Lo que cambia son los valores.
+     --orange no es naranja desde hace tiempo; ahora es el cian del acento. */
+  --orange: #35D0E8;
+  --yellow: #FFC155;
+  --black: #04121A;
+  --white: #FFFFFF;
+  --bg: #080C10;
+  --bg-card: #101820;
+  --bg-card-hover: #16212B;
+  --bg-card-solid: #101820;
+  --bg-card-light: #0C1218;
+  --bg-sidebar: rgba(8,12,16,0.95);
+  --border: rgba(96,186,214,0.14);
+  --border-hover: rgba(96,186,214,0.32);
+  --border-focus: #35D0E8;
+  --text: #D8E6F0;
+  --text-secondary: #8AA0B2;
+  --text-muted: #5C7284;
+  /* El texto que va ENCIMA del acento. Sobre el cian va casi negro. */
+  --text-dark: #04121A;
+  /* Plano a propósito: el acento aparece cuando significa algo, no de adorno. */
+  --gradient: var(--orange);
+  --glow: transparent;
+  --radius: 10px;
+  --radius-sm: 7px;
+  --radius-lg: 14px;
   --radius-xs: 6px;
-  --success: #22C55E;
-  --danger: #EF4444;
-  --warning: #FFB800;
+  --success: #3FD68C;
+  --danger: #FF6B5E;
+  --warning: #FFC155;
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --transition-base: 0.25s var(--ease-out-expo);
 }
-:root.theme-light {
-  --orange:           #1E40AF;   /* YC navy → accent global de light */
-  --yellow:           #D4A017;   /* YC gold */
-  --black:            #0F172A;
-  --white:            #FFFFFF;
-  --bg:               #FFFFFF;
-  --bg-card:          #FFFFFF;
-  --bg-card-hover:    #F8FAFC;
-  --bg-card-solid:    #FFFFFF;
-  --bg-card-light:    #F8FAFC;
-  --bg-sidebar:       rgba(255,255,255,0.95);
-  --border:           #E2E8F0;
-  --border-hover:     #CBD5E1;
-  --border-focus:     #1E40AF;
-  --text:             #0F172A;
-  --text-secondary:   #475569;
-  --text-muted:       #94A3B8;
-  --text-dark:        #FFFFFF;
-  --gradient:         linear-gradient(135deg, #1E40AF, #D4A017);
-  --glow:             rgba(30,64,175,0.12);
-  --success:          #16A34A;
-  --danger:           #DC2626;
-  --warning:          #D97706;
-}
-:root.theme-dark {
-  --orange: #FF6B00;
-  --yellow: #FFB800;
-  --bg: #050510;
-  --bg-card: rgba(255,255,255,0.02);
-  --bg-card-hover: rgba(255,255,255,0.05);
-  --bg-card-solid: #0a0a14;
-  --bg-card-light: rgba(255,255,255,0.04);
-  --bg-sidebar: rgba(5,5,16,0.95);
-  --border: rgba(255,255,255,0.06);
-  --border-hover: rgba(255,255,255,0.12);
-  --border-focus: #F5F5F5;
-  --text: #E4E4E7;
-  --text-secondary: rgba(255,255,255,0.5);
-  --text-muted: rgba(255,255,255,0.25);
-  --text-dark: #000000;
-  --gradient: linear-gradient(135deg, var(--orange), color-mix(in srgb, var(--orange) 70%, #000));
-  --glow: rgba(245, 245, 245, 0.08);
-  --success: #22C55E;
-  --danger: #EF4444;
-  --warning: #FFB800;
-}
+
+/* .theme-light y .theme-dark apuntan a la misma paleta: HELM tiene un solo
+   aspecto y no hay tema que elegir. Se mantienen los selectores, y no se borran, para
+   que nada se quede sin estilo si algún componente todavía pone la clase. */
+:root.theme-light, :root.theme-dark { color-scheme: dark; }
 html { font-size: calc(15px * var(--ax-font-scale, 1)); }
 body {
-  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  font-family: 'Archivo', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
@@ -268,21 +242,22 @@ button {
   justify-content: center;
   position: relative;
   overflow: hidden;
-  background: #050510;
+  background: var(--bg);
 }
 .admin-login-glow {
   position: absolute;
   width: 600px; height: 600px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255,255,255,0.04) 0%, transparent 70%);
+  background: none;
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
 .admin-login-card {
-  background: rgba(5,5,16,0.95);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 2px rgba(28,29,25,0.04), 0 8px 24px -16px rgba(28,29,25,0.18);
   padding: 48px 40px;
   width: 100%;
   max-width: 420px;
@@ -297,17 +272,16 @@ button {
   border-radius: 50%;
   object-fit: contain;
   margin-bottom: 20px;
-  filter: drop-shadow(0 0 20px rgba(255,255,255,0.1));
 }
 .admin-login-title {
   font-size: 1.8rem;
   font-weight: 800;
   letter-spacing: 4px;
-  color: #fff;
+  color: var(--text);
   margin-bottom: 6px;
 }
 .admin-login-subtitle {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.9rem;
   margin-bottom: 32px;
 }
@@ -320,38 +294,38 @@ button {
 }
 .admin-input-group label {
   font-size: 0.8rem;
-  color: #888;
+  color: var(--text-secondary);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
 .admin-input-group input {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   padding: 12px 14px;
-  color: #fff;
+  color: var(--text);
   font-size: 0.95rem;
   font-family: inherit;
   transition: border-color 0.2s, box-shadow 0.2s;
   outline: none;
 }
 .admin-input-group input:focus {
-  border-color: #fff;
-  box-shadow: 0 0 0 3px rgba(255,255,255,0.08);
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--orange) 24%, transparent);
 }
 .admin-login-error {
-  background: rgba(239, 68, 68, 0.15);
-  color: #EF4444;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
   padding: 10px;
   border-radius: 8px;
   font-size: 0.85rem;
 }
 .admin-login-btn {
-  background: #fff;
-  color: #000;
+  background: var(--orange);
+  color: var(--text-dark);
   border: none;
-  border-radius: 100px;
+  border-radius: var(--radius-sm);
   padding: 14px;
   font-weight: 700;
   font-size: 1rem;
@@ -361,10 +335,45 @@ button {
   letter-spacing: 1px;
 }
 .admin-login-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(255,255,255,0.15);
+  filter: brightness(1.06);
 }
 .admin-login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.admin-login-alt { margin-top: 18px; text-align: center; font-size: 0.85rem; color: var(--text-secondary); }
+.admin-login-alt a { color: var(--orange); font-weight: 600; text-decoration: none; }
+.admin-login-alt a:hover { text-decoration: underline; }
+.admin-login-ok {
+  background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.3);
+  color: rgba(255,255,255,0.85); padding: 16px; border-radius: 12px;
+  font-size: 0.9rem; line-height: 1.55; margin: 8px 0 20px; text-align: left;
+}
+
+/* Registro → bloque de marca blanca (logo, nombre y subtítulo del negocio). */
+.registro-marca {
+  margin-top: 6px; padding: 16px; border-radius: 12px; text-align: left;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+}
+.registro-marca-head { margin-bottom: 14px; }
+.registro-marca-head b { display: block; font-size: 0.9rem; color: rgba(255,255,255,0.9); }
+.registro-marca-head small { display: block; margin-top: 3px; font-size: 0.75rem; line-height: 1.5; color: rgba(255,255,255,0.45); }
+.registro-logo { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.registro-logo img,
+.registro-logo-ph {
+  width: 56px; height: 56px; border-radius: 14px; flex-shrink: 0;
+  object-fit: contain; background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.registro-logo-ph {
+  display: grid; place-items: center; border-style: dashed;
+  font-size: 0.7rem; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,0.4);
+}
+.registro-logo > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.registro-logo small { flex-basis: 100%; font-size: 0.72rem; color: rgba(255,255,255,0.4); }
+.registro-logo-btn {
+  padding: 7px 12px; border-radius: 9px; cursor: pointer; font-family: inherit; font-size: 0.78rem;
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14); color: rgba(255,255,255,0.85);
+}
+.registro-logo-btn:hover:not(:disabled) { background: rgba(255,255,255,0.12); }
+.registro-logo-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 @media (max-width: 768px) {
   .ceo-quick-cards { grid-template-columns: repeat(2, 1fr); }
   .ceo-team-grid { grid-template-columns: 1fr; }
@@ -754,7 +763,7 @@ button {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(5,5,16,0.6);
+    background: var(--bg-overlay);
     backdrop-filter: blur(4px);
     z-index: 199;
   }
@@ -884,11 +893,11 @@ a[style*="var(--orange)"][style*="background"] svg {
   fill: var(--on-primary, #fff) !important;
 }
 ::selection {
-  background: var(--orange, #FF6B00);
+  background: var(--orange, #2FCB6A);
   color: var(--on-primary, #fff);
 }
 ::-moz-selection {
-  background: var(--orange, #FF6B00);
+  background: var(--orange, #2FCB6A);
   color: var(--on-primary, #fff);
 }
 button,
@@ -903,9 +912,11 @@ button:focus-visible,
 a:focus-visible,
 [role="button"]:focus-visible,
 [role="tab"]:focus-visible {
-  outline: 2px solid var(--orange, #FF6B00);
+  outline: 2px solid var(--orange, #2FCB6A);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(255, 107, 0, 0.18);
+  /* Del acento, no naranja a fuego: dentro de .helm --orange es el color del
+     tema (o el de marca del perfil) y el halo tiene que seguirlo. */
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--orange, #2FCB6A) 18%, transparent);
   border-radius: inherit;
 }
 button:active,

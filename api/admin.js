@@ -53,7 +53,7 @@ export default async function handler(req, res) {
     if (!row || !verifyPassword(password, row)) {
       const { data: teamData, error: teamErr } = await supabase
         .from('team')
-        .select('id, client_id, name, email, role, password, password_hash, active')
+        .select('id, client_id, name, email, role, password_hash, active, guide_seen')
         .eq('email', String(email).trim().toLowerCase())
         .eq('active', true)
         .limit(2)
@@ -74,22 +74,50 @@ export default async function handler(req, res) {
 
     // Nombre del perfil al que pertenece el acceso de cliente.
     let clientInfo = null
+    // Rol de la PERSONA (closer, setter, CSM…), que no es lo mismo que su nivel
+    // de acceso. De él dependen las secciones que verá: sin esto, un closer
+    // entraría al panel completo, con las finanzas del negocio incluidas.
+    let teamRole = null
+    // Su ficha en el directorio de personas. Hace falta el id, y no solo el
+    // rol: es lo único que identifica a QUIÉN está mirando el panel, y sin eso
+    // no se puede enseñar a cada uno solo sus tareas privadas.
+    let helmTeamId = null
     if (source === 'team') {
-      const { data } = await supabase
-        .from('clients').select('id, name, slug').eq('id', teamRow.client_id).maybeSingle()
+      const [{ data }, { data: persona }] = await Promise.all([
+        supabase.from('clients').select('id, name, slug').eq('id', teamRow.client_id).maybeSingle(),
+        supabase.from('helm_team').select('id, role, name').eq('login_id', teamRow.id).maybeSingle(),
+      ])
       if (!data) {
         await writeAudit({ action: 'login.orphan_team', req, statusCode: 403, metadata: { email } })
         return res.status(403).json({ error: 'Este acceso no tiene un perfil asociado' })
       }
       clientInfo = data
+      teamRole = persona?.role || null
+      helmTeamId = persona?.id || null
     }
 
     const isSuperadmin = source === 'superadmins'
+    // El administrador de una agencia entra con ella: el panel enseña su
+    // nombre y su saldo de créditos.
+    let agencia = null
+    if (isSuperadmin && row.agencia_id) {
+      const { data } = await supabase.from('agencias').select('id, nombre, slug').eq('id', row.agencia_id).maybeSingle()
+      agencia = data || null
+    }
     const user = isSuperadmin
-      ? toAppFormat(row, 'superadmins')
+      ? { ...toAppFormat(row, 'superadmins'), agencia, plataforma: row.plataforma === true }
       : {
           id: row.id, email: row.email, name: row.name, role: 'client',
           clientId: clientInfo.id, clientName: clientInfo.name, clientSlug: clientInfo.slug,
+          guideSeen: row.guide_seen === true,
+          // `teamRole` es el oficio (closer/setter/csm…) y `level` el nivel de
+          // acceso guardado en team.role. Con los dos, el panel decide qué
+          // secciones pinta.
+          teamRole,
+          level: row.role || null,
+          // Su ficha en el directorio del perfil: con ella el panel sabe cuáles
+          // de las tareas privadas son suyas.
+          helmTeamId,
         }
     delete user.password
     delete user.passwordHash
@@ -103,6 +131,8 @@ export default async function handler(req, res) {
         superadmin: isSuperadmin,
         clientId: isSuperadmin ? null : clientInfo.id,
         clientSlug: isSuperadmin ? null : clientInfo.slug,
+        agenciaId: isSuperadmin ? (row.agencia_id || null) : null,
+        plataforma: isSuperadmin && row.plataforma === true,
         via: source,
       }, { expiresIn: 60 * 60 * 12 }) // 12h
     } catch (err) {

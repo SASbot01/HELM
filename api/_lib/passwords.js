@@ -4,9 +4,10 @@
 // Formato del hash (en columna password_hash de team / superadmins):
 //   scrypt:<salt_hex>:<hash_hex>
 //
-// El proyecto está en migración (BUG-002): hay rows con password en plano y
-// rows con password_hash. verifyPassword soporta ambos formatos para que el
-// login no se rompa durante la transición.
+// Solo se aceptan contraseñas con hash. La migración de las antiguas en plano
+// terminó (0 filas el 2026-10-12) y la columna `password` se borra en
+// migrations/100_fuera_password_en_claro.sql: aceptarlas era dejar abierta
+// una puerta para cualquier fila que alguien escribiera a mano sin hash.
 
 import crypto from 'node:crypto'
 
@@ -28,8 +29,7 @@ export function hashPassword(plain) {
 }
 
 /**
- * Verifica una contraseña contra un row que puede tener password_hash
- * (formato scrypt:salt:hash) o password (plano legacy).
+ * Verifica una contraseña contra el password_hash (scrypt:salt:hash) de un row.
  * @param {string} plain
  * @param {object} row
  * @returns {boolean}
@@ -45,12 +45,6 @@ export function verifyPassword(plain, row) {
     const expected = Buffer.from(hashHex, 'hex')
     const actual = crypto.scryptSync(plain, salt, expected.length)
     return expected.length === actual.length && crypto.timingSafeEqual(expected, actual)
-  }
-
-  if (row.password && typeof row.password === 'string') {
-    const a = Buffer.from(plain)
-    const b = Buffer.from(row.password)
-    return a.length === b.length && crypto.timingSafeEqual(a, b)
   }
 
   return false

@@ -1,0 +1,44 @@
+# HELM — el worker del Agent OS.
+#
+# Instalar:
+#   sudo mkdir -p /home/s4sf/helm-agents/audio
+#   sudo chown -R s4sf:s4sf /home/s4sf/helm-agents      # ← IMPRESCINDIBLE
+#   sudo cp /home/s4sf/helm/scripts/helm-agents.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now helm-agents.service
+#
+# Lo del chown no es adorno: el worker corre como `s4sf` y si la carpeta la
+# creó root, yt-dlp muere con "Permission denied" al escribir el audio y el
+# reel se queda eternamente en "Descargando". Pasó exactamente eso la primera
+# vez, y desde el panel el síntoma no dice nada del permiso.
+#
+# Ver qué hace:
+#   tail -f /var/log/helm-agents.log
+#
+# Va aparte de helm-api a propósito: transcribir bloquea un núcleo durante
+# minutos, y si compartiera proceso con la API, el panel se quedaría pillado
+# cada vez que entrara un vídeo.
+
+[Unit]
+Description=Helm — worker del Agent OS (descarga, transcribe y etiqueta reels)
+After=network.target docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/s4sf/helm
+EnvironmentFile=/home/s4sf/helm/.env.server
+ExecStart=/usr/bin/node /home/s4sf/helm/scripts/agents-worker.mjs
+Restart=always
+RestartSec=10
+User=s4sf
+
+# Whisper en CPU se come la máquina si se le deja. Con la prioridad baja, el
+# panel y la API siguen respondiendo mientras transcribe por detrás.
+Nice=10
+IOSchedulingClass=idle
+
+StandardOutput=append:/var/log/helm-agents.log
+StandardError=append:/var/log/helm-agents.log
+
+[Install]
+WantedBy=multi-user.target

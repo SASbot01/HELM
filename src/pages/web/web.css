@@ -1,0 +1,273 @@
+/* ============================================================================
+   HELM — la web pública del producto (Web.jsx).
+
+   La misma estética que el panel (src/helm/tema.css): el lienzo negro de
+   puntos, Geist con los titulares apretados, el oro como único acento y las
+   piezas que flotan con el filo de luz arriba a la izquierda. Vive fuera de
+   .helm, así que los tokens se repiten aquí, en .hw.
+
+   En móvil, todo a una columna con 16px de margen y sin scroll lateral.
+   ============================================================================ */
+@import url('../../fonts/geist.css');
+
+.hw {
+  --bg:       #000000;
+  --bg-1:     #0a0a0b;
+  --panel:    #121213;
+  --panel-2:  #19191b;
+  --border:   rgba(255, 255, 255, 0.08);
+  --border-2: rgba(255, 255, 255, 0.16);
+  --text:     #ffffff;
+  --text-dim: #c9c9ce;
+  --text-mut: #8d8d95;
+  --oro:      #d9b66b;
+  --oro-2:    #e8cf95;
+  --on-oro:   #0d0a02;
+  --borde: linear-gradient(140deg, rgba(217, 182, 107, 0.7) 0%, rgba(255, 255, 255, 0.12) 26%, rgba(255, 255, 255, 0.05) 100%);
+  --superficie: linear-gradient(180deg, #161617 0%, #0f0f10 100%);
+  --shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.8),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 12px 24px -14px rgba(0, 0, 0, 0.9),
+    0 36px 64px -32px #000;
+
+  min-height: 100vh;
+  overflow-x: clip;
+  color: var(--text);
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  /* El lienzo: puntos cada 22px y una luz muy baja arriba a la izquierda. */
+  background:
+    radial-gradient(1100px 560px at 18% -6%, rgba(255, 255, 255, 0.06), transparent 62%),
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.085) 1px, transparent 1.6px) 0 0 / 22px 22px,
+    var(--bg);
+  background-attachment: fixed;
+}
+.hw *, .hw *::before, .hw *::after { box-sizing: border-box; }
+.hw h1, .hw h2, .hw h3 { margin: 0; letter-spacing: -0.035em; font-weight: 600; }
+.hw p { margin: 0; }
+.hw a { color: inherit; }
+
+.hw main, .hw-cab-in, .hw-pie {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+/* Una pieza que flota: superficie, filo de luz y sombra, como en el panel. */
+.hw-pieza {
+  background: var(--superficie) padding-box, var(--borde) border-box;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+}
+
+/* ── Cabecera ─────────────────────────────────────────────────────────── */
+.hw-cab {
+  position: sticky; top: 0; z-index: 20;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
+  border-bottom: 1px solid var(--border);
+}
+.hw-cab-in { display: flex; align-items: center; gap: 24px; height: 64px; }
+.hw-marca {
+  display: inline-flex; align-items: center; gap: 10px;
+  color: var(--text); text-decoration: none;
+  font-weight: 600; font-size: 15px; letter-spacing: 0.32em;
+}
+.hw-marca img { width: 30px; height: 30px; border-radius: 8px; }
+.hw-nav { display: flex; gap: 22px; margin-left: 12px; }
+.hw-nav a { color: var(--text-mut); font-size: 14px; text-decoration: none; transition: color .14s ease; }
+.hw-nav a:hover { color: var(--text); }
+.hw-cab-acc { display: flex; gap: 8px; margin-left: auto; }
+
+/* ── Botones: el primario es la única mancha de oro ───────────────────── */
+.hw-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 8px 15px; border-radius: 10px;
+  border: 1px solid transparent;
+  background: linear-gradient(180deg, var(--oro-2), var(--oro));
+  color: var(--on-oro);
+  font: inherit; font-weight: 600; font-size: 14px;
+  text-decoration: none; white-space: nowrap; cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transition: filter .14s ease, background .14s ease, border-color .14s ease, transform .1s ease;
+}
+.hw-btn:hover { filter: brightness(1.07); }
+.hw-btn:active { transform: scale(.98); }
+.hw-btn--sec {
+  background: var(--panel-2); color: var(--text);
+  border-color: var(--border-2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.hw-btn--sec:hover { filter: none; background: #202023; border-color: rgba(255, 255, 255, 0.28); }
+.hw-btn--xl { padding: 12px 20px; font-size: 15px; border-radius: 12px; }
+
+/* ── Portada ──────────────────────────────────────────────────────────── */
+.hw-hero {
+  display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 48px; align-items: center;
+  padding: 88px 0 72px;
+}
+.hw-eti {
+  display: inline-flex; align-items: center; gap: 8px;
+  color: var(--oro); font-size: 12.5px; font-weight: 500; letter-spacing: 0.04em;
+  margin-bottom: 18px;
+}
+.hw-eti::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--oro); box-shadow: 0 0 12px var(--oro); }
+.hw-hero h1 { font-size: clamp(36px, 5.4vw, 60px); line-height: 1.02; }
+.hw-hero h1 span { color: var(--text-mut); }
+.hw-lead { margin-top: 22px; max-width: 540px; color: var(--text-dim); font-size: 17px; line-height: 1.6; }
+.hw-ctas { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; }
+.hw-nota { margin-top: 16px; color: var(--text-mut); font-size: 13.5px; }
+
+/* Tres capturas de la app, escalonadas. */
+.hw-hero-vis { position: relative; height: 560px; }
+.hw-movil {
+  position: absolute; margin: 0; width: 41%;
+  padding: 7px; border-radius: 30px;
+  background: linear-gradient(155deg, #2a2a30, #121214);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 1px #000, 0 50px 90px -40px rgba(0, 0, 0, 0.95);
+}
+.hw-movil img { display: block; width: 100%; height: auto; border-radius: 24px; }
+.hw-movil--a { left: 0; top: 70px; opacity: 0.9; }
+.hw-movil--b {
+  left: 29.5%; top: 0; z-index: 2;
+  box-shadow: 0 0 0 1px #000, 0 60px 110px -40px rgba(0, 0, 0, 0.95), 0 0 90px -40px rgba(217, 182, 107, 0.35);
+}
+.hw-movil--c { right: 0; top: 110px; opacity: 0.9; }
+
+/* ── Bloques ──────────────────────────────────────────────────────────── */
+.hw-bloque { padding: 72px 0; border-top: 1px solid var(--border); scroll-margin-top: 72px; }
+.hw-bloque h2 { max-width: 720px; font-size: clamp(28px, 3.6vw, 40px); line-height: 1.08; }
+.hw-sub { max-width: 640px; margin-top: 16px; color: var(--text-dim); font-size: 16px; line-height: 1.6; }
+
+/* Cómo funciona: los pasos son nodos de un esquema, unidos por una línea. */
+.hw-pasos {
+  list-style: none; margin: 40px 0 0; padding: 0;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px;
+  position: relative;
+}
+.hw-pasos::before {
+  content: ''; position: absolute; left: 18px; right: 18px; top: 18px; height: 1px;
+  background: linear-gradient(90deg, var(--oro), rgba(255, 255, 255, 0.12) 40%, rgba(255, 255, 255, 0.05));
+}
+.hw-pasos li { position: relative; display: grid; gap: 18px; }
+.hw-nodo {
+  display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%;
+  background: var(--bg); border: 1px solid var(--border-2);
+  color: var(--oro); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 5px var(--bg);
+}
+.hw-pasos li:first-child .hw-nodo { border-color: var(--oro); }
+.hw-pasos h3 { font-size: 17px; letter-spacing: -0.02em; }
+.hw-pasos p { margin-top: 8px; color: var(--text-mut); font-size: 14.5px; line-height: 1.6; }
+
+/* Lo que hay dentro. */
+.hw-secciones {
+  list-style: none; margin: 36px 0 0; padding: 0;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 40px;
+}
+.hw-secciones li {
+  display: flex; gap: 14px; align-items: flex-start;
+  padding: 16px 0; border-bottom: 1px solid var(--border);
+}
+.hw-secciones svg { flex-shrink: 0; margin-top: 2px; color: var(--oro); }
+.hw-secciones b { display: block; font-weight: 500; font-size: 15px; }
+.hw-secciones span { display: block; margin-top: 3px; color: var(--text-mut); font-size: 14px; line-height: 1.5; }
+
+/* Conector de Claude. */
+.hw-claude { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr); gap: 48px; align-items: center; }
+.hw-terminal { overflow: hidden; }
+.hw-terminal-cab {
+  display: flex; align-items: center; gap: 6px; padding: 12px 16px;
+  border-bottom: 1px solid var(--border); color: var(--text-mut); font-size: 12px;
+}
+.hw-terminal-cab i { width: 9px; height: 9px; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--border-2); }
+.hw-terminal-cab span { margin-left: 8px; }
+.hw-terminal ul {
+  list-style: none; margin: 0; padding: 18px;
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.hw-terminal code {
+  display: inline-block; padding: 6px 10px; border-radius: 8px;
+  background: var(--bg-1); border: 1px solid var(--border);
+  color: var(--text-dim); font: 13px/1.2 ui-monospace, 'SF Mono', Menlo, monospace;
+}
+.hw-terminal li:nth-child(3) code { color: var(--oro); border-color: rgba(217, 182, 107, 0.35); }
+
+/* Precios. */
+.hw-precio { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; margin-top: 36px; align-items: start; }
+.hw-precio-reglas { padding: 26px; }
+.hw-precio-reglas dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 0; }
+.hw-precio-reglas dt { font-size: 34px; font-weight: 600; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.hw-precio-reglas dd { margin: 4px 0 0; color: var(--text-mut); font-size: 14px; }
+.hw-gasta { display: grid; gap: 14px; margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--border); }
+.hw-gasta b { display: block; font-weight: 500; font-size: 14.5px; }
+.hw-gasta span { display: block; margin-top: 3px; color: var(--text-mut); font-size: 14px; line-height: 1.55; }
+.hw-gasta div:first-child b { color: var(--oro); }
+.hw-packs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.hw-packs li { display: grid; gap: 4px; padding: 20px; }
+.hw-pack-eur { font-size: 26px; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.hw-pack-cr { color: var(--text-mut); font-size: 13.5px; }
+
+/* Cierre. */
+.hw-final {
+  margin: 24px 0 88px; padding: 56px 32px;
+  display: grid; justify-items: center; text-align: center;
+}
+.hw-final-logo { width: 52px; height: 52px; border-radius: 13px; margin-bottom: 22px; box-shadow: 0 0 60px -10px rgba(217, 182, 107, 0.35); }
+.hw-final h2 { font-size: clamp(28px, 3.6vw, 40px); line-height: 1.08; }
+.hw-final > p { max-width: 520px; margin-top: 14px; color: var(--text-dim); font-size: 16px; line-height: 1.6; }
+.hw-final .hw-ctas { justify-content: center; }
+.hw-final .hw-puente { margin-top: 26px; color: var(--text-mut); font-size: 14px; }
+.hw-puente a { color: var(--oro); text-decoration: none; }
+.hw-puente a:hover { text-decoration: underline; }
+
+/* ── Pie ──────────────────────────────────────────────────────────────── */
+.hw-pie {
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  padding-top: 28px; padding-bottom: 40px;
+  border-top: 1px solid var(--border);
+  color: var(--text-mut); font-size: 13px;
+}
+.hw-marca--pie { font-size: 13px; }
+.hw-marca--pie img { width: 22px; height: 22px; border-radius: 6px; }
+.hw-pie nav { display: flex; gap: 18px; margin-left: auto; }
+.hw-pie nav a { text-decoration: none; }
+.hw-pie nav a:hover { color: var(--text); }
+
+/* ── Tableta y móvil ──────────────────────────────────────────────────── */
+@media (max-width: 960px) {
+  .hw-hero { grid-template-columns: 1fr; padding-top: 56px; gap: 40px; }
+  .hw-hero-vis { height: auto; display: flex; justify-content: center; gap: 12px; }
+  .hw-movil { position: static; width: 31%; max-width: 230px; padding: 5px; border-radius: 22px; }
+  .hw-movil img { border-radius: 18px; }
+  .hw-movil--a, .hw-movil--c { margin-top: 36px; }
+  .hw-pasos { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 18px; }
+  .hw-pasos::before { display: none; }
+  .hw-claude, .hw-precio { grid-template-columns: 1fr; gap: 28px; }
+}
+@media (max-width: 640px) {
+  .hw main, .hw-cab-in, .hw-pie { padding-left: 16px; padding-right: 16px; }
+  .hw-cab-in { gap: 12px; height: 58px; }
+  .hw-nav { display: none; }
+  .hw-cab-acc .hw-btn { padding: 7px 12px; font-size: 13px; }
+  .hw-marca { letter-spacing: 0.24em; }
+  .hw-hero { padding: 40px 0 48px; }
+  .hw-lead { font-size: 16px; }
+  .hw-ctas .hw-btn--xl { flex: 1 1 100%; }
+  .hw-hero-vis { gap: 8px; }
+  .hw-movil { padding: 4px; border-radius: 16px; }
+  .hw-movil img { border-radius: 13px; }
+  .hw-movil--a, .hw-movil--c { margin-top: 24px; }
+  .hw-bloque { padding: 52px 0; }
+  .hw-pasos { grid-template-columns: 1fr; }
+  .hw-secciones { grid-template-columns: 1fr; }
+  .hw-precio-reglas { padding: 20px; }
+  .hw-precio-reglas dt { font-size: 28px; }
+  .hw-final { padding: 40px 20px; margin-bottom: 56px; }
+  .hw-pie nav { margin-left: 0; width: 100%; }
+}

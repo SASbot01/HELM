@@ -22,7 +22,7 @@ const money = (n, cur = 'EUR') =>
     .format(Number(n) || 0)
 
 // ── Finanzas ───────────────────────────────────────────────────────────────
-async function addFinanceEntry(supabase, clientId, { date, category, description, amount, ref }) {
+export async function addFinanceEntry(supabase, clientId, { date, category, description, amount, ref }) {
   const { data: dup } = await supabase
     .from('ceo_finance_entries').select('id')
     .eq('client_id', clientId).eq('notes', ref).limit(1)
@@ -38,7 +38,7 @@ async function addFinanceEntry(supabase, clientId, { date, category, description
 // ── CRM ────────────────────────────────────────────────────────────────────
 // Un lead no pisa nunca a un contacto que ya existe: si ya está en el CRM se
 // respeta su etapa (puede estar más avanzado que lo que dice Stripe).
-async function upsertLead(supabase, clientId, { email, name, phone, status, note }) {
+export async function upsertLead(supabase, clientId, { email, name, phone, status, note }) {
   if (!email) return 'skipped'
   const { data: existing } = await supabase
     .from('crm_contacts').select('id, status')
@@ -232,7 +232,7 @@ export async function importStripeWindow({ supabase, clientId, apiKey, days = 60
  * Devuelve el texto (o null si el modelo no está disponible: el import no debe
  * fallar por esto).
  */
-export async function analyzeStripeWindow({ clientName, summary, knowledge = [] }) {
+export async function analyzeStripeWindow({ clientId, clientName, summary, knowledge = [] }) {
   const porProducto = Object.entries(summary.porProducto)
     .sort((a, b) => b[1].importe - a[1].importe)
     .map(([name, d]) => `- ${name}: ${d.unidades} ventas, ${money(d.importe, summary.moneda)}`)
@@ -270,6 +270,7 @@ Escribe el análisis con estos apartados y nada más:
 
   try {
     return await llmChat({
+      clientId,
       system,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.5,

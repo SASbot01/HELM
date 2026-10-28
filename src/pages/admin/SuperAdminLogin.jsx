@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import PasswordInput from '../../components/PasswordInput'
 
 // Login del superadmin: pasa por POST /api/admin?action=login para que se
@@ -52,7 +52,12 @@ export default function SuperAdminLogin() {
         localStorage.setItem('bw_client', JSON.stringify({
           email: sa.user.email, name: sa.user.name,
           clientId: sa.user.clientId, clientName: sa.user.clientName,
-          clientSlug: sa.user.clientSlug,
+          clientSlug: sa.user.clientSlug, guideSeen: sa.user.guideSeen === true,
+          // Oficio y nivel de acceso: de aquí sale qué secciones ve en el menú.
+          teamRole: sa.user.teamRole || null, level: sa.user.level || null,
+          // Quién es en el directorio del perfil: de aquí sale qué tareas
+          // privadas son suyas.
+          helmTeamId: sa.user.helmTeamId || null,
         }))
         localStorage.removeItem('bw_superadmin')
         if (sa.token) localStorage.setItem('bw_admin_jwt', sa.token)
@@ -80,7 +85,6 @@ export default function SuperAdminLogin() {
     <div className="admin-login-page">
       <div className="admin-login-glow" />
       <div className="admin-login-card">
-        <img src="/assets/logos/apex-mark-platinum.svg" alt="HELM" className="admin-login-logo" />
         <h1 className="admin-login-title" style={{ letterSpacing: '4px' }}>HELM</h1>
         <p className="admin-login-subtitle">El puesto de mando de tu negocio</p>
         <form onSubmit={handleSubmit} className="admin-login-form">
@@ -108,6 +112,7 @@ export default function SuperAdminLogin() {
             {loading ? 'Entrando...' : 'Acceder'}
           </button>
         </form>
+        <p className="admin-login-alt">¿No tienes cuenta? <Link to="/registro">Crea una</Link></p>
       </div>
     </div>
   )

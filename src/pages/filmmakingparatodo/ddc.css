@@ -1,0 +1,124 @@
+/* Filmmaking para todo — la marca de detrasdecamara.org sobre el motor de las
+   comunidades (src/pages/comunidad/comunidad.css): fondo #0A0A0D, tarjetas
+   #141417, texto #F5F6F7, el dorado #C9A84C para la acción y el azul #4A9BD9
+   de apoyo; Inter Tight para los titulares e Inter para el texto. Solo se
+   redefinen variables y lo que el dorado obliga (el texto oscuro encima). */
+.aip.ddc {
+  --negro: #0A0A0D;
+  --negro-2: #111113;
+  --negro-rgb: 10, 10, 13;
+  --negro-2-rgb: 17, 17, 19;
+  --panel-rgb: 20, 20, 23;
+  --acento-rgb: 201, 168, 76;
+  --granate-rgb: 201, 168, 76;
+  --hondo-rgb: 74, 155, 217;
+  --rosa-rgb: 232, 212, 139;
+  --granate-hondo: #1A1A1E;
+  --codigo-fondo: #0D0D10;
+  --codigo-texto: #E8D48B;
+  --foto-fondo: #141417;
+  --texto-articulo: #E4E5E8;
+  --panel: rgba(20, 20, 23, 0.86);
+  --linea: #1F2128;
+  --linea-2: #2E3038;
+  --granate: #A8893A;
+  --granate-2: #C9A84C;
+  --granate-3: #E8D48B;
+  --rosa: #E8D48B;
+  --papel: #F5F6F7;
+  --papel-2: #9DA2B0;
+  --papel-3: #6B7080;
+  --oro: #C9A84C;
+  --azul: #4A9BD9;
+  --tinta: #0A0A0D;
+  --letra: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background:
+    radial-gradient(900px 560px at 50% -14%, rgba(201, 168, 76, 0.09), transparent 62%),
+    radial-gradient(700px 520px at 110% 72%, rgba(74, 155, 217, 0.05), transparent 60%),
+    var(--negro);
+}
+
+/* Titulares en Inter Tight, como la web. */
+.aip.ddc h1, .aip.ddc h2, .aip.ddc h3, .aip.ddc .aip-logo, .aip.ddc .aip-btn { font-family: 'Inter Tight', var(--letra); }
+
+/* El logo: tipográfico, con el dorado al final («Detrás de Cámara»). */
+.aip.ddc .aip-logo { gap: 6px; font-weight: 700; font-size: 17px; letter-spacing: -.5px; }
+.aip.ddc .ddc-dorado { color: var(--oro); }
+
+/* Sobre el dorado, texto oscuro (en la web, el botón principal es así). */
+.aip.ddc .aip-btn, .aip.ddc .aip-nav a.aip-nav-cta, .aip.ddc .aip-skill-n span, .aip.ddc .aip-cap-pasos li > span,
+.aip.ddc .aip-diario-temas a.on, .aip.ddc .aip-tema-chip { color: var(--tinta); }
+.aip.ddc .aip-btn { box-shadow: 0 14px 34px -18px rgba(201, 168, 76, 0.55); }
+.aip.ddc .aip-btn.sec { color: var(--papel); }
+.aip.ddc .aip-zona::before { background: linear-gradient(90deg, var(--oro), transparent); }
+.aip.ddc .aip-art-portada:hover h2 { color: var(--papel); }
+/* Los degradados de las tarjetas, con el dorado mucho más bajo que el granate
+   de AI para todo: en dorado, a la misma intensidad, se ensucian. */
+.aip.ddc .aip-puerta { background: linear-gradient(180deg, rgba(201, 168, 76, 0.09), rgba(17, 17, 19, 0.94)); }
+.aip.ddc .aip-nn-listo { background: linear-gradient(180deg, rgba(201, 168, 76, 0.1), rgba(17, 17, 19, 0.94)); }
+.aip.ddc .aip-claves { background: linear-gradient(160deg, rgba(201, 168, 76, 0.1), rgba(20, 20, 23, 0.9)); }
+.aip.ddc .aip-nn-banner { background: linear-gradient(120deg, rgba(201, 168, 76, 0.12), rgba(20, 20, 23, 0.9) 60%); }
+.aip.ddc .aip-aviso { background: rgba(201, 168, 76, 0.06); }
+.aip.ddc .aip-articulo-ati { background: rgba(201, 168, 76, 0.07); }
+
+/* El sello sobre el titular de la portada y el enlace a la clase gratuita. */
+.aip.ddc .ddc-sello { margin: 0 0 18px; color: var(--oro); text-transform: uppercase; letter-spacing: .14em; }
+.aip.ddc .ddc-clase {
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 14px; font-size: 15px; font-weight: 600;
+  color: var(--papel-2); text-decoration: none; border-bottom: 1px solid transparent; transition: color .15s, border-color .15s;
+}
+.aip.ddc .ddc-clase:hover { color: var(--oro); border-color: var(--oro); }
+
+/* Las secciones, de dos en dos en la portada; la de HELM, la última, a lo ancho. */
+.aip.ddc .aip-portada .aip-zonas { grid-template-columns: repeat(2, 1fr); }
+.aip.ddc .aip-portada .aip-zona.contenido { grid-column: 1 / -1; min-height: 190px; }
+@media (max-width: 560px) { .aip.ddc .aip-portada .aip-zonas { grid-template-columns: 1fr; } }
+
+/* La profesión en la puerta: la última opción, si queda sola, a lo ancho. */
+.aip.ddc .aip-ingresos label.ancho { grid-column: 1 / -1; }
+
+/* Los temas del diario. */
+.aip.ddc .aip-tema-chip.equipo { background: var(--azul); }
+.aip.ddc .aip-tema-chip.filmmaking { background: var(--papel); }
+.aip.ddc .aip-tema-chip.postproduccion { background: transparent; color: var(--oro); box-shadow: inset 0 0 0 1px var(--oro); }
+.aip.ddc .aip-foto-propia { color: rgba(245, 246, 247, .8); background: radial-gradient(circle at 30% 20%, rgba(201, 168, 76, .22), transparent 55%), linear-gradient(135deg, #1A1A1E, #0A0A0D); }
+.aip.ddc .aip-foto-propia.equipo { background: radial-gradient(circle at 30% 20%, rgba(74, 155, 217, .22), transparent 55%), linear-gradient(135deg, #12202e, #0A0A0D); }
+.aip.ddc .aip-foto-propia.filmmaking { background: radial-gradient(circle at 30% 20%, rgba(245, 246, 247, .14), transparent 55%), linear-gradient(135deg, #1F2128, #0A0A0D); }
+
+/* Un archivo para descargar dentro de un recurso. */
+.aip-descarga-bloque { display: grid; grid-template-columns: 22px 1fr auto; gap: 12px; align-items: center; margin: 6px 0 20px; padding: 16px 18px; border-radius: 14px; border: 1px solid var(--linea-2); background: var(--panel); }
+.aip-descarga-bloque > svg { color: var(--rosa); }
+.aip-descarga-bloque b { display: block; font-size: 15.5px; }
+.aip-descarga-bloque p { margin: 4px 0 0; font-size: 14.5px; line-height: 1.5; color: var(--papel-2); }
+@media (max-width: 520px) { .aip-descarga-bloque { grid-template-columns: 22px 1fr; } .aip-descarga-bloque > :last-child { grid-column: 2; justify-self: start; } }
+
+/* ── El fondo: lenguaje de cine ──────────────────────────────────────────────
+   Grano de película, las esquinas del visor, las guías de 2.39:1 y la
+   marca de grabación. Quieto y tenue: es un fondo, no un adorno. */
+.ddc-fondo { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.ddc-fondo::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 52%, rgba(0, 0, 0, 0.5)); }
+.ddc-grano {
+  position: absolute; inset: 0; opacity: .06; mix-blend-mode: screen;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
+}
+/* Las guías de 2.39:1, centradas, y la cruz del centro. */
+.ddc-guias {
+  position: absolute; left: 0; right: 0; top: 50%; height: min(86vh, calc(100vw / 2.39)); transform: translateY(-50%);
+  border-top: 1px dashed rgba(201, 168, 76, 0.1); border-bottom: 1px dashed rgba(201, 168, 76, 0.1);
+}
+.ddc-guias::before, .ddc-guias::after { content: ''; position: absolute; left: 50%; top: 50%; background: rgba(201, 168, 76, 0.18); transform: translate(-50%, -50%); }
+.ddc-guias::before { width: 22px; height: 1px; }
+.ddc-guias::after { width: 1px; height: 22px; }
+/* Las esquinas del visor (las de arriba, por debajo de la cabecera). */
+.ddc-visor { position: absolute; inset: 84px clamp(14px, 3vw, 34px) clamp(14px, 3vw, 34px); }
+.ddc-visor i { position: absolute; width: 30px; height: 30px; border: 0 solid rgba(201, 168, 76, 0.3); }
+.ddc-visor i:nth-child(1) { top: 0; left: 0; border-top-width: 1.5px; border-left-width: 1.5px; }
+.ddc-visor i:nth-child(2) { top: 0; right: 0; border-top-width: 1.5px; border-right-width: 1.5px; }
+.ddc-visor i:nth-child(3) { bottom: 0; left: 0; border-bottom-width: 1.5px; border-left-width: 1.5px; }
+.ddc-visor i:nth-child(4) { bottom: 0; right: 0; border-bottom-width: 1.5px; border-right-width: 1.5px; }
+.ddc-rec { position: absolute; font: 600 11px 'JetBrains Mono', ui-monospace, monospace; letter-spacing: .16em; color: rgba(245, 246, 247, 0.32); }
+.ddc-rec { top: 98px; right: calc(clamp(14px, 3vw, 34px) + 14px); display: inline-flex; align-items: center; gap: 7px; }
+.ddc-rec b { width: 7px; height: 7px; border-radius: 50%; background: #E5484D; animation: ddc-rec 2.4s steps(1) infinite; }
+@keyframes ddc-rec { 50% { opacity: .25; } }
+@media (max-width: 700px) { .ddc-guias, .ddc-rec { display: none; } .ddc-visor i { width: 18px; height: 18px; } }
+@media (prefers-reduced-motion: reduce) { .ddc-rec b { animation: none; } }
