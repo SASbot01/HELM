@@ -26,7 +26,9 @@ export default defineConfig({
     // Preview local: reenvía las llamadas del frontend al dev-server de las
     // funciones api/ (Vercel-style) que corre en :5182 contra la Supabase local.
     proxy: {
-      '/api': 'http://localhost:5182',
+      // /api va a la API, salvo api/_lib/: algún módulo de ahí (almacen.js)
+      // también lo importa el panel y Vite lo tiene que servir como código.
+      '^/api/(?!_lib/)': 'http://localhost:5182',
       // /sb: solo GET/HEAD de /storage/v1/object/public/… (los enlaces viejos
       // a archivos guardados en la base), ver scripts/sb-proxy.mjs. Sin
       // escrituras ni Realtime. El panel habla con la base por /api/db
