@@ -86,7 +86,8 @@ function Casilla({ a, metrica, onAbrir }) {
     </>
   )
 
-  if (!entrable) return <article className="ag-casilla pendiente" aria-disabled="true">{cuerpo}</article>
+  // Los que trabajan en segundo plano (sin panel propio) se ven activos, no en gris.
+  if (!entrable) return <article className={`ag-casilla${a.estado === 'trabaja' ? ' fondo' : ' pendiente'}`} aria-disabled="true">{cuerpo}</article>
   if (onAbrir) return <button type="button" className="ag-casilla" onClick={() => onAbrir(a.key)}>{cuerpo}</button>
   return <Link className="ag-casilla" to={a.ruta}>{cuerpo}</Link>
 }

@@ -321,6 +321,9 @@ a.ag-casilla:hover .ag-cas-flecha, button.ag-casilla:hover .ag-cas-flecha { tran
   background: var(--bg-card-light); color: var(--text-muted);
 }
 .ag-casilla.pendiente h3 { color: var(--text-secondary); }
+/* Trabaja en segundo plano (sin panel propio): se ve normal, pero no se entra. */
+.ag-casilla.fondo { cursor: default; }
+.ag-casilla.fondo:hover { transform: none; }
 /* El detalle va en TODAS las casillas y siempre en el mismo sitio: es lo que
    mantiene el pie de todas a la misma altura dentro de la fila. */
 .ag-cas-detalle {

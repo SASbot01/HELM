@@ -63,6 +63,10 @@ const SECRETAS = new Set([
   'helm_participaciones',
   // El estudio de contenido y la foto diaria de seguidores: solo por api/estudio-contenido.js.
   'helm_ig_seguidores', 'helm_estudio_contenido',
+  // La bandeja de los agentes de departamento: solo por api/propuestas.js.
+  'helm_propuestas', 'helm_agente_ajustes',
+  // El Media buyer (Meta Ads): solo por api/meta-ads.js y el worker.
+  'helm_ads_cuentas', 'helm_ads_metricas', 'helm_ads_acciones', 'helm_ads_paradas',
   // Editor de reels: los vídeos y los estilos, solo por api/editor.js.
   'helm_ediciones', 'helm_estilos_edicion',
 ])

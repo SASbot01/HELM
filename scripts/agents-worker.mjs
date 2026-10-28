@@ -686,6 +686,9 @@ const { miraFabricacion, generaEstudioWeb } = await import('../api/_lib/webcreat
 // El estudio de contenido del Informe (api/_lib/estudio-contenido/generar.js):
 // a petición y, los lunes desde las 6:30, solo para los perfiles de la casa.
 const { generaEstudio: generaEstudioContenido, miraEstudiosContenido } = await import('../api/_lib/estudio-contenido/generar.js')
+const { trabajoDepartamentos, miraDepartamentos } = await import('../api/_lib/departamentos/index.js')
+// El vigilante del Media buyer: sin IA, cada media hora; solo puede FRENAR (pausar si se pasa del tope).
+const { vigilante: vigilanteAds } = await import('../api/_lib/departamentos/media-buyer.js')
 
 // El Editor de reels (api/_lib/editor/trabajo.js): la API sube el vídeo y
 // encola; aquí se transcribe palabra a palabra, se monta y se cobra. Cada
@@ -697,13 +700,15 @@ const { limpiaEdiciones } = await import('../api/_lib/editor/archivos.js')
 const editaReel = (job) => editorRender(job, { db, log, py: PY, script: TRANSCRIBE, modelo: MODELO_WHISPER })
 const CADA_CUANTO_LIMPIAR_EDITOR_MS = 3600_000
 let ultimaLimpiezaEditor = 0
+const CADA_CUANTO_VIGILAR_ADS_MS = 30 * 60_000
+let ultimoVigilanteAds = 0
 
 const CADA_CUANTO_AGENDA_MS = 60_000
 let ultimaAgenda = 0
 
 // ── Bucle ───────────────────────────────────────────────────────────────────
 
-const PASOS = { descargar, transcribir, etiquetar, estudiar, equipo: ejecutaAgente, noticias: generaNoticias, articulo: generaArticulo, avatar: generaAvatar, radar: generaRadar, metricas: sincronizaMetricas, 'ad-estudio': estudiaAd, 'web-estudio': generaEstudioWeb, 'estudio-contenido': generaEstudioContenido, 'editor-render': editaReel }
+const PASOS = { descargar, transcribir, etiquetar, estudiar, equipo: ejecutaAgente, noticias: generaNoticias, articulo: generaArticulo, avatar: generaAvatar, radar: generaRadar, metricas: sincronizaMetricas, 'ad-estudio': estudiaAd, 'web-estudio': generaEstudioWeb, 'estudio-contenido': generaEstudioContenido, 'editor-render': editaReel, departamentos: trabajoDepartamentos }
 
 let parando = false
 for (const s of ['SIGINT', 'SIGTERM']) {
@@ -736,6 +741,13 @@ async function bucle() {
         await miraMetricas().catch(e => log('no pude mirar las métricas del día:', e.message))
         await miraFabricacion().catch(e => log('no pude mirar las webs en fabricación:', e.message))
         await miraEstudiosContenido().catch(e => log('no pude mirar los estudios de contenido del lunes:', e.message))
+        await miraDepartamentos().catch(e => log('no pude mirar los agentes de departamento:', e.message))
+      }
+      if (Date.now() - ultimoVigilanteAds > CADA_CUANTO_VIGILAR_ADS_MS) {
+        ultimoVigilanteAds = Date.now()
+        const r = await vigilanteAds().catch(e => { log('no pude vigilar el gasto de Meta Ads:', e.message); return [] })
+        const frenadas = (r || []).filter(x => x?.accion && x.accion !== 'ok' && x.accion !== 'nada')
+        if (frenadas.length) log(`vigilante de Meta Ads: ${frenadas.map(x => `${x.cuenta} ${x.accion}`).join(', ')}`)
       }
       if (Date.now() - ultimaLimpiezaEditor > CADA_CUANTO_LIMPIAR_EDITOR_MS) {
         ultimaLimpiezaEditor = Date.now()

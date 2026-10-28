@@ -426,6 +426,7 @@ export const adsApi = {
   create: (clientId, ad) => apiFetch('/api/ads?action=create', { method: 'POST', body: { clientId, ...ad } }),
   publicar: (clientId, id) => apiFetch('/api/ads?action=publicar', { method: 'POST', body: { clientId, id } }),
   estado: (clientId, id, estado) => apiFetch('/api/ads?action=estado', { method: 'POST', body: { clientId, id, estado } }),
+  gasto: (clientId, id, gasto) => apiFetch('/api/ads?action=gasto', { method: 'POST', body: { clientId, id, gasto } }),
   borrar: (clientId, id) => apiFetch(`/api/ads?action=borrar&clientId=${clientId}&id=${id}`, { method: 'DELETE' }),
 }
 
@@ -465,6 +466,32 @@ export const estudioContenidoApi = {
   ahora: (clientId) => apiFetch(`/api/estudio-contenido?action=ahora&clientId=${clientId}`, { method: 'POST' }),
   ver: (clientId, id) =>
     apiFetch(`/api/estudio-contenido?action=ver&clientId=${clientId}&id=${encodeURIComponent(id)}`),
+}
+
+// El Media buyer (api/meta-ads.js): la conexión con Meta, las cuentas que
+// lleva, sus topes (solo quien administra la agencia), el parte, parar y el registro.
+const qMeta = (clientId) => `clientId=${encodeURIComponent(clientId)}`
+export const metaAdsApi = {
+  estado: (clientId) => apiFetch(`/api/meta-ads?action=estado&${qMeta(clientId)}`),
+  disponibles: (clientId) => apiFetch(`/api/meta-ads?action=disponibles&${qMeta(clientId)}`),
+  parte: (clientId) => apiFetch(`/api/meta-ads?action=parte&${qMeta(clientId)}`),
+  registro: (clientId) => apiFetch(`/api/meta-ads?action=registro&limite=30&${qMeta(clientId)}`),
+  conectar: (clientId, token) => apiFetch(`/api/meta-ads?action=conectar&${qMeta(clientId)}`, { method: 'POST', body: { token } }),
+  desconectar: (clientId) => apiFetch(`/api/meta-ads?action=desconectar&${qMeta(clientId)}`, { method: 'POST', body: {} }),
+  cuentas: (clientId, cuentas) => apiFetch(`/api/meta-ads?action=cuentas&${qMeta(clientId)}`, { method: 'POST', body: { cuentas } }),
+  topes: (clientId, topes) => apiFetch(`/api/meta-ads?action=topes&${qMeta(clientId)}`, { method: 'POST', body: topes }),
+  parar: (clientId, cuenta) => apiFetch(`/api/meta-ads?action=parar&${qMeta(clientId)}`, { method: 'POST', body: cuenta ? { cuenta } : {} }),
+  reanudar: (clientId, cuenta) => apiFetch(`/api/meta-ads?action=reanudar&${qMeta(clientId)}`, { method: 'POST', body: { cuenta } }),
+}
+
+// La bandeja de los agentes de departamento (api/propuestas.js): lo que
+// proponen y espera tu aprobación, sus ajustes y lanzarlos a mano.
+export const propuestasApi = {
+  lista: (clientId) => apiFetch(`/api/propuestas?action=lista&clientId=${encodeURIComponent(clientId)}`),
+  decidir: (clientId, id, aprobar) => apiFetch(`/api/propuestas?action=decidir&clientId=${encodeURIComponent(clientId)}`, { method: 'POST', body: { id, aprobar: aprobar === true } }),
+  ajustes: (clientId) => apiFetch(`/api/propuestas?action=ajustes&clientId=${encodeURIComponent(clientId)}`),
+  ajuste: (clientId, agente, cambios) => apiFetch(`/api/propuestas?action=ajuste&clientId=${encodeURIComponent(clientId)}`, { method: 'POST', body: { ...cambios, agente } }),
+  correr: (clientId, agentes) => apiFetch(`/api/propuestas?action=correr&clientId=${encodeURIComponent(clientId)}`, { method: 'POST', body: agentes ? { agentes } : {} }),
 }
 
 // Google (Calendar + Drive) por perfil. El refresh token se queda en el

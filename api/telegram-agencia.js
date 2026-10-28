@@ -46,6 +46,7 @@ import { alcanceDesdeContexto } from './mcp/[token].js'
 import { herramientasBot, sistemaBot, resolverPerfil, perfilesDeAgencia, esAccionVacia, NO_SE_PUEDE } from './_lib/bot-herramientas.js'
 import { tapaSecretos } from './_lib/bot/comun.js'
 import { turnoAgente, cierraPendientes, RECHAZADA } from './_lib/claude-agente.js'
+import { decidir as decidirPropuesta } from './_lib/propuestas.js'
 import {
   registrarWebhook, infoWebhook, publicarComandos, accionEscribiendo, enviarMensaje, enviarConBotones,
   responderCallback, editarMensaje, generarCodigo, igual, normalizarCodigo, nombreDelChat,
@@ -810,6 +811,26 @@ async function atenderBoton(token, cq) {
   }
   const chatId = cq.message?.chat?.id
   try {
+    // Las propuestas de los agentes de departamento (api/_lib/propuestas.js):
+    // «pa:<id>» aprueba y «pr:<id>» rechaza. Solo quien está vinculado (en su
+    // chat privado) y administra AHORA la agencia de la propuesta: decidir lo
+    // comprueba contra la agencia de la cuenta, no contra el chat.
+    const mp = /^p([ar]):(.+)$/.exec(String(cq.data || ''))
+    if (mp) {
+      if (!UUID.test(mp[2]) || !chatId || cq.message.chat.type !== 'private' || cq.from?.id == null) return await contestar()
+      if (!rateLimit({ key: `tga:${cq.from.id}`, max: 20, windowMs: 60_000 }).ok) return await contestar('Demasiado seguido. Espera un momento.')
+      const vinculo = await vinculoDe(cq.from.id)
+      if (!vinculo || String(vinculo.tg_chat_id) !== String(chatId)) return await contestar('Esta propuesta no es tuya.')
+      const quien = await quienSigue(vinculo.superadmin_id)
+      if (!quien) {
+        await desvincular(vinculo.superadmin_id, { motivo: 'cuenta desactivada o agencia sin permiso' })
+        return await contestar('Tu cuenta ya no puede usar este bot.')
+      }
+      const r = await enContexto({ agenciaId: quien.agencia.id, origen: 'telegram' }, () => decidirPropuesta({
+        id: mp[2].toLowerCase(), aprobar: mp[1] === 'a', agenciaId: quien.agencia.id, quien: quien.superadmin, origen: 'Telegram',
+      }))
+      return await contestar(String(r?.texto || '').slice(0, 190))
+    }
     const m = /^([ar]):(.+)$/.exec(String(cq.data || ''))
     if (!m || !UUID.test(m[2]) || !chatId || cq.message.chat.type !== 'private' || cq.from?.id == null) return await contestar()
     if (!rateLimit({ key: `tga:${cq.from.id}`, max: 20, windowMs: 60_000 }).ok) return await contestar('Demasiado seguido. Espera un momento.')

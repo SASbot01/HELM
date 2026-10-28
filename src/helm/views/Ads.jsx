@@ -73,6 +73,8 @@ function AdCard({ ad, onAccion }) {
   const v = ad.veredicto ? VEREDICTO[ad.veredicto] : null
   const p = ad.progreso
   const conclusion = ad.estudio?.conclusion || ad.estudio?.resumen || ad.estudio?.texto || null
+  const [gasto, setGasto] = useState(ad.gasto ?? '')
+  const [guardandoGasto, setGuardandoGasto] = useState(false)
   return (
     <article className="ad-card" style={{ '--c': e.c }}>
       <header className="ad-card-cab">
@@ -106,6 +108,21 @@ function AdCard({ ad, onAccion }) {
         <div className="ad-veredicto" style={{ '--c': v.c }}>
           <span className="ad-veredicto-badge"><v.Icon size={14} /> {v.label}</span>
           {conclusion && <p>{conclusion}</p>}
+        </div>
+      )}
+
+      {(ad.estado === 'en_test' || ad.estado === 'evaluado') && (
+        <div className="ad-gasto" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, opacity: 0.8 }}>Gasto real (€)</span>
+          <input className="helm-input" type="number" min="0" step="0.01" value={gasto}
+            onChange={ev => setGasto(ev.target.value)} placeholder="Lo gastado" style={{ width: 120 }} />
+          <button type="button" className="helm-btn sec" disabled={guardandoGasto}
+            onClick={async () => {
+              setGuardandoGasto(true)
+              try { await onAccion(() => adsApi.gasto(ad.client_id, ad.id, gasto)) } finally { setGuardandoGasto(false) }
+            }}>
+            {guardandoGasto ? 'Guardando…' : 'Apuntar'}
+          </button>
         </div>
       )}
 

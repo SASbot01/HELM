@@ -752,3 +752,55 @@ export const ESCRITURAS = [
     },
   },
 ]
+
+// ── Meta Ads: las del Media buyer (migración 117) ──────────────────────────
+// Van aquí al final para no tocar las de arriba. Las reglas, los topes y la
+// única puerta a Meta están en api/_lib/meta-ads.js: aquí solo se traduce el
+// perfil y quién aprueba. preparar() lee el valor ACTUAL en Meta y comprueba
+// los topes; el resumen lleva el antes → después, y si al aprobar Meta ya no
+// tiene ese «antes», no se hace.
+import { planPresupuesto, planPausa } from '../meta-ads.js'
+
+const CUENTA_META = { type: 'string', description: 'La cuenta publicitaria de Meta: act_ y su número.' }
+const quienAprueba = (h) => h.superadmin?.nombre || h.superadmin?.email || 'Telegram'
+
+ESCRITURAS.push(
+  {
+    name: 'meta_presupuesto',
+    description: 'Cambia el presupuesto DIARIO de un conjunto de anuncios (adset) o de una campaña con presupuesto de campaña en Meta Ads. Antes vuelve a leer el valor en Meta. Subir: como mucho +20 % de una vez, solo si ha salido del aprendizaje, no más de una subida cada 72 h y sin pasar los topes de la cuenta (los pone el dueño en HELM → Ads; no se pueden saltar). Bajar no tiene esos límites.',
+    perfil: 'si',
+    tabla: 'helm_ads_acciones',
+    properties: {
+      cuenta: CUENTA_META,
+      tipo: { type: 'string', enum: ['adset', 'campaign'], description: 'adset (conjunto) o campaign (campaña con presupuesto de campaña).' },
+      objeto: { type: 'string', description: 'El id de Meta del conjunto o la campaña.' },
+      despues: { type: 'number', minimum: 1, description: 'El presupuesto diario nuevo, en la moneda de la cuenta (euros).' },
+      antes: { type: 'number', description: 'Opcional: el presupuesto diario que había al proponerlo. Si en Meta ya no es ese, no se hace.' },
+      motivo: { type: 'string', maxLength: 1500, description: 'Por qué, con las cifras (queda en el registro).' },
+    },
+    required: ['cuenta', 'tipo', 'objeto', 'despues'],
+    preparar: (a, h) => planPresupuesto({
+      clientId: h.p.id, perfil: h.p.name, cuenta: a.cuenta, tipo: a.tipo, objeto: String(a.objeto).trim(),
+      antes: a.antes ?? null, despues: a.despues, motivo: textoLibre(a.motivo, 'motivo', { max: 1500 }),
+      quien: quienAprueba(h), origen: 'aprobado',
+    }),
+  },
+
+  {
+    name: 'meta_pausar',
+    description: 'Pausa un anuncio (ad), un conjunto (adset) o una campaña (campaign) de Meta Ads. Pausar no gasta: se puede reactivar después.',
+    perfil: 'si',
+    tabla: 'helm_ads_acciones',
+    properties: {
+      cuenta: CUENTA_META,
+      tipo: { type: 'string', enum: ['ad', 'adset', 'campaign'], description: 'ad, adset o campaign.' },
+      objeto: { type: 'string', description: 'El id de Meta de lo que se pausa.' },
+      motivo: { type: 'string', maxLength: 1500, description: 'Por qué, con las cifras (queda en el registro).' },
+    },
+    required: ['cuenta', 'tipo', 'objeto'],
+    preparar: (a, h) => planPausa({
+      clientId: h.p.id, perfil: h.p.name, cuenta: a.cuenta, tipo: a.tipo, objeto: String(a.objeto).trim(),
+      motivo: textoLibre(a.motivo, 'motivo', { max: 1500 }), quien: quienAprueba(h), origen: 'aprobado',
+    }),
+  },
+)

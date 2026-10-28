@@ -20,6 +20,9 @@ export const ESTADOS = {
   espera:     { label: 'Esperando a Meta', tono: 'espera' },
   // El plan: lo que va a hacer, con su frase, para que se vea hacia dónde va.
   proximo:    { label: 'Próximamente',    tono: 'espera' },
+  // Funciona en segundo plano (api/_lib/departamentos/): no tiene panel
+  // propio; lo que propone llega a la Bandeja de Agentes y a tu Telegram.
+  trabaja:    { label: 'Activo',          tono: 'ok' },
 }
 
 // Los departamentos: cada agente trabaja en uno. En el menú se entra por
@@ -162,17 +165,20 @@ export const AGENTES = [
     departamento: 'contenido',
     nombre: 'Guionista',
     resumen: 'Te deja cada día los guiones en borrador, con los temas que más te han vendido, no solo los que más se vieron.',
-    detalle: 'Hoy escribe los guiones del Equipo de agentes eligiendo por visitas. Va a unir cada reel con los leads y las ventas que trajo para escribir sobre lo que vende.',
-    estado: 'mejora',
+    detalle: 'Une cada reel con los leads y las ventas que trajo (por el utm_content de tus enlaces) y deja al guionista del Equipo los temas que más venden. Lo que propone llega a la Bandeja y a tu Telegram para que lo apruebes.',
+    estado: 'trabaja',
     icono: 'pluma',
   },
   {
     key: 'media-buyer',
     departamento: 'contenido',
+    ruta: 'media-buyer',
     nombre: 'Media buyer',
     resumen: 'Lleva tus campañas de Meta: sube lo que vende, apaga lo que no y nunca pasa del tope que tú pongas.',
     detalle: 'Cada mañana cruza el gasto de Meta con las ventas cobradas de tu CRM y te propone los cambios con un botón para aprobar. Los topes de gasto los pones tú y el código no deja pasarlos.',
-    estado: 'proximo',
+    // Hecho y probado; le falta que conectes tu cuenta de Meta (se abre para conectarla).
+    estado: 'espera',
+    abrible: true,
     icono: 'anuncios',
   },
   {
@@ -180,8 +186,8 @@ export const AGENTES = [
     departamento: 'contenido',
     nombre: 'Anuncios',
     resumen: 'Mide cada anuncio por los leads y las ventas que trae de verdad y te dice cuál apagar, cuál subir y qué probar después.',
-    detalle: 'Hoy hace el test de 5 días por UTM. Va a calcular el coste por lead y por venta con lo cobrado y a proponer anuncios nuevos con tus reels que más venden.',
-    estado: 'mejora',
+    detalle: 'Con el gasto que apuntas de cada anuncio calcula el coste por lead y por venta cobrada, te da el veredicto al cerrar el test y propone convertir en anuncio tu reel que más vende. Lo que propone llega a la Bandeja y a tu Telegram para que lo apruebes.',
+    estado: 'trabaja',
     icono: 'grafica',
   },
   {
@@ -207,8 +213,8 @@ export const AGENTES = [
     departamento: 'ventas',
     nombre: 'Seguimiento',
     resumen: 'Escribe al lead que se enfría, recuerda la llamada al que la tiene y rescata al que no vino.',
-    detalle: 'Te pasa por Telegram el mensaje ya redactado de cada lead parado, con su enlace de WhatsApp, para mandarlo con un toque.',
-    estado: 'proximo',
+    detalle: 'Te pasa por Telegram el mensaje ya redactado de cada lead parado, con su enlace de WhatsApp, para mandarlo con un toque. Lo que propone llega a la Bandeja y a tu Telegram para que lo apruebes.',
+    estado: 'trabaja',
     icono: 'seguimiento',
   },
   {
@@ -216,8 +222,8 @@ export const AGENTES = [
     departamento: 'ventas',
     nombre: 'Preparador de llamadas',
     resumen: 'Antes de cada llamada te da la ficha del lead y sus objeciones; después, apunta el resultado y la venta.',
-    detalle: 'Junta lo que dijo en el formulario, por qué reel o anuncio llegó y su conversación con el setter.',
-    estado: 'proximo',
+    detalle: 'Junta lo que dijo en el formulario, por qué reel o anuncio llegó y su conversación con el setter. Lo que propone llega a la Bandeja y a tu Telegram para que lo apruebes.',
+    estado: 'trabaja',
     icono: 'llamada',
   },
   {
@@ -225,8 +231,8 @@ export const AGENTES = [
     departamento: 'ventas',
     nombre: 'Prospector',
     resumen: 'Busca negocios de tu zona en Google Maps, saca su contacto y te prepara el primer mensaje de cada uno.',
-    detalle: 'Hoy busca y enriquece los negocios. Va a redactar el primer mensaje de cada uno con lo que ha encontrado de él.',
-    estado: 'mejora',
+    detalle: 'Redacta el primer mensaje de cada negocio prospectado con lo que se sabe de él (sin web, buenas reseñas…), de cinco en cinco y para que lo mandes tú. Lo que propone llega a la Bandeja y a tu Telegram para que lo apruebes.',
+    estado: 'trabaja',
     icono: 'buscar',
   },
   {
@@ -243,8 +249,8 @@ export const AGENTES = [
     departamento: 'atencion',
     nombre: 'Bienvenida',
     resumen: 'Al que te paga le da sus accesos, le pide lo que falta y le agenda la llamada de arranque.',
-    detalle: 'Salta en cuanto entra el pago.',
-    estado: 'proximo',
+    detalle: 'Salta en cuanto entra el pago. Lo que propone llega a la Bandeja y a tu Telegram para que lo apruebes.',
+    estado: 'trabaja',
     icono: 'bienvenida',
   },
   {
@@ -252,8 +258,8 @@ export const AGENTES = [
     departamento: 'atencion',
     nombre: 'Documentación pendiente',
     resumen: 'Recuerda a cada cliente qué papeles le faltan antes de cada plazo, con su enlace para subirlos.',
-    detalle: 'Pensado para asesorías: tira de los plazos de Fiscal y de los documentos de cada cliente.',
-    estado: 'proximo',
+    detalle: 'Pensado para asesorías: tira de los plazos de Fiscal y de los documentos de cada cliente. Lo que propone llega a la Bandeja y a tu Telegram para que lo apruebes.',
+    estado: 'trabaja',
     icono: 'documentos',
   },
   {
@@ -261,8 +267,8 @@ export const AGENTES = [
     departamento: 'atencion',
     nombre: 'Postventa',
     resumen: 'Pregunta a cada cliente qué tal le va, te avisa de quien quiere irse y pide reseña o testimonio a quien está contento.',
-    detalle: 'Los testimonios pasan al Guionista para tu contenido.',
-    estado: 'proximo',
+    detalle: 'Los testimonios pasan al Guionista para tu contenido. Lo que propone llega a la Bandeja y a tu Telegram para que lo apruebes.',
+    estado: 'trabaja',
     icono: 'postventa',
   },
   {
@@ -279,8 +285,8 @@ export const AGENTES = [
     departamento: 'operaciones',
     nombre: 'Director',
     resumen: 'Cada mañana mira todo el negocio, reparte el trabajo de los agentes y te manda el parte del día.',
-    detalle: 'Hoy planifica el contenido del Equipo de agentes. Va a mirar también el embudo, los cobros y los clientes, y a mandarte por Telegram lo que entra, lo que vence, lo atascado y lo que espera tu aprobación.',
-    estado: 'mejora',
+    detalle: 'Cada mañana te manda por Telegram el parte: lo que entra, lo que vence, lo atascado, lo hecho ayer y lo que espera tu aprobación. Además reparte el contenido del Equipo de agentes. Lo que propone llega a la Bandeja y a tu Telegram para que lo apruebes.',
+    estado: 'trabaja',
     icono: 'director',
   },
   {
@@ -306,8 +312,8 @@ export const AGENTES = [
     departamento: 'operaciones',
     nombre: 'Limpieza del CRM',
     resumen: 'Junta los contactos repetidos, rellena lo que falta y te avisa de las fichas sin etapa ni dueño.',
-    detalle: 'Para que el resto de agentes trabaje con datos buenos.',
-    estado: 'proximo',
+    detalle: 'Para que el resto de agentes trabaje con datos buenos. Lo que propone llega a la Bandeja y a tu Telegram para que lo apruebes.',
+    estado: 'trabaja',
     icono: 'limpieza',
   },
   {
@@ -332,8 +338,8 @@ export const AGENTES = [
     departamento: 'finanzas',
     nombre: 'Cobrador',
     resumen: 'Te avisa de cada cuota y renovación que toca, prepara el enlace de pago y el mensaje, y marca lo cobrado.',
-    detalle: 'Nunca cobra a una tarjeta sin permiso: te prepara el recordatorio para que lo apruebes.',
-    estado: 'proximo',
+    detalle: 'Nunca cobra a una tarjeta sin permiso: te prepara el recordatorio para que lo apruebes. Lo que propone llega a la Bandeja y a tu Telegram para que lo apruebes.',
+    estado: 'trabaja',
     icono: 'cobros',
   },
   {
@@ -341,7 +347,8 @@ export const AGENTES = [
     departamento: 'finanzas',
     nombre: 'Conciliación',
     resumen: 'Cuadra cada pago de Stripe con su venta y su cliente, y te enseña los duplicados y lo que falta.',
-    estado: 'proximo',
+    detalle: 'Lo que propone llega a la Bandeja y a tu Telegram para que lo apruebes.',
+    estado: 'trabaja',
     icono: 'conciliacion',
   },
   {
@@ -349,7 +356,8 @@ export const AGENTES = [
     departamento: 'finanzas',
     nombre: 'Caja',
     resumen: 'Te dice cuánto va a entrar y salir en los próximos 90 días y te avisa antes de que falte caja.',
-    estado: 'proximo',
+    detalle: 'Lo que propone llega a la Bandeja y a tu Telegram para que lo apruebes.',
+    estado: 'trabaja',
     icono: 'caja',
   },
   {
@@ -357,7 +365,8 @@ export const AGENTES = [
     departamento: 'finanzas',
     nombre: 'Comisiones',
     resumen: 'Calcula lo que toca pagar a cada setter y closer con lo cobrado de verdad, no con lo vendido.',
-    estado: 'proximo',
+    detalle: 'Lo que propone llega a la Bandeja y a tu Telegram para que lo apruebes.',
+    estado: 'trabaja',
     icono: 'comisiones',
   },
   {
@@ -365,7 +374,8 @@ export const AGENTES = [
     departamento: 'webs',
     nombre: 'Reseñas',
     resumen: 'Pide la reseña de Google a cada cliente contento y te propone la respuesta a cada reseña nueva.',
-    estado: 'proximo',
+    detalle: 'Lo que propone llega a la Bandeja y a tu Telegram para que lo apruebes.',
+    estado: 'trabaja',
     icono: 'resenas',
   },
   {

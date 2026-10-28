@@ -52,7 +52,7 @@ export default async function handler(req, res) {
 
     // POST create — un ad nuevo en borrador, con su UTM.
     if (req.method === 'POST' && action === 'create') {
-      const { nombre, plataforma, objetivo, presupuesto, utm } = req.body || {}
+      const { nombre, plataforma, objetivo, presupuesto, gasto, utm } = req.body || {}
       if (!nombre?.trim()) return res.status(400).json({ error: 'El ad necesita un nombre' })
       const fila = {
         client_id: clientId,
@@ -60,10 +60,25 @@ export default async function handler(req, res) {
         plataforma: plataforma || null,
         objetivo: objetivo ? String(objetivo).slice(0, 500) : null,
         presupuesto: presupuesto != null && presupuesto !== '' ? Number(presupuesto) : null,
+        gasto: gasto != null && gasto !== '' ? Number(gasto) : null,
         utm: (String(utm || '').trim() || generarUtm(nombre)).slice(0, 80),
         estado: 'borrador',
       }
       const { data, error } = await supabase.from('helm_ads').insert(fila).select('*').single()
+      if (error) throw error
+      return res.status(200).json({ ad: data })
+    }
+
+    // POST gasto — apunta (o borra) el gasto real del anuncio. Es lo que el
+    // agente de anuncios usa para el coste por lead y por venta cobrada.
+    if (req.method === 'POST' && action === 'gasto') {
+      const { id, gasto } = req.body || {}
+      if (!id) return res.status(400).json({ error: 'id requerido' })
+      const valor = gasto != null && gasto !== '' ? Number(gasto) : null
+      if (valor != null && (!Number.isFinite(valor) || valor < 0)) return res.status(400).json({ error: 'gasto inválido' })
+      const { data, error } = await supabase.from('helm_ads')
+        .update({ gasto: valor, updated_at: new Date().toISOString() })
+        .eq('id', id).eq('client_id', clientId).select('*').single()
       if (error) throw error
       return res.status(200).json({ ad: data })
     }

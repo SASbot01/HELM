@@ -43,12 +43,19 @@ describe('catálogo de agentes', () => {
     expect(html).toContain('Cobrador')
   })
 
-  it('dentro de un departamento, «Próximamente» se ve con su frase pero no se abre', () => {
-    const html = renderToStaticMarkup(<MemoryRouter><MenuAgentes agentes={de('finanzas')} onAbrir={() => {}} /></MemoryRouter>)
-    expect(html).toContain('Te avisa de cada cuota y renovación que toca')
+  it('dentro de un departamento, «Próximamente» se ve con su frase pero no se abre; los de segundo plano, activos', () => {
+    const html = renderToStaticMarkup(<MemoryRouter><MenuAgentes agentes={de('atencion')} onAbrir={() => {}} /></MemoryRouter>)
+    expect(html).toContain('Responde a tus clientes a cualquier hora')
     expect(html).toContain('Próximamente')
     expect(html).toContain('aria-disabled="true"')
     expect(html).not.toContain('<button')
+    // Finanzas ya trabaja: sus casillas dicen «Activo», no salen en gris y dicen dónde ver lo que proponen.
+    const fin = renderToStaticMarkup(<MemoryRouter><MenuAgentes agentes={de('finanzas')} onAbrir={() => {}} /></MemoryRouter>)
+    expect(fin).toContain('Te avisa de cada cuota y renovación que toca')
+    expect(fin).toContain('Activo')
+    expect(fin).not.toContain('Próximamente')
+    expect(fin).toContain('ag-casilla fondo')
+    expect(fin).toContain('llega a la Bandeja')
     // El setter espera a Meta, pero se abre.
     const ventas = renderToStaticMarkup(<MemoryRouter><MenuAgentes agentes={de('ventas')} onAbrir={() => {}} /></MemoryRouter>)
     expect(ventas).toContain('Esperando a Meta')
