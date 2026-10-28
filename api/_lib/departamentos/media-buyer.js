@@ -27,6 +27,7 @@
 // y avisa. Al 80 % del presupuesto diario máximo, solo avisa. NUNCA sube nada.
 import { supabase } from '../../lib/supabase.js'
 import { notificar } from '../notificar.js'
+import { todasLasFilas } from '../filas.js'
 import {
   CUENTAS, ACCIONES, HORAS_ENTRE_SUBIDAS, SUBIDA_MAX_PCT, MINIMO_DIARIO,
   tokenDe, insightsPorAnuncioDia, insightsPorAnuncio, campanas, conjuntos, anuncios, gastoDe,
@@ -53,6 +54,9 @@ export const REGLAS = {
   usoMinimoSubida: 0.7,
   // Para decir que algo «no vende» cuando la venta pasa por una llamada.
   diasVentaPorLlamada: 7,
+  // Si HELM ve menos del 30 % de los leads que cuenta Meta, la atribución está
+  // rota y no se juzga con el CRM.
+  atribucionMin: 0.3,
   // Fatiga: frecuencia de 7 días por encima de 3 y el CTR un 30 % por debajo de la semana anterior.
   fatigaFrecuencia: 3,
   fatigaCaidaCtr: 0.3,
@@ -86,12 +90,13 @@ export async function crmPorAnuncio(clientId, adIds, { desde, hasta, zona = 'Eur
   const d0 = `${masDias(desde, -1)}T00:00:00Z`
   const d1 = `${masDias(hasta, 2)}T00:00:00Z`
 
+  // Por páginas: PostgREST corta en 1000 filas y un anuncio que funciona puede
+  // pasar de 1000 leads en la ventana (con menos, el coste por lead saldría
+  // inflado y propondría pausar lo que va bien).
   const contactos = []
   for (const t of trozos(ids)) {
-    const { data, error } = await supabase.from('crm_contacts').select('id, created_at, utm_content')
-      .eq('client_id', clientId).in('utm_content', t).gte('created_at', d0).lt('created_at', d1)
-    if (error) throw error
-    contactos.push(...(data || []))
+    contactos.push(...await todasLasFilas(() => supabase.from('crm_contacts').select('id, created_at, utm_content')
+      .eq('client_id', clientId).in('utm_content', t).gte('created_at', d0).lt('created_at', d1).order('id')))
   }
   const cohorte = new Map()
   for (const c of contactos) {
@@ -102,17 +107,15 @@ export async function crmPorAnuncio(clientId, adIds, { desde, hasta, zona = 'Eur
 
   const ventas = new Map()
   for (const t of trozos([...cohorte.keys()])) {
-    const { data, error } = await supabase.from('sales').select('id, contact_id, utm_content, cash_collected, status, date, created_at')
-      .eq('client_id', clientId).in('contact_id', t)
-    if (error) throw error
-    for (const v of data || []) ventas.set(v.id, v)
+    const filas = await todasLasFilas(() => supabase.from('sales').select('id, contact_id, utm_content, cash_collected, status, date, created_at')
+      .eq('client_id', clientId).in('contact_id', t).order('id'))
+    for (const v of filas) ventas.set(v.id, v)
   }
   // Las que llevan el UTM pero no tienen ficha (o es de otro anuncio): por su fecha.
   for (const t of trozos(ids)) {
-    const { data, error } = await supabase.from('sales').select('id, contact_id, utm_content, cash_collected, status, date, created_at')
-      .eq('client_id', clientId).in('utm_content', t).gte('created_at', d0).lt('created_at', d1)
-    if (error) throw error
-    for (const v of data || []) if (!ventas.has(v.id)) ventas.set(v.id, v)
+    const filas = await todasLasFilas(() => supabase.from('sales').select('id, contact_id, utm_content, cash_collected, status, date, created_at')
+      .eq('client_id', clientId).in('utm_content', t).gte('created_at', d0).lt('created_at', d1).order('id'))
+    for (const v of filas) if (!ventas.has(v.id)) ventas.set(v.id, v)
   }
   for (const v of ventas.values()) {
     const cobrado = Number(v.cash_collected) || 0
@@ -236,6 +239,14 @@ export function decide({ cuenta, unidades = [], anuncios: ads = [], porAnuncio =
     const coste = res > 0 ? agg.gasto / res : null
     if (horas < minHoras) return { juzgable: false, res, coste, pronto: `lleva ${Math.floor(horas / 24)} días (mínimo ${minHoras / 24})` }
     if (agg.gasto < gastoMin) return { juzgable: false, res, coste, pronto: `ha gastado ${$(agg.gasto)} (mínimo ${$(gastoMin)} para juzgar)` }
+    // Si Meta cuenta leads y HELM casi no los ve, la atribución está rota (el
+    // enlace sin utm_content={{ad.id}}, o formularios instantáneos de Meta que
+    // no llegan al CRM): juzgar con el CRM pausaría lo que funciona.
+    const metaLeads = Number(agg.leads_meta) || 0
+    const crmLeads = Number(agg.leads_crm) || 0
+    if (metaLeads >= 3 && crmLeads < metaLeads * reglas.atribucionMin) {
+      return { juzgable: false, res, coste, pronto: `Meta cuenta ${metaLeads} leads y HELM solo ve ${crmLeads}: la atribución está rota (falta utm_content={{ad.id}} en el enlace del anuncio, o son formularios de Meta), así que no lo juzgo` }
+    }
     // Sin ventas solo es «no vende» si ha pasado el tiempo de la llamada.
     const sinResultadoCuenta = res === 0 && (!porVenta || horas >= reglas.diasVentaPorLlamada * 24)
     const malo = sinResultadoCuenta || (coste != null && coste >= reglas.pausaFactor * objetivo)

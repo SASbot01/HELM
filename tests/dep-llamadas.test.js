@@ -104,7 +104,7 @@ describe('llamadas · parte de hoy', () => {
 })
 
 describe('llamadas · apuntar el resultado', () => {
-  it('propone apuntar el resultado de una llamada pasada sin outcome, con crm_nota', async () => {
+  it('propone la tarea de apuntar el resultado de una llamada pasada sin outcome (crm_tarea, sin nota con hueco)', async () => {
     const tablas = {
       helm_calls: [llamada({ id: 'p1', starts_at: '2026-07-14T10:00:00Z', status: 'agendada', outcome: null })],
       crm_contacts: [{ id: 'k1', client_id: 'c1', name: 'Ana Pérez' }],
@@ -115,8 +115,10 @@ describe('llamadas · apuntar el resultado', () => {
     const p = propuestas[0]
     expect(p.clave).toBe('llamadas:resultado:p1')
     expect(p.titulo).toContain('Ana Pérez')
-    expect(p.herramienta).toBe('crm_nota')
+    expect(p.herramienta).toBe('crm_tarea')
     expect(p.input).toMatchObject({ contacto: 'k1' })
+    expect(p.input.descripcion).toMatch(/Apunta en su ficha cómo fue/)
+    expect(JSON.stringify(p.input)).not.toMatch(/resultado: "/)
     expect(p.mensaje).toBeUndefined() // apuntar resultado no es un mensaje al cliente
   })
 
@@ -141,14 +143,16 @@ describe('llamadas · apuntar el resultado', () => {
     expect(proponer).not.toHaveBeenCalled()
   })
 
-  it('respeta el tope y no duplica entre pasadas', async () => {
+  it('respeta el tope, no duplica entre pasadas y la siguiente pasada sigue con las que faltaban', async () => {
     const calls = [0, 1, 2].map(i => llamada({ id: `p${i}`, starts_at: '2026-07-14T10:00:00Z', contact_id: `k${i}` }))
     const contacts = [0, 1, 2].map(i => ({ id: `k${i}`, client_id: 'c1', name: `C${i}` }))
     const { ctx, propuestas } = hazCtx({ tablas: { helm_calls: calls, crm_contacts: contacts }, config: { maximo: 2 } })
     const r1 = await agente.corre(ctx)
     expect(r1.propuestas).toBe(2)
-    const r2 = await agente.corre(ctx) // mismas claves → nada nuevo
-    expect(r2.propuestas).toBe(0)
-    expect(propuestas).toHaveLength(2)
+    const r2 = await agente.corre(ctx) // las dos ya propuestas no cuentan: sale la tercera
+    expect(r2.propuestas).toBe(1)
+    const r3 = await agente.corre(ctx) // ya no queda ninguna
+    expect(r3.propuestas).toBe(0)
+    expect(new Set(propuestas.map(p => p.clave)).size).toBe(3)
   })
 })

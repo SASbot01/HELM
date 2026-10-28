@@ -26,6 +26,7 @@ class Q {
   is(c, v) { this.f.push(r => (v === null ? r[c] == null : r[c] === v)); return this }
   order(c, o = {}) { this.ord.push([c, o.ascending !== false]); return this }
   limit(n) { this.lim = n; return this }
+  range(a, b) { this.desde = a; this.lim = b - a + 1; return this }
   insert(d) { this.op = 'insert'; this.d = d; return this }
   update(d) { this.op = 'update'; this.d = d; return this }
   upsert(d, o = {}) { Object.assign(this, { op: 'upsert', d, on: (o.onConflict || 'id').split(',') }); return this }
@@ -54,7 +55,7 @@ class Q {
       data = t.filter(pasa)
       for (const [c, asc] of [...this.ord].reverse()) data = [...data].sort((a, b) => (asc ? 1 : -1) * String(a[c] ?? '').localeCompare(String(b[c] ?? '')))
     }
-    if (this.lim != null) data = data.slice(0, this.lim)
+    if (this.lim != null) data = data.slice(this.desde || 0, (this.desde || 0) + this.lim)
     data = structuredClone(data)
     if (this.uno === 's') return data.length ? { data: data[0], error: null } : { data: null, error: { message: 'sin filas' } }
     if (this.uno === 'm') return { data: data[0] ?? null, error: null }
@@ -154,6 +155,14 @@ describe('decide: las reglas', () => {
     expect(propuestas.find(p => p.objeto.id === 'a2')).toMatchObject({ tipo: 'pausar', objeto: { tipo: 'ad' }, titulo: 'Pausar el anuncio «Malo»' })
     expect(propuestas.find(p => p.objeto.id === 'a2').porque).toMatch(/ningún lead/)
     expect(propuestas.some(p => p.objeto.id === 'a3' || p.objeto.id === 's2')).toBe(false)
+  })
+
+  it('si Meta cuenta leads y HELM casi no los ve (atribución rota), no pausa: lo dice en el parte', () => {
+    const u = unidad({ id: 's1', nombre: 'Formulario', presupuesto: 20 })
+    const r = mb.decide({ cuenta: { ...CUENTA, objetivo_cpl: 10 }, hoy: HOY, ahora: AHORA, gastadoMes: 0, unidades: [u],
+      anuncios: [anuncio({ id: 'a1', name: 'Lead form', adset_id: 's1' })], porAnuncio: new Map([['a1', datos({ gasto: 100, leads_meta: 30, leads_crm: 0 })]]) })
+    expect(r.propuestas).toEqual([])
+    expect(r.notas.join(' ')).toMatch(/Meta cuenta 30 leads y HELM solo ve 0: la atribución está rota \(falta utm_content=\{\{ad\.id\}\}/)
   })
 
   it('baja un 20 % lo que va caro sin ser un desastre', () => {

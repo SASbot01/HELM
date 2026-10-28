@@ -86,8 +86,8 @@ describe('bienvenida · detecta y propone', () => {
 
   it('solo las ventas de las últimas 48 h; propone la bienvenida con WhatsApp y las tareas de arranque', async () => {
     const r = await bienvenida.corre(esc.ctx)
-    // 1 bienvenida + 2 tareas (por defecto) para la venta reciente; la vieja no cuenta.
-    expect(r.propuestas).toBe(3)
+    // 1 bienvenida + 1 tarea de arranque (con los 2 pasos por defecto); la vieja no cuenta.
+    expect(r.propuestas).toBe(2)
     const bienv = esc.proponer.creadas.find(p => p.clave === 'bienvenida:s1')
     expect(bienv).toBeTruthy()
     expect(bienv.telefono).toBe('600111222')
@@ -97,8 +97,9 @@ describe('bienvenida · detecta y propone', () => {
     expect(esc.proponer.todas.some(p => p.clave.includes('viejo'))).toBe(false)
     // Las tareas de arranque van a la bandeja con la escritura crm_tarea.
     const tareas = esc.proponer.creadas.filter(p => p.herramienta === 'crm_tarea')
-    expect(tareas).toHaveLength(2)
+    expect(tareas).toHaveLength(1)
     expect(tareas[0].input.titulo).toContain('Ana')
+    expect(tareas[0].input.descripcion).toMatch(/• Dar la bienvenida[\s\S]*• Agendar la llamada/)
   })
 
   it('no duplica: a la segunda pasada no propone nada nuevo', async () => {
@@ -151,5 +152,36 @@ describe('bienvenida · solo a quien compra por primera vez', () => {
     await bienvenida.corre(ctx)
     const bienvenidas = proponer.creadas.filter(p => String(p.clave).startsWith('bienvenida:'))
     expect(bienvenidas.map(p => p.clave)).toEqual(['bienvenida:a1'])
+  })
+})
+
+describe('bienvenida · lo que encontró la revisión', () => {
+  it('las ventas viejas importadas hoy (created_at de hoy, fecha antigua) no reciben bienvenida', async () => {
+    const importadas = Array.from({ length: 40 }, (_, i) => ({ id: `imp${i}`, client_id: 'c1', client_name: `Cliente ${i}`, client_email: `c${i}@x.com`, client_phone: '', product: 'Plan', created_at: '2026-10-28T09:00:00.000Z', date: '2025-03-01' }))
+    const { ctx, proponer } = escenario({ ventas: importadas })
+    const r = await bienvenida.corre(ctx)
+    expect(r.propuestas).toBe(0)
+    expect(proponer.todas).toHaveLength(0)
+  })
+
+  it('como mucho 10 bienvenidas por pasada; el resto queda para la siguiente', async () => {
+    const muchas = Array.from({ length: 25 }, (_, i) => ({ id: `n${String(i).padStart(2, '0')}`, client_id: 'c1', client_name: `Nuevo ${i}`, client_email: `n${i}@x.com`, client_phone: '', product: 'Curso', created_at: `2026-10-28T0${i % 10}:00:00.000Z`, date: '2026-10-28' }))
+    const { ctx, proponer } = escenario({ ventas: muchas })
+    const r = await bienvenida.corre(ctx)
+    expect(proponer.creadas.filter(p => String(p.clave).startsWith('bienvenida:'))).toHaveLength(10)
+    expect(r.resumen).toMatch(/15 más para la próxima pasada/)
+  })
+
+  it('quien ya compró antes con el correo en mayúsculas o por teléfono no es cliente nuevo; las canceladas tampoco cuentan', async () => {
+    const { ctx, proponer } = escenario({ ventas: [
+      { id: 'antes-ana', client_id: 'c1', client_name: 'Ana', client_email: 'Ana@Gmail.com', client_phone: '', product: 'Ebook', created_at: '2026-03-01T09:00:00.000Z', date: '2026-03-01' },
+      { id: 'hoy-ana', client_id: 'c1', client_name: 'Ana', client_email: 'ana@gmail.com', client_phone: '', product: 'Curso', created_at: '2026-10-28T09:00:00.000Z', date: '2026-10-28' },
+      { id: 'antes-tel', client_id: 'c1', client_name: 'Pepe', client_email: '', client_phone: '+34 600 123 456', product: 'Ebook', created_at: '2026-02-01T09:00:00.000Z', date: '2026-02-01' },
+      { id: 'hoy-tel', client_id: 'c1', client_name: 'Pepe', client_email: 'pepe@x.com', client_phone: '600123456', product: 'Curso', created_at: '2026-10-28T09:10:00.000Z', date: '2026-10-28' },
+      { id: 'hoy-canc', client_id: 'c1', client_name: 'Rita', client_email: 'rita@x.com', client_phone: '', product: 'Curso', status: 'cancelada', created_at: '2026-10-28T09:20:00.000Z', date: '2026-10-28' },
+    ] })
+    const r = await bienvenida.corre(ctx)
+    expect(r.propuestas).toBe(0)
+    expect(proponer.todas).toHaveLength(0)
   })
 })

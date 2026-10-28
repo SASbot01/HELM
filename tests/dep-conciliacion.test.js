@@ -20,6 +20,7 @@ function fakeDb(tablas) {
         lte(c, v) { rows = rows.filter(r => String(r[c]) <= v); return q },
         order(c, o = {}) { rows = [...rows].sort((a, b) => (a[c] < b[c] ? -1 : a[c] > b[c] ? 1 : 0) * (o.ascending === false ? -1 : 1)); return q },
         limit(n) { rows = rows.slice(0, n); return q },
+        range(a, b) { rows = rows.slice(a, b + 1); return q },
         maybeSingle() { return Promise.resolve({ data: rows[0] ?? null, error: null }) },
         then(res, rej) { return Promise.resolve({ data: rows, error: null }).then(res, rej) },
       }
@@ -126,5 +127,21 @@ describe('conciliación · no duplica y mira solo lo reciente (día de Madrid)',
     await conciliacion.corre(ctx)
     // Todas las ventas y apuntes del fixture son anteriores al 23-oct → nada.
     expect(llamadas.length).toBe(0)
+  })
+})
+
+describe('conciliación · lo que encontró la revisión', () => {
+  it('la cuota de hoy de un plan vendido hace más de 120 días no es un «ingreso sin venta»', async () => {
+    tablas.sales.push({ id: 'vieja', client_id: 'c1', date: '2026-05-01', client_name: 'Kiko', client_email: 'kiko@example.com', product: 'Plan', revenue: 600, cash_collected: 500, status: 'won', installments_total: 6, contact_id: 'k1' })
+    tablas.ceo_finance_entries.push(
+      { id: 'cuota-k1', client_id: 'c1', date: '2026-10-01', category: 'Ingreso', description: 'Cuota 6/6', amount: 100, notes: '', person_name: '', contact_ids: ['k1'] },
+      { id: 'cuota-tg', client_id: 'c1', date: '2026-10-02', category: 'Ingreso', description: 'Cuota 3/6', amount: 100, notes: 'telegram:otra-venta:2026-10', person_name: '', contact_ids: ['k9'] },
+    )
+    const { ctx, llamadas } = hazCtx(tablas)
+    await conciliacion.corre(ctx)
+    const claves = llamadas.map(p => p.clave)
+    expect(claves).not.toContain('conciliacion:pago-sin-venta:cuota-k1')
+    expect(claves).not.toContain('conciliacion:pago-sin-venta:cuota-tg')
+    expect(claves).toContain('conciliacion:pago-sin-venta:a3')
   })
 })

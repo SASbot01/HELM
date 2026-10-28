@@ -19,7 +19,11 @@
 //                            pero cash_collected a 0: marcada como vendida y sin
 //                            cobro registrado.
 //   4. Pago sin venta       — un Ingreso de Finanzas atado a un contacto que no
-//                            tiene ninguna venta: dinero apuntado sin su venta.
+//                            tiene ninguna venta (de cuando sea: una cuota de
+//                            hoy puede ser de una venta de hace un año): dinero
+//                            apuntado sin su venta. Los Ingresos de cuota
+//                            (notes «telegram:<venta>:<mes>») ya van atados a
+//                            su venta y no se miran.
 //
 // Para no revisar años de historia, solo mira lo reciente (config.dias_atras,
 // 120 por defecto) y como mucho config.max casos por pasada.
@@ -38,6 +42,9 @@ const esFraccionado = (v) => (Number(v?.installments_total) || 0) > 0
 // Una clave de agrupación estable a partir de unos ids (para no proponer dos
 // veces el mismo caso aunque cambie el orden).
 const claveIds = (ids) => [...ids].sort().join('_')
+const esDeCuota = (e) => /^telegram:[^:]+:/.test(String(e?.notes || ''))
+
+import { todasLasFilas } from '../filas.js'
 
 export default {
   key: 'conciliacion',
@@ -50,19 +57,17 @@ export default {
     const tope = Number.isFinite(config.max) ? config.max : 30
     const margenDias = Number.isFinite(config.margen_dias) ? config.margen_dias : 1   // «el mismo día o casi»
 
-    const [{ data: ventasRaw, error: eV }, { data: apuntesRaw, error: eA }] = await Promise.all([
-      supabase.from('sales')
+    // PostgREST corta en 1000 filas: se lee por páginas.
+    const [ventasRaw, apuntes] = await Promise.all([
+      todasLasFilas(() => supabase.from('sales')
         .select('id, date, client_name, client_email, product, revenue, cash_collected, status, installments_total, contact_id')
-        .eq('client_id', clientId).gte('date', desde).limit(5000),
-      supabase.from('ceo_finance_entries')
+        .eq('client_id', clientId).gte('date', desde).order('id')),
+      todasLasFilas(() => supabase.from('ceo_finance_entries')
         .select('id, date, category, description, amount, notes, person_name, contact_ids')
-        .eq('client_id', clientId).gte('date', desde).limit(5000),
+        .eq('client_id', clientId).gte('date', desde).order('id')),
     ])
-    if (eV) throw eV
-    if (eA) throw eA
 
-    const ventas = (ventasRaw || []).filter(v => !cancelada(v))
-    const apuntes = apuntesRaw || []
+    const ventas = ventasRaw.filter(v => !cancelada(v))
 
     let propuestas = 0
     const cuenta = { ventas_dup: 0, apuntes_dup: 0, sin_cobro: 0, pago_sin_venta: 0 }
@@ -142,12 +147,22 @@ export default {
     }
 
     // ── 4) Pagos (Ingresos) atados a un contacto sin ninguna venta ─────────
-    const contactosConVenta = new Set(ventas.map(v => v.contact_id).filter(Boolean))
-    for (const e of apuntes) {
+    // Con un solo contacto (con varios o ninguno no está claro de quién es) y
+    // que no sean de cuota. Las ventas de esos contactos se buscan SIN ventana
+    // de fechas: la venta de un plan puede ser de hace meses.
+    const candidatos = apuntes.filter(e => norm(e.category) === 'ingreso' && Number(e.amount) > 0 && !esDeCuota(e))
+      .map(e => ({ e, ids: Array.isArray(e.contact_ids) ? e.contact_ids.filter(Boolean) : [] }))
+      .filter(x => x.ids.length === 1)
+    const contactosConVenta = new Set()
+    const porMirar = [...new Set(candidatos.map(x => x.ids[0]))]
+    for (let i = 0; i < porMirar.length; i += 200) {
+      const trozo = porMirar.slice(i, i + 200)
+      const conVenta = await todasLasFilas(() => supabase.from('sales').select('id, contact_id')
+        .eq('client_id', clientId).in('contact_id', trozo).order('id'))
+      for (const v of conVenta) if (v.contact_id) contactosConVenta.add(v.contact_id)
+    }
+    for (const { e, ids } of candidatos) {
       if (propuestas >= tope) break
-      if (norm(e.category) !== 'ingreso' || !(Number(e.amount) > 0)) continue
-      const ids = Array.isArray(e.contact_ids) ? e.contact_ids.filter(Boolean) : []
-      if (ids.length !== 1) continue          // con varios o ninguno no está claro de quién es
       const contacto = ids[0]
       if (contactosConVenta.has(contacto)) continue
       const r = await propon({

@@ -17,6 +17,7 @@
 // El texto se arma con `parteDelDia(datos)`, que es pura (no toca la base) y se
 // puede probar sola; `corre` solo agrega los datos y la llama.
 import { masMeses, aISO } from '../renovaciones.js'
+import { todasLasFilas } from '../filas.js'
 
 // El día en Madrid, y sumar días sobre un día (AAAA-MM-DD), como en equipo.js.
 const fmtDia = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -111,28 +112,37 @@ export default {
         return []
       }
     }
+    // Lo mismo, por páginas: lo que pasa de 1000 filas (PostgREST corta ahí).
+    const selTodas = async (fn) => {
+      try {
+        return await todasLasFilas(fn)
+      } catch (e) {
+        log?.('lectura del parte falló:', e?.message || e)
+        return []
+      }
+    }
 
     const [
       ventasFrac, llamadas, leadsAyer, tareas, leadsParados, piezasParadas,
       propCaducadas, ventasAyer, piezasAyer, propAplicadas, propPendientes,
     ] = await Promise.all([
-      sel(() => supabase.from('sales')
-        .select('date, plan_start, revenue, cash_collected, status, installments_total, installments_paid, installment_amount')
-        .eq('client_id', clientId).not('installments_total', 'is', null).limit(2000)),
+      selTodas(() => supabase.from('sales')
+        .select('id, date, plan_start, revenue, cash_collected, status, installments_total, installments_paid, installment_amount')
+        .eq('client_id', clientId).not('installments_total', 'is', null).order('id')),
       sel(() => supabase.from('helm_calls').select('id, starts_at, status')
         .eq('client_id', clientId).gte('starts_at', `${hoy}T00:00:00`).lt('starts_at', `${manana}T00:00:00`).limit(200)),
       sel(() => supabase.from('crm_contacts').select('id')
         .eq('client_id', clientId).gte('created_at', ayer).lt('created_at', hoy).limit(500)),
       sel(() => supabase.from('crm_tasks').select('id, due_date')
         .eq('client_id', clientId).eq('completed', false).not('due_date', 'is', null).lte('due_date', `${dentro3}T23:59:59Z`).limit(500)),
-      sel(() => supabase.from('crm_contacts').select('id, status, last_activity_at')
-        .eq('client_id', clientId).not('last_activity_at', 'is', null).lt('last_activity_at', hace7).limit(1000)),
+      selTodas(() => supabase.from('crm_contacts').select('id, status, last_activity_at')
+        .eq('client_id', clientId).not('last_activity_at', 'is', null).lt('last_activity_at', hace7).order('id')),
       sel(() => supabase.from('helm_content_calendar').select('id')
         .eq('client_id', clientId).eq('status', 'planned').lt('date', hoy).limit(500)),
       sel(() => supabase.from('helm_propuestas').select('id')
         .eq('client_id', clientId).eq('estado', 'caducada').gte('caduca', hace3).limit(500)),
-      sel(() => supabase.from('sales').select('date, cash_collected, status')
-        .eq('client_id', clientId).eq('date', ayer).limit(2000)),
+      selTodas(() => supabase.from('sales').select('id, date, cash_collected, status')
+        .eq('client_id', clientId).eq('date', ayer).order('id')),
       sel(() => supabase.from('helm_content_calendar').select('id')
         .eq('client_id', clientId).eq('status', 'published').eq('date', ayer).limit(500)),
       sel(() => supabase.from('helm_propuestas').select('id')

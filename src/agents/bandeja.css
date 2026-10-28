@@ -57,3 +57,4 @@
 .mb-registro { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .mb-registro li { display: flex; gap: 10px; align-items: baseline; font-size: .86rem; min-width: 0; }
 @media (max-width: 520px) { .mb-registro li { flex-direction: column; gap: 3px; } }
+.mb-botones { display: flex; gap: 8px; flex-wrap: wrap; }

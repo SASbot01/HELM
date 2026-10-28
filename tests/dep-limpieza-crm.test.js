@@ -21,6 +21,8 @@ function fakeSupabase({ contactos = [], tareas = [] } = {}) {
       const q = {
         select() { return q },
         limit() { return q },
+        order() { return q },
+        range(a, b) { filtros.push(((i) => () => i.n++ >= a && i.n - 1 <= b)({ n: 0 })); return q },
         eq(c, v) { filtros.push((r) => r[c] === v); return q },
         insert(fila) { escrito.push({ tabla, fila }); if (store[tabla]) store[tabla].push(fila); return Promise.resolve({ data: null, error: null }) },
         then(res, rej) {

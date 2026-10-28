@@ -700,8 +700,22 @@ const { limpiaEdiciones } = await import('../api/_lib/editor/archivos.js')
 const editaReel = (job) => editorRender(job, { db, log, py: PY, script: TRANSCRIBE, modelo: MODELO_WHISPER })
 const CADA_CUANTO_LIMPIAR_EDITOR_MS = 3600_000
 let ultimaLimpiezaEditor = 0
+// El vigilante va con su propio reloj, no entre trabajo y trabajo: una
+// transcripción larga o una pasada de departamentos lo retrasarían más de una
+// hora, y es el freno del gasto. Con cerrojo: nunca dos pasadas a la vez.
 const CADA_CUANTO_VIGILAR_ADS_MS = 30 * 60_000
-let ultimoVigilanteAds = 0
+let vigilandoAds = false
+async function vigilaAds() {
+  if (vigilandoAds || parando) return
+  vigilandoAds = true
+  try {
+    const r = await vigilanteAds().catch(e => { log('no pude vigilar el gasto de Meta Ads:', e.message); return [] })
+    const frenadas = (r || []).filter(x => x?.accion && x.accion !== 'ok' && x.accion !== 'nada')
+    if (frenadas.length) log(`vigilante de Meta Ads: ${frenadas.map(x => `${x.cuenta} ${x.accion}`).join(', ')}`)
+  } finally {
+    vigilandoAds = false
+  }
+}
 
 const CADA_CUANTO_AGENDA_MS = 60_000
 let ultimaAgenda = 0
@@ -726,6 +740,8 @@ async function bucle() {
     .update({ estado: 'pendiente', correr_tras: ahora() }).eq('estado', 'corriendo').select('id')
   if (huerfanos?.length) log(`${huerfanos.length} trabajo(s) a medias devueltos a la cola`)
   await cierraHuerfanas().catch(e => log('no pude cerrar las ejecuciones a medias:', e.message))
+  vigilaAds()
+  const relojAds = setInterval(vigilaAds, CADA_CUANTO_VIGILAR_ADS_MS)
   while (!parando) {
     let job = null
     try {
@@ -742,12 +758,6 @@ async function bucle() {
         await miraFabricacion().catch(e => log('no pude mirar las webs en fabricación:', e.message))
         await miraEstudiosContenido().catch(e => log('no pude mirar los estudios de contenido del lunes:', e.message))
         await miraDepartamentos().catch(e => log('no pude mirar los agentes de departamento:', e.message))
-      }
-      if (Date.now() - ultimoVigilanteAds > CADA_CUANTO_VIGILAR_ADS_MS) {
-        ultimoVigilanteAds = Date.now()
-        const r = await vigilanteAds().catch(e => { log('no pude vigilar el gasto de Meta Ads:', e.message); return [] })
-        const frenadas = (r || []).filter(x => x?.accion && x.accion !== 'ok' && x.accion !== 'nada')
-        if (frenadas.length) log(`vigilante de Meta Ads: ${frenadas.map(x => `${x.cuenta} ${x.accion}`).join(', ')}`)
       }
       if (Date.now() - ultimaLimpiezaEditor > CADA_CUANTO_LIMPIAR_EDITOR_MS) {
         ultimaLimpiezaEditor = Date.now()
@@ -773,6 +783,7 @@ async function bucle() {
       else { log('error en el bucle:', err.message); await duerme(ESPERA_VACIO_MS) }
     }
   }
+  clearInterval(relojAds)
   log('parado.')
   process.exit(0)
 }

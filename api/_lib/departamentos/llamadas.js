@@ -143,19 +143,26 @@ export default {
       await ctx.avisar([cabecera, ...fichas].join('\n\n'))
     }
 
-    // 2) Apuntar el resultado de las llamadas ya pasadas sin resultado.
+    // 2) Apuntar el resultado de las llamadas ya pasadas sin resultado. Quien
+    // aprueba no puede escribir el resultado, así que se propone una TAREA
+    // («apúntalo en su ficha»), no una nota con el hueco vacío. Se sigue hasta
+    // crear `maximo`: las ya propuestas (la misma clave) no cuentan.
     let n = 0
-    for (const l of pasadasSinResultado.slice(0, maximo)) {
+    for (const l of pasadasSinResultado) {
+      if (n >= maximo) break
       const c = l.contact_id ? (porId.get(l.contact_id) || null) : null
       const quien = c?.name || l.title || 'el lead'
-      // Sin ficha en el CRM no hay dónde apuntar la nota: se deja fuera.
+      // Sin ficha en el CRM no hay dónde apuntarlo: se deja fuera.
       if (!c) continue
       const r = await ctx.proponer({
         clave: `llamadas:resultado:${l.id}`,
         titulo: `Apunta el resultado de la llamada con ${quien}`,
-        porque: `La llamada del ${diaMadrid(l.starts_at)} ya pasó y no tiene resultado apuntado. Déjalo en su ficha para no perder el hilo (¿avanzó, se cayó, hay que reagendar?).`,
-        herramienta: 'crm_nota',
-        input: { contacto: c.id, titulo: 'Resultado de la llamada', texto: `Llamada del ${diaMadrid(l.starts_at)} (${l.title || 'sin título'}) — resultado: ` },
+        porque: `La llamada del ${diaMadrid(l.starts_at)} ya pasó y no tiene resultado apuntado. Al aprobar queda la tarea de dejarlo en su ficha (¿avanzó, se cayó, hay que reagendar?).`,
+        herramienta: 'crm_tarea',
+        input: {
+          titulo: `Apuntar el resultado de la llamada con ${quien}`.slice(0, 300), contacto: c.id, prioridad: 'media',
+          descripcion: `Llamada del ${diaMadrid(l.starts_at)} (${l.title || 'sin título'}). Apunta en su ficha cómo fue: si avanzó, si se cayó o si hay que reagendar.`,
+        },
         datos: { contactId: c.id, callId: l.id, motivo: 'resultado' },
       })
       if (r && r.creada !== false) n++

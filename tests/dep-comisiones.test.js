@@ -15,6 +15,9 @@ function fakeDb(tablas) {
         eq(c, v) { rows = rows.filter(r => r[c] === v); return q },
         gte(c, v) { rows = rows.filter(r => String(r[c]) >= v); return q },
         lte(c, v) { rows = rows.filter(r => String(r[c]) <= v); return q },
+        in(c, vs) { rows = rows.filter(r => vs.includes(r[c])); return q },
+        ilike(c, v) { const re = new RegExp(`^${String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*')}$`, 'i'); rows = rows.filter(r => re.test(String(r[c] ?? ''))); return q },
+        range(a, b) { rows = rows.slice(a, b + 1); return q },
         order(c, o = {}) { rows = [...rows].sort((a, b) => (a[c] < b[c] ? -1 : a[c] > b[c] ? 1 : 0) * (o.ascending === false ? -1 : 1)); return q },
         limit(n) { rows = rows.slice(0, n); return q },
         then(res, rej) { return Promise.resolve({ data: rows, error: null }).then(res, rej) },
@@ -131,5 +134,24 @@ describe('comisiones · mes de Madrid y sin duplicar', () => {
     // En Madrid es el 1-oct → el mes anterior es septiembre (no agosto).
     expect(llamadas.length).toBeGreaterThan(0)
     expect(llamadas.every(p => p.datos.mes === '2026-09')).toBe(true)
+  })
+})
+
+describe('comisiones · las cuotas de planes de antes', () => {
+  it('una cuota cobrada en el mes de un plan vendido antes lleva su comisión; la que se cobró después, no cuenta en su venta', async () => {
+    tablas.sales.push(venta({ id: 'plan', date: '2026-06-10', closer: 'Juan', revenue: 1200, cash_collected: 600 }))
+    // s1 (sept): 1.000 cobrados, pero 200 de ellos son una cuota cobrada en octubre.
+    tablas.ceo_finance_entries = [
+      { id: 'e1', client_id: 'c1', date: '2026-09-28', category: 'Ingreso', amount: 200, notes: 'telegram:plan:2026-09' },
+      { id: 'e2', client_id: 'c1', date: '2026-10-02', category: 'Ingreso', amount: 200, notes: 'telegram:s1:2026-10' },
+      { id: 'e3', client_id: 'c1', date: '2026-09-12', category: 'Ingreso', amount: 999, notes: 'manual' },
+    ]
+    const { ctx, llamadas } = hazCtx(tablas)
+    await comisiones.corre(ctx)
+    const juan = llamadas.find(p => p.clave === 'comisiones:2026-09:juan')
+    // 1.000 − 200 (cuota de octubre) + 500 (s2) + 200 (cuota de septiembre del plan de junio) = 1.500 → 10 % = 150.
+    expect(juan.datos.base).toBe(1500)
+    expect(juan.input.importe).toBe(150)
+    expect(juan.porque).toMatch(/1 cuota\(s\) de planes de antes/)
   })
 })

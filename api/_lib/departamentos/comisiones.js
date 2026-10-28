@@ -15,10 +15,16 @@
 //   2. ctx.config.porcentajes[rol] (p. ej. { closer: 10, setter: 5 }).
 //   3. Si no hay ninguno, esa persona no entra y se dice en el resumen.
 //
-// La base («lo cobrado en el mes») es el cash_collected de las ventas de ese mes
-// que esa persona cerró (closer) o abrió (setter), sin las canceladas. Es lo que
-// permite el esquema (sales.closer / sales.setter son el NOMBRE); va dicho en el
-// porqué de cada propuesta.
+// La base («lo cobrado en el mes») de cada persona, de las ventas que cerró
+// (closer) o abrió (setter), sin las canceladas (sales.closer / sales.setter
+// son el NOMBRE):
+//   · de las ventas FECHADAS en el mes, su cash_collected, menos las cuotas
+//     que se cobraron después (que se liquidan en su mes);
+//   · y las CUOTAS de planes vendidos antes que se cobraron en el mes (los
+//     Ingresos con notes «telegram:<venta>:<mes>» que deja registrar_cuota).
+// Así una cuota del tercer mes de un plan también lleva su comisión.
+
+import { todasLasFilas } from '../filas.js'
 
 // ── Cálculo puro (el mes es el de Madrid, como api/_lib/bot/comun.js) ────────
 const fmtMadrid = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -27,6 +33,9 @@ const redondea = (n) => Math.round((Number(n) || 0) * 100) / 100
 const euros = (n) => `${new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(redondea(n))} €`
 const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
 const cancelada = (v) => String(v?.status || '').toLowerCase().trim() === 'cancelada'
+// El id de la venta de un Ingreso de cuota (notes «telegram:<venta>:<mes>»).
+const ventaDeCuota = (notes) => /^telegram:([^:]+):\d{4}-\d{2}$/.exec(String(notes || ''))?.[1] || null
+
 
 // El mes anterior (y sus bordes) a partir del 'AAAA-MM-DD' de hoy en Madrid.
 function mesAnterior(hoyISO) {
@@ -56,19 +65,47 @@ export default {
     const { mes, inicio, fin } = MES_RE.test(String(config.mes || '')) ? bordesDeMes(config.mes) : mesAnterior(hoy)
     const porConfig = config.porcentajes && typeof config.porcentajes === 'object' ? config.porcentajes : {}
 
-    const [{ data: equipoRaw, error: eT }, { data: ventasRaw, error: eV }] = await Promise.all([
+    const columnas = 'id, date, client_name, revenue, cash_collected, status, closer, setter'
+    const [{ data: equipoRaw, error: eT }, ventasRaw, cuotasRaw] = await Promise.all([
       supabase.from('helm_team').select('id, name, role, commission_pct, active').eq('client_id', clientId).limit(500),
-      supabase.from('sales')
-        .select('id, date, client_name, revenue, cash_collected, status, closer, setter')
-        .eq('client_id', clientId).gte('date', inicio).lte('date', fin).limit(5000),
+      todasLasFilas(() => supabase.from('sales').select(columnas)
+        .eq('client_id', clientId).gte('date', inicio).lte('date', fin).order('id')),
+      // Las cuotas cobradas desde el mes (las de después se restan de su venta).
+      todasLasFilas(() => supabase.from('ceo_finance_entries').select('id, date, amount, notes')
+        .eq('client_id', clientId).eq('category', 'Ingreso').ilike('notes', 'telegram:%').gte('date', inicio).order('id')),
     ])
     if (eT) throw eT
-    if (eV) throw eV
 
     const equipo = (equipoRaw || []).filter(p => p.active !== false && ROLES_COMISION.includes(String(p.role || '').toLowerCase()))
-    const ventas = (ventasRaw || []).filter(v => !cancelada(v))
-
     if (!equipo.length) return { propuestas: 0, resumen: `Comisiones ${mes}: sin setters ni closers en el equipo.` }
+
+    const delMes = new Map(ventasRaw.map(v => [v.id, v]))
+    const cuotas = cuotasRaw.map(e => ({ ...e, venta: ventaDeCuota(e.notes) })).filter(e => e.venta)
+    // Cuotas cobradas después del mes de ventas del mes: no son de este mes.
+    const despues = new Map()
+    for (const e of cuotas) {
+      if (String(e.date) > fin && delMes.has(e.venta)) despues.set(e.venta, redondea((despues.get(e.venta) || 0) + (Number(e.amount) || 0)))
+    }
+    // Cuotas cobradas en el mes de ventas de antes: se buscan sus ventas.
+    const enMes = cuotas.filter(e => String(e.date) <= fin && !delMes.has(e.venta))
+    const deAntes = new Map()
+    const ids = [...new Set(enMes.map(e => e.venta))]
+    for (let i = 0; i < ids.length; i += 200) {
+      const trozo = ids.slice(i, i + 200)
+      for (const v of await todasLasFilas(() => supabase.from('sales').select(columnas).eq('client_id', clientId).in('id', trozo).order('id'))) deAntes.set(v.id, v)
+    }
+    // Cada cobro del mes: { venta, importe }.
+    const cobros = []
+    for (const v of delMes.values()) {
+      if (cancelada(v)) continue
+      const importe = redondea((Number(v.cash_collected) || 0) - (despues.get(v.id) || 0))
+      if (importe > 0) cobros.push({ venta: v, importe, cuota: false })
+    }
+    for (const e of enMes) {
+      const v = deAntes.get(e.venta)
+      if (!v || cancelada(v) || !(Number(e.amount) > 0)) continue
+      cobros.push({ venta: v, importe: redondea(e.amount), cuota: true })
+    }
 
     let propuestas = 0
     let total = 0
@@ -79,8 +116,10 @@ export default {
       if (!(pct > 0)) { sinPct.push(p.name); continue }
 
       // Lo cobrado en el mes de las ventas que esta persona cerró/abrió.
-      const suyas = ventas.filter(v => norm(rol === 'closer' ? v.closer : v.setter) === norm(p.name))
-      const base = redondea(suyas.reduce((t, v) => t + (Number(v.cash_collected) || 0), 0))
+      const suyos = cobros.filter(c => norm(rol === 'closer' ? c.venta.closer : c.venta.setter) === norm(p.name))
+      const base = redondea(suyos.reduce((t, c) => t + c.importe, 0))
+      const nVentas = suyos.filter(c => !c.cuota).length
+      const nCuotas = suyos.filter(c => c.cuota).length
       const comision = redondea(base * pct / 100)
       if (comision <= 0) continue
 
@@ -88,7 +127,7 @@ export default {
       const r = await ctx.proponer({
         clave: `comisiones:${mes}:${p.id}`,
         titulo: `Comisión de ${p.name} (${rol}) · ${mes}: ${euros(comision)}`,
-        porque: `${pct} % sobre ${euros(base)} cobrados en ${suyas.length} venta(s) de ${mes} (lo cobrado, no lo facturado). ` +
+        porque: `${pct} % sobre ${euros(base)} cobrados en ${mes}: ${nVentas} venta(s) del mes${nCuotas ? ` y ${nCuotas} cuota(s) de planes de antes` : ''} (lo cobrado, no lo facturado). ` +
           `Al aprobar se apunta como Comisión en Finanzas, para ${p.name}.`,
         herramienta: 'finanzas_apunte',
         input: { tipo: 'comision', importe: comision, persona: p.name, concepto: `Comisión ${mes} · ${rol}`, fecha: fin },
