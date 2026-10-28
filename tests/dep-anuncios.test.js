@@ -145,6 +145,23 @@ describe('anuncios · corre', () => {
     expect(p.porque).toMatch(/presupuesto, apunta el real/)
   })
 
+  it('si Metricool tiene el gasto de ese utm, manda sobre el apuntado', async () => {
+    tablas.user_integrations = [{ client_id: 'c1', service: 'metricool', enabled: true, member_id: null, config: { blog_id: '555', user_id: '42', user_token: 'token-de-prueba' } }]
+    tablas.helm_metricool_ads = [{ client_id: 'c1', dia: '2026-10-21', red: 'meta', ad_id: 'ad-a-1234', campaign_id: 'c9', adset_id: '', gasto: 80 }]
+    hazCtx()
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 404, text: async () => '' })))
+    try {
+      await agente.corre(ctx)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+    const p = porTitulo(/Reel testimonio/)
+    expect(p.porque).toMatch(/Gasto 80 € \(Metricool\)/)
+    expect(p.porque).toMatch(/20,00 €\/lead/)
+    expect(p.porque).toMatch(/40,00 €\/venta cobrada/)
+    expect(p.porque).toMatch(/ROAS 5,0×/)
+  })
+
   it('sin anuncios en test ni evaluados, no hace nada', async () => {
     tablas.helm_ads = [ad('adX', 'Borrador', 'ad-x', 'borrador', { publicado_en: null })]
     hazCtx()

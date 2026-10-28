@@ -27,6 +27,7 @@ import { sincronizar as sincronizarIg } from '../instagram.js'
 import { informeIg } from '../_lib/instagram.js'
 import { validaArgs, explicaErrores, pagina, recorta, resumeArgs } from '../_lib/esquema.js'
 import { todasLasFilas } from '../_lib/filas.js'
+import { configDe as configMetricool, sincronizaPerfil, filasGuardadas, resumenDe, sinDoble, sumaDia } from '../_lib/metricool.js'
 
 const VERSIONES = ['2025-06-18', '2025-03-26', '2024-11-05']
 
@@ -224,6 +225,23 @@ const TOOLS = [
         dias: { type: 'integer', minimum: 1, description: 'Solo las publicadas en los últimos N días, p. ej. 15.' },
         detalle: { type: 'string', enum: ['resumen', 'completo'], description: '"resumen" (por defecto): el texto de cada publicación recortado a 200 caracteres. "completo": entero.' },
         actualizar: { type: 'boolean', description: 'true para sincronizar con Instagram antes de leer.' },
+      },
+      required: ['perfil'],
+    },
+  },
+  {
+    name: 'anuncios',
+    description: `Métricas de anuncios de un perfil (Meta, TikTok y Google) traídas de Metricool, por día y por anuncio o campaña: gasto, impresiones, clics, CTR, CPM, CPC, leads y conversiones de la plataforma, cruzadas con los leads y lo cobrado del CRM de HELM. Es solo lectura: no pausa campañas ni cambia presupuestos (eso sigue siendo Meta, cuando el dueño aprueba). Los datos son los de la última sincronización; con actualizar=true se vuelven a pedir a Metricool. "resumen" es la ventana entera; "anuncios" es la página. ${PAGINACION}`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        perfil: PERFIL,
+        desde: fecha('Por defecto, 14 días antes de hasta.'),
+        hasta: fecha('Por defecto, ayer.'),
+        red: { type: 'string', enum: ['meta', 'tiktok', 'google'], description: 'Opcional: solo esa red.' },
+        limite: { type: 'integer', minimum: 1, maximum: 200, description: 'Filas por página. Por defecto 60, máximo 200.' },
+        cursor: CURSOR,
+        actualizar: { type: 'boolean', description: 'true para sincronizar con Metricool antes de leer.' },
       },
       required: ['perfil'],
     },
@@ -876,6 +894,76 @@ const HERRAMIENTAS = {
     }
   },
 
+  async anuncios({ perfil, desde, hasta, red, limite = 60, cursor = 0, actualizar, [FIJO]: fijo }) {
+    const c = await perfilDe(perfil, fijo)
+    const cfg = await configMetricool(supabase, c.id, { slug: c.slug })
+    if (!cfg) {
+      throw new Error(`${c.name} no tiene Metricool. Hace falta METRICOOL_USER_TOKEN y METRICOOL_USER_ID (o el token de la agencia en agencias.metricool) y el blog_id de la marca en user_integrations (service=metricool) o en METRICOOL_BRANDS. Es solo lectura: no pausa ni cambia presupuestos.`)
+    }
+    const hoy = new Date().toISOString().slice(0, 10)
+    const hastaR = hasta || sumaDia(hoy, -1)
+    const desdeR = desde || sumaDia(hastaR, -13)
+    if (desdeR > hastaR) throw new Error('desde es posterior a hasta.')
+    let aviso = null
+    if (actualizar) {
+      try {
+        const r = await sincronizaPerfil({ db: supabase, clientId: c.id, desde: desdeR, hasta: hastaR, cfg })
+        if (r.avisos?.length) aviso = r.avisos.join(' ')
+      } catch (e) {
+        aviso = `No se ha podido sincronizar con Metricool (${String(e?.message || e).slice(0, 180)}). Van los datos de la última vez.`
+      }
+    }
+    let filas
+    try {
+      filas = await filasGuardadas(supabase, c.id, { desde: desdeR, hasta: hastaR, red })
+    } catch (e) {
+      if (['42P01', 'PGRST205'].includes(e?.code) || /does not exist|schema cache/i.test(String(e?.message || ''))) {
+        throw new Error('Falta aplicar la migración 119 (helm_metricool_ads).')
+      }
+      throw e
+    }
+    filas = sinDoble(filas).sort((a, b) => String(b.dia).localeCompare(String(a.dia)) || ((Number(b.gasto) || 0) - (Number(a.gasto) || 0)))
+    const pag = pagina(filas, { cursor, limite })
+    const vista = (f) => ({
+      dia: String(f.dia).slice(0, 10),
+      red: f.red,
+      nivel: f.nivel,
+      campana_id: f.campaign_id || undefined,
+      campana: f.campaign_nombre || undefined,
+      conjunto_id: f.adset_id || undefined,
+      conjunto: f.adset_nombre || undefined,
+      anuncio_id: f.ad_id || undefined,
+      anuncio: f.ad_nombre || undefined,
+      gasto: Number(f.gasto) || 0,
+      impresiones: Number(f.impresiones) || 0,
+      clics: Number(f.clics) || 0,
+      ctr: f.ctr == null ? undefined : Number(f.ctr),
+      cpm: f.cpm == null ? undefined : Number(f.cpm),
+      cpc: f.cpc == null ? undefined : Number(f.cpc),
+      leads: Number(f.leads) || 0,
+      conversiones: Number(f.conversiones) || 0,
+      leads_crm: Number(f.leads_crm) || 0,
+      ventas_crm: Number(f.ventas_crm) || 0,
+      cobrado_crm: Number(f.cobrado_crm) || 0,
+      moneda: f.moneda || undefined,
+    })
+    if (!filas.length && !aviso) aviso = 'Todavía no hay métricas guardadas. Vuelve a llamar con actualizar=true.'
+    const actualizado = filas.reduce((m, f) => (String(f.actualizado_en || '') > m ? String(f.actualizado_en) : m), '')
+    return {
+      perfil: c.slug,
+      blog_id: cfg.blogId,
+      solo_lectura: true,
+      desde: desdeR,
+      hasta: hastaR,
+      ...(actualizado ? { actualizado_en: actualizado } : {}),
+      ...(aviso ? { aviso } : {}),
+      resumen: resumenDe(filas),
+      anuncios: pag.items.map(vista),
+      hay_mas: pag.hay_mas,
+      ...(pag.hay_mas ? { siguiente: pag.siguiente } : {}),
+    }
+  },
+
   async guardar_memoria({ contenido, identidad, prueba, [FIJO]: fijo }) {
     const texto = String(contenido || '').trim()
     if (!texto) throw new Error('La nota está vacía')
@@ -978,7 +1066,7 @@ async function llamaComoAgencia(nombre, args, a) {
 // Leer y usar SU parte: sus creadores, su calendario, sus vídeos. Lo que toca
 // el corpus de todos (añadir reels, reetiquetar, asignar creadores) es del
 // operador y ni siquiera aparece.
-export const DEL_CLIENTE = ['identidades', 'perfiles', 'corpus', 'calendario', 'programar_guiones', 'ordenar_video', 'metricas', 'guardar_memoria']
+export const DEL_CLIENTE = ['identidades', 'perfiles', 'corpus', 'calendario', 'programar_guiones', 'ordenar_video', 'metricas', 'anuncios', 'guardar_memoria']
 
 async function asignadosDe(clientId) {
   const { data, error } = await supabase.from('agent_identity_clients')
@@ -1027,7 +1115,7 @@ const ok = (id, result) => ({ jsonrpc: '2.0', id, result })
 const fallo = (id, code, message) => ({ jsonrpc: '2.0', id, error: { code, message } })
 
 // Lo mismo para cualquier enlace: cómo leer lo largo y cómo escribir sin miedo.
-const COMO_SE_USA = ' Las lecturas largas (corpus, calendario) van por páginas: si la respuesta trae "hay_mas", sigue con cursor = "siguiente"; con detalle="resumen" ocupan mucho menos. Toda escritura acepta prueba=true para ensayar sin escribir, se puede repetir sin duplicar y devuelve en "comprobar" qué llamada enseña lo escrito. Si los argumentos no valen, el error dice qué campo y qué valores valen: corrígelo y repite.'
+const COMO_SE_USA = ' Las lecturas largas (corpus, calendario, anuncios) van por páginas: si la respuesta trae "hay_mas", sigue con cursor = "siguiente"; con detalle="resumen" ocupan mucho menos. "anuncios" son las métricas de Meta, TikTok y Google vía Metricool, solo lectura. Toda escritura acepta prueba=true para ensayar sin escribir, se puede repetir sin duplicar y devuelve en "comprobar" qué llamada enseña lo escrito. Si los argumentos no valen, el error dice qué campo y qué valores valen: corrígelo y repite.'
 
 // ── El registro: lo que hace Claude, a la vista de una persona ─────────────
 // Cada escritura (y cada error) queda como una ejecución del agente
