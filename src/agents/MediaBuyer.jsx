@@ -161,9 +161,16 @@ export default function MediaBuyer({ clientId, onVolver }) {
                 ? <p className="mb-falta"><ShieldAlert size={14} /> Sin topes no propone ninguna subida. Ponlos aquí.</p>
                 : <p className="mb-resumen">Tope diario {eur(c.tope_diario)} · duro del día {eur(c.tope_duro_efectivo)} · mensual {eur(c.tope_mensual)}. Subidas de +{c.subida_max_pct ?? 20} % como mucho, cada {c.horas_entre_subidas ?? 72} h.</p>}
               <Topes c={c} puedeCambiar={puede} onGuardar={(t) => hacer(() => metaAdsApi.topes(clientId, t), 'Topes guardados.')} />
-              {puede && (c.parada
-                ? <button type="button" className="ag-btn sm" disabled={ocupado} onClick={() => hacer(() => metaAdsApi.reanudar(clientId, c.cuenta_id), 'Reanudado.')}><PlayCircle size={13} /> Reanudar lo que se paró ({c.parada.campanas} campañas)</button>
-                : <button type="button" className="ag-btn peligro sm" disabled={ocupado} onClick={() => window.confirm(`¿Parar YA todos los anuncios activos de ${c.nombre || c.cuenta_id}? Se guarda la lista para reanudar exactamente eso.`) && hacer(() => metaAdsApi.parar(clientId, c.cuenta_id), 'Anuncios parados.')}><ShieldAlert size={13} /> Parar los anuncios</button>)}
+              {/* «Parar» está SIEMPRE: aunque haya una parada pendiente (p. ej. la
+                  del vigilante por el tope del mes, que no deja reanudar hasta el
+                  mes siguiente), alguien puede reactivar en Ads Manager y el freno
+                  de HELM tiene que seguir a mano. */}
+              {puede && (
+                <div className="mb-botones">
+                  <button type="button" className="ag-btn peligro sm" disabled={ocupado} onClick={() => window.confirm(`¿Parar YA todos los anuncios activos de ${c.nombre || c.cuenta_id}? Se guarda la lista para reanudar exactamente eso.`) && hacer(() => metaAdsApi.parar(clientId, c.cuenta_id), 'Anuncios parados.')}><ShieldAlert size={13} /> Parar los anuncios</button>
+                  {c.parada && <button type="button" className="ag-btn sm" disabled={ocupado} onClick={() => hacer(() => metaAdsApi.reanudar(clientId, c.cuenta_id), 'Reanudado.')}><PlayCircle size={13} /> Reanudar lo que se paró ({c.parada.campanas} campañas)</button>}
+                </div>
+              )}
             </div>
           ))}
         </section>

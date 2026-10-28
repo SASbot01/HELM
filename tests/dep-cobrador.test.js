@@ -8,7 +8,8 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import cobrador from '../api/_lib/departamentos/cobrador.js'
 
 // ── Supabase en memoria: lo justo de PostgREST que usa el agente ────────────
-function fakeDb(tablas) {
+// Con `maxRows` corta como PostgREST (max_rows = 1000 en supabase/config.toml).
+function fakeDb(tablas, { maxRows = Infinity } = {}) {
   return {
     from(tabla) {
       let rows = (tablas[tabla] || []).slice()
@@ -25,9 +26,10 @@ function fakeDb(tablas) {
         lt(c, v) { rows = rows.filter(r => r[c] < v); return q },
         order(c, o = {}) { rows = [...rows].sort((a, b) => (a[c] < b[c] ? -1 : a[c] > b[c] ? 1 : 0) * (o.ascending === false ? -1 : 1)); return q },
         limit(n) { rows = rows.slice(0, n); return q },
+        range(a, b) { rows = rows.slice(a, b + 1); return q },
         maybeSingle() { return Promise.resolve({ data: rows[0] ?? null, error: null }) },
         single() { return Promise.resolve({ data: rows[0] ?? null, error: null }) },
-        then(res, rej) { return Promise.resolve({ data: rows, error: null }).then(res, rej) },
+        then(res, rej) { return Promise.resolve({ data: rows.slice(0, maxRows), error: null }).then(res, rej) },
       }
       return q
     },
@@ -36,11 +38,11 @@ function fakeDb(tablas) {
 
 // Un ctx como el de api/_lib/departamentos/index.js, con proponer que deduplica
 // por clave (como la bandeja de verdad: la misma clave no se crea dos veces).
-function hazCtx(tablas, { hoy = new Date('2026-10-28T06:00:00Z'), config = {} } = {}) {
+function hazCtx(tablas, { hoy = new Date('2026-10-28T06:00:00Z'), config = {}, maxRows } = {}) {
   const vistas = new Set()
   const llamadas = []
   const ctx = {
-    supabase: fakeDb(tablas), clientId: 'c1', perfil: { id: 'c1', slug: 'ag', name: 'Perfil' },
+    supabase: fakeDb(tablas, { maxRows }), clientId: 'c1', perfil: { id: 'c1', slug: 'ag', name: 'Perfil' },
     agenciaId: 'ag1', hoy, config, autonomia: 'proponer',
     proponer: async (p) => { llamadas.push(p); if (vistas.has(p.clave)) return null; vistas.add(p.clave); return { id: `p${vistas.size}`, ...p } },
     avisar: async () => {}, log: () => {},
@@ -108,7 +110,7 @@ describe('cobrador · qué detecta', () => {
     const ana = llamadas.find(p => p.clave === 'cobrador:ana:3')
     expect(ana.titulo).toBe('Cuota 3/6 de Ana López — 331,17 € — vence hoy')
     expect(ana.herramienta).toBe('registrar_cuota')
-    expect(ana.input).toEqual({ venta: 'ana', cuota: 3 })
+    expect(ana.input).toEqual({ venta: 'ana', cuota: 3, fecha: '2026-10-28' })
     expect(ana.telefono).toBe('600111222')
     expect(ana.mensaje).toContain('331,17 €')
     expect(ana.mensaje).toContain('https://pay.me/ana')   // el enlace de pago guardado en Enlaces
@@ -162,5 +164,30 @@ describe('cobrador · el día es el de Madrid', () => {
     const noa = llamadas.find(p => p.clave === 'cobrador:noche:1')
     expect(noa).toBeTruthy()
     expect(noa.titulo).toContain('vence hoy')
+  })
+})
+
+describe('cobrador · lo que encontró la revisión', () => {
+  it('con más de 1000 ventas (una por factura de cada suscripción) sigue viendo la cuota de hoy', async () => {
+    const facturas = Array.from({ length: 1100 }, (_, i) => unico({ id: `f${String(i).padStart(4, '0')}`, client_name: `Sub ${i}`, revenue: 30, service_end: '2025-01-01' }))
+    tablas.sales = [...facturas, plan({ id: 'zz-plan', client_name: 'Zoe', total: 3, paid: 1, cuota: 100, revenue: 300, cash_collected: 100, plan_start: '2026-09-28' })]
+    const { ctx, llamadas } = hazCtx(tablas, { maxRows: 1000 })
+    await cobrador.corre(ctx)
+    expect(llamadas.map(p => p.clave)).toContain('cobrador:zz-plan:2')
+  })
+
+  it('el enlace solo sale de config.enlace_pago o de la categoría Ventas, nunca de un panel ni de otra categoría', async () => {
+    tablas.helm_links = [
+      { client_id: 'c1', title: 'Pagos Stripe', url: 'https://dashboard.stripe.com/payments', category: 'Ventas' },
+      { client_id: 'c1', title: 'Factura de Pepe', url: 'https://facturas.ejemplo.es/pepe.pdf', category: 'Clientes' },
+    ]
+    const { ctx, llamadas } = hazCtx(tablas)
+    await cobrador.corre(ctx)
+    const ana = llamadas.find(p => p.clave === 'cobrador:ana:3')
+    expect(ana.mensaje).not.toContain('http')
+
+    const { ctx: c2, llamadas: l2 } = hazCtx(tablas, { config: { enlace_pago: 'https://buy.stripe.com/abc' } })
+    await cobrador.corre(c2)
+    expect(l2.find(p => p.clave === 'cobrador:ana:3').mensaje).toContain('https://buy.stripe.com/abc')
   })
 })

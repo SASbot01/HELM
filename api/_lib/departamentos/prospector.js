@@ -64,8 +64,12 @@ export default {
       .filter(p => telDe(p))
       .sort((a, b) => puntos(b) - puntos(a))
 
+    // Se sigue hasta crear `maximo`: los ya propuestos (aprobados, rechazados o
+    // pendientes, misma clave) no cuentan, y sin esto a partir del segundo día
+    // los 5 primeros taparían a todos los demás.
     let n = 0
-    for (const p of conTelefono.slice(0, maximo)) {
+    for (const p of conTelefono) {
+      if (n >= maximo) break
       const a = anguloDe(p)
       const pista = a.clave === 'sin_web' ? 'no tiene web' : a.buenas ? `web y buenas reseñas (${Number(p.rating).toFixed(1)}★)` : 'ya tiene web'
       const r = await ctx.proponer({

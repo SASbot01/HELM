@@ -49,11 +49,17 @@ function tipoEtapa(status) {
 const nombrePila = (n) => String(n || '').trim().split(/\s+/)[0] || ''
 const telDe = (c) => c.whatsapp || c.phone || ''
 
-// De dónde llegó, en una frase corta: el reel/anuncio (UTM) o el origen.
+// De dónde llegó, dicho como lo diría una persona («Instagram», «un anuncio»).
+// Nunca un UTM tal cual: utm_content es el id interno del anuncio o del reel y
+// no se le enseña al lead.
+const ORIGENES = [
+  [/instagram|\big\b/i, 'Instagram'], [/facebook|\bfb\b|meta|anuncio|\bads?\b|paid/i, 'un anuncio'],
+  [/tiktok/i, 'TikTok'], [/youtube/i, 'YouTube'], [/google/i, 'Google'], [/linkedin/i, 'LinkedIn'],
+  [/refer|recomend|boca/i, 'una recomendación'],
+]
 function porDonde(c) {
-  const utm = c.utm_content || c.utm_campaign || c.utm_source
-  if (utm) return String(utm).slice(0, 80)
-  if (c.source && !/^web$/i.test(c.source)) return String(c.source).slice(0, 80)
+  const texto = `${c.utm_source || ''} ${c.source || ''}`
+  for (const [re, dicho] of ORIGENES) if (re.test(texto)) return dicho
   return ''
 }
 
@@ -70,7 +76,7 @@ function delFormulario(answers) {
 // ── Las plantillas (español cercano y corto; sin IA) ─────────────────────────
 function mensajeFrio(c) {
   const hola = nombrePila(c.name) ? `Hola ${nombrePila(c.name)}` : 'Hola'
-  const donde = porDonde(c) ? ` Llegaste por ${porDonde(c)} y` : ''
+  const donde = porDonde(c) ? ` llegaste por ${porDonde(c)} y` : ''
   switch (tipoEtapa(c.status || c.stage_key)) {
     case 'cita':
       return `${hola}, ¿seguimos con la llamada? Dime qué día y hora te vienen mejor y lo dejamos cerrado.`
@@ -79,7 +85,7 @@ function mensajeFrio(c) {
     case 'seguimiento':
       return `${hola}, ¿cómo lo ves? Sin prisa, pero me gustaría saber si sigue encajando contigo para no dejarte colgado.`
     case 'contactado':
-      return `${hola}, retomo nuestra conversación.${donde} me quedé con ganas de ayudarte. ¿Te viene bien que hablemos esta semana?`
+      return `${hola}, retomo nuestra conversación.${donde ? ` L${donde.slice(2)}` : ''} me quedé con ganas de ayudarte. ¿Te viene bien que hablemos esta semana?`
     default:
       return `${hola},${donde} me quedé con ganas de contarte cómo te puedo ayudar. ¿Te va bien que lo veamos en un par de minutos?`
   }
@@ -216,9 +222,19 @@ export default {
     }
 
     // ── Priorizar los más calientes y respetar el tope ────────────────────────
+    // Un lead «parado» al que ya se le propuso el seguimiento en las últimas 3
+    // semanas (y se aprobó o sigue pendiente) no se repite: aprobar no deja
+    // actividad en el CRM, así que si no, cada lunes saldría el mismo mensaje.
+    const desde21 = new Date(ahora - 21 * DIA_MS).toISOString()
+    const { data: hechas } = await supabase.from('helm_propuestas').select('clave')
+      .eq('client_id', clientId).eq('agente', 'seguimiento').in('estado', ['pendiente', 'aprobada', 'aplicada'])
+      .gte('creada_en', desde21).limit(1000)
+    const yaSeguidos = new Set((hechas || []).map(h => /^seguimiento:frio:([^:]+):/.exec(h.clave)?.[1]).filter(Boolean))
     candidatos.sort((a, b) => b.score - a.score)
     let n = 0
-    for (const cand of candidatos.slice(0, maximo)) {
+    for (const cand of candidatos) {
+      if (n >= maximo) break
+      if (cand.prop.datos?.motivo === 'frio' && yaSeguidos.has(cand.prop.datos.contactId)) continue
       const r = await ctx.proponer(cand.prop)
       if (r && r.creada !== false) n++
     }

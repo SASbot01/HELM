@@ -17,12 +17,14 @@
 //     La próxima cuota y su importe se calculan igual que cobros_pendientes de
 //     api/_lib/bot/lecturas.js (misma fórmula, portada para no arrastrar la
 //     base en los tests).
-//   · helm_links — por si hay un enlace de pago guardado para meterlo al mensaje.
+//   · helm_links — por si hay un enlace de pago guardado para meterlo al mensaje
+//     (o config.enlace_pago, que manda).
 //
 // Lo que se escribe al aprobar lo hace la escritura registrar_cuota
 // (api/_lib/bot/escrituras.js): suma la cuota, actualiza lo cobrado y deja el
 // Ingreso en Finanzas, sin pasarse del total y sin duplicar el mes.
 import { masMeses, aISO } from '../renovaciones.js'
+import { todasLasFilas } from '../filas.js'
 
 // ── Cálculo puro (el día es SIEMPRE el de Madrid, como api/_lib/bot/comun.js) ─
 const fmtMadrid = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -45,14 +47,16 @@ const importeCuota = (v) => redondea(Number(v.installment_amount) || (Number(v.r
 const proximaCuota = (v) => aISO(masMeses(new Date(`${v.plan_start || v.date}T00:00:00Z`), Number(v.installments_paid) || 0))
 const nombrePila = (nombre) => String(nombre || '').trim().split(/\s+/)[0] || ''
 
-// Un enlace de pago guardado en Enlaces (checkout, pasarela…): para meterlo en
-// el recordatorio. Se prefiere la categoría Ventas, y si no, cualquiera que
-// huela a cobro por su título o su URL.
+// El enlace de pago que va en el recordatorio: el de config.enlace_pago o uno
+// de la categoría Ventas que huela a cobro. Nunca de otra categoría (ahí puede
+// estar la factura de otro cliente) ni un panel interno de la pasarela.
 const RE_PAGO = /pago|cobro|checkout|\bpay\b|stripe|hotmart|bizum|factura|suscrip|payment|pagar/i
-function enlaceDePago(links) {
-  const lista = (links || []).filter(l => l?.url)
-  const deVentas = lista.find(l => String(l.category || '') === 'Ventas' && RE_PAGO.test(`${l.title || ''} ${l.url}`))
-  return (deVentas || lista.find(l => RE_PAGO.test(`${l.title || ''} ${l.url}`)))?.url || null
+const RE_PANEL = /^https?:\/\/(dashboard\.stripe\.com|app\.hotmart\.com|admin\.|panel\.)/i
+const enlaceSeguro = (url) => /^https:\/\//i.test(String(url || '')) && !RE_PANEL.test(String(url))
+function enlaceDePago(links, config = {}) {
+  if (enlaceSeguro(config.enlace_pago)) return String(config.enlace_pago).trim()
+  const deVentas = (links || []).find(l => enlaceSeguro(l?.url) && String(l.category || '') === 'Ventas' && RE_PAGO.test(`${l.title || ''} ${l.url}`))
+  return deVentas?.url || null
 }
 
 // Cómo se dice la fecha en el título y en el porqué.
@@ -106,21 +110,25 @@ export default {
     const renovDesde = masDias(hoy, -(Number.isFinite(config.vencidas_dias) ? config.vencidas_dias : 60))
     const limite = masDias(hoy, dias)
 
-    const { data: ventas, error } = await supabase.from('sales')
-      .select('id, date, client_name, client_phone, product, revenue, cash_collected, status, installments_total, installments_paid, installment_amount, plan_start, service_end')
-      .eq('client_id', clientId).limit(5000)
-    if (error) throw error
+    // PostgREST corta en 1000 filas: se lee por páginas y solo lo que cuenta
+    // (planes fraccionados y renovaciones dentro de la ventana). Con una venta
+    // por factura de cada suscripción, el histórico pasa de 1000 enseguida.
+    const columnas = 'id, date, client_name, client_phone, product, revenue, cash_collected, status, installments_total, installments_paid, installment_amount, plan_start, service_end'
+    const conPlan = await todasLasFilas(() => supabase.from('sales').select(columnas)
+      .eq('client_id', clientId).gt('installments_total', 0).order('id'))
+    const conFin = await todasLasFilas(() => supabase.from('sales').select(columnas)
+      .eq('client_id', clientId).gte('service_end', renovDesde).lte('service_end', limite).order('id'))
 
     const { data: links } = await supabase.from('helm_links')
       .select('title, url, category').eq('client_id', clientId).limit(200)
-    const enlace = enlaceDePago(links)
+    const enlace = enlaceDePago(links, config)
 
     let propuestas = 0
     let cuotas = 0; let renovaciones = 0; let vencidas = 0
     const propon = async (p) => { const r = await ctx.proponer(p); if (r) propuestas++; return r }
 
     // ── Cuotas de planes fraccionados ──────────────────────────────────────
-    const planes = (ventas || [])
+    const planes = conPlan
       .filter(v => !cancelada(v) && cuotasPendientes(v) > 0)
       .map(v => ({ v, fecha: proximaCuota(v) }))
       .filter(({ v, fecha }) => {
@@ -147,16 +155,18 @@ export default {
           `La cuota ${n} ${cuando(fecha, hoy)} (${fecha}). Lleva ${euros(cobrado)} de ${euros(facturado)}; faltan ${euros(facturado - cobrado)}.`,
         mensaje: mensajeCuota({ nombre: nombrePila(v.client_name), n, total, producto, importe, fechaISO: fecha, hoy, enlace }),
         telefono: v.client_phone || null,
-        // Al aprobar, se marca cobrada con los datos de ese momento.
+        // Al aprobar, se marca cobrada con los datos de ese momento. La fecha va
+        // fija (la de hoy): sin ella el resumen cambiaría al aprobar otro día y
+        // la propuesta fallaría por «ha cambiado algo».
         herramienta: 'registrar_cuota',
-        input: { venta: v.id, cuota: n },
+        input: { venta: v.id, cuota: n, fecha: hoy },
         datos: { venta: v.id, cuota: n, importe, fecha, vencida: atrasada },
       })
       if (!r) continue
     }
 
     // ── Renovaciones (pago único con fin de término) ───────────────────────
-    const renovs = (ventas || [])
+    const renovs = conFin
       .filter(v => !cancelada(v) && cuotasPendientes(v) == null && v.service_end)
       .map(v => ({ v, fecha: v.service_end }))
       .filter(({ fecha }) => fecha <= limite && fecha >= renovDesde)

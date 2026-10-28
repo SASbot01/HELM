@@ -9,7 +9,10 @@
 //
 // El saldo arranca del que diga el dueño en ctx.config.saldo_inicial (0 por
 // defecto): HELM no conoce el banco, así que la previsión es de FLUJO. Esto va
-// dicho en el resumen para no dar un número como si fuera el saldo real.
+// dicho en el resumen para no dar un número como si fuera el saldo real. Sin
+// saldo inicial puesto NO se avisa (desde 0, con un solo gasto fijo, todas las
+// semanas saldrían en negativo); y con él, un solo aviso: la PRIMERA semana que
+// baja del mínimo, que es la que hay que ver venir.
 //
 // Columnas reales:
 //   · sales — installments_total/paid, installment_amount, plan_start, revenue,
@@ -17,6 +20,7 @@
 //   · ceo_finance_entries — recurring=true marca los gastos fijos (amount en
 //     negativo). Se proyectan mes a mes sobre su día del mes.
 import { masMeses, aISO } from '../renovaciones.js'
+import { todasLasFilas } from '../filas.js'
 
 // ── Cálculo puro (el día es el de Madrid, como api/_lib/bot/comun.js) ────────
 const fmtMadrid = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -67,18 +71,18 @@ export default {
       if (i >= 0 && i < nSemanas) semanas[i][campo] = redondea(semanas[i][campo] + importe)
     }
 
-    const [{ data: ventas, error: eV }, { data: apuntes, error: eA }] = await Promise.all([
-      supabase.from('sales')
-        .select('id, date, revenue, cash_collected, status, installments_total, installments_paid, installment_amount, plan_start, service_end')
-        .eq('client_id', clientId).limit(5000),
-      supabase.from('ceo_finance_entries')
-        .select('id, date, category, description, amount, recurring').eq('client_id', clientId).limit(5000),
+    // PostgREST corta en 1000 filas: por páginas y solo lo que cuenta (planes
+    // fraccionados, renovaciones del horizonte y gastos fijos).
+    const columnas = 'id, date, revenue, cash_collected, status, installments_total, installments_paid, installment_amount, plan_start, service_end'
+    const [planes, conFin, apuntes] = await Promise.all([
+      todasLasFilas(() => supabase.from('sales').select(columnas).eq('client_id', clientId).gt('installments_total', 0).order('id')),
+      todasLasFilas(() => supabase.from('sales').select(columnas).eq('client_id', clientId).gte('service_end', hoy).lte('service_end', hasta).order('id')),
+      todasLasFilas(() => supabase.from('ceo_finance_entries')
+        .select('id, date, category, description, amount, recurring').eq('client_id', clientId).eq('recurring', true).lt('amount', 0).order('id')),
     ])
-    if (eV) throw eV
-    if (eA) throw eA
 
     // ── Entra: cuotas pendientes de cada plan fraccionado ──────────────────
-    for (const v of (ventas || [])) {
+    for (const v of planes) {
       if (cancelada(v)) continue
       const pend = cuotasPendientes(v)
       if (!pend) continue
@@ -97,7 +101,7 @@ export default {
     }
 
     // ── Entra: renovaciones de pago único (service_end dentro del horizonte) ─
-    for (const v of (ventas || [])) {
+    for (const v of conFin) {
       if (cancelada(v) || cuotasPendientes(v) != null) continue
       const fin = v.service_end
       if (fin && fin >= hoy && fin <= hasta && Number(v.revenue) > 0) enSemana(fin, 'entra', Number(v.revenue))
@@ -107,7 +111,7 @@ export default {
     // Se queda la última versión de cada gasto fijo (por su concepto) para no
     // contar dos veces el mismo si aparece repetido en meses pasados.
     const fijos = new Map()
-    for (const e of (apuntes || [])) {
+    for (const e of apuntes) {
       if (!e.recurring || !(Number(e.amount) < 0)) continue
       const k = norm(e.description) || `importe:${redondea(e.amount)}`
       const previo = fijos.get(k)
@@ -137,19 +141,26 @@ export default {
       if (saldo < minimo) descubiertos.push(s)
     }
 
-    for (const s of descubiertos) {
+    const s0 = config.saldo_inicial ?? config.saldo
+    const conSaldo = s0 != null && s0 !== '' && Number.isFinite(Number(s0))
+    const primera = conSaldo ? descubiertos[0] : null
+    if (primera) {
+      const s = primera
       const r = await ctx.proponer({
         clave: `caja:deficit:${s.lunes}`,
         titulo: `Caja: la semana del ${s.lunes} el saldo previsto baja a ${euros(s.saldo)}`,
         porque: `Previsión de caja: esa semana entran ${euros(s.entra)} y salen ${euros(s.sale)}, y el saldo previsto queda en ${euros(s.saldo)} ` +
           `(por debajo del mínimo de ${euros(minimo)}). Arranca de un saldo inicial de ${euros(config.saldo_inicial ?? config.saldo ?? 0)}; ` +
-          `es una previsión de flujo, ajústala con tu saldo real.`,
+          `es una previsión de flujo, ajústala con tu saldo real.` +
+          (descubiertos.length > 1 ? ` En los próximos 90 días hay ${descubiertos.length} semanas por debajo; lo más bajo, ${euros(peor.saldo)} la semana del ${peor.lunes}.` : ''),
         datos: { tipo: 'deficit_caja', semana: s.lunes, entra: s.entra, sale: s.sale, saldo: s.saldo, minimo },
       })
       if (r) propuestas++
     }
 
-    const resumen = descubiertos.length
+    const resumen = !conSaldo
+      ? `Caja 90d: sin saldo inicial puesto no aviso de descubiertos (flujo de ${euros(saldo)} en 90 días). Pon el saldo con el que empezar en el ajuste del agente.`
+      : descubiertos.length
       ? `Caja 90d: ${descubiertos.length} semana(s) por debajo del mínimo; lo más bajo, ${euros(peor.saldo)} la semana del ${peor.lunes} (desde un saldo de ${euros(config.saldo_inicial ?? config.saldo ?? 0)}).`
       : `Caja 90d: sin descubiertos; el saldo previsto no baja de ${euros(peor.saldo === Infinity ? (config.saldo_inicial ?? config.saldo ?? 0) : peor.saldo)} (desde ${euros(config.saldo_inicial ?? config.saldo ?? 0)}).`
     return { propuestas, resumen, descubiertos: descubiertos.length }

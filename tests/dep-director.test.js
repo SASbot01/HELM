@@ -15,9 +15,12 @@ function fakeSupabase(tablas = {}) {
     from(tabla) {
       const filtros = []
       let tope = null
+      let desde = 0
       const q = {
         select() { return q },
         limit(n) { tope = n; return q },
+        order() { return q },
+        range(a, b) { desde = a; tope = b - a + 1; return q },
         eq(c, v) { filtros.push((r) => r[c] === v); return q },
         gt(c, v) { filtros.push((r) => r[c] != null && r[c] > v); return q },
         gte(c, v) { filtros.push((r) => r[c] != null && r[c] >= v); return q },
@@ -27,7 +30,7 @@ function fakeSupabase(tablas = {}) {
         then(res, rej) {
           try {
             let out = (store[tabla] || []).filter((r) => filtros.every((f) => f(r)))
-            if (tope != null) out = out.slice(0, tope)
+            if (tope != null) out = out.slice(desde, desde + tope)
             return Promise.resolve({ data: out, error: null }).then(res, rej)
           } catch (e) {
             return Promise.resolve({ data: null, error: e }).then(res, rej)

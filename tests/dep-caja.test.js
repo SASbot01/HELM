@@ -16,6 +16,9 @@ function fakeDb(tablas) {
         not(c, op, v) { if (op === 'is' && v === null) rows = rows.filter(r => r[c] != null); return q },
         gte(c, v) { rows = rows.filter(r => String(r[c]) >= v); return q },
         lte(c, v) { rows = rows.filter(r => String(r[c]) <= v); return q },
+        gt(c, v) { rows = rows.filter(r => r[c] != null && r[c] > v); return q },
+        lt(c, v) { rows = rows.filter(r => r[c] != null && r[c] < v); return q },
+        range(a, b) { rows = rows.slice(a, b + 1); return q },
         order(c, o = {}) { rows = [...rows].sort((a, b) => (a[c] < b[c] ? -1 : a[c] > b[c] ? 1 : 0) * (o.ascending === false ? -1 : 1)); return q },
         limit(n) { rows = rows.slice(0, n); return q },
         then(res, rej) { return Promise.resolve({ data: rows, error: null }).then(res, rej) },
@@ -61,11 +64,20 @@ describe('caja · previsión y descubiertos', () => {
   it('con los gastos fijos por encima de las cuotas, avisa de semanas en descubierto', async () => {
     const { ctx, llamadas } = hazCtx(tablas, { config: { saldo_inicial: 0, minimo: 0 } })
     const r = await caja.corre(ctx)
-    expect(r.propuestas).toBeGreaterThan(0)
+    // Un solo aviso (la primera semana en descubierto), aunque haya varias.
+    expect(r.propuestas).toBe(1)
+    expect(r.descubiertos).toBeGreaterThan(1)
     expect(llamadas.every(p => /^caja:deficit:\d{4}-\d{2}-\d{2}$/.test(p.clave))).toBe(true)
     expect(llamadas[0].herramienta).toBeUndefined()   // aviso informativo, sin escritura
+    expect(llamadas[0].porque).toMatch(/semanas por debajo/)
     expect(r.resumen).toMatch(/Caja 90d:.*por debajo del mínimo/)
-    expect(r.descubiertos).toBe(r.propuestas)
+  })
+
+  it('sin saldo inicial puesto no avisa (desde 0 todo saldría en negativo) y lo dice en el resumen', async () => {
+    const { ctx, llamadas } = hazCtx(tablas)
+    const r = await caja.corre(ctx)
+    expect(llamadas.length).toBe(0)
+    expect(r.resumen).toMatch(/sin saldo inicial/)
   })
 
   it('con saldo inicial de sobra, no hay descubiertos y el resumen lo dice', async () => {

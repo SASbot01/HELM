@@ -15,6 +15,8 @@
 //      agente va en autonomía 'interno' la crea él mismo en Tareas (reversible:
 //      una tarea se cierra); si no, la propone con la herramienta `crm_tarea`.
 //
+import { todasLasFilas } from '../filas.js'
+
 // Tope de 10 propuestas de duplicados por pasada, para no inundar la bandeja.
 
 export const TOPE = 10
@@ -127,11 +129,11 @@ export default {
   departamento: 'operaciones',
   async corre(ctx) {
     const { supabase, clientId, autonomia, proponer } = ctx
-    const { data, error } = await supabase.from('crm_contacts')
+    // Todas las fichas, por páginas (PostgREST corta en 1000): un duplicado
+    // puede estar en cualquier parte de la lista.
+    const contactos = await todasLasFilas(() => supabase.from('crm_contacts')
       .select('id, name, email, phone, status, assigned_closer, assigned_setter, company, instagram, notes, deal_value, created_at')
-      .eq('client_id', clientId).limit(5000)
-    if (error) throw error
-    const contactos = data || []
+      .eq('client_id', clientId).order('id'))
 
     // 1) Duplicados → una propuesta por grupo (tope TOPE).
     let dups = 0

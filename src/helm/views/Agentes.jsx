@@ -10,7 +10,7 @@
 // Todo en solo lectura. Solo el superadmin elige qué creadores lleva el perfil
 // y tiene a mano el taller global (/agents), que es donde se editan.
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, Settings2, Link2, Copy, Check } from 'lucide-react'
+import { ArrowLeft, Settings2 } from 'lucide-react'
 import { creadoresApi } from '../lib'
 import { agentsApi } from '../../agents/api'
 import { AGENTES, DEPARTAMENTOS } from '../../agents/agentes'
@@ -187,7 +187,6 @@ export default function Agentes({ clientId, client }) {
       {esAdmin() && (
         <div className="ag-admin-fila">
           <ElegirCreadores clientId={clientId} onCambio={cargar} />
-          <EnlaceClaude clientId={clientId} nombre={client?.name} />
         </div>
       )}
 
@@ -253,54 +252,6 @@ function ElegirCreadores({ clientId, onCambio }) {
           ))}
         </div>
       )}
-    </section>
-  )
-}
-
-// El enlace del conector de Claude para ESTE perfil: con él, Claude solo ve sus
-// creadores, su historial y su calendario. Se enseña una sola vez; generar
-// otro deja de valer el anterior.
-function EnlaceClaude({ clientId, nombre }) {
-  const [estado, setEstado] = useState(null)
-  const [url, setUrl] = useState('')
-  const [copiado, setCopiado] = useState(false)
-  const [error, setError] = useState('')
-
-  useEffect(() => { agentsApi.mcpEnlace(clientId).then(setEstado).catch(e => setError(e.message)) }, [clientId])
-
-  async function generar() {
-    if (estado?.existe && !window.confirm(`El enlace actual de ${nombre || 'este perfil'} dejará de funcionar. ¿Generar uno nuevo?`)) return
-    setError('')
-    try { setUrl((await agentsApi.generarMcpEnlace(clientId)).url); setEstado({ existe: true }) }
-    catch (e) { setError(e.message) }
-  }
-
-  async function copiar() {
-    try { await navigator.clipboard.writeText(url); setCopiado(true); setTimeout(() => setCopiado(false), 2000) } catch { /* sin portapapeles */ }
-  }
-
-  return (
-    <section className="ag-card ag-enlace">
-      <header>
-        <b><Link2 size={14} /> Conector de Claude de este perfil</b>
-        <button type="button" className="ag-btn sm" onClick={generar}>{estado?.existe ? 'Generar otro' : 'Generar enlace'}</button>
-      </header>
-      {url ? (
-        <>
-          <div className="ag-enlace-url">
-            <code>{url}</code>
-            <button type="button" className="ag-btn sm" onClick={copiar}>{copiado ? <Check size={13} /> : <Copy size={13} />}</button>
-          </div>
-          <small className="ag-aviso">Cópialo ahora: no se vuelve a enseñar. Es una contraseña: dáselo solo a {nombre || 'este cliente'}.</small>
-        </>
-      ) : (
-        <small className="ag-aviso">
-          {estado?.existe
-            ? `Ya tiene enlace${estado.ultimo_uso ? ` (usado por última vez el ${new Date(estado.ultimo_uso).toLocaleDateString('es-ES')})` : ' (aún sin usar)'}. Solo ve este perfil.`
-            : 'Aún no tiene. Con su enlace, Claude solo ve los creadores, el historial y el calendario de este perfil.'}
-        </small>
-      )}
-      {error && <p className="ag-error">{error}</p>}
     </section>
   )
 }

@@ -14,6 +14,7 @@ import {
   AREAS, SECCIONES, DEFAULT_MATRIX, DEFAULT_VISIBLE, OWNER_ROLE, loadPermisos, savePermisos,
 } from '../permisos'
 import { rolesDelProducto } from '../equipo/roles'
+import { agentsApi } from '../../agents/api'
 
 function Badge({ tone, children }) {
   return <span className={'helm-badge ' + (tone || '')}>{children}</span>
@@ -1590,12 +1591,75 @@ function PermisosCard({ clientId }) {
   )
 }
 
+// ── Conector de Claude (MCP) ─────────────────────────────────────────────────
+// El enlace con el que Claude (claude.ai, Claude Code…) se conecta a ESTE
+// perfil: solo ve sus creadores, su historial y su calendario. Se enseña una
+// sola vez (es una contraseña) y generar otro deja de valer el anterior. Solo
+// el superadmin lo genera (api/agents.js lo exige).
+function ConectorClaudeCard({ clientId, nombre }) {
+  const [estado, setEstado] = useState(null)
+  // El enlace recién generado va atado a su perfil: al cambiar de perfil no se
+  // enseña el del anterior.
+  const [nuevo, setNuevo] = useState({ clientId: null, url: '' })
+  const url = nuevo.clientId === clientId ? nuevo.url : ''
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    agentsApi.mcpEnlace(clientId).then(setEstado).catch(err => { setError(err.message); setEstado({ failed: true }) })
+  }, [clientId])
+
+  async function generar() {
+    if (estado?.existe && !window.confirm(`El enlace actual de ${nombre || 'este perfil'} dejará de funcionar. ¿Generar uno nuevo?`)) return
+    setBusy(true); setError(null)
+    try { setNuevo({ clientId, url: (await agentsApi.generarMcpEnlace(clientId)).url }); setEstado({ existe: true }) }
+    catch (err) { setError(err.message) }
+    setBusy(false)
+  }
+
+  if (!estado) return <Panel title="Conector de Claude"><div className="helm-empty">Cargando…</div></Panel>
+  return (
+    <Panel title="Conector de Claude" action={estado.existe ? <Badge tone="green">Con enlace</Badge> : <Badge>Sin enlace</Badge>}>
+      <div className="helm-settings-body">
+        <p className="helm-settings-lead">
+          El enlace con el que Claude se conecta a {nombre || 'este perfil'}: con él solo ve sus creadores de referencia,
+          su historial y su calendario, nada de otros perfiles.
+        </p>
+        {url ? (
+          <div className="helm-settings-block">
+            <CopyRow value={url} />
+            <small className="helm-settings-note">
+              Cópialo ahora: no se vuelve a enseñar. Es una contraseña: dáselo solo a {nombre || 'este cliente'}.
+            </small>
+          </div>
+        ) : (
+          <small className="helm-settings-note">
+            {estado.existe
+              ? `Ya tiene enlace${estado.ultimo_uso ? ` (usado por última vez el ${new Date(estado.ultimo_uso).toLocaleDateString('es-ES')})` : ' (aún sin usar)'}.`
+              : 'Aún no tiene enlace.'}
+          </small>
+        )}
+        {!estado.failed && (
+          <div className="helm-settings-actions">
+            <button className="helm-btn primary" onClick={generar} disabled={busy}>
+              <Link2 size={15} /> {busy ? 'Generando…' : estado.existe ? 'Generar otro' : 'Generar enlace'}
+            </button>
+          </div>
+        )}
+        {error && <div className="helm-formerror">{error}</div>}
+      </div>
+    </Panel>
+  )
+}
+
 const AJUSTES_TABS = [
   { key: 'integraciones', label: 'Integraciones', icon: <Link2 size={15} /> },
   { key: 'marca', label: 'Marca', icon: <ImageIcon size={15} /> },
   { key: 'permisos', label: 'Permisos', icon: <ShieldCheck size={15} /> },
   { key: 'ia', label: 'IA', icon: <Cpu size={15} /> },
 ]
+
+const esSuperadmin = () => { try { return Boolean(localStorage.getItem('bw_superadmin')) } catch { return false } }
 
 export default function Ajustes({ clientId, client, onClientUpdate }) {
   // Volver del consentimiento de Google aterriza en Ajustes → Integraciones,
@@ -1617,7 +1681,12 @@ export default function Ajustes({ clientId, client, onClientUpdate }) {
       )
         : tab === 'marca' ? <MarcaCard clientId={clientId} client={client} onClientUpdate={onClientUpdate} />
         : tab === 'permisos' ? <PermisosCard clientId={clientId} />
-        : <IaCard clientId={clientId} />}
+        : (
+          <div className="helm-grid" style={{ gap: 20 }}>
+            <IaCard clientId={clientId} />
+            {esSuperadmin() && <ConectorClaudeCard clientId={clientId} nombre={client?.name} />}
+          </div>
+        )}
     </div>
   )
 }
