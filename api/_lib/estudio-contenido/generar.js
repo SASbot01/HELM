@@ -333,6 +333,35 @@ async function cargaPerfil(clientId) {
 }
 
 /**
+ * Las cifras de HOY de un perfil frente a un estudio ya hecho. El estudio
+ * guarda los números del día en que se hizo; al abrirlo, la etapa (seguidores,
+ * ritmo, hito) y el avance de sus objetivos se enseñan con los de hoy, que son
+ * los que se sincronizan cada día (helm_ig_media, helm_ig_seguidores y los
+ * seguidores de la integración). Sin IA: solo calculaDatos.
+ */
+export async function datosDeHoy(clientId, estudio, hoy = new Date()) {
+  const piezas = await todasLasFilas(() => supabase.from('helm_ig_media')
+    .select(CAMPOS_PIEZA).eq('client_id', clientId).order('id', { ascending: true }))
+  const cfg = (await getIgConfig(supabase, clientId))?.config || {}
+  const historial = await opcional(supabase.from('helm_ig_seguidores').select('dia, seguidores')
+    .eq('client_id', clientId).order('dia', { ascending: false }).limit(400))
+  const d = calculaDatos({
+    piezas, seguidores: cfg.followers ?? null, usuario: cfg.username || null,
+    historialSeguidores: [...(historial || [])].reverse(), anterior: estudio, hoy,
+  })
+  const DIA = 86_400_000
+  return {
+    calculado_en: hoy.toISOString(),
+    cuenta: { seguidores: d.cuenta?.seguidores ?? null },
+    etapa: d.etapa || null,
+    objetivos: (d.desde_anterior?.objetivos || []).map(o => ({
+      ...o,
+      quedan_dias: o.vence ? Math.max(0, Math.ceil((Date.parse(o.vence) - hoy.getTime()) / DIA)) : null,
+    })),
+  }
+}
+
+/**
  * Los objetivos del estudio anterior que siguen en plazo sin cumplirse, con
  * lo que hace falta para mantenerlos: su punto de partida, su cifra, su plazo
  * y desde cuándo cuentan. Van al modelo como OBJETIVOS VIGENTES.

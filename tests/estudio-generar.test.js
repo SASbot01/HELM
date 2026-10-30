@@ -128,7 +128,7 @@ vi.mock('../api/_lib/estudio-contenido/conocimiento.js', () => ({
 }))
 vi.mock('../api/_lib/equipo.js', () => ({ diaMadrid: () => '2026-10-27', horaMadrid: () => 10 }))
 
-const { generaEstudio, revisaEstudio, guardaAprendido, caducaAprendido, miraEstudiosContenido, encolaEstudio, objetivosVigentes, importaEstudio, SISTEMA, HERRAMIENTA } =
+const { generaEstudio, revisaEstudio, guardaAprendido, caducaAprendido, miraEstudiosContenido, encolaEstudio, objetivosVigentes, importaEstudio, datosDeHoy, SISTEMA, HERRAMIENTA } =
   await import('../api/_lib/estudio-contenido/generar.js')
 const { calculaDatos } = await import('../api/_lib/estudio-contenido/datos.js')
 const { sincronizaMetricas } = await import('../api/_lib/metricas-ig.js')
@@ -408,6 +408,26 @@ describe('generaEstudio · el estudio anterior y sus objetivos', () => {
     expect(objetivosVigentes(ant, datos)).toEqual([
       expect.objectContaining({ nombre: 'A', metrica: 'visitas', partida: 1000, objetivo: 9000, plazo_dias: 45, desde: '2026-10-20T07:00:00Z', vence: '2026-12-04T07:00:00.000Z' }),
     ])
+  })
+})
+
+describe('datosDeHoy · las cifras de hoy frente a un estudio ya hecho', () => {
+  it('la etapa y el avance de sus objetivos salen con los seguidores de hoy, no con los del día del estudio', async () => {
+    const estudio = {
+      id: 'e27', client_id: 'c1', estado: 'listo', generado_en: '2026-10-27T17:48:00Z', datos: { cuenta: { seguidores: 1577 } },
+      estudio: { objetivos: [{ nombre: 'Llegar a 2.000 seguidores', metrica: 'seguidores', actual: 1577, objetivo: 2000, plazo_dias: 33 }] },
+    }
+    store.tablas.user_integrations = [{ client_id: 'c1', service: 'instagram', enabled: true, config: { token: 'tok', followers: 1984, username: 'cuenta' } }]
+    store.tablas.helm_ig_seguidores = [
+      { client_id: 'c1', dia: '2026-10-27', seguidores: 1589 }, { client_id: 'c1', dia: '2026-10-28', seguidores: 1694 },
+      { client_id: 'c1', dia: '2026-10-29', seguidores: 1874 }, { client_id: 'c1', dia: '2026-10-30', seguidores: 1984 },
+    ]
+    const hoy = await datosDeHoy('c1', estudio, new Date('2026-10-30T10:00:00Z'))
+    expect(hoy.cuenta.seguidores).toBe(1984)
+    expect(hoy.etapa.siguiente_hito).toBeGreaterThan(1984)
+    const [o] = hoy.objetivos
+    expect(o).toMatchObject({ nombre: 'Llegar a 2.000 seguidores', antes: 1577, ahora: 1984, objetivo: 2000, estado: 'en_curso', quedan_dias: 31 })
+    expect(o.avance).toBeGreaterThan(0.9)
   })
 })
 

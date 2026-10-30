@@ -82,8 +82,10 @@ vi.mock('../api/_lib/instagram.js', () => ({
   getIgConfig: async (_s, clientId) => (db.user_integrations || []).find(r => r.client_id === clientId) || null,
 }))
 const encolaEstudio = vi.fn(async () => {})
+const datosDeHoy = vi.fn(async () => ({ calculado_en: '2026-10-30T10:00:00Z', cuenta: { seguidores: 1984 }, etapa: { siguiente_hito: 10000 }, objetivos: [] }))
 vi.mock('../api/_lib/estudio-contenido/generar.js', () => ({
   encolaEstudio: (...a) => encolaEstudio(...a), modeloEstudio: () => 'claude-sonnet-5', TIPO: 'estudio-contenido',
+  datosDeHoy: (...a) => datosDeHoy(...a),
 }))
 vi.mock('../api/_lib/estudio-contenido/conocimiento.js', () => ({
   ALGORITMO_RESUMEN: [{ titulo: 'Tres señales', texto: 'Tiempo de visionado, me gusta y envíos.', fuente: 'https://example.com', etiqueta: 'OFICIAL' }],
@@ -184,6 +186,17 @@ describe('api/estudio-contenido · lo que devuelve', () => {
     expect(r.body.coste_aprox_eur).toBeLessThan(0.3)
     expect(r.body.algoritmo[0].etiqueta).toBe('OFICIAL')
     expect(r.body.ultimo_error).toBeNull()
+    // Las cifras de hoy, calculadas frente al último estudio listo.
+    expect(datosDeHoy).toHaveBeenCalledWith('c1', expect.objectContaining({ id: E2 }))
+    expect(r.body.al_dia.cuenta.seguidores).toBe(1984)
+  })
+
+  it('si las cifras de hoy fallan, el estudio sale igual (sin al_dia)', async () => {
+    datosDeHoy.mockRejectedValueOnce(new Error('sin red'))
+    const r = await pide(PROPIETARIO)
+    expect(r.statusCode).toBe(200)
+    expect(r.body.estudio.id).toBe(E2)
+    expect(r.body.al_dia).toBeNull()
   })
 
   it('a la agencia de la casa no le cuesta nada', async () => {

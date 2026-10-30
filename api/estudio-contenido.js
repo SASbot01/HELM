@@ -2,8 +2,10 @@
 //
 //   GET                &clientId=        → el último estudio listo, el historial,
 //                                          si hay uno en marcha, lo que cuesta,
-//                                          si hay Instagram, la base del algoritmo
-//                                          y, si lo último pedido falló, por qué
+//                                          si hay Instagram, la base del algoritmo,
+//                                          si lo último pedido falló, por qué, y
+//                                          `al_dia`: la etapa y el avance de sus
+//                                          objetivos con las cifras de hoy
 //   GET  ?action=ver   &clientId=&id=    → { estudio }: uno del historial, con la
 //                                          misma forma que el del GET
 //   POST ?action=ahora &clientId=        → abre la fila 'en_curso' y encola el trabajo
@@ -20,7 +22,7 @@ import { applyCors } from './_lib/auth.js'
 import { requireProfileAccess } from './_lib/access.js'
 import { exigirSaldo, pagaConCreditos, precioEuros, costeUsd } from './_lib/creditos.js'
 import { getIgConfig } from './_lib/instagram.js'
-import { encolaEstudio, modeloEstudio, TIPO } from './_lib/estudio-contenido/generar.js'
+import { encolaEstudio, modeloEstudio, datosDeHoy, TIPO } from './_lib/estudio-contenido/generar.js'
 import { ALGORITMO_RESUMEN } from './_lib/estudio-contenido/conocimiento.js'
 
 const TABLA = 'helm_estudio_contenido'
@@ -190,8 +192,14 @@ export default async function handler(req, res) {
       // en marcha detrás), se dice por qué. En `error` el worker deja un
       // mensaje para el usuario, nunca el fallo interno (ese va al log).
       const ultimo = historial.data?.[0]
+      // El estudio guarda las cifras del día en que se hizo; las de hoy se
+      // calculan al abrirlo. Si fallan, se enseña el estudio tal cual.
+      const alDia = estudio
+        ? await datosDeHoy(clientId, estudio).catch(e => { console.warn('[estudio-contenido] cifras de hoy:', e?.message || e); return null })
+        : null
       return res.status(200).json({
         estudio,
+        al_dia: alDia,
         historial: (historial.data || []).map(({ id, generado_en, estado }) => ({ id, generado_en, estado })),
         en_curso: marcha,
         // A una agencia que no paga (la de la casa) no le cuesta nada.

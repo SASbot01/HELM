@@ -191,6 +191,28 @@ describe('EstudioContenido · la pantalla del estudio', () => {
     expect(screen.getByText(/vence el 15 nov/)).toBeTruthy()
   })
 
+  it('con las cifras de hoy (al_dia): seguidores, ritmo y cómo van los objetivos de este estudio, sin tocar el análisis', async () => {
+    const AL_DIA = {
+      ...CON_ESTUDIO,
+      al_dia: {
+        calculado_en: '2026-10-30T10:00:00Z',
+        cuenta: { seguidores: 1984 },
+        etapa: { hito_anterior: 1000, siguiente_hito: 10000, progreso: 0.109, ritmo_dia: 98.7, dias_historial: 4, fecha_estimada: '2027-01-20', ritmo_necesario_90d: 89.1 },
+        objetivos: [{ nombre: 'Mediana de visitas', metrica: 'visitas', antes: 1275, ahora: 1650, objetivo: 2000, estado: 'en_curso', cumplido: null, avance: 0.52, vence: '2026-11-24T09:00:00.000Z', quedan_dias: 25 }],
+      },
+    }
+    de.mockResolvedValueOnce(AL_DIA)
+    render(<EstudioContenido clientId="demo" />)
+    await screen.findByText('La cuenta retiene bien y genera guardados por encima de su tamaño.')
+    expect(screen.getByText('1.984')).toBeTruthy()                       // los seguidores de hoy, no los 1.551 del estudio
+    expect(screen.getByText('98,7 seguidores/día')).toBeTruthy()
+    expect(screen.getByText(/Seguidores y ritmo de hoy/)).toBeTruthy()
+    expect(screen.getByText(/Cómo van hoy/)).toBeTruthy()              // en lugar del repaso congelado del anterior
+    expect(screen.queryByText('Subir guardados')).toBeNull()
+    expect(screen.getByText(/quedan 25 días/, { selector: '.ec-anterior-vence' })).toBeTruthy()
+    expect(screen.getByText('1.650', { selector: '.ec-obj-hoy b' })).toBeTruthy()
+  })
+
   it('etapa sin crecimiento (ritmo 0): lo dice claro y no finge «sin histórico»', async () => {
     const CON_NOCRECE = {
       ...CON_ESTUDIO,

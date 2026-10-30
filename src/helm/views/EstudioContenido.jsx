@@ -123,8 +123,10 @@ function Bloque({ icono, titulo, sub, children, className = '' }) {
   )
 }
 
-// 1) Etapa — la barra hacia el siguiente hito, el ritmo y qué cambia aquí.
-function Etapa({ datos, estudio }) {
+// 1) Etapa — la barra hacia el siguiente hito, el ritmo y qué cambia aquí. Con
+// `alDia` (solo en el último estudio), los seguidores, el ritmo y la fecha
+// estimada son los de hoy; el texto de la etapa es el del estudio.
+function Etapa({ datos, estudio, alDia, generadoEn }) {
   const c = datos?.cuenta || {}
   const et = datos?.etapa || {}
   const texto = estudio?.etapa || {}
@@ -170,6 +172,11 @@ function Etapa({ datos, estudio }) {
         )}
       </div>
       {texto.que_cambia && <p className="ec-etapa-cambia">{texto.que_cambia}</p>}
+      {alDia && (
+        <p className="ec-al-dia">
+          <Clock size={12} /> Seguidores y ritmo de hoy ({fechaCorta(alDia.calculado_en)}). El análisis y el plan son del estudio del {fechaCorta(generadoEn)}.
+        </p>
+      )}
     </Bloque>
   )
 }
@@ -188,19 +195,26 @@ const ESTADO_OBJ = {
   en_curso: { label: 'En curso', icono: <Clock size={16} />, cls: 'curso' },
 }
 
-// 2) Objetivos — tarjetas con actual → objetivo, y, si hay estudio anterior, el
-// repaso de qué se cumplió, no se cumplió o sigue en curso (con su avance y la
-// fecha en que vence).
-function Objetivos({ estudio, datos }) {
+// 2) Objetivos — tarjetas con actual → objetivo, y el repaso de qué se cumplió,
+// no se cumplió o sigue en curso (con su avance y la fecha en que vence). En el
+// último estudio (`alDia`), el repaso es el de SUS objetivos con las cifras de
+// hoy; en uno del historial, el que se hizo al generarlo (desde el anterior).
+function Objetivos({ estudio, datos, alDia, generadoEn }) {
   const objetivos = aLista(estudio?.objetivos)
-  const anterior = datos?.desde_anterior
+  const vivos = aLista(alDia?.objetivos)
+  const anterior = vivos.length ? { generado_en: generadoEn, objetivos: vivos } : datos?.desde_anterior
   const anterioresLista = aLista(anterior?.objetivos)
+  const vivoDe = (o) => vivos.find(v => v.nombre === String(o.nombre || o.metrica) && v.metrica === String(o.metrica || ''))
   if (!objetivos.length && !anterioresLista.length) return null
   return (
     <Bloque icono={<Target size={16} />} titulo="Objetivos" sub="A dónde apuntar y por qué. Pocos y medibles.">
       {anterioresLista.length > 0 && (
         <div className="ec-anterior">
-          <p className="ec-anterior-tit">Desde el estudio del {fechaCorta(anterior.generado_en)}</p>
+          <p className="ec-anterior-tit">
+            {vivos.length
+              ? <>Cómo van hoy ({fechaCorta(alDia.calculado_en)}) · objetivos del estudio del {fechaCorta(anterior.generado_en)}</>
+              : <>Desde el estudio del {fechaCorta(anterior.generado_en)}</>}
+          </p>
           <ul className="ec-anterior-lista">
             {anterioresLista.map((o, i) => {
               const est = ESTADO_OBJ[estadoObjetivo(o)]
@@ -217,7 +231,11 @@ function Objetivos({ estudio, datos }) {
                       <i style={{ width: `${avance * 100}%` }} />
                     </span>
                   )}
-                  {est.cls === 'curso' && o.vence && <span className="ec-anterior-vence">vence el {fechaCorta(o.vence)}</span>}
+                  {est.cls === 'curso' && o.vence && (
+                    <span className="ec-anterior-vence">
+                      vence el {fechaCorta(o.vence)}{o.quedan_dias != null ? ` · quedan ${num(o.quedan_dias)} días` : ''}
+                    </span>
+                  )}
                 </li>
               )
             })}
@@ -226,19 +244,25 @@ function Objetivos({ estudio, datos }) {
       )}
       {objetivos.length > 0 && (
         <div className="ec-obj-rejilla">
-          {objetivos.map((o, i) => (
-            <article key={i} className="ec-obj">
-              <h4>{o.nombre}</h4>
-              {nombreMetrica(o.metrica) && <span className="ec-obj-metrica">{nombreMetrica(o.metrica)}</span>}
-              <div className="ec-obj-salto">
-                <span className="act">{fmtMetrica(o.actual, o.metrica)}</span>
-                <ArrowUpRight size={15} />
-                <span className="obj">{fmtMetrica(o.objetivo, o.metrica)}</span>
-              </div>
-              <span className="ec-obj-plazo"><Clock size={12} /> {o.plazo_dias != null ? `en ${num(o.plazo_dias)} días` : 'sin plazo'}</span>
-              {o.por_que && <p>{o.por_que}</p>}
-            </article>
-          ))}
+          {objetivos.map((o, i) => {
+            const vivo = vivoDe(o)
+            return (
+              <article key={i} className="ec-obj">
+                <h4>{o.nombre}</h4>
+                {nombreMetrica(o.metrica) && <span className="ec-obj-metrica">{nombreMetrica(o.metrica)}</span>}
+                <div className="ec-obj-salto">
+                  <span className="act">{fmtMetrica(o.actual, o.metrica)}</span>
+                  <ArrowUpRight size={15} />
+                  <span className="obj">{fmtMetrica(o.objetivo, o.metrica)}</span>
+                </div>
+                {vivo?.ahora != null && <span className="ec-obj-hoy">Hoy: <b>{fmtMetrica(vivo.ahora, o.metrica)}</b></span>}
+                <span className="ec-obj-plazo">
+                  <Clock size={12} /> {vivo?.quedan_dias != null ? `quedan ${num(vivo.quedan_dias)} días` : o.plazo_dias != null ? `en ${num(o.plazo_dias)} días` : 'sin plazo'}
+                </span>
+                {o.por_que && <p>{o.por_que}</p>}
+              </article>
+            )
+          })}
         </div>
       )}
     </Bloque>
@@ -631,6 +655,12 @@ export default function EstudioContenido({ clientId, onHayEstudio }) {
 
   const enCurso = base.en_curso || activo?.estado === 'en_curso'
   const hayEstudio = activo?.estado === 'listo'
+  // Las cifras de hoy solo valen para el último estudio (el del GET), no para
+  // uno abierto del historial.
+  const alDia = hayEstudio && activo.id === base.estudio?.id ? base.al_dia || null : null
+  const datosEtapa = alDia
+    ? { ...activo.datos, cuenta: { ...(activo.datos?.cuenta || {}), seguidores: alDia.cuenta?.seguidores ?? activo.datos?.cuenta?.seguidores }, etapa: alDia.etapa || activo.datos?.etapa }
+    : activo?.datos
   const historial = aLista(base.historial)
   const viendoViejo = hayEstudio && base.estudio?.id && activo?.id && activo.id !== base.estudio.id
   // El último pedido falló (lo cuenta el servidor), salvo que haya otro fallo
@@ -728,8 +758,8 @@ export default function EstudioContenido({ clientId, onHayEstudio }) {
           {activo.estudio?.resumen && <p className="ec-cabecera-resumen">{activo.estudio.resumen}</p>}
           <Resumen datos={activo.datos} />
           <Avisos avisos={[...aLista(activo.datos?.avisos), ...aLista(activo.estudio?.avisos)]} />
-          <Etapa datos={activo.datos} estudio={activo.estudio} />
-          <Objetivos estudio={activo.estudio} datos={activo.datos} />
+          <Etapa datos={datosEtapa} estudio={activo.estudio} alDia={alDia} generadoEn={activo.generado_en} />
+          <Objetivos estudio={activo.estudio} datos={activo.datos} alDia={alDia} generadoEn={activo.generado_en} />
           <Diagnostico estudio={activo.estudio} />
           <Plan estudio={activo.estudio} />
           <Experimentos estudio={activo.estudio} />
