@@ -190,7 +190,14 @@ function siembra() {
   M.ignoraPresupuesto = false
 }
 
+// La cuenta del tope del mes depende de los días que quedan: las cifras de
+// estos casos son de finales de octubre. Solo se fija la fecha (los
+// temporizadores siguen siendo los de verdad).
+const HOY_TEST = new Date('2026-10-28T10:00:00Z')
+
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(HOY_TEST)
   siembra()
   fallan.clear()
   vi.stubGlobal('fetch', vi.fn(fetchMeta))
@@ -201,6 +208,7 @@ beforeEach(() => {
   administra.mockResolvedValue(true)
 })
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   delete process.env.META_APP_SECRET
 })
