@@ -2,7 +2,7 @@
 // Se monta en /admin. Gestiona un perfil (cliente) a la vez, con selector arriba.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, Link2, Settings, Plus, Rocket, Menu, X, Package, UserCog, PhoneCall, Layers, CalendarClock, CalendarRange, BookOpen, FileText, Receipt, ShieldCheck, Bot, Sunrise, Newspaper, LayoutGrid, LogOut, Target, Radar, Megaphone, BarChart3 } from 'lucide-react'
+import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, Link2, Settings, Plus, Rocket, Menu, X, Package, UserCog, PhoneCall, Layers, CalendarClock, CalendarRange, BookOpen, FileText, Receipt, ShieldCheck, Bot, Sunrise, Newspaper, LayoutGrid, LogOut, Target, Radar, Megaphone, BarChart3, Mail } from 'lucide-react'
 import { listClients, createProfile, slugify, usersApi, brandOf } from './lib'
 import { productoActual, seccionDelProducto, seccionSiempre } from './producto'
 import { Modal, Field, Input } from './ui'
@@ -21,6 +21,7 @@ import Ads from './views/Ads.jsx'
 import Lienzo from './Lienzo'
 import Llamadas from './views/Llamadas'
 import Crm from './views/Crm'
+import EmailMarketing from './views/EmailMarketing.jsx'
 import Servicios from './views/Servicios'
 import Documentos from './views/Documentos'
 import Gastos from './views/Gastos'
@@ -48,6 +49,9 @@ const NAV = [
   { key: 'informe', tono: 'oro', label: 'Informe', icon: LayoutDashboard, title: 'Informe', sub: 'Resumen del negocio', C: Informe },
   { key: 'onboarding', tono: 'azul', label: 'Onboarding', icon: Rocket, title: 'Onboarding', sub: 'Alimenta a tu IA y trae tu sistema', C: Onboarding },
   { key: 'crm', tono: 'azul', label: 'CRM', icon: Users, title: 'CRM', sub: 'Tus contactos y pipeline', C: Crm },
+  // Email marketing: campañas de correo al CRM por la cuenta de Resend del
+  // perfil. Va detrás del CRM porque es de donde sale su audiencia.
+  { key: 'email', tono: 'azul', label: 'Email marketing', icon: Mail, title: 'Email marketing', sub: 'Campañas de correo a tus contactos, con sus bajas', C: EmailMarketing },
   // Radar: privado, solo para el perfil silvestre (se gatea por slug en `puede`).
   { key: 'radar', tono: 'rojo', label: 'Radar', icon: Radar, title: 'Radar', sub: 'Tecnología e ideas nuevas para investigar', C: RadarView },
   { key: 'servicios', tono: 'oro', label: 'Servicios', icon: Package, title: 'Servicios', sub: 'El catálogo que lo conecta todo', C: Servicios },

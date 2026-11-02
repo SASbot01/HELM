@@ -346,6 +346,9 @@ async function apiFetch(path, { method = 'GET', body } = {}) {
     const err = new Error(data?.error || `Error ${r.status}`)
     err.status = r.status
     if (data?.codigo) err.codigo = data.codigo
+    // El resto de la respuesta, por si trae cifras (Email marketing: el número
+    // nuevo de personas cuando la audiencia cambia antes de lanzar).
+    err.datos = data
     throw err
   }
   return data
@@ -482,6 +485,29 @@ export const metaAdsApi = {
   topes: (clientId, topes) => apiFetch(`/api/meta-ads?action=topes&${qMeta(clientId)}`, { method: 'POST', body: topes }),
   parar: (clientId, cuenta) => apiFetch(`/api/meta-ads?action=parar&${qMeta(clientId)}`, { method: 'POST', body: cuenta ? { cuenta } : {} }),
   reanudar: (clientId, cuenta) => apiFetch(`/api/meta-ads?action=reanudar&${qMeta(clientId)}`, { method: 'POST', body: { cuenta } }),
+}
+
+// Email marketing (api/email-marketing.js): campañas al CRM por la cuenta de
+// Resend del perfil. La clave se manda una vez y no vuelve: `estado` solo trae
+// los cuatro últimos. Cambiar o lanzar algo, solo quien manda en el perfil.
+const qEmail = (clientId, extra = '') => `/api/email-marketing?clientId=${encodeURIComponent(clientId)}${extra}`
+export const emailMarketingApi = {
+  estado: (clientId) => apiFetch(qEmail(clientId, '&action=estado')),
+  ajustes: (clientId, datos) => apiFetch(qEmail(clientId, '&action=ajustes'), { method: 'POST', body: datos }),
+  quitarClave: (clientId) => apiFetch(qEmail(clientId, '&action=clave'), { method: 'DELETE' }),
+  audiencia: (clientId, audiencia) => apiFetch(qEmail(clientId, '&action=audiencia'), { method: 'POST', body: audiencia }),
+  campanas: (clientId) => apiFetch(qEmail(clientId, '&action=campanas')),
+  campana: (clientId, id) => apiFetch(qEmail(clientId, `&action=campana&id=${encodeURIComponent(id)}`)),
+  guardar: (clientId, campana) => apiFetch(qEmail(clientId, '&action=guardar'), { method: 'POST', body: campana }),
+  duplicar: (clientId, id) => apiFetch(qEmail(clientId, '&action=duplicar'), { method: 'POST', body: { id } }),
+  borrar: (clientId, id) => apiFetch(qEmail(clientId, `&action=campana&id=${encodeURIComponent(id)}`), { method: 'DELETE' }),
+  prueba: (clientId, id) => apiFetch(qEmail(clientId, '&action=prueba'), { method: 'POST', body: { id } }),
+  lanzar: (clientId, id, confirmar) => apiFetch(qEmail(clientId, '&action=lanzar'), { method: 'POST', body: { id, confirmar } }),
+  pausar: (clientId, id) => apiFetch(qEmail(clientId, '&action=pausar'), { method: 'POST', body: { id } }),
+  reanudar: (clientId, id) => apiFetch(qEmail(clientId, '&action=reanudar'), { method: 'POST', body: { id } }),
+  bajas: (clientId) => apiFetch(qEmail(clientId, '&action=bajas')),
+  apuntarBaja: (clientId, email, nota) => apiFetch(qEmail(clientId, '&action=baja'), { method: 'POST', body: { email, nota } }),
+  quitarBaja: (clientId, email, nota) => apiFetch(qEmail(clientId, '&action=quitar-baja'), { method: 'POST', body: { email, nota, pedido: true } }),
 }
 
 // La bandeja de los agentes de departamento (api/propuestas.js): lo que

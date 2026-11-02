@@ -68,6 +68,7 @@ export const PRODUCTOS = {
     secciones: [
       'informe',      // el director: facturación y cobros del despacho
       'crm',          // clientes del despacho, con su pipeline
+      'email',        // boletines y avisos a los clientes del despacho
       'fiscal',       // plazos, avisos y dirección — el corazón del vertical
       'servicios',    // catálogo: cuotas y servicios que presta
       'equipo',       // los asesores
