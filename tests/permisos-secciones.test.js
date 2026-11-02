@@ -45,6 +45,17 @@ describe('permisos · secciones', () => {
     expect(puedeVer(DEFAULT_VISIBLE, 'editor', 'metricas')).toBe(true)
   })
 
+  it('Email marketing nace encendida pero nadie la trae de serie: la ve quien manda y a quien se le marque', () => {
+    expect(SECCIONES.map(s => s.key)).toContain('email')
+    expect(esOptIn('email')).toBe(false)
+    expect(seccionEncendida({}, 'email')).toBe(true)
+    for (const lista of Object.values(DEFAULT_VISIBLE)) expect(lista).not.toContain('email')
+    expect(puedeVer(DEFAULT_VISIBLE, 'closer', 'email')).toBe(false)
+    expect(puedeVer({ closer: ['crm', 'email'] }, 'closer', 'email')).toBe(true)
+    expect(puedeVer(DEFAULT_VISIBLE, 'closer', 'email', 'admin')).toBe(true)
+    expect(puedeVer(DEFAULT_VISIBLE, 'dueno', 'email')).toBe(true)
+  })
+
   it('Noticias no promete una pasada diaria, y dice que se puede buscar a mano', () => {
     const desc = SECCIONES.find(s => s.key === 'noticias').desc
     expect(desc).toBe('Las tres noticias del día de los temas del perfil; también cuando quieras con «Buscar ahora»')

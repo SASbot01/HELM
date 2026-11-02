@@ -69,6 +69,10 @@ const SECRETAS = new Set([
   'helm_ads_cuentas', 'helm_ads_metricas', 'helm_ads_acciones', 'helm_ads_paradas',
   // Editor de reels: los vídeos y los estilos, solo por api/editor.js.
   'helm_ediciones', 'helm_estilos_edicion',
+  // Email marketing: campañas, audiencias, envíos y bajas (correos de terceros),
+  // solo por api/email-marketing.js, la baja pública y el worker.
+  'helm_email_ajustes', 'helm_email_campanas', 'helm_email_mensajes', 'helm_email_destinatarios',
+  'helm_email_envios', 'helm_email_bajas', 'helm_email_resumen', 'helm_email_resumen_destinatarios',
 ])
 
 // LISTA BLANCA: las únicas tablas que el panel toca por aquí (las que usa

@@ -1,0 +1,84 @@
+/* Email marketing (EmailMarketing.jsx). Usa los tokens del tema (theme.css).
+   En el móvil nada desborda: las rejillas se doblan a una columna, los botones
+   saltan de línea y los correos o asuntos largos se parten. */
+.em { display: grid; gap: 14px; min-width: 0; max-width: 980px; }
+.em > .helm-tabs { justify-self: start; max-width: 100%; overflow-x: auto; }
+.em-legal { margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--text-dim); padding: 10px 13px; border-left: 2px solid var(--tono, var(--border-2)); background: var(--bg-1); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; overflow-wrap: anywhere; }
+.em-ayuda { margin: 0; font-size: 12.5px; line-height: 1.7; color: var(--text-dim); overflow-wrap: anywhere; }
+.em-ayuda code, .em-cuerpo { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+.em-nota { color: var(--text-mut); font-size: 11.5px; line-height: 1.6; }
+.em-error { color: var(--amber); display: inline-flex; gap: 5px; align-items: flex-start; }
+.em-error svg { flex: none; margin-top: 2px; }
+
+.em-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.em-cuenta { color: var(--text-mut); font-size: 12.5px; }
+.em-botones { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* La lista de campañas */
+.em-lista { display: grid; gap: 12px; min-width: 0; }
+.em-tarjetas { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+.em-tarjeta {
+  width: 100%; box-sizing: border-box; text-align: left; display: grid; gap: 5px; cursor: pointer; font: inherit; color: var(--text);
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 15px; min-width: 0;
+}
+.em-tarjeta:hover { border-color: var(--border-2); }
+.em-tarjeta-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; min-width: 0; }
+.em-tarjeta-cab b { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.em-tarjeta-cab .helm-badge { flex: none; }
+.em-tarjeta small { color: var(--text-mut); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+
+/* Una campaña */
+.em-campana { display: grid; gap: 14px; min-width: 0; }
+.em-bloque { display: grid; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px; min-width: 0; }
+.em-bloque h3 { margin: 0; display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; }
+.em-etapas { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; min-width: 0; }
+.em-etapas legend { padding: 0; margin-bottom: 6px; font-size: 12px; color: var(--text-dim); width: 100%; }
+.em-etapas legend small { color: var(--text-mut); }
+.em-check { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; overflow-wrap: anywhere; }
+.em-check input { flex: none; }
+.em-audiencia { display: grid; gap: 6px; padding: 11px 13px; background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius-sm); min-width: 0; }
+.em-audiencia p { margin: 0; font-size: 13.5px; }
+.em-audiencia small { color: var(--text-mut); font-size: 12px; line-height: 1.5; }
+.em-muestra { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; }
+.em-muestra li { display: flex; gap: 4px 10px; flex-wrap: wrap; font-size: 12.5px; min-width: 0; }
+.em-muestra li span { color: var(--text-mut); overflow-wrap: anywhere; min-width: 0; }
+.em-mensaje { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-1); min-width: 0; }
+.em-mensaje-cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.em-mensaje-cab b { font-size: 13px; }
+.em-mensaje textarea { resize: vertical; min-height: 140px; }
+.em-mensaje .helm-input, .em-campos .helm-input, .em-ajustes .helm-input { width: 100%; box-sizing: border-box; min-width: 0; }
+.em-franja { display: grid; grid-template-columns: repeat(2, minmax(0, 160px)); gap: 10px; }
+.em-cifras { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 110px), 1fr)); }
+.em-cifras div { display: grid; gap: 2px; padding: 10px 12px; background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.em-cifras b { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.em-cifras small { color: var(--text-mut); font-size: 11.5px; }
+.em-meta { margin: 0; color: var(--text-dim); font-size: 12.5px; line-height: 1.6; overflow-wrap: anywhere; }
+.em-asunto { margin: 0; overflow-wrap: anywhere; }
+.em-cuerpo { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-dim); background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; max-height: 320px; overflow: auto; }
+.em-confirmar { display: grid; gap: 8px; }
+.em-confirmar p { margin: 0; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.em-confirmar-n { font-size: 15px !important; }
+.em-confirmar-n b { font-size: 22px; font-variant-numeric: tabular-nums; }
+
+/* Bajas */
+.em-bajas { display: grid; gap: 12px; min-width: 0; }
+.em-apuntar { display: flex; gap: 8px; flex-wrap: wrap; max-width: 520px; }
+.em-apuntar .helm-input { flex: 1 1 220px; min-width: 0; }
+.em-filas { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.em-filas li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-sm); min-width: 0; }
+.em-filas li > div { display: grid; gap: 2px; min-width: 0; }
+.em-filas b { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.em-filas small { color: var(--text-mut); font-size: 12px; overflow-wrap: anywhere; }
+.em-filas .helm-btn { flex: none; }
+
+/* Ajustes */
+.em-ajustes { display: grid; gap: 14px; min-width: 0; }
+.em-campos { display: grid; gap: 4px 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); }
+.em-ajustes .helm-copyrow { flex-wrap: wrap; min-width: 0; }
+.em-ajustes .helm-copyrow code { min-width: 0; }
+
+@media (max-width: 520px) {
+  .em-franja { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .em-botones .helm-btn { flex: 1 1 auto; justify-content: center; }
+  .em-filas li { flex-direction: column; align-items: stretch; }
+}

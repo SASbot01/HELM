@@ -1,6 +1,7 @@
 // Una base en memoria con lo justo de PostgREST para las pruebas de la bandeja
-// (tests/propuestas*.test.js, tests/departamentos-index.test.js): filtros,
-// orden, límite, embebidos (`superadmins(...)` por superadmin_id), índices
+// (tests/propuestas*.test.js, tests/departamentos-index.test.js) y de Email
+// marketing (tests/email-*.test.js): filtros, orden, límite, páginas (range),
+// embebidos (`superadmins(...)` por superadmin_id), índices
 // únicos con onConflict/ignoreDuplicates, valores por defecto y fallos a
 // propósito. Como PostgREST, una escritura solo devuelve filas si lleva
 // `.select()` detrás, y un upsert con ignoreDuplicates solo las que inserta.
@@ -38,7 +39,7 @@ export function crearBase({ unicos = {}, defectos = {} } = {}) {
 
   function from(t) {
     const filtros = []
-    let op = 'select', datos = null, opciones = {}, columnas = '*', devolver = false, orden = null, tope = null
+    let op = 'select', datos = null, opciones = {}, columnas = '*', devolver = false, orden = null, tope = null, rango = null
     // Las columnas pedidas (las de arriba del todo; un embebido «tabla(...)»
     // trae la fila de esa tabla por <tabla sin la s>_id).
     const pedidas = () => {
@@ -75,6 +76,8 @@ export function crearBase({ unicos = {}, defectos = {} } = {}) {
         data = filas(t).filter(pasa)
         if (orden) data = [...data].sort((a, b) => compara(a[orden.c] ?? '', b[orden.c] ?? '') * (orden.asc ? 1 : -1))
         if (tope != null) data = data.slice(0, tope)
+        // .range(a, b) como PostgREST: de la fila a a la b, las dos incluidas.
+        if (rango) data = data.slice(rango[0], rango[1] + 1)
         data = data.map(f => copia(embebe(f)))
       } else if (op === 'insert') {
         const nuevas = (Array.isArray(datos) ? datos : [datos]).map(conDefectos)
@@ -127,6 +130,7 @@ export function crearBase({ unicos = {}, defectos = {} } = {}) {
       not(c, o, v) { const f = filtro(c, o, v); filtros.push(x => !f(x)); return q },
       order(c, o = {}) { orden = { c, asc: o.ascending !== false }; return q },
       limit(n) { tope = n; return q },
+      range(a, b) { rango = [a, b]; return q },
       insert(d) { op = 'insert'; datos = d; return q },
       update(d) { op = 'update'; datos = d; return q },
       upsert(d, o = {}) { op = 'upsert'; datos = d; opciones = o; return q },

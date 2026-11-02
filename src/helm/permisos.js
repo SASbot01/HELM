@@ -60,6 +60,10 @@ export const SECCIONES = [
   { key: 'avatar', label: 'Avatar de ventas', desc: 'La pestaña del Informe con el cliente tipo, sacado del CRM' },
   { key: 'onboarding', label: 'Onboarding', desc: 'Formularios y Biblia' },
   { key: 'crm', label: 'CRM', desc: 'Contactos y pipeline' },
+  // Nadie la trae de serie (no está en DEFAULT_VISIBLE): la ve quien manda en
+  // el perfil y a quien se le marque. Mandar o cambiar algo, solo quien manda
+  // (mandaEnPerfil en api/_lib/access.js), aunque se le enseñe a otro rol.
+  { key: 'email', label: 'Email marketing', desc: 'Campañas de correo a los contactos del CRM, con sus bajas' },
   { key: 'radar', label: 'Radar', desc: 'Tecnología e ideas nuevas para investigar (privado)' },
   { key: 'servicios', label: 'Servicios', desc: 'Catálogo de servicios' },
   { key: 'documentos', label: 'Documentos', desc: 'Presupuestos y facturas' },
