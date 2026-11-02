@@ -717,6 +717,25 @@ async function vigilaAds() {
   }
 }
 
+// Email marketing (api/_lib/email/motor.js): cada minuto, lo que toque de las
+// campañas activas, por la cuenta de Resend de cada perfil. Con su propio reloj
+// y su cerrojo, como el vigilante: un correo programado a las 9:00 no puede
+// esperar a que acabe una transcripción, y dos pasadas a la vez se pisarían.
+const { enviaCorreos } = await import('../api/_lib/email/motor.js')
+const CADA_CUANTO_CORREOS_MS = 60_000
+let enviandoCorreos = false
+async function mandaCorreos() {
+  if (enviandoCorreos || parando) return
+  enviandoCorreos = true
+  try {
+    const r = await enviaCorreos({ db, log }).catch(e => { log('no pude mandar los correos de las campañas:', e.message); return [] })
+    const n = (r || []).reduce((t, x) => t + (x.enviados || 0), 0)
+    if (n) log(`email marketing: ${n} correo(s) enviado(s)`)
+  } finally {
+    enviandoCorreos = false
+  }
+}
+
 const CADA_CUANTO_AGENDA_MS = 60_000
 let ultimaAgenda = 0
 
@@ -742,6 +761,8 @@ async function bucle() {
   await cierraHuerfanas().catch(e => log('no pude cerrar las ejecuciones a medias:', e.message))
   vigilaAds()
   const relojAds = setInterval(vigilaAds, CADA_CUANTO_VIGILAR_ADS_MS)
+  mandaCorreos()
+  const relojCorreos = setInterval(mandaCorreos, CADA_CUANTO_CORREOS_MS)
   while (!parando) {
     let job = null
     try {
@@ -784,6 +805,10 @@ async function bucle() {
     }
   }
   clearInterval(relojAds)
+  clearInterval(relojCorreos)
+  // Si había una pasada de correos a medias, se la deja acabar: cortarla entre
+  // «Resend lo aceptó» y «apuntado» obligaría a rematarla en la siguiente.
+  for (let i = 0; enviandoCorreos && i < 120; i++) await duerme(500)
   log('parado.')
   process.exit(0)
 }

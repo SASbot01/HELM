@@ -170,13 +170,24 @@ export const SECCION_AGENTES = 'contenido'
  * Lanza si falla la base al mirar el oficio: no se deja gastar a ciegas.
  */
 export async function puedeUsarAgentes(auth, clientId) {
-  if (!auth || !clientId) return false
+  return puedeVerSeccion(auth, clientId, SECCION_AGENTES)
+}
+
+/**
+ * ¿Le aparece a esta sesión esa sección del panel en este perfil? La misma
+ * escalera que puedeUsarAgentes (que es esto con SECCION_AGENTES), para una
+ * sección cualquiera que NO nazca apagada (las de sector y los módulos de
+ * permisos.js no valen aquí: con la clave ausente esto las da por encendidas).
+ * Lo usa Email marketing (api/email-marketing.js) con la clave 'email'.
+ */
+export async function puedeVerSeccion(auth, clientId, seccion) {
+  if (!auth || !clientId || !seccion) return false
   // Sin la tabla o sin la columna, como el panel: todo encendido y los
   // permisos de serie.
   const { data, error } = await supabase.from('helm_permissions')
     .select('sections, visible').eq('client_id', clientId).maybeSingle()
   const permisos = error ? {} : (data || {})
-  if (permisos.sections?.[SECCION_AGENTES] === false) return false
+  if (permisos.sections?.[seccion] === false) return false
 
   if (auth.plataforma || auth.superadmin || auth.role === 'superadmin') return true
   if (NIVELES_TOTALES.includes(auth.nivel)) return true
@@ -196,5 +207,36 @@ export async function puedeUsarAgentes(auth, clientId) {
   const guardados = permisos.visible && typeof permisos.visible === 'object' && Object.keys(permisos.visible).length
     ? permisos.visible : DEFAULT_VISIBLE
   const lista = guardados[rol] ?? DEFAULT_VISIBLE[rol] ?? []
-  return Array.isArray(lista) && lista.includes(SECCION_AGENTES)
+  return Array.isArray(lista) && lista.includes(seccion)
+}
+
+/**
+ * ¿Manda esta sesión en el perfil? Para lo que sale hacia fuera en nombre del
+ * negocio y no tiene vuelta atrás (Email marketing: guardar la clave de Resend,
+ * lanzar una campaña a medio CRM). Ver una sección no basta: un closer al que
+ * le enseñan las campañas puede mirarlas, no mandarlas.
+ *
+ * La misma idea que «manda en todo» del panel (sesionHelm en
+ * src/helm/permisos.js), pero leída en el servidor:
+ *   · la plataforma y el administrador de la agencia (que el perfil es de la
+ *     suya ya lo ha mirado requireProfileAccess, que va antes);
+ *   · los niveles de acceso total del perfil (propietario y admin);
+ *   · el dueño (oficio 'dueno'), tenga el nivel que tenga;
+ *   · un acceso SIN nivel (de antes de los niveles) y sin oficio: quien montó
+ *     el negocio. Un 'member' sin oficio, no: su nivel ya dice que no manda.
+ * Lanza si falla la base al mirar el oficio: no se deja mandar a ciegas.
+ */
+export async function mandaEnPerfil(auth, clientId) {
+  if (!auth || !clientId) return false
+  if (auth.plataforma || auth.superadmin || auth.role === 'superadmin') return true
+  if (NIVELES_TOTALES.includes(auth.nivel)) return true
+  let rol = null
+  if (auth.userId) {
+    const { data: persona, error } = await supabase.from('helm_team')
+      .select('role').eq('login_id', auth.userId).eq('client_id', clientId).maybeSingle()
+    if (error) throw error
+    rol = persona?.role || null
+  }
+  if (rol === 'dueno') return true
+  return !rol && !auth.nivel
 }
