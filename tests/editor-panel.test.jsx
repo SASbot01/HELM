@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // El Editor de reels en pantalla (src/agents/EditorReel.jsx), pulsando de
 // verdad con la API simulada:
-//   · la galería: los 31 estilos, el filtro por idioma y tema, «Crear» abre el
+//   · la galería: los 32 estilos, el filtro por idioma y tema, «Crear» abre el
 //     taller con ese estilo y «Copiar prompt» copia el suyo;
 //   · el precio antes de subir («Esto cuesta… · te quedan…» o «Gratis en tu
 //     agencia») y un vídeo de más de 10 minutos que no entra;
@@ -14,7 +14,7 @@
 //   · la lista: cada estado en castellano con su barra, lo cobrado, una subida
 //     a medias que se sigue eligiendo el mismo archivo, una entera que se lanza
 //     sin él, y que no se sondea por subidas a medias;
-//   · los 31 estilos son parámetros válidos para el motor.
+//   · los 32 estilos son parámetros válidos para el motor.
 // Y que ya no aparece «En construcción» por ningún lado.
 //
 // Usa jsdom y @testing-library/react, que vienen del node_modules compartido
@@ -157,7 +157,7 @@ async function eligeVideo(a = video()) {
 }
 
 describe('EditorReel · la galería de estilos', () => {
-  it('enseña los 31 estilos, filtra por idioma y tema, y ya no dice «En construcción»', async () => {
+  it('enseña los 32 estilos, filtra por idioma y tema, y ya no dice «En construcción»', async () => {
     const { container } = pinta()
     await screen.findByText('lista.mp4')
     expect(tarjetas(container)).toHaveLength(ESTILOS_REFERENCIA.length)
@@ -743,9 +743,9 @@ describe('EditorReel · tus vídeos', () => {
   })
 })
 
-describe('los 31 estilos de referencia', () => {
-  it('son 31 (los 30 y marcoalbanny), sin repetir, con su perfil y parámetros válidos para el motor', () => {
-    expect(ESTILOS_REFERENCIA).toHaveLength(31)
+describe('los 32 estilos de referencia', () => {
+  it('son 32 (los 30, marcoalbanny y bellucciproduction), sin repetir, con su perfil y parámetros válidos para el motor', () => {
+    expect(ESTILOS_REFERENCIA).toHaveLength(32)
     expect(new Set(ESTILOS_REFERENCIA.map(e => e.clave)).size).toBe(ESTILOS_REFERENCIA.length)
     expect(ESTILOS_REFERENCIA.filter(e => /abdaal/i.test(e.clave))).toHaveLength(1)
     for (const e of ESTILOS_REFERENCIA) {

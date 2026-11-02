@@ -1,4 +1,4 @@
-// HELM — Editor de reels: la biblioteca de estilos de referencia (31).
+// HELM — Editor de reels: la biblioteca de estilos de referencia (32).
 //
 // Cada estilo lleva el NOMBRE DEL PERFIL de donde sale (lo pidió Alex el
 // 2026-10-19). En el editor, cada tarjeta tiene dos botones:
@@ -11,9 +11,10 @@
 //                       todo lo que el motor no hace (rótulos, gráficos, SFX…).
 //
 // De dónde sale cada uno:
-//   · Los 7 primeros, de mirar FOTOGRAMAS reales de sus reels (los 6 de
-//     2026-10-19 y marcoalbanny, 2026-10-27): por eso traen `reels` con su
-//     portada (public/agentes/editor-estilos/). Lo que un fotograma no da (el
+//   · Los 8 primeros, de mirar FOTOGRAMAS reales de sus reels (los 6 de
+//     2026-10-19, marcoalbanny el 2026-10-27 y bellucciproduction el
+//     2026-11-02): por eso traen `reels` con su portada
+//     (public/agentes/editor-estilos/). Lo que un fotograma no da (el
 //     ritmo exacto) va marcado «a ajustar».
 //   · Los otros 24, de la investigación de 2026-10-27 (creadores de negocio,
 //     marketing e IA en español e inglés, con fuentes públicas en `fuentes`).
@@ -207,6 +208,33 @@ export const ESTILOS_REFERENCIA = [
       pausaFrase: 0.4, silencioMax: 0.25, silencioDeja: 0.08, recursosModo: 'corte', recursoDuracion: 3, musicaVolumen: 0.08,
     },
     prompt: 'Edita el reel en el estilo de marcoalbanny (explicador técnico de filmmaking, en español). Todo es ANIMACIÓN sobre voz en off, sin persona a cámara: fondo azul noche (#0B1020) con un brillo radial suave y una rejilla muy tenue. Arriba, una cabecera fija de interfaz en monoespaciada pequeña («● REC // TEMA» a la izquierda y «A VS B» a la derecha) y una barra de progreso fina en cian abajo del todo. El vídeo va por CAPÍTULOS numerados en monoespaciada («01 // EL PÍXEL», «02 // TONOS POR CANAL», «03 // COLORES TOTALES»…), uno por idea. Dos colores de marca para la comparación: ÁMBAR (#F5A623) para la opción A y CIAN (#22D3EE) para la B, siempre los mismos. Cada idea se ve con un GRÁFICO que se construye al ritmo de la voz: barras de color, escaleras de tonos que suben, contadores que cuentan hasta la cifra (16.777.216 → 1.073.741.824, «×64»), comparación lado a lado con etiquetas en píldora, deslizadores de un «editor de color» que se mueven, y tarjetas con casillas que se marcan una a una. Remata cada bloque con un SELLO inclinado tipo etiqueta («SE ROMPE» en rojo, «AGUANTA» en cian, «SUFICIENTE» en ámbar, «SIN DUDAR»). Titulares en sans muy gruesa en mayúsculas, grandes y centrados. Subtítulos karaoke abajo, en mayúsculas y negrita: la palabra que suena en blanco, las que vienen en gris y las cifras o palabras clave en el color de su opción. Cierre: «LA REGLA» y la frase final enorme en cian, con una barra arcoíris y una línea pequeña en monoespaciada («A · B · TÚ DECIDES»). Ritmo: un cambio de gráfico por frase (2-4 s), animaciones de entrada rápidas y suaves, sin cortes bruscos; música electrónica muy baja. [Duración de cada animación: ajustar a la voz.]' + SOLO_ESTILO,
+  },
+
+  {
+    // Añadido el 2026-11-02 a petición de Alex, de mirar el reel fotograma a
+    // fotograma (uno por segundo, 36 s) y su transcripción en el corpus.
+    clave: 'bellucciproduction',
+    nombre: 'bellucciproduction',
+    persona: 'Bellucci Brothers',
+    nicho: 'productora de vídeo / marca para negocios (Miami)',
+    tema: 'filmmaking',
+    idioma: 'en',
+    enlace: ig('bellucciproduction'),
+    reels: [
+      { shortcode: 'DeSBBMIuNv5', url: 'https://www.instagram.com/reel/DeSBBMIuNv5/', caption: 'MIAMI ENTREPRENEURS: your brand is EVERYTHING', likes: 2439 },
+    ],
+    // Lo que pone el motor: UNA palabra blanca a la altura del pecho, sin borde
+    // (sobre fondo desenfocado se lee sola), la clave en rosa, frases cortadas
+    // a ras y recursos a corte rápidos para el montaje de ciudad. El resto (la
+    // palabra gigante detrás del sujeto, los neones, los gráficos y el cierre)
+    // va por el prompt.
+    estilo: {
+      palabrasPorBloque: 1, mayusculas: false, colorTexto: '#FFFFFF', colorResalte: '#FF4FD8', colorBorde: '#000000',
+      tamano: 56, borde: 0, posicion: 55, zoom: false,
+      pausaFrase: 0.35, silencioMax: 0.25, silencioDeja: 0.06, quitarTomas: true, quitarMuletillas: true,
+      recursosModo: 'corte', recursoDuracion: 1.5, musicaVolumen: 0.1,
+    },
+    prompt: 'Edita el reel en el estilo de bellucciproduction (productora de vídeo de Miami: anuncio de marca personal para negocios, en inglés). Talking head CAMINANDO hacia cámara al aire libre, plano medio-largo con mucha profundidad de campo (fondo de ciudad muy desenfocado), y un sitio distinto en cada frase con la misma ropa: calle con tráfico, plaza, un rótulo de neón, el paseo junto al agua y un muelle. Subtítulos de UNA palabra cada vez, en blanco, sans en negrita y pequeña, centrada a la altura del pecho. Las palabras clave se convierten en TÍTULOS gigantes: «your BRAND» en dos tamaños apilados (la pequeña en blanco, la grande en degradado rosa-magenta), «VIDEOS / you need BETTER» con la palabra fuerte en azul, a veces colocadas DETRÁS del sujeto (recorte de la persona por delante del texto). Rótulos en NEÓN manuscrito rosa que se encienden con parpadeo («Miami», «Dale!»). Entre el gancho y el desarrollo, un MONTAJE de ciudad de 6-7 planos de menos de 1 s: dron sobre la playa, macro de las gafas de sol, contrapicado girando entre rascacielos, hiperlapso de calle, vida nocturna con gran angular y el skyline de noche con el neón, unidos con transiciones de barrido y rampas de velocidad. GRÁFICOS animados alrededor del sujeto cuando lo nombra: el año («2026») girando dentro de un anillo, los iconos de las redes (Instagram, YouTube, TikTok, Facebook, Discord, Threads) orbitando a su alrededor en 3D y una curva de crecimiento morado-naranja que sube por detrás. Color cálido y saturado, paleta Miami Vice (rosa, turquesa, cielo azul). Cierre: «SEND US A MESSAGE» enorme en blanco detrás del sujeto y, a negro, el logotipo de la productora. Ritmo: corte en cada frase (2-3 s), música electrónica con pegada y efectos de barrido en las transiciones. [Duración de cada plano del montaje: ajustar a la música.]' + SOLO_ESTILO,
   },
 
   // ── Negocio y ventas, en inglés ───────────────────────────────────────────
