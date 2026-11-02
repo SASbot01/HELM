@@ -41,6 +41,10 @@ class IgError extends Error {
   }
 }
 
+// Lo que se enseña cuando Meta ya no acepta el token (lo ha cancelado o ha
+// caducado): su texto viene en inglés y no dice qué hacer.
+const IG_CADUCADO = 'Meta ha cancelado el permiso de Instagram de este perfil. Vuelve a conectarlo en Ajustes → Integraciones → Instagram.'
+
 // La URL que Meta tiene registrada como redirect. Debe coincidir carácter a
 // carácter con la del panel, así que manda la variable de entorno y lo demás es
 // deducción para desarrollo.
@@ -91,7 +95,7 @@ async function pedir(url, opciones = {}) {
     const msg = data?.error?.message || data?.error_message || `Error ${r.status}`
     const code = Number(data?.error?.code)
     const caducado = r.status === 401 || code === 190 || code === 102
-    throw new IgError(msg, caducado ? 401 : (r.status || 502))
+    throw new IgError(caducado ? IG_CADUCADO : msg, caducado ? 401 : (r.status || 502))
   }
   return data
 }
@@ -317,7 +321,7 @@ export async function getToken(supabase, clientId) {
       // Si la renovación falla pero el token aún vale, se sigue con el viejo:
       // ya avisará el propio Meta cuando de verdad haya caducado.
       if (caduca > Date.now()) return { token: cfg.token, config: cfg, row }
-      throw new IgError('El permiso de Instagram ha caducado. Vuelve a conectar la cuenta.', 401)
+      throw new IgError(IG_CADUCADO, 401)
     }
   }
   return { token: cfg.token, config: cfg, row }

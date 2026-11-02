@@ -94,6 +94,6 @@ describe('altasYBajas', () => {
       : { ok: true, json: async () => ({ data: [{ total_value: { breakdowns: [{ results: [{ dimension_values: ['FOLLOWER'], value: 1 }] }] } }] }) }))
     expect(await altasYBajas('tok', { dias: 3, hoy: HOY })).toHaveLength(2)
     global.fetch = vi.fn(async () => ({ ok: false, status: 400, json: async () => ({ error: { message: 'Invalid OAuth access token', code: 190 } }) }))
-    await expect(altasYBajas('tok', { dias: 3, hoy: HOY })).rejects.toThrow(/OAuth/)
+    await expect(altasYBajas('tok', { dias: 3, hoy: HOY })).rejects.toThrow(/Vuelve a conectarlo/)
   })
 })

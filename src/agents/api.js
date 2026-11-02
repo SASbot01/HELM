@@ -2,7 +2,9 @@
 //
 // Propio y no el de src/helm/lib.js a propósito: /agents es una zona aparte,
 // solo para superadmin, y no depende del panel de perfiles. Mismo contrato de
-// sesión, eso sí: el JWT de admin en localStorage y vuelta al login si caduca.
+// sesión, eso sí: el JWT de admin en localStorage y vuelta al login si caduca
+// (solo si caduca de verdad: ver src/helm/sesion.js).
+import { tras401 } from '../helm/sesion'
 
 async function pide(path, { method = 'GET', body } = {}) {
   const token = localStorage.getItem('bw_admin_jwt')
@@ -15,10 +17,7 @@ async function pide(path, { method = 'GET', body } = {}) {
     ...(body ? { body: JSON.stringify(body) } : {}),
   })
   const data = await r.json().catch(() => ({}))
-  if (r.status === 401) {
-    localStorage.removeItem('bw_admin_jwt')
-    localStorage.removeItem('bw_superadmin')
-    if (typeof window !== 'undefined') window.location.href = '/login'
+  if (r.status === 401 && await tras401(token)) {
     throw new Error('Tu sesión ha caducado. Vuelve a entrar.')
   }
   // 403 tiene su propio mensaje: /agents no es para cualquiera con sesión.

@@ -1,5 +1,5 @@
 import { supabase, toAppFormat } from './lib/supabase.js'
-import { applyCors, rateLimit, getClientIp, signJwt, writeAudit } from './_lib/auth.js'
+import { applyCors, rateLimit, getClientIp, signJwt, writeAudit, validateAuth } from './_lib/auth.js'
 import { verifyPassword } from './_lib/passwords.js'
 
 export default async function handler(req, res) {
@@ -148,29 +148,24 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true, user, token })
   }
 
-  // GET ?action=verify — Verifica el JWT del admin y devuelve {isSuperAdmin, email}.
-  // Implementa la parte server del Sprint 0 T0.7: el frontend ya no decide
-  // super-admin solo por presencia de `bw_superadmin` en localStorage; ahora
-  // monta y llama a este endpoint con Bearer <bw_admin_jwt>; si falla, limpia
-  // el localStorage y desactiva el modo super-admin.
+  // GET ?action=verify — ¿Sigue valiendo esta sesión? Devuelve {isSuperAdmin, email}.
+  // Lo pregunta el panel ante un 401 (src/helm/sesion.js) antes de mandarte al
+  // login: un 401 también puede ser de Instagram o Google con el permiso
+  // caducado. Por eso es la misma comprobación que la de cualquier endpoint
+  // (validateAuth: firma, tipo de token y cuenta o acceso todavía activos), y
+  // un 401 de aquí quiere decir, solo, que la sesión ya no vale.
   if (req.method === 'GET' && action === 'verify') {
     const header = req.headers?.authorization || req.headers?.Authorization || ''
-    const token = header.startsWith('Bearer ') ? header.slice(7) : ''
-    if (!token) {
+    if (!header.startsWith('Bearer ')) {
       return res.status(401).json({ ok: false, isSuperAdmin: false, error: 'no_token' })
     }
     try {
-      const { verifyJwt } = await import('./_lib/auth.js')
-      const payload = await verifyJwt(token)
-      // Como en validateAuth: un token con `kind` (un enlace de alta, la
-      // sesión de una comunidad…) está bien firmado, pero no es una sesión.
-      if (payload.kind) throw new Error(`este token es de tipo "${payload.kind}" y no sirve para el panel`)
-      const isSuperAdmin = payload.superadmin === true || payload.role === 'superadmin'
+      const auth = await validateAuth(req, { required: true })
       return res.status(200).json({
         ok: true,
-        isSuperAdmin,
-        email: payload.email || null,
-        userId: payload.sub || null,
+        isSuperAdmin: auth.superadmin === true || auth.role === 'superadmin',
+        email: auth.email || null,
+        userId: auth.userId || null,
       })
     } catch (err) {
       return res.status(401).json({ ok: false, isSuperAdmin: false, error: err.message })

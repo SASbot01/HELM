@@ -3,6 +3,7 @@ import { supabase } from '../utils/supabase'
 import { esDeEsteProducto, productoActual } from './producto'
 import { SLUG_RE, slugify, RUTAS_DE_LA_WEB, filaPerfilNuevo, pipelineInicial } from './perfilNuevo'
 import { tipoDeArchivo, NO_ADMITIDO } from '../../api/_lib/almacen.js'
+import { tras401 } from './sesion'
 
 export { supabase }
 
@@ -325,14 +326,11 @@ async function apiFetch(path, { method = 'GET', body } = {}) {
     ...(body ? { body: JSON.stringify(body) } : {}),
   })
   const data = await r.json().catch(() => ({}))
-  if (r.status === 401) {
-    // Sesión sin JWT válido (o caducado): no tiene arreglo desde aquí, hay que
-    // volver a entrar. Limpiamos y mandamos al login en vez de dejar la vista
-    // colgada con un error que el usuario no puede resolver.
-    localStorage.removeItem('bw_admin_jwt')
-    localStorage.removeItem('bw_superadmin')
-    localStorage.removeItem('bw_client')
-    if (typeof window !== 'undefined') window.location.href = '/login'
+  // Sesión sin JWT válido (o caducado): no tiene arreglo desde aquí, hay que
+  // volver a entrar. Pero un 401 también puede ser de Instagram, Google o Meta
+  // Ads con el permiso caducado: entonces la sesión sigue y la vista enseña el
+  // mensaje (ver ./sesion.js).
+  if (r.status === 401 && await tras401(token)) {
     throw new Error('Tu sesión ha caducado. Vuelve a iniciar sesión.')
   }
   // Sin créditos: el panel abre la recarga esté donde esté (AvisoSinSaldo, en
@@ -898,11 +896,7 @@ async function pideEditor(path, { method = 'GET', body } = {}) {
   })
   const data = await r.json().catch(() => ({}))
   // La sesión caducada y el sin saldo, igual que en apiFetch.
-  if (r.status === 401) {
-    localStorage.removeItem('bw_admin_jwt')
-    localStorage.removeItem('bw_superadmin')
-    localStorage.removeItem('bw_client')
-    if (typeof window !== 'undefined') window.location.href = '/login'
+  if (r.status === 401 && await tras401(token)) {
     throw Object.assign(new Error('Tu sesión ha caducado. Vuelve a iniciar sesión.'), { status: 401, datos: data })
   }
   if (r.status === 402 && typeof window !== 'undefined') {
