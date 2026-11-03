@@ -1670,6 +1670,7 @@ export default function Ajustes({ clientId, client, onClientUpdate }) {
       <Tabs tabs={AJUSTES_TABS} value={tab} onChange={setTab} />
       {tab === 'integraciones' ? (
         <div className="helm-grid" style={{ gap: 20 }}>
+          {esSuperadmin() && <ConectorClaudeCard clientId={clientId} nombre={client?.name} />}
           <GoogleCard clientId={clientId} />
           <InstagramCard clientId={clientId} />
           <CalendlyCard clientId={clientId} />
@@ -1684,7 +1685,6 @@ export default function Ajustes({ clientId, client, onClientUpdate }) {
         : (
           <div className="helm-grid" style={{ gap: 20 }}>
             <IaCard clientId={clientId} />
-            {esSuperadmin() && <ConectorClaudeCard clientId={clientId} nombre={client?.name} />}
           </div>
         )}
     </div>
