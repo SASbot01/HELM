@@ -416,6 +416,9 @@ async function school(b, { ip } = {}) {
   if (!nombre) throw fallo(400, 'Dinos cómo te llamas')
   const extra = {
     dedico: txt(b.dedico, 120),
+    quiero: txt(b.quiero, 120),
+    ingreso: txt(b.ingreso, 40),
+    usa_ia: txt(b.usa_ia, 40),
     edad: txt(b.edad, 12),
     residencia: txt(b.residencia, 120),
     telefono: txt(b.telefono, 40),
@@ -423,7 +426,7 @@ async function school(b, { ip } = {}) {
   }
   const c = comunidadPorClave('aiparatodo')
   const clientId = await perfil(c.perfil)
-  const linea = ['HELM Academy · se apuntó', extra.dedico && `dedica: ${extra.dedico}`, extra.residencia && `de ${extra.residencia}`, extra.edad && `${extra.edad} años`].filter(Boolean).join(' · ')
+  const linea = ['HELM Academy · se apuntó', extra.dedico && `dedica: ${extra.dedico}`, extra.quiero && `quiere: ${extra.quiero}`, extra.ingreso && `meta: ${extra.ingreso}`, extra.usa_ia && `IA: ${extra.usa_ia}`, extra.residencia && `de ${extra.residencia}`, extra.edad && `${extra.edad} años`].filter(Boolean).join(' · ')
   const previo = await buscar(clientId, correo, 'id, name, notes, phone, custom_fields, pipeline_id, status')
   // Apuntarse a HELM Academy da el acceso a AI para todo al momento (Alex,
   // 27-oct): para entrar basta con poner este mismo correo. Sin solicitud ni
