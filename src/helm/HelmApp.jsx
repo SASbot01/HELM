@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, Link2, Settings, Plus, Rocket, Menu, X, Package, UserCog, PhoneCall, Layers, CalendarClock, CalendarRange, BookOpen, FileText, Receipt, ShieldCheck, Bot, Sunrise, Newspaper, LayoutGrid, LogOut, Target, Radar, Megaphone, BarChart3, Mail } from 'lucide-react'
-import { listClients, createProfile, slugify, usersApi, brandOf } from './lib'
+import { listClients, createProfile, slugify, usersApi, brandOf, perfilApi } from './lib'
 import { productoActual, seccionDelProducto, seccionSiempre } from './producto'
 import { Modal, Field, Input } from './ui'
 import Guia from './Guia'
@@ -287,27 +287,51 @@ export default function HelmApp() {
     }
   }
 
-  // Cambiar de perfil desde el selector = cambiar de URL.
-  function goToClient(id) {
+  // Cambiar de perfil desde el selector. Un superadmin solo cambia de URL. Una
+  // cuenta de equipo con acceso a varios perfiles reemite el token (su nivel es
+  // el del perfil nuevo): hasta que no lo tiene, no se navega, o el panel
+  // pediría datos de un perfil para el que el token aún no vale. Se recarga para
+  // releer la sesión nueva de localStorage sin reconciliar el estado a mano.
+  async function goToClient(id) {
     const c = clients.find(x => x.id === id)
-    if (c) navigate('/' + c.slug)
-    else selectClient(id)
+    if (!c) return selectClient(id)
+    if (isClient) {
+      if (id === clientId) return
+      try {
+        const { token, user } = await perfilApi.cambiar(id)
+        if (token) localStorage.setItem('bw_admin_jwt', token)
+        localStorage.setItem('bw_client', JSON.stringify({
+          email: user.email, name: user.name, clientId: user.clientId,
+          clientName: user.clientName, clientSlug: user.clientSlug, guideSeen: true,
+          teamRole: user.teamRole || null, level: user.level || null, helmTeamId: user.helmTeamId || null,
+        }))
+        localStorage.setItem(LAST_CLIENT_KEY, user.clientId)
+      } catch (err) {
+        window.alert(err.message || 'No se pudo cambiar de perfil')
+        return
+      }
+      window.location.assign('/' + c.slug)
+      return
+    }
+    navigate('/' + c.slug)
   }
 
   // Carga la lista de perfiles y restaura el último seleccionado.
   async function refreshClients(preferId) {
-    const all = await listClients()
-    // El cliente solo ve el suyo, pase lo que pase.
-    const cs = isClient ? all.filter(c => c.id === clientSession.clientId) : all
+    let cs
+    if (isClient) {
+      // Una cuenta de equipo puede tener acceso a VARIOS perfiles: el suyo de
+      // origen más aquellos donde la hayan añadido al equipo. La lista la da el
+      // servidor (mis-perfiles); si fallara, al menos el suyo de origen.
+      const r = await perfilApi.mios().catch(() => null)
+      cs = (r?.perfiles && r.perfiles.length)
+        ? r.perfiles
+        : (await listClients()).filter(c => c.id === clientSession.clientId)
+    } else {
+      cs = await listClients()
+    }
     setClients(cs)
     setLoadingClients(false)
-
-    // Un cliente que se cuele en el slug de otro perfil vuelve al suyo.
-    if (isClient && urlSlug && cs[0] && urlSlug !== cs[0].slug) {
-      navigate('/' + cs[0].slug, { replace: true })
-      selectClient(cs[0].id)
-      return cs
-    }
 
     // El administrador que entra sin slug (/admin) no cae en ningún perfil:
     // ve el tablero con todos y elige él.
@@ -315,9 +339,15 @@ export default function HelmApp() {
 
     const bySlug = urlSlug ? cs.find(c => c.slug === urlSlug) : null
     const saved = preferId || localStorage.getItem(LAST_CLIENT_KEY)
-    const pick = bySlug || (isClient ? cs[0] : (cs.find(c => c.id === saved) || cs[0]))
+    // Un cliente que entra por el slug de un perfil al que SÍ tiene acceso se
+    // queda ahí; si el slug no es ninguno de los suyos, va a su perfil por
+    // defecto (el guardado, su de origen, o el primero).
+    const pordefecto = isClient
+      ? (cs.find(c => c.id === saved) || cs.find(c => c.id === clientSession.clientId) || cs[0])
+      : (cs.find(c => c.id === saved) || cs[0])
+    const pick = bySlug || pordefecto
     selectClient(pick ? pick.id : null)
-    // Sin slug en la URL (o con uno que no existe): la fijamos al perfil elegido.
+    // Sin slug en la URL (o con uno que no es suyo): la fijamos al perfil elegido.
     if (pick && urlSlug !== pick.slug) navigate('/' + pick.slug, { replace: true })
     return cs
   }
@@ -560,7 +590,15 @@ export default function HelmApp() {
             <div className="helm-top-actions">
               {clientId && <Notificaciones key={clientId} clientId={clientId} onNavigate={go} />}
               {isClient ? (
-                <span className="helm-badge">{marca.name}</span>
+                // Con acceso a varios perfiles, un selector para saltar entre
+                // ellos; con uno solo, la insignia de siempre.
+                clients.length > 1 ? (
+                  <select className="helm-select" value={clientId || ''} onChange={e => goToClient(e.target.value)} aria-label="Cambiar de perfil">
+                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                ) : (
+                  <span className="helm-badge">{marca.name}</span>
+                )
               ) : (
                 <>
                   <button className="helm-btn" onClick={() => navigate('/admin')} title="Ver todos los perfiles">

@@ -90,27 +90,46 @@ async function cuentaSuperadmin(sub, payload) {
 // valía 12 h aunque se le quitara el acceso o se desactivara. Se relee un
 // minuto como mucho y, de paso, el servidor sabe su NIVEL (propietario, admin,
 // miembro), que el JWT no lleva y que hacía falta para no fiarse del navegador.
-const accesosVistos = new Map() // sub -> { cuenta, exp }
+// La clave lleva el perfil: una misma cuenta puede entrar a varios (el suyo de
+// origen y aquellos donde la hayan añadido al equipo), y en cada uno vale una
+// cosa distinta.
+const accesosVistos = new Map() // `${sub}:${clientId}` -> { cuenta, exp }
 async function cuentaAcceso(sub, payload) {
   if (!sub) return { ok: false, nivel: null }
-  const visto = accesosVistos.get(sub)
+  const clientId = payload.clientId || null
+  const key = `${sub}:${clientId || ''}`
+  const visto = accesosVistos.get(key)
   if (visto && visto.exp > Date.now()) return visto.cuenta
   const { data, error } = await supabase.from('team')
     .select('active, role, client_id').eq('id', sub).maybeSingle()
   // Base caída: como con los superadmins, vale el token (está firmado).
   if (error) return { ok: true, nivel: null }
-  const cuenta = {
-    ok: Boolean(data) && data.active !== false && (!payload.clientId || data.client_id === payload.clientId),
-    nivel: data?.role || null,
+  const activa = Boolean(data) && data.active !== false
+  let cuenta
+  if (!activa) {
+    cuenta = { ok: false, nivel: null }
+  } else if (!clientId || data.client_id === clientId) {
+    // Su perfil de origen: su NIVEL (propietario/admin/miembro) manda.
+    cuenta = { ok: true, nivel: data.role || null }
+  } else {
+    // Otro perfil: solo si la han añadido al equipo de ESE perfil (concesión
+    // activa en helm_team). El nivel NO se hereda del de origen —si no, un
+    // admin de su perfil sería admin aquí—: en el ajeno manda solo su oficio
+    // (closer/setter…), que leen puedeVerSeccion y mandaEnPerfil de helm_team.
+    const { data: concesion, error: eC } = await supabase.from('helm_team')
+      .select('id').eq('login_id', sub).eq('client_id', clientId).eq('active', true).maybeSingle()
+    cuenta = (!eC && concesion) ? { ok: true, nivel: null } : { ok: false, nivel: null }
   }
-  accesosVistos.set(sub, { cuenta, exp: Date.now() + 60_000 })
+  accesosVistos.set(key, { cuenta, exp: Date.now() + 60_000 })
   return cuenta
 }
 
-/** Para que quitar un acceso surta efecto ya, sin esperar al minuto. */
+/** Para que quitar (o cambiar) un acceso surta efecto ya, sin esperar al minuto. */
 export function olvidarAcceso(sub) {
-  if (sub) accesosVistos.delete(sub)
-  else accesosVistos.clear()
+  if (!sub) { accesosVistos.clear(); return }
+  for (const k of accesosVistos.keys()) {
+    if (k.startsWith(`${sub}:`)) accesosVistos.delete(k)
+  }
 }
 
 export async function validateAuth(req, { required = true } = {}) {

@@ -1,6 +1,7 @@
 import { supabase, toAppFormat } from './lib/supabase.js'
 import { applyCors, rateLimit, getClientIp, signJwt, writeAudit, validateAuth } from './_lib/auth.js'
 import { verifyPassword } from './_lib/passwords.js'
+import { puedeVerPerfil, perfilesVisibles } from './_lib/access.js'
 
 export default async function handler(req, res) {
   applyCors(req, res)
@@ -170,6 +171,80 @@ export default async function handler(req, res) {
     } catch (err) {
       return res.status(401).json({ ok: false, isSuperAdmin: false, error: err.message })
     }
+  }
+
+  // GET ?action=mis-perfiles — los perfiles a los que una cuenta de equipo
+  // puede entrar (el suyo de origen más aquellos donde la hayan añadido al
+  // equipo), con su oficio en cada uno. Lo pide el selector del panel. Un
+  // superadmin no lo usa: tiene su propia lista (los de su agencia).
+  if (req.method === 'GET' && action === 'mis-perfiles') {
+    let auth
+    try { auth = await validateAuth(req, { required: true }) }
+    catch (err) { return res.status(err.statusCode || 401).json({ error: err.message }) }
+    const ids = await perfilesVisibles(auth)
+    if (ids === null || !ids.length) return res.status(200).json({ perfiles: [] })
+    const [{ data: clientes }, { data: personas }] = await Promise.all([
+      supabase.from('clients')
+        .select('id, slug, name, client_type, primary_color, logo_url, brand_name, brand_subtitle, agencia_id')
+        .in('id', ids).eq('active', true),
+      auth.userId
+        ? supabase.from('helm_team').select('client_id, role').eq('login_id', auth.userId).eq('active', true)
+        : Promise.resolve({ data: [] }),
+    ])
+    const oficio = new Map((personas || []).map(p => [p.client_id, p.role]))
+    const perfiles = (clientes || []).map(c => ({ ...c, teamRole: oficio.get(c.id) || null, origen: c.id === auth.clientId }))
+    return res.status(200).json({ perfiles })
+  }
+
+  // POST ?action=cambiar-perfil { clientId } — cambia el perfil activo de una
+  // cuenta de equipo con acceso a varios. Reemite el token con el nuevo
+  // clientId (tras comprobar que puede entrar) y con el NIVEL del perfil nuevo
+  // —null si no es el de origen, para que no herede permisos— y devuelve el
+  // user para el panel. El superadmin no cambia por aquí: su token no lleva
+  // clientId y elige perfil en la propia lista.
+  if (req.method === 'POST' && action === 'cambiar-perfil') {
+    let auth
+    try { auth = await validateAuth(req, { required: true }) }
+    catch (err) { return res.status(err.statusCode || 401).json({ error: err.message }) }
+    if (auth.superadmin || auth.role === 'superadmin') {
+      return res.status(400).json({ error: 'Un administrador no cambia de perfil por aquí' })
+    }
+    const destino = req.body?.clientId
+    if (!destino) return res.status(400).json({ error: 'clientId requerido' })
+    if (!(await puedeVerPerfil(auth, destino))) {
+      return res.status(403).json({ error: 'No tienes acceso a ese perfil' })
+    }
+    const [{ data: cliente }, { data: persona }, { data: cuenta }] = await Promise.all([
+      supabase.from('clients').select('id, name, slug').eq('id', destino).maybeSingle(),
+      supabase.from('helm_team').select('id, role, name').eq('login_id', auth.userId).eq('client_id', destino).maybeSingle(),
+      supabase.from('team').select('client_id, role').eq('id', auth.userId).maybeSingle(),
+    ])
+    if (!cliente) return res.status(404).json({ error: 'Ese perfil no existe' })
+    const esOrigen = cuenta?.client_id === destino
+    const user = {
+      id: auth.userId, email: auth.email, name: persona?.name || auth.email, role: 'client',
+      clientId: cliente.id, clientName: cliente.name, clientSlug: cliente.slug,
+      guideSeen: true,
+      teamRole: persona?.role || null,
+      // El nivel solo cuenta en su perfil de origen; en el ajeno, null (manda el oficio).
+      level: esOrigen ? (cuenta?.role || null) : null,
+      helmTeamId: persona?.id || null,
+    }
+    let token = null
+    try {
+      token = await signJwt({
+        sub: auth.userId, email: auth.email, role: 'client', superadmin: false,
+        clientId: cliente.id, clientSlug: cliente.slug, agenciaId: null, plataforma: false, via: 'team',
+      }, { expiresIn: 60 * 60 * 12 })
+    } catch (err) {
+      console.warn('[admin.cambiar-perfil] no se pudo firmar JWT:', err?.message)
+    }
+    await writeAudit({
+      clientId: destino, action: 'perfil.cambiado',
+      actor: { userId: auth.userId, email: auth.email, role: 'client' },
+      req, statusCode: 200, metadata: { destino },
+    })
+    return res.status(200).json({ success: true, user, token })
   }
 
   return res.status(405).json({ error: 'Method not allowed' })

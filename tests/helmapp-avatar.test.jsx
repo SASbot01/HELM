@@ -21,6 +21,7 @@ const h = vi.hoisted(() => {
 vi.mock('../src/helm/lib', () => ({
   supabase: {},
   listClients: vi.fn(async () => [{ id: 'c1', slug: 'demo', name: 'Demo' }]),
+  perfilApi: { mios: vi.fn(async () => ({ perfiles: [{ id: 'c1', slug: 'demo', name: 'Demo' }] })), cambiar: vi.fn() },
   createProfile: vi.fn(), slugify: (s) => s, usersApi: { guideDone: vi.fn(async () => {}) },
   brandOf: (c) => ({ name: c?.name || 'HELM', subtitle: '', logo: '', color: '' }),
 }))

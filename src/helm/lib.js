@@ -389,6 +389,19 @@ export const equipoApi = {
     apiFetch('/api/equipo?action=grant', { method: 'POST', body: { clientId, personId, email, password, level } }),
   revoke: (clientId, personId) =>
     apiFetch('/api/equipo?action=revoke', { method: 'POST', body: { clientId, personId } }),
+  // Vincular una cuenta que YA existe (de otro perfil) para que esta persona
+  // entre también a este perfil con una sola cuenta. No toca su contraseña.
+  vincular: (clientId, personId, email) =>
+    apiFetch('/api/equipo?action=vincular', { method: 'POST', body: { clientId, personId, email } }),
+  desvincular: (clientId, personId) =>
+    apiFetch('/api/equipo?action=desvincular', { method: 'POST', body: { clientId, personId } }),
+}
+
+// Perfiles de una cuenta de equipo con acceso a varios: la lista (para el
+// selector) y el cambio de perfil activo (reemite el token con el nuevo).
+export const perfilApi = {
+  mios: () => apiFetch('/api/admin?action=mis-perfiles'),
+  cambiar: (clientId) => apiFetch('/api/admin?action=cambiar-perfil', { method: 'POST', body: { clientId } }),
 }
 
 // Niveles de acceso al panel. Es distinto del ROL de la persona (closer,

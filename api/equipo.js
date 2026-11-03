@@ -88,7 +88,11 @@ export default async function handler(req, res) {
     // de la persona se edita desde el panel, y un login_id apuntando al acceso
     // de otro perfil permitiría cambiarle el email y la contraseña (o
     // desactivarlo) a alguien de otro negocio.
-    if (persona.login_id) {
+    // Solo al crear o cambiar una credencial (grant): no se puede tocar la
+    // contraseña ni el email del acceso de otro perfil. Compartir una cuenta
+    // (cuyo origen es otro perfil) es justo lo que sí se permite, y va por
+    // `vincular`/`desvincular`, que no tocan la credencial.
+    if (action === 'grant' && persona.login_id) {
       const { data: acceso } = await supabase.from('team').select('client_id').eq('id', persona.login_id).maybeSingle()
       if (acceso && acceso.client_id !== clientId) {
         return res.status(409).json({ error: 'El acceso de esta persona es de otro perfil' })
@@ -96,7 +100,7 @@ export default async function handler(req, res) {
     }
   }
 
-  if (!esPropietario) {
+  if (action === 'grant' && !esPropietario) {
     const { data: suLogin } = persona?.login_id
       ? await supabase.from('team').select('role').eq('id', persona.login_id).maybeSingle()
       : { data: null }
@@ -188,6 +192,51 @@ export default async function handler(req, res) {
       .update({ login_id: null, updated_at: new Date().toISOString() }).eq('id', persona.id)
 
     await writeAudit({ clientId, action: 'equipo.access_revoked', req, metadata: { personId } })
+    return res.status(200).json({ ok: true, loginId: null })
+  }
+
+  // ── POST ?action=vincular ────────────────────────────────────────────────
+  // Da acceso a ESTE perfil a una cuenta que YA EXISTE (la de otro perfil): una
+  // misma persona —un setter, un closer— puede trabajar en varios perfiles con
+  // una sola cuenta. No crea credenciales ni toca la contraseña: solo engancha
+  // la cuenta a la ficha de la persona en este perfil (helm_team.login_id). Su
+  // oficio aquí (y por tanto qué ve) es el de su ficha; su nivel de origen NO
+  // viaja (ver cuentaAcceso en _lib/auth.js).
+  if (action === 'vincular') {
+    if (!persona) return res.status(400).json({ error: 'personId requerido' })
+    const correo = String(req.body?.email || '').trim().toLowerCase()
+    if (!RE_EMAIL.test(correo)) return res.status(400).json({ error: 'Email no válido' })
+    if (persona.login_id) {
+      return res.status(409).json({ error: 'Esta persona ya tiene acceso. Quítaselo antes de vincular otra cuenta.' })
+    }
+    const { data: cuentas } = await supabase.from('team').select('id, active').eq('email', correo).limit(2)
+    const activas = (cuentas || []).filter(c => c.active !== false)
+    if (!activas.length) {
+      return res.status(404).json({ error: 'No existe ninguna cuenta activa con ese email. Créale un acceso nuevo con contraseña.' })
+    }
+    if (activas.length > 1) return res.status(409).json({ error: 'Hay más de una cuenta con ese email' })
+    const loginId = activas[0].id
+    const { error } = await supabase.from('helm_team')
+      .update({ login_id: loginId, email: correo, updated_at: new Date().toISOString() }).eq('id', persona.id)
+    if (error) return res.status(500).json({ error: error.message })
+    olvidarAcceso(loginId)   // su lista de perfiles cambia: que valga ya
+    await writeAudit({ clientId, action: 'equipo.cuenta_vinculada', req, metadata: { personId, loginId } })
+    return res.status(200).json({ ok: true, loginId, email: correo })
+  }
+
+  // ── POST ?action=desvincular ─────────────────────────────────────────────
+  // Le quita a la persona el acceso a ESTE perfil, sin tocar la cuenta: sigue
+  // viva en su perfil de origen y en los demás donde esté vinculada. Para
+  // retirar del todo un acceso de este perfil está `revoke`.
+  if (action === 'desvincular') {
+    if (!persona) return res.status(400).json({ error: 'personId requerido' })
+    if (!persona.login_id) return res.status(200).json({ ok: true, loginId: null })
+    const idLogin = persona.login_id
+    const { error } = await supabase.from('helm_team')
+      .update({ login_id: null, updated_at: new Date().toISOString() }).eq('id', persona.id)
+    if (error) return res.status(500).json({ error: error.message })
+    olvidarAcceso(idLogin)
+    await writeAudit({ clientId, action: 'equipo.cuenta_desvinculada', req, metadata: { personId, loginId: idLogin } })
     return res.status(200).json({ ok: true, loginId: null })
   }
 

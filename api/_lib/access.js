@@ -49,7 +49,17 @@ export async function puedeVerPerfil(auth, clientId) {
   if (auth.superadmin || auth.role === 'superadmin') {
     return Boolean(auth.agenciaId) && (await agenciaDe(clientId)) === auth.agenciaId
   }
-  return Boolean(auth.clientId) && auth.clientId === clientId
+  if (auth.clientId && auth.clientId === clientId) return true
+  // Una cuenta de equipo puede entrar a varios perfiles: a cualquiera donde la
+  // hayan añadido al equipo (concesión activa en helm_team). El oficio de ese
+  // perfil, y por tanto qué ve y qué manda, lo deciden puedeVerSeccion y
+  // mandaEnPerfil; aquí solo se mira si entra.
+  if (auth.userId) {
+    const { data, error } = await supabase.from('helm_team')
+      .select('id').eq('login_id', auth.userId).eq('client_id', clientId).eq('active', true).maybeSingle()
+    if (!error && data) return true
+  }
+  return false
 }
 
 /**
@@ -99,7 +109,16 @@ export async function perfilesVisibles(auth) {
     perfilesDeAgencia.set(auth.agenciaId, { ids, exp: Date.now() + 15_000 })
     return ids
   }
-  return auth.clientId ? [auth.clientId] : []
+  // Cliente / cuenta de equipo: su perfil de origen más aquellos donde la
+  // hayan añadido al equipo (concesión activa). Así una misma cuenta ve varios.
+  const propios = auth.clientId ? [auth.clientId] : []
+  if (!auth.userId) return propios
+  const { data, error } = await supabase.from('helm_team')
+    .select('client_id').eq('login_id', auth.userId).eq('active', true)
+  if (error) return propios
+  const todos = new Set(propios)
+  for (const r of (data || [])) if (r.client_id) todos.add(r.client_id)
+  return [...todos]
 }
 
 // ── Créditos: quién ve el saldo y quién puede gastarlo ─────────────────────

@@ -23,7 +23,7 @@ const EMPTY = {
   contract_url: '', contract_note: '', started_on: '', notes: '', active: true,
   // Acceso al panel. No se guarda en helm_team: viaja aparte a /api/equipo,
   // que es quien hashea la contraseña.
-  conAcceso: false, accessEmail: '', accessPassword: '', accessLevel: 'miembro',
+  conAcceso: false, vincular: false, accessEmail: '', accessPassword: '', accessLevel: 'miembro',
 }
 
 const toForm = (r) => ({
@@ -92,7 +92,11 @@ export default function Equipo({ clientId }) {
     // El acceso se gestiona DESPUÉS y por separado: la persona ya está
     // guardada, así que si crear la credencial falla no se pierde el alta —
     // solo se avisa de que falta el acceso.
-    if (form.conAcceso) {
+    if (form.conAcceso && form.vincular && !inicial.conAcceso) {
+      // Cuenta que ya existe (otro perfil): se enlaza, no se crea credencial.
+      await equipoApi.vincular(clientId, persona.id, form.accessEmail.trim())
+      persona = { ...persona, login_id: 'pendiente' }
+    } else if (form.conAcceso) {
       await equipoApi.grant(clientId, persona.id, {
         email: form.accessEmail.trim(),
         password: form.accessPassword || undefined,
@@ -228,13 +232,16 @@ function PersonaModal({ inicial, onClose, onSave }) {
   }
   if (form.conAcceso) {
     if (!RE_EMAIL.test(form.accessEmail.trim())) errors.accessEmail = 'Hace falta un email válido para entrar'
-    // Al editar alguien que ya tiene acceso, dejar la contraseña vacía
-    // significa "no la cambies"; al crearlo es obligatoria.
+    // Vincular una cuenta existente no pide contraseña: no se crea, se enlaza.
+    // Al editar alguien que ya tiene acceso, dejar la contraseña vacía significa
+    // "no la cambies"; al crear un acceso nuevo es obligatoria.
     const yaTenia = Boolean(inicial.id) && inicial.conAcceso
-    if (!yaTenia && form.accessPassword.length < 8) {
-      errors.accessPassword = 'Mínimo 8 caracteres'
-    } else if (form.accessPassword && form.accessPassword.length < 8) {
-      errors.accessPassword = 'Mínimo 8 caracteres'
+    if (!form.vincular) {
+      if (!yaTenia && form.accessPassword.length < 8) {
+        errors.accessPassword = 'Mínimo 8 caracteres'
+      } else if (form.accessPassword && form.accessPassword.length < 8) {
+        errors.accessPassword = 'Mínimo 8 caracteres'
+      }
     }
   }
   const ok = Object.keys(errors).length === 0
@@ -332,10 +339,26 @@ function PersonaModal({ inicial, onClose, onSave }) {
 
         <label className="helm-checkline">
           <input type="checkbox" checked={form.conAcceso} onChange={e => set('conAcceso', e.target.checked)} />
-          <KeyRound size={14} /> Crear acceso con email y contraseña
+          <KeyRound size={14} /> Dar acceso al panel
         </label>
 
-        {form.conAcceso && (
+        {/* Una misma persona puede trabajar en varios perfiles con una sola
+            cuenta: en el segundo perfil se vincula la que ya tiene, sin crearle
+            otra contraseña. Solo al crear el acceso (no al editarlo). */}
+        {form.conAcceso && !inicial.conAcceso && (
+          <label className="helm-checkline" style={{ marginLeft: 22 }}>
+            <input type="checkbox" checked={form.vincular} onChange={e => set('vincular', e.target.checked)} />
+            Ya tiene cuenta en otro perfil (vincularla, sin contraseña nueva)
+          </label>
+        )}
+
+        {form.conAcceso && (form.vincular && !inicial.conAcceso ? (
+          <Field label="Email de la cuenta que ya existe *" error={shown.accessEmail}
+            hint="Entrará a este perfil y a los suyos con la misma cuenta, con los permisos de su rol aquí.">
+            <Input value={form.accessEmail} onChange={e => set('accessEmail', e.target.value)}
+              type="text" inputMode="email" autoComplete="off" spellCheck={false} />
+          </Field>
+        ) : (
           <>
             <div className="helm-form-2">
               <Field label="Email de acceso *" error={shown.accessEmail}>
@@ -372,7 +395,7 @@ function PersonaModal({ inicial, onClose, onSave }) {
               Pásasela a {form.name.trim() || 'esta persona'} por un canal seguro y que la cambie al entrar.
             </FormNote>
           </>
-        )}
+        ))}
 
         {inicial.conAcceso && !form.conAcceso && (
           <FormNote tone="warn">
