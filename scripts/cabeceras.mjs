@@ -54,6 +54,15 @@ const CON_HASH = /^\/assets\/[^/]+-[A-Za-z0-9_-]{8}\.(js|css|woff2?|png|jpe?g|sv
 
 const DEL_ALMACEN = /^\/(sb|api\/db)\/storage\//
 
+// claude.ai (y otros clientes MCP) preguntan por OAuth en estas rutas antes de
+// añadir el conector. HELM no usa OAuth: el token va en la URL del /api/mcp. El
+// SPA respondía 200 con el index.html a cualquier ruta desconocida, así que
+// claude.ai creía que había servidor OAuth, intentaba registrarse y fallaba
+// («Couldn't register with helm's sign-in service»). Un 404 aquí le dice que no
+// hay OAuth y conecta con el token de la URL. RFC 9728 también pide la metadata
+// en /.well-known/oauth-protected-resource/<ruta-del-recurso>: por eso el `/`.
+const OAUTH_DESCUBRIMIENTO = /^\/\.well-known\/(oauth-protected-resource|oauth-authorization-server|openid-configuration)(\/|\?|$)/
+
 export const CABECERAS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
@@ -67,6 +76,12 @@ export function cabecerasSeguridad() {
     configurePreviewServer(server) {
       server.middlewares.use((req, res, next) => {
         const url = req.url || '/'
+        if (OAUTH_DESCUBRIMIENTO.test(url)) {
+          res.statusCode = 404
+          res.setHeader('Content-Type', 'application/json; charset=utf-8')
+          res.end('{"error":"HELM no usa OAuth; el conector MCP lleva el token en la URL"}')
+          return
+        }
         const archivo = DEL_ALMACEN.test(url)
         const conHash = CON_HASH.test(url)
         for (const [k, v] of Object.entries(CABECERAS)) res.setHeader(k, v)
