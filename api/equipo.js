@@ -18,7 +18,7 @@
 // al dar de alta un negocio nuevo) sin colgarlo de nadie del equipo.
 import { supabase } from './lib/supabase.js'
 import { applyCors, rateLimit, getClientIp, writeAudit, olvidarAcceso } from './_lib/auth.js'
-import { requireProfileAccess } from './_lib/access.js'
+import { requireProfileAccess, agenciaDe } from './_lib/access.js'
 import { hashPassword } from './_lib/passwords.js'
 
 // Nivel de acceso al panel. NO es lo mismo que el rol de la persona (closer,
@@ -36,9 +36,53 @@ export const NIVELES = {
 const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i
 const MIN_PASSWORD = 8
 
+// ¿Administra esta sesión el perfil? Su superadmin, o alguien del equipo con
+// nivel admin en él. (requireProfileAccess, que mira si ENTRA, va antes.)
+async function administraPerfil(auth, clientId) {
+  if (auth.superadmin || auth.role === 'superadmin') return true
+  const { data: yo } = await supabase.from('team')
+    .select('role, active').eq('id', auth.userId).eq('client_id', clientId).maybeSingle()
+  const mio = String(yo?.role || '').split(',').map(r => r.trim())
+  return Boolean(yo?.active) && mio.includes('admin')
+}
+
 export default async function handler(req, res) {
   applyCors(req, res)
   if (req.method === 'OPTIONS') return res.status(200).end()
+
+  // GET ?action=disponibles&clientId= — las cuentas que YA existen en tu
+  // agencia (su perfil de origen es uno de la agencia) y que todavía no están
+  // en el equipo de este perfil, para el botón «Añadir persona existente».
+  if (req.method === 'GET' && req.query.action === 'disponibles') {
+    if (!rateLimit({ key: `equipo:${getClientIp(req)}`, max: 30, windowMs: 60_000 }).ok) {
+      return res.status(429).json({ error: 'Demasiadas peticiones' })
+    }
+    const clientId = req.query.clientId
+    if (!clientId) return res.status(400).json({ error: 'clientId requerido' })
+    let auth
+    try { auth = await requireProfileAccess(req, clientId) }
+    catch (err) { return res.status(err.statusCode || 401).json({ error: err.message }) }
+    if (!(await administraPerfil(auth, clientId))) {
+      return res.status(403).json({ error: 'Solo el propietario o un administrador del perfil gestionan el equipo' })
+    }
+    const ag = await agenciaDe(clientId)
+    const { data: perfilesAg } = ag
+      ? await supabase.from('clients').select('id, name').eq('agencia_id', ag)
+      : { data: [] }
+    const idsAg = (perfilesAg || []).map(c => c.id)
+    if (!idsAg.length) idsAg.push(clientId)
+    const nombrePerfil = new Map((perfilesAg || []).map(c => [c.id, c.name]))
+    const [{ data: cuentas }, { data: yaAqui }] = await Promise.all([
+      supabase.from('team').select('id, email, name, client_id, active').in('client_id', idsAg).eq('active', true),
+      supabase.from('helm_team').select('login_id').eq('client_id', clientId),
+    ])
+    const ocupados = new Set((yaAqui || []).map(r => r.login_id).filter(Boolean))
+    const disponibles = (cuentas || [])
+      .filter(c => !ocupados.has(c.id))
+      .map(c => ({ loginId: c.id, email: c.email, name: c.name || c.email.split('@')[0], origen: nombrePerfil.get(c.client_id) || null }))
+    return res.status(200).json({ disponibles })
+  }
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   const ip = getClientIp(req)
@@ -238,6 +282,40 @@ export default async function handler(req, res) {
     olvidarAcceso(idLogin)
     await writeAudit({ clientId, action: 'equipo.cuenta_desvinculada', req, metadata: { personId, loginId: idLogin } })
     return res.status(200).json({ ok: true, loginId: null })
+  }
+
+  // ── POST ?action=agregar-existente ───────────────────────────────────────
+  // Añade a ESTE perfil una cuenta que YA existe en la agencia (su origen es
+  // otro perfil): crea su ficha en el equipo con el rol elegido y la deja
+  // enganchada a su cuenta, en un paso. No toca su contraseña; su nivel de
+  // origen no viaja (ver cuentaAcceso en _lib/auth.js). Lo usa el botón
+  // «Añadir persona existente».
+  if (action === 'agregar-existente') {
+    const { loginId, role, name } = req.body || {}
+    if (!loginId) return res.status(400).json({ error: 'Falta la cuenta a añadir' })
+    const { data: cuenta } = await supabase.from('team')
+      .select('id, email, name, active, client_id').eq('id', loginId).maybeSingle()
+    if (!cuenta || cuenta.active === false) {
+      return res.status(404).json({ error: 'Esa cuenta no existe o está inactiva' })
+    }
+    // Tiene que ser de la misma agencia que el perfil.
+    const [agPerfil, agCuenta] = await Promise.all([agenciaDe(clientId), agenciaDe(cuenta.client_id)])
+    if (agPerfil && agCuenta && agPerfil !== agCuenta) {
+      return res.status(403).json({ error: 'Esa cuenta no es de tu agencia' })
+    }
+    const { data: yaAqui } = await supabase.from('helm_team')
+      .select('id').eq('client_id', clientId).eq('login_id', loginId).maybeSingle()
+    if (yaAqui) return res.status(409).json({ error: 'Esa persona ya está en el equipo de este perfil' })
+    const rol = String(role || 'setter').trim().slice(0, 40) || 'setter'
+    const { data: persona, error } = await supabase.from('helm_team').insert({
+      client_id: clientId,
+      name: (name && String(name).trim()) || cuenta.name || cuenta.email.split('@')[0],
+      role: rol, email: cuenta.email, login_id: loginId, active: true,
+    }).select('id, name, role, email, phone, country, login_id, active').single()
+    if (error) return res.status(500).json({ error: error.message })
+    olvidarAcceso(loginId)
+    await writeAudit({ clientId, action: 'equipo.persona_existente_anadida', req, metadata: { loginId, role: rol } })
+    return res.status(200).json({ ok: true, persona })
   }
 
   return res.status(400).json({ error: 'Acción no reconocida' })

@@ -395,6 +395,11 @@ export const equipoApi = {
     apiFetch('/api/equipo?action=vincular', { method: 'POST', body: { clientId, personId, email } }),
   desvincular: (clientId, personId) =>
     apiFetch('/api/equipo?action=desvincular', { method: 'POST', body: { clientId, personId } }),
+  // Cuentas que ya existen en la agencia y no están en este perfil, y añadir una.
+  disponibles: (clientId) =>
+    apiFetch(`/api/equipo?action=disponibles&clientId=${encodeURIComponent(clientId)}`),
+  agregarExistente: (clientId, { loginId, role, name }) =>
+    apiFetch('/api/equipo?action=agregar-existente', { method: 'POST', body: { clientId, loginId, role, name } }),
 }
 
 // Perfiles de una cuenta de equipo con acceso a varios: la lista (para el

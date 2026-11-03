@@ -6,7 +6,7 @@
 // el rol, Finanzas filtra las comisiones por persona, Ventas asigna setter,
 // closer y CSM, y Actividad puede escribir "el closer Juan añadió una nota".
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Pencil, Trash2, Mail, Phone, FileText, Wallet, KeyRound, ShieldCheck } from 'lucide-react'
+import { Plus, UserPlus, Pencil, Trash2, Mail, Phone, FileText, Wallet, KeyRound, ShieldCheck } from 'lucide-react'
 import {
   fetchRowsOrError, insertRow, updateRow, deleteRow, money, fmtDate, MISSING_TABLE,
   equipoApi, NIVELES_ACCESO,
@@ -47,6 +47,7 @@ export default function Equipo({ clientId }) {
   const [edit, setEdit] = useState(null)
   const [error, setError] = useState(null)
   const [rolFiltro, setRolFiltro] = useState('__all__')
+  const [addExisting, setAddExisting] = useState(false)
 
   const load = () => fetchRowsOrError('helm_team', clientId, { order: 'created_at', asc: true })
     .then(({ rows: r, error: e }) => { setRows(r); setFatal(e) })
@@ -145,6 +146,7 @@ export default function Equipo({ clientId }) {
               <option value="__all__">Todos los roles</option>
               {rolesDelProducto().map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
             </select>
+            <button className="helm-btn" onClick={() => setAddExisting(true)}><UserPlus size={15} />Añadir persona existente</button>
             <button className="helm-btn primary" onClick={() => setEdit(EMPTY)}><Plus size={15} />Nueva persona</button>
           </div>
         }
@@ -212,7 +214,88 @@ export default function Equipo({ clientId }) {
       </Panel>
 
       {edit && <PersonaModal inicial={edit} onClose={() => setEdit(null)} onSave={save} />}
+      {addExisting && (
+        <AgregarExistenteModal
+          clientId={clientId}
+          onClose={() => setAddExisting(false)}
+          onAdded={(persona) => { setRows(rs => [...(rs || []), persona]); setAddExisting(false) }}
+        />
+      )}
     </div>
+  )
+}
+
+// «Añadir persona existente»: alguien que ya trabaja en otro perfil de la
+// agencia entra también a este, con una sola cuenta y los permisos del rol que
+// se elija aquí. El servidor (api/equipo.js) lista las cuentas de la agencia
+// que no están ya en este perfil y crea la ficha enganchada a su cuenta.
+function AgregarExistenteModal({ clientId, onClose, onAdded }) {
+  const [disp, setDisp] = useState(null)
+  const [sel, setSel] = useState('')
+  const [rol, setRol] = useState(() => rolesDelProducto()[0]?.key || 'setter')
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let vivo = true
+    equipoApi.disponibles(clientId)
+      .then(r => { if (vivo) setDisp(r.disponibles || []) })
+      .catch(e => { if (vivo) { setError(e.message); setDisp([]) } })
+    return () => { vivo = false }
+  }, [clientId])
+
+  const elegido = (disp || []).find(d => d.loginId === sel) || null
+
+  async function guardar() {
+    if (!elegido || guardando) return
+    setGuardando(true); setError(null)
+    try {
+      const { persona } = await equipoApi.agregarExistente(clientId, { loginId: elegido.loginId, role: rol, name: elegido.name })
+      onAdded(persona)
+    } catch (e) { setError(e.message); setGuardando(false) }
+  }
+
+  return (
+    <Modal title="Añadir persona existente" onClose={onClose}>
+      <p className="helm-settings-lead">
+        Alguien que ya trabaja en otro perfil de tu agencia. Entrará también a
+        este perfil con su <b>misma cuenta</b> (su contraseña no cambia) y los
+        permisos del rol que elijas aquí.
+      </p>
+
+      {disp == null ? (
+        <Empty>Cargando…</Empty>
+      ) : disp.length === 0 ? (
+        <Empty>No hay cuentas de otros perfiles de tu agencia para añadir. Si es nueva, créala en «Nueva persona».</Empty>
+      ) : (
+        <>
+          <Field label="¿A quién añades?">
+            <Select value={sel} onChange={e => setSel(e.target.value)}>
+              <option value="" disabled>Elige una cuenta…</option>
+              {disp.map(d => (
+                <option key={d.loginId} value={d.loginId}>
+                  {d.name} · {d.email}{d.origen ? ` (de ${d.origen})` : ''}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Rol en este perfil">
+            <Select value={rol} onChange={e => setRol(e.target.value)}>
+              {rolesDelProducto().map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+            </Select>
+          </Field>
+        </>
+      )}
+
+      {error && <FormNote>{error}</FormNote>}
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
+        <button type="button" className="helm-btn" onClick={onClose}>Cancelar</button>
+        <button type="button" className="helm-btn primary" disabled={!sel || guardando} onClick={guardar}>
+          {guardando ? 'Añadiendo…' : 'Añadir al equipo'}
+        </button>
+      </div>
+    </Modal>
   )
 }
 
