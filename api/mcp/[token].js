@@ -242,6 +242,24 @@ const TOOLS = [
       required: ['contenido'],
     },
   },
+  {
+    name: 'fabrica',
+    description: 'La Fábrica de software de HELM: un tablero de TAREAS repartidas por agentes (carriles) que se mueven por estados. Agentes (carriles): Estrategia, Marketing y contenido, Comercial y ventas, Seguridad y legal, Operaciones y entrega. Estados: backlog (Por hacer), curso (En curso), revision (En revisión · comité), bloqueada, hecho. accion="tareas" lista (y filtra por cliente, agente o estado); "mover" cambia el estado de una tarea (y, opcional, su agente) y añade una nota de avance; "anotar" añade una nota sin moverla; "crear" crea una tarea. La tarea se identifica por su id o por su título exacto (ambos salen en accion="tareas"). Hoy solo está montada para el sistema de Silvestre (perfil "fabrica-software").',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        accion: { type: 'string', enum: ['tareas', 'mover', 'anotar', 'crear'], description: 'Qué hacer. Por defecto "tareas" (listar).' },
+        cliente: { type: 'string', description: 'Para filtrar por cliente (p. ej. "Elena Fontecha"), o para asignarlo al crear.' },
+        agente: { type: 'string', description: 'Carril/agente: Estrategia · Marketing y contenido · Comercial y ventas · Seguridad y legal · Operaciones y entrega.' },
+        estado: { type: 'string', enum: ['backlog', 'curso', 'revision', 'bloqueada', 'hecho'], description: 'Estado para filtrar, o el estado nuevo al mover o crear.' },
+        tarea: { type: 'string', description: 'La tarea a mover o anotar: su id (uuid) o su título exacto.' },
+        titulo: { type: 'string', description: 'El título de la tarea nueva (accion="crear").' },
+        nota: { type: 'string', description: 'Nota de avance que se añade a la tarea.' },
+        perfil: { type: 'string', description: 'El perfil de la fábrica. Por defecto "fabrica-software".' },
+        prueba: PRUEBA,
+      },
+    },
+  },
 ]
 
 // Las que escriben: aceptan prueba y quedan en el registro del perfil.
@@ -909,6 +927,77 @@ const HERRAMIENTAS = {
     }).select('id').single()
     if (error) throw error
     return { guardado: true, id: data.id, en, hecho: `Nota de ${texto.length} caracteres guardada en ${en}.`, comprobar: ver }
+  },
+
+  // La Fábrica de software: tablero de tareas (reutiliza el CRM). Solo el enlace
+  // del operador la ve (no está en DEL_CLIENTE). Opera sobre el perfil
+  // "fabrica-software" por defecto.
+  async fabrica({ accion = 'tareas', cliente, agente, estado, tarea, titulo, nota, perfil, prueba }) {
+    const c = await perfilDe(perfil || 'fabrica-software')
+    const { data: pls, error: ep } = await supabase.from('crm_pipelines').select('id, name, stages').eq('client_id', c.id)
+    if (ep) throw ep
+    if (!pls.length) throw new Error(`El perfil "${c.slug}" no tiene carriles (pipelines) de fábrica.`)
+    const ESTADOS = { backlog: 'Por hacer', curso: 'En curso', revision: 'En revisión · comité', bloqueada: 'Bloqueada', hecho: 'Hecho' }
+    const porNombre = (name) => { const n = String(name || '').trim().toLowerCase(); return pls.find(p => p.name.toLowerCase() === n) || null }
+    const porId = new Map(pls.map(p => [p.id, p.name]))
+    const carriles = pls.map(p => p.name).join(', ')
+
+    if (accion === 'tareas') {
+      let q = supabase.from('crm_contacts').select('id, name, status, company, pipeline_id, custom_fields').eq('client_id', c.id)
+      if (cliente) q = q.ilike('company', `%${cliente}%`)
+      if (estado) q = q.eq('status', estado)
+      const { data, error } = await q
+      if (error) throw error
+      let items = data || []
+      if (agente) { const p = porNombre(agente); if (!p) throw new Error(`Agente no válido. Los carriles: ${carriles}.`); items = items.filter(t => t.pipeline_id === p.id) }
+      const porAg = {}
+      for (const t of items) {
+        const ag = porId.get(t.pipeline_id) || '—'
+        ;(porAg[ag] ||= []).push({ id: t.id, titulo: t.name, estado: ESTADOS[t.status] || t.status, cliente: t.company || undefined, fase: t.custom_fields?.fase })
+      }
+      return { fabrica: c.slug, total: items.length, agentes: Object.entries(porAg).map(([ag, ts]) => ({ agente: ag, tareas: ts.length, lista: ts })) }
+    }
+
+    if (accion === 'crear') {
+      if (!titulo) throw new Error('Para crear una tarea pasa "titulo".')
+      const p = porNombre(agente)
+      if (!p) throw new Error(`Di a qué agente va (argumento "agente"). Los carriles: ${carriles}.`)
+      const est = estado && ESTADOS[estado] ? estado : 'backlog'
+      const hecho = `Crear «${titulo}» en ${p.name} (${ESTADOS[est]})${cliente ? ` · ${cliente}` : ''}.`
+      if (prueba) return { prueba: true, haria: hecho, hecho: `Ensayo, nada escrito. ${hecho}` }
+      const { data, error } = await supabase.from('crm_contacts').insert({
+        client_id: c.id, pipeline_id: p.id, status: est, name: titulo, company: cliente || '',
+        source: 'Fábrica · MCP', notes: nota ? `[nuevo] ${nota}` : '',
+        custom_fields: { cliente: cliente || undefined, agente: p.name, origen: 'mcp' },
+      }).select('id').single()
+      if (error) throw error
+      return { creada: { id: data.id, titulo, agente: p.name, estado: ESTADOS[est] }, hecho }
+    }
+
+    // mover / anotar
+    if (!tarea) throw new Error('Di qué tarea con "tarea" (su id o su título exacto; míralos con accion="tareas").')
+    const { data: todas, error: et } = await supabase.from('crm_contacts').select('id, name, status, pipeline_id, notes').eq('client_id', c.id)
+    if (et) throw et
+    const esId = UUID.test(String(tarea))
+    const t = esId ? (todas || []).find(x => x.id === tarea) : (todas || []).find(x => x.name.toLowerCase() === String(tarea).trim().toLowerCase())
+    if (!t) throw new Error(`No encuentro la tarea "${tarea}" en ${c.slug}. Usa su id o su título exacto (accion="tareas").`)
+    const hoy = new Date().toISOString().slice(0, 10)
+    const cambios = {}
+    const dicho = []
+    if (accion === 'mover') {
+      if (!estado || !ESTADOS[estado]) throw new Error(`Di el "estado" nuevo: ${Object.keys(ESTADOS).join(', ')}.`)
+      cambios.status = estado; dicho.push(`${ESTADOS[t.status] || t.status} → ${ESTADOS[estado]}`)
+      if (agente) { const p = porNombre(agente); if (!p) throw new Error(`Agente no válido. Los carriles: ${carriles}.`); cambios.pipeline_id = p.id; dicho.push(`agente → ${p.name}`) }
+    } else if (accion === 'anotar' && !nota) {
+      throw new Error('Para anotar pasa "nota".')
+    }
+    if (nota) { cambios.notes = `${t.notes || ''}\n· ${hoy}: ${nota}`; if (accion === 'anotar') dicho.push('nota añadida') }
+    if (!Object.keys(cambios).length) throw new Error('Nada que cambiar: pasa "estado" (mover) o "nota" (anotar).')
+    const hecho = `${t.name}: ${dicho.join(' · ')}.`
+    if (prueba) return { prueba: true, tarea: t.name, haria: dicho.join(' · '), hecho: `Ensayo, nada escrito. ${hecho}` }
+    const { error: eu } = await supabase.from('crm_contacts').update(cambios).eq('id', t.id)
+    if (eu) throw eu
+    return { tarea: t.name, cambio: dicho.join(' · '), hecho }
   },
 }
 
