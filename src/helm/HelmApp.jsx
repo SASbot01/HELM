@@ -2,8 +2,8 @@
 // Se monta en /admin. Gestiona un perfil (cliente) a la vez, con selector arriba.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, Link2, Settings, Plus, Rocket, Menu, X, Package, UserCog, PhoneCall, Layers, CalendarClock, CalendarRange, BookOpen, FileText, Receipt, ShieldCheck, Bot, Sunrise, Newspaper, LayoutGrid, LogOut, Target, Radar, Megaphone, BarChart3, Mail } from 'lucide-react'
-import { listClients, createProfile, slugify, usersApi, brandOf, perfilApi } from './lib'
+import { LayoutDashboard, Users, TrendingUp, ClipboardList, Wallet, Link2, Settings, Plus, Rocket, Menu, X, Package, UserCog, PhoneCall, Layers, CalendarClock, CalendarRange, BookOpen, FileText, Receipt, ShieldCheck, Bot, Sunrise, Newspaper, LayoutGrid, LogOut, Target, Radar, Megaphone, BarChart3, Mail, Factory } from 'lucide-react'
+import { listClients, createProfile, slugify, usersApi, brandOf, perfilApi, creditosApi } from './lib'
 import { productoActual, seccionDelProducto, seccionSiempre } from './producto'
 import { Modal, Field, Input } from './ui'
 import Guia from './Guia'
@@ -16,6 +16,7 @@ import Agentes from './views/Agentes'
 import MiDia from './views/MiDia'
 import Noticias from './views/Noticias'
 import RadarView from './views/Radar.jsx'
+import Fabrica from './views/Fabrica.jsx'
 import Roadmap from './views/Roadmap.jsx'
 import Ads from './views/Ads.jsx'
 import Lienzo from './Lienzo'
@@ -101,6 +102,12 @@ const NAV = [
 // volver a encenderlo. Sin esto se quedaba apagado para siempre.
 const AVATAR = { key: 'avatar', tono: 'oro', label: 'Avatar de ventas', icon: Target, title: 'Avatar de ventas', sub: 'La pestaña del Informe con tu cliente tipo, sacado del CRM' }
 const CATALOGO = NAV.flatMap(n => (n.key === 'informe' ? [n, AVATAR] : [n]))
+
+// La Fábrica: los procesos internos que la PLATAFORMA lleva sobre cada perfil.
+// No está en NAV (no pasa por los permisos de cliente ni se enciende en
+// Secciones): es solo de la plataforma, en todos los perfiles, y se inyecta a
+// mano más abajo. Con forma de «plugin» (View/name/desc) porque no está en NAV.
+const FABRICA = { key: 'fabrica', tono: 'plata', name: 'Fábrica', desc: 'Los procesos internos de este perfil · privado de la plataforma', icon: Factory, View: Fabrica }
 
 // El menú no es una lista: es un esquema de tres ramas, y cada rama tiene su
 // color de borde. Ese mismo color tiñe la cabecera y los paneles de la sección
@@ -411,6 +418,15 @@ export default function HelmApp() {
     loadSecciones(clientId).then(setSecciones).catch(() => setSecciones({}))
   }, [clientId])
 
+  // La Fábrica (procesos internos) solo la ve la PLATAFORMA, no un superadmin de
+  // agencia ni un cliente. El saldo ya dice si esta sesión es de plataforma; se
+  // pide una vez y gatea el recuadro. El endpoint lo vuelve a exigir (requirePlataforma).
+  const [esPlataforma, setEsPlataforma] = useState(false)
+  useEffect(() => {
+    if (isClient) return
+    creditosApi.saldo().then(r => setEsPlataforma(r?.plataforma === true)).catch(() => {})
+  }, [isClient])
+
   // Tres filtros, y en este orden: qué secciones EXISTEN en este producto (el
   // calendario de contenido no pinta nada en un despacho, ni encendiéndolo),
   // qué usa este negocio, y qué puede ver este rol. El primero manda sobre los
@@ -479,9 +495,12 @@ export default function HelmApp() {
 
   // La vista activa puede ser del núcleo o de un plugin. Una sección que no le
   // corresponde no se abre ni escribiendo la URL: cae en la primera que sí.
-  const coreCurrent = coreNav.find(n => n.key === view)
-  const pluginCurrent = !coreCurrent ? PLUGIN_MAP[view] : null
-  const current = coreCurrent || (pluginCurrent && pluginNav.includes(pluginCurrent) ? pluginCurrent : null) || coreNav[0]
+  // La Fábrica no está en NAV ni en los plugins: es solo de la plataforma y se
+  // resuelve aquí. Si no eres plataforma, /fabrica cae en la primera sección.
+  const fabricaCurrent = (!isClient && esPlataforma && view === 'fabrica') ? FABRICA : null
+  const coreCurrent = fabricaCurrent ? null : coreNav.find(n => n.key === view)
+  const pluginCurrent = !coreCurrent && !fabricaCurrent ? PLUGIN_MAP[view] : null
+  const current = fabricaCurrent || coreCurrent || (pluginCurrent && pluginNav.includes(pluginCurrent) ? pluginCurrent : null) || coreNav[0]
   const isPlugin = !NAV.includes(current)
   const View = isPlugin ? current.View : current.C
   const title = isPlugin ? current.name : current.title
@@ -548,6 +567,17 @@ export default function HelmApp() {
               <div className="helm-grupo-cab">Módulos</div>
               <div className="helm-grupo-grid">
                 {pluginNav.map(p => recuadro(p.key, p.icon, p.name))}
+              </div>
+            </div>
+          )}
+          {/* La Fábrica: los procesos internos sobre este perfil. Solo la ve la
+              plataforma (esPlataforma), en todos los perfiles, y no se enciende
+              en Secciones: es herramienta de la casa, no del negocio. */}
+          {!isClient && esPlataforma && (
+            <div className="helm-grupo" data-tono="plata">
+              <div className="helm-grupo-cab">Procesos</div>
+              <div className="helm-grupo-grid">
+                {recuadro('fabrica', Factory, 'Fábrica')}
               </div>
             </div>
           )}

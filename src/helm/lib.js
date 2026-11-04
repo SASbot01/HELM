@@ -821,6 +821,17 @@ export const radarApi = {
   ahora: (clientId) => apiFetch(`/api/radar?action=ahora&clientId=${clientId}`, { method: 'POST' }),
 }
 
+// La Fábrica: los procesos internos que la plataforma lleva sobre cada perfil
+// (api/fabrica.js, solo plataforma). Separado del CRM del cliente a propósito.
+export const fabricaApi = {
+  lista: (clientId) => apiFetch(`/api/fabrica?action=lista&clientId=${clientId}`),
+  crear: (clientId, t) => apiFetch(`/api/fabrica?action=crear&clientId=${clientId}`, { method: 'POST', body: t }),
+  mover: (clientId, id, cambios) => apiFetch(`/api/fabrica?action=mover&clientId=${clientId}`, { method: 'POST', body: { id, ...cambios } }),
+  anotar: (clientId, id, nota) => apiFetch(`/api/fabrica?action=anotar&clientId=${clientId}`, { method: 'POST', body: { id, nota } }),
+  editar: (clientId, id, cambios) => apiFetch(`/api/fabrica?action=editar&clientId=${clientId}`, { method: 'POST', body: { id, ...cambios } }),
+  borrar: (clientId, id) => apiFetch(`/api/fabrica?action=borrar&clientId=${clientId}`, { method: 'POST', body: { id } }),
+}
+
 // Portadas de reels (api/portadas.js). El vídeo y la portada llegan como
 // archivo, no como JSON: van por apiBlob, con la misma sesión que apiFetch.
 async function apiBlob(path) {

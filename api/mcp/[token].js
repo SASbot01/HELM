@@ -244,18 +244,19 @@ const TOOLS = [
   },
   {
     name: 'fabrica',
-    description: 'La Fábrica de software de HELM: un tablero de TAREAS repartidas por agentes (carriles) que se mueven por estados. Agentes (carriles): Estrategia, Marketing y contenido, Comercial y ventas, Seguridad y legal, Operaciones y entrega. Estados: backlog (Por hacer), curso (En curso), revision (En revisión · comité), bloqueada, hecho. accion="tareas" lista (y filtra por cliente, agente o estado); "mover" cambia el estado de una tarea (y, opcional, su agente) y añade una nota de avance; "anotar" añade una nota sin moverla; "crear" crea una tarea. La tarea se identifica por su id o por su título exacto (ambos salen en accion="tareas"). Hoy solo está montada para el sistema de Silvestre (perfil "fabrica-software").',
+    description: 'La Fábrica de HELM: los procesos/TAREAS internos que la plataforma lleva sobre CADA perfil de cliente, repartidos por agentes (carriles) y movidos por estados. NO es el CRM del cliente (eso son sus leads): es el tablero de trabajo interno, que solo ve la plataforma. Agentes (carriles): Estrategia, Marketing y contenido, Comercial y ventas, Seguridad y legal, Operaciones y entrega. Estados: backlog (Por hacer), curso (En curso), revision (En revisión · comité), bloqueada, hecho. `perfil` = el perfil de cliente cuyos procesos operas (su slug o nombre, p. ej. "elenafontecha"). accion="tareas": sin `perfil`, resume todos los perfiles que tienen procesos; con `perfil`, lista sus tareas por agente (y filtra por agente o estado). "crear": crea una tarea (necesita perfil, titulo y agente). "mover": cambia el estado (y, opcional, el agente) y añade nota de avance. "anotar": añade una nota. La tarea se identifica por su id o su título exacto.',
     inputSchema: {
       type: 'object',
       properties: {
         accion: { type: 'string', enum: ['tareas', 'mover', 'anotar', 'crear'], description: 'Qué hacer. Por defecto "tareas" (listar).' },
-        cliente: { type: 'string', description: 'Para filtrar por cliente (p. ej. "Elena Fontecha"), o para asignarlo al crear.' },
+        perfil: { type: 'string', description: 'El perfil de cliente cuyos procesos operas (slug o nombre, p. ej. "elenafontecha"). Obligatorio para crear/mover/anotar; opcional al listar.' },
         agente: { type: 'string', description: 'Carril/agente: Estrategia · Marketing y contenido · Comercial y ventas · Seguridad y legal · Operaciones y entrega.' },
         estado: { type: 'string', enum: ['backlog', 'curso', 'revision', 'bloqueada', 'hecho'], description: 'Estado para filtrar, o el estado nuevo al mover o crear.' },
         tarea: { type: 'string', description: 'La tarea a mover o anotar: su id (uuid) o su título exacto.' },
         titulo: { type: 'string', description: 'El título de la tarea nueva (accion="crear").' },
+        detalle: { type: 'string', description: 'Descripción de la tarea (al crear).' },
+        fase: { type: 'string', description: 'Fase/etiqueta corta de la tarea (al crear), p. ej. "0".' },
         nota: { type: 'string', description: 'Nota de avance que se añade a la tarea.' },
-        perfil: { type: 'string', description: 'El perfil de la fábrica. Por defecto "fabrica-software".' },
         prueba: PRUEBA,
       },
     },
@@ -932,72 +933,80 @@ const HERRAMIENTAS = {
   // La Fábrica de software: tablero de tareas (reutiliza el CRM). Solo el enlace
   // del operador la ve (no está en DEL_CLIENTE). Opera sobre el perfil
   // "fabrica-software" por defecto.
-  async fabrica({ accion = 'tareas', cliente, agente, estado, tarea, titulo, nota, perfil, prueba }) {
-    const c = await perfilDe(perfil || 'fabrica-software')
-    const { data: pls, error: ep } = await supabase.from('crm_pipelines').select('id, name, stages').eq('client_id', c.id)
-    if (ep) throw ep
-    if (!pls.length) throw new Error(`El perfil "${c.slug}" no tiene carriles (pipelines) de fábrica.`)
+  async fabrica({ accion = 'tareas', perfil, agente, estado, tarea, titulo, detalle, fase, nota, prueba }) {
+    const AGENTES = ['Estrategia', 'Marketing y contenido', 'Comercial y ventas', 'Seguridad y legal', 'Operaciones y entrega']
     const ESTADOS = { backlog: 'Por hacer', curso: 'En curso', revision: 'En revisión · comité', bloqueada: 'Bloqueada', hecho: 'Hecho' }
-    const porNombre = (name) => { const n = String(name || '').trim().toLowerCase(); return pls.find(p => p.name.toLowerCase() === n) || null }
-    const porId = new Map(pls.map(p => [p.id, p.name]))
-    const carriles = pls.map(p => p.name).join(', ')
+    const hoy = new Date().toISOString().slice(0, 10)
+    const agenteValido = (a) => { const n = String(a || '').trim().toLowerCase(); return AGENTES.find(x => x.toLowerCase() === n) || null }
+    const listaAgentes = AGENTES.join(' · ')
 
     if (accion === 'tareas') {
-      let q = supabase.from('crm_contacts').select('id, name, status, company, pipeline_id, custom_fields').eq('client_id', c.id)
-      if (cliente) q = q.ilike('company', `%${cliente}%`)
-      if (estado) q = q.eq('status', estado)
-      const { data, error } = await q
-      if (error) throw error
-      let items = data || []
-      if (agente) { const p = porNombre(agente); if (!p) throw new Error(`Agente no válido. Los carriles: ${carriles}.`); items = items.filter(t => t.pipeline_id === p.id) }
-      const porAg = {}
-      for (const t of items) {
-        const ag = porId.get(t.pipeline_id) || '—'
-        ;(porAg[ag] ||= []).push({ id: t.id, titulo: t.name, estado: ESTADOS[t.status] || t.status, cliente: t.company || undefined, fase: t.custom_fields?.fase })
+      // Sin perfil: resumen de todos los perfiles que tienen procesos.
+      if (!perfil) {
+        const { data, error } = await supabase.from('fabrica_tareas').select('estado, clients(slug, name)')
+        if (error) throw error
+        const m = new Map()
+        for (const t of data || []) {
+          const slug = t.clients?.slug || '—'
+          const e = m.get(slug) || { perfil: slug, cliente: t.clients?.name || slug, total: 0, porEstado: {} }
+          e.total++; e.porEstado[ESTADOS[t.estado] || t.estado] = (e.porEstado[ESTADOS[t.estado] || t.estado] || 0) + 1
+          m.set(slug, e)
+        }
+        return { total: (data || []).length, perfiles: [...m.values()], nota: 'Pasa "perfil" (p. ej. "elenafontecha") para ver sus tareas por agente.' }
       }
-      return { fabrica: c.slug, total: items.length, agentes: Object.entries(porAg).map(([ag, ts]) => ({ agente: ag, tareas: ts.length, lista: ts })) }
+      const c = await perfilDe(perfil)
+      let q = supabase.from('fabrica_tareas').select('id, agente, estado, titulo, fase').eq('client_id', c.id)
+      if (estado) q = q.eq('estado', estado)
+      if (agente) { const a = agenteValido(agente); if (!a) throw new Error(`Agente no válido. Los carriles: ${listaAgentes}.`); q = q.eq('agente', a) }
+      const { data, error } = await q.order('agente')
+      if (error) throw error
+      const porAg = {}
+      for (const t of data || []) (porAg[t.agente] ||= []).push({ id: t.id, titulo: t.titulo, estado: ESTADOS[t.estado] || t.estado, fase: t.fase || undefined })
+      return { perfil: c.slug, cliente: c.name, total: (data || []).length, agentes: Object.entries(porAg).map(([ag, ts]) => ({ agente: ag, tareas: ts.length, lista: ts })) }
     }
+
+    if (!perfil) throw new Error('Di en qué perfil con "perfil" (p. ej. "elenafontecha").')
+    const c = await perfilDe(perfil)
 
     if (accion === 'crear') {
       if (!titulo) throw new Error('Para crear una tarea pasa "titulo".')
-      const p = porNombre(agente)
-      if (!p) throw new Error(`Di a qué agente va (argumento "agente"). Los carriles: ${carriles}.`)
+      const a = agenteValido(agente)
+      if (!a) throw new Error(`Di a qué agente va (argumento "agente"). Los carriles: ${listaAgentes}.`)
       const est = estado && ESTADOS[estado] ? estado : 'backlog'
-      const hecho = `Crear «${titulo}» en ${p.name} (${ESTADOS[est]})${cliente ? ` · ${cliente}` : ''}.`
+      const hecho = `Crear «${titulo}» en ${a} (${ESTADOS[est]}) · ${c.name}.`
       if (prueba) return { prueba: true, haria: hecho, hecho: `Ensayo, nada escrito. ${hecho}` }
-      const { data, error } = await supabase.from('crm_contacts').insert({
-        client_id: c.id, pipeline_id: p.id, status: est, name: titulo, company: cliente || '',
-        source: 'Fábrica · MCP', notes: nota ? `[nuevo] ${nota}` : '',
-        custom_fields: { cliente: cliente || undefined, agente: p.name, origen: 'mcp' },
+      const { data, error } = await supabase.from('fabrica_tareas').insert({
+        client_id: c.id, agente: a, estado: est, titulo,
+        detalle: detalle || null, fase: fase || null,
+        notas: nota ? [{ fecha: hoy, texto: String(nota) }] : [],
       }).select('id').single()
       if (error) throw error
-      return { creada: { id: data.id, titulo, agente: p.name, estado: ESTADOS[est] }, hecho }
+      return { creada: { id: data.id, titulo, agente: a, estado: ESTADOS[est], perfil: c.slug }, hecho }
     }
 
     // mover / anotar
     if (!tarea) throw new Error('Di qué tarea con "tarea" (su id o su título exacto; míralos con accion="tareas").')
-    const { data: todas, error: et } = await supabase.from('crm_contacts').select('id, name, status, pipeline_id, notes').eq('client_id', c.id)
+    const { data: todas, error: et } = await supabase.from('fabrica_tareas').select('id, titulo, agente, estado, notas').eq('client_id', c.id)
     if (et) throw et
     const esId = UUID.test(String(tarea))
-    const t = esId ? (todas || []).find(x => x.id === tarea) : (todas || []).find(x => x.name.toLowerCase() === String(tarea).trim().toLowerCase())
+    const t = esId ? (todas || []).find(x => x.id === tarea) : (todas || []).find(x => x.titulo.toLowerCase() === String(tarea).trim().toLowerCase())
     if (!t) throw new Error(`No encuentro la tarea "${tarea}" en ${c.slug}. Usa su id o su título exacto (accion="tareas").`)
-    const hoy = new Date().toISOString().slice(0, 10)
-    const cambios = {}
+    const cambios = { updated_at: new Date().toISOString() }
     const dicho = []
     if (accion === 'mover') {
       if (!estado || !ESTADOS[estado]) throw new Error(`Di el "estado" nuevo: ${Object.keys(ESTADOS).join(', ')}.`)
-      cambios.status = estado; dicho.push(`${ESTADOS[t.status] || t.status} → ${ESTADOS[estado]}`)
-      if (agente) { const p = porNombre(agente); if (!p) throw new Error(`Agente no válido. Los carriles: ${carriles}.`); cambios.pipeline_id = p.id; dicho.push(`agente → ${p.name}`) }
+      cambios.estado = estado; dicho.push(`${ESTADOS[t.estado] || t.estado} → ${ESTADOS[estado]}`)
+      if (agente) { const a = agenteValido(agente); if (!a) throw new Error(`Agente no válido. Los carriles: ${listaAgentes}.`); cambios.agente = a; dicho.push(`agente → ${a}`) }
     } else if (accion === 'anotar' && !nota) {
       throw new Error('Para anotar pasa "nota".')
     }
-    if (nota) { cambios.notes = `${t.notes || ''}\n· ${hoy}: ${nota}`; if (accion === 'anotar') dicho.push('nota añadida') }
-    if (!Object.keys(cambios).length) throw new Error('Nada que cambiar: pasa "estado" (mover) o "nota" (anotar).')
-    const hecho = `${t.name}: ${dicho.join(' · ')}.`
-    if (prueba) return { prueba: true, tarea: t.name, haria: dicho.join(' · '), hecho: `Ensayo, nada escrito. ${hecho}` }
-    const { error: eu } = await supabase.from('crm_contacts').update(cambios).eq('id', t.id)
+    if (nota) { cambios.notas = [...(Array.isArray(t.notas) ? t.notas : []), { fecha: hoy, texto: String(nota) }]; if (accion === 'anotar') dicho.push('nota añadida') }
+    if (dicho.length === 0) throw new Error('Nada que cambiar: pasa "estado" (mover) o "nota" (anotar).')
+    const hecho = `${t.titulo}: ${dicho.join(' · ')}.`
+    if (prueba) return { prueba: true, tarea: t.titulo, haria: dicho.join(' · '), hecho: `Ensayo, nada escrito. ${hecho}` }
+    const { error: eu } = await supabase.from('fabrica_tareas').update(cambios).eq('id', t.id)
     if (eu) throw eu
-    return { tarea: t.name, cambio: dicho.join(' · '), hecho }
+    return { tarea: t.titulo, cambio: dicho.join(' · '), hecho }
   },
 }
 
