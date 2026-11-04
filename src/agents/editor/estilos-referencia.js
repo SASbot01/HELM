@@ -876,6 +876,34 @@ export const ESTILOS_REFERENCIA = [
     },
     prompt: 'Edita el reel en el estilo de Marcos Vázquez (@fitness.revolucionario, fitness y salud basados en ciencia, en español): divulgación sobria, que cuestiona los dogmas con datos. Talking head limpio, cortes al silencio sin prisa, subtítulos en minúscula normal con la palabra clave resaltada [color: aprox.]. Cuando cita un estudio o un dato, entra a pantalla completa una infografía o una captura sencilla (de las que publica en su cuenta) durante unos segundos. Poca música y sin efectos llamativos: la autoridad la pone el contenido. Gancho: una creencia de fitness que se cae («no necesitas…», «lo que dice la ciencia de…»). [Todo el estilo es aprox.: su forma de editar no está documentada.]' + SOLO_ESTILO,
   },
+
+  // ── Collage estilo Vox (añadido el 2026-11-04 a petición de Alex) ───────────
+  {
+    // Visto fotograma a fotograma en el navegador. El reel de ashokreddyai es
+    // mitad demo de ANIMACIONES DE COLLAGE estilo Vox (hechas con Claude) y
+    // mitad patrocinio de invideo; el ESTILO que se copia es solo el collage.
+    clave: 'ashokreddyai',
+    nombre: 'ashokreddyai',
+    persona: 'Ashok Reddy',
+    nicho: 'IA / explicadores con collage estilo Vox',
+    tema: 'ia',
+    idioma: 'en',
+    enlace: ig('ashokreddyai'),
+    confianza: 'alta',
+    reels: [
+      { shortcode: 'DePNgrmToh9', url: 'https://www.instagram.com/reel/DePNgrmToh9/', caption: 'So you can now make Vox-style collage animations like this using Claude', likes: 9402 },
+    ],
+    // El motor pone el collage como inserto ARRIBA mientras habla (o a pantalla
+    // completa cuando ilustra) y el subtítulo como chip: MAYÚSCULAS, blanco,
+    // borde negro grueso, a media altura. El collage (papel, recortes, sellos,
+    // etiquetas) va por el prompt.
+    estilo: {
+      palabrasPorBloque: 3, mayusculas: true, colorTexto: '#FFFFFF', colorResalte: '#E8B33D', colorBorde: '#000000',
+      tamano: 58, borde: 7, posicion: 58, zoom: true, zoomCada: 4, zoomFactor: 1.06,
+      pausaFrase: 0.4, silencioMax: 0.3, silencioDeja: 0.08, recursosModo: 'arriba', recursoDuracion: 2.5, musicaVolumen: 0.1,
+    },
+    prompt: 'Edita el reel en el estilo de ashokreddyai (explicador de IA, en inglés, formato «collage animado estilo Vox»). La mitad superior —o a pantalla completa cuando ilustra algo— es una ANIMACIÓN DE COLLAGE estilo Vox/revista; abajo, el talking head en su estudio. El collage: fondos de PAPEL o cartón envejecido, mapas antiguos, planos y esquemas técnicos a línea fina; encima, RECORTES de fotos de archivo (muchas en blanco y negro o duotono) con borde blanco rasgado o de polaroid, sombra marcada y ligera inclinación; sellos de correos, recortes de periódico con titulares reales, marcos de cuadro y objetos recortados (un animal, un trasto antiguo) que a veces llevan un CONTORNO rojo o naranja. Anotaciones dibujadas por encima: LÍNEAS y rutas de puntos rojas, flechas, círculos y chinchetas con su etiqueta (una ciudad: «MUMBAI»). Etiquetas y cifras en SERIF condensada para fechas y datos («1952», «c. 850», «1650s») y cajitas de RESALTADOR amarillo para los rótulos. Letras tipo recorte (ransom note) sobre TARJETAS de color plano (rojo, naranja) para las palabras fuerza, y siluetas vectoriales planas (un skyline). Titulares grandes en SERIF blanca tipo Times, a veces junto a una sans redondeada gruesa. Paleta vintage: crema/hueso, kraft, negro, amarillo mostaza y un acento ROJO/NARANJA potente; el metraje de archivo, con grano. Movimiento: cada pieza del collage ENTRA por separado (pop o deslizamiento de recorte de papel, aire de stop-motion) con algo de parallax, al ritmo de la voz; ágil pero que respira, con algún zoom suave. Subtítulos del habla en MAYÚSCULAS, blancos, en MONOESPACIADA, dentro de una CAJA NEGRA redondeada (chip), de pocas palabras, a media altura; en los planos de solo collage, el rótulo puede ir en serif cursiva sobre una banda negra (letterbox). Música documental baja. [Ritmo de cortes y de las entradas del collage: ajustar al audio.]' + SOLO_ESTILO,
+  },
 ]
 
 /** El estilo de referencia con esa clave, o null. */
