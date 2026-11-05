@@ -178,8 +178,19 @@ input::placeholder,textarea::placeholder{color:#C3BBBD}
 .citem.off{color:var(--muted)}
 
 .result-cta{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin:28px 0 8px}
-.footer{max-width:var(--maxw);margin:10px auto 40px;display:flex;justify-content:space-between;gap:12px;color:var(--faint);font-size:.8rem;border-top:1px solid var(--hair);padding-top:18px;flex-wrap:wrap}
-.footer b{font-family:"Archivo";font-weight:800;letter-spacing:.14em;color:var(--muted)}
+.site-foot{background:var(--black);color:#fff;border-radius:24px;max-width:var(--maxw);margin:44px auto 30px;padding:40px clamp(22px,5vw,48px) 34px;position:relative;overflow:hidden}
+.site-foot::after{content:"";position:absolute;left:-120px;bottom:-140px;width:360px;height:360px;border-radius:50%;background:radial-gradient(circle,rgba(181,56,74,.3),transparent 70%)}
+.foot-top{display:flex;justify-content:space-between;align-items:center;gap:22px;flex-wrap:wrap;padding-bottom:26px;border-bottom:1px solid rgba(255,255,255,.12);position:relative}
+.foot-top h3{font-size:clamp(1.3rem,3.4vw,1.8rem);font-weight:800}
+.foot-top p{color:#C0B8BA;margin-top:7px}
+.foot-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:26px 0 22px;position:relative}
+.foot-card{display:block;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:18px 20px;text-decoration:none;color:#fff;transition:.15s}
+.foot-card:hover{background:rgba(255,255,255,.09);border-color:var(--wine-pink)}
+.foot-card b{display:block;font-family:"Archivo";font-weight:700;font-size:1.05rem}
+.foot-card span{display:block;color:#C7BFC1;font-size:.9rem;margin:5px 0 11px;line-height:1.45}
+.foot-card em{font-style:normal;color:var(--wine-pink);font-size:.86rem;font-weight:600}
+.foot-legal{color:#8C8487;font-size:.82rem;text-align:center;position:relative}
+@media (max-width:620px){.foot-grid{grid-template-columns:1fr}.foot-top{flex-direction:column;align-items:flex-start}}
 .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--black);color:#fff;padding:13px 20px;border-radius:12px;font-weight:600;font-size:.92rem;opacity:0;transition:.3s;z-index:50;box-shadow:0 10px 30px rgba(0,0,0,.25)}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
@@ -287,9 +298,27 @@ input::placeholder,textarea::placeholder{color:#C3BBBD}
   <p class="muted" style="text-align:center;font-size:.85rem">¿Algún punto en blanco? Es exactamente lo que vas a averiguar hablando con 3 o 4 clientes potenciales. Lo vemos en directo.</p>
 </section>
 
-<footer class="footer wrap">
-  <span><b>HELM</b> · El puesto de mando de tu negocio</span>
-  <span>Silvestre.AI · Academy</span>
+<footer class="site-foot">
+  <div class="foot-top">
+    <div>
+      <h3>Aprende a dirigir la IA, no solo a usarla.</h3>
+      <p>Gratis, en español y con casos reales.</p>
+    </div>
+    <a class="btn btn-primary btn-lg" href="/helm-academy">Unirme a HELM Academy →</a>
+  </div>
+  <div class="foot-grid">
+    <a class="foot-card" href="https://youtube.com/@silvesttre-ai" target="_blank" rel="noopener">
+      <b>Mi canal de YouTube</b>
+      <span>La serie larga, paso a paso y sin paja.</span>
+      <em>youtube.com/@silvesttre-ai</em>
+    </a>
+    <a class="foot-card" href="https://s4sf.net/empresas" target="_blank" rel="noopener">
+      <b>¿Eres una empresa o negocio?</b>
+      <span>Monto y llevo HELM, el sistema que vende por ti.</span>
+      <em>s4sf.net/empresas</em>
+    </a>
+  </div>
+  <div class="foot-legal">© 2026 Alex Silvestre · IA aplicada</div>
 </footer>
 
 <div class="toast" id="toast"></div>
