@@ -58,6 +58,10 @@
       "destination": "/api/portal-meta?slug=:slug&tipo=panel"
     },
     {
+      "source": "/clase",
+      "destination": "/clase/index.html"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
