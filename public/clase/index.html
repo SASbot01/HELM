@@ -282,7 +282,7 @@ input::placeholder,textarea::placeholder{color:#C3BBBD}
 
   <div class="result-cta">
     <button class="btn btn-dark btn-lg" id="pdfBtn" onclick="downloadPDF()">⤓ Descargar mi ficha en PDF</button>
-    <a class="btn btn-outline btn-lg" id="classCta" href="#" target="_blank" rel="noopener">Reservar mi plaza en la clase →</a>
+    <button class="btn btn-outline btn-lg" onclick="editar()">Editar mis respuestas</button>
   </div>
   <p class="muted" style="text-align:center;font-size:.85rem">¿Algún punto en blanco? Es exactamente lo que vas a averiguar hablando con 3 o 4 clientes potenciales. Lo vemos en directo.</p>
 </section>
@@ -299,7 +299,6 @@ input::placeholder,textarea::placeholder{color:#C3BBBD}
 <script>
 /* ===== Config ===== */
 var ENDPOINT = "/api/leads?action=clase-qcc";   // gateway público de HELM (api/leads.js)
-var CLASS_URL = "/helm-academy-qcc";            // página de reserva de plaza de la clase QCC
 var PREVIEW = (location.protocol === "file:" || /localhost|127\.0\.0\.1/.test(location.hostname));
 
 var check = '<svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
@@ -407,6 +406,7 @@ function opt_check(name,val,title,sub){return '<label class="opt"><input type="c
 /* ===== Navegación ===== */
 var ci = 0;
 function start(){document.getElementById("intro").hidden=true;document.getElementById("form").hidden=false;ci=0;render();window.scrollTo({top:0,behavior:"smooth"})}
+function editar(){document.getElementById("result").hidden=true;document.getElementById("form").hidden=false;ci=0;render();window.scrollTo({top:0,behavior:"smooth"})}
 function render(){
   var s=STEPS[ci];
   var host=document.getElementById("stepHost");
@@ -483,7 +483,6 @@ function finish(){
 
   buildFunnel();
   buildChecklist();
-  document.getElementById("classCta").href=CLASS_URL;
 
   document.getElementById("form").hidden=true;
   document.getElementById("result").hidden=false;
