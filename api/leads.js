@@ -710,7 +710,93 @@ async function nota(b) {
   return { ok: true }
 }
 
-const ACCIONES = { masterclass, socio, miembro, puerta, completar, nota, school, 'solicitar-acceso': solicitarAcceso, 'comprobar-acceso': comprobarAcceso }
+// ── Clase gratis (QCC): el lead magnet «Monta tu servicio con QCC» ───────────
+// La página pública /clase lleva al alumno por el QCC (quién · cómo · cuánto) y
+// al final le devuelve su ficha de servicio + frase de oferta para descargar en
+// PDF. Aquí se guarda el lead en el CRM de silvestre, embudo «Clase gratis»,
+// con todas sus respuestas en custom_fields.clase_qcc y una etiqueta con su
+// nivel de ticket, para que el equipo lo enrute como en los funnels de la clase
+// (low → checkout, medium → setter/formación, high → setting/agenda).
+const PIPELINE_CLASE = 'Clase gratis'
+const TICKETS = new Set(['low', 'medium', 'high'])
+const COBROS = new Set(['unico', 'mensual', 'montaje', 'resultado'])
+
+async function claseQcc(b, { ip } = {}) {
+  // El campo trampa: oculto en la página, solo lo rellena un bot.
+  if (txt(b.website, 200)) throw fallo(400, 'No se ha podido enviar')
+  const correo = correoDe(b.email)
+  const nombre = txt(b.nombre, 80)
+  if (!nombre) throw fallo(400, 'Dinos cómo te llamas')
+  const telefono = txt(b.whatsapp, 40)
+  const ticket = TICKETS.has(String(b.ticket)) ? String(b.ticket) : ''
+
+  // Cada campo del QCC, elegido a mano y con tope de tamaño (como el resto del
+  // fichero: nada de lo que manda el navegador llega a la base tal cual).
+  const qcc = {
+    nicho: txt(b.nicho, 200),
+    problema: txt(b.problema, 400),
+    ticket,
+    via: txt(b.via, 20),
+    canal: txt(b.canal, 120),
+    resultado: txt(b.resultado, 160),
+    plazo: txt(b.plazo, 80),
+    tipos: Array.isArray(b.tipos) ? b.tipos.map(t => txt(t, 20)).filter(Boolean).slice(0, 4) : [],
+    servicio: txt(b.servicio, 120),
+    recibe: txt(b.recibe, 400),
+    cobro: COBROS.has(String(b.cobro)) ? String(b.cobro) : '',
+    precio: txt(b.precio, 80),
+    frase: txt(b.frase, 400),
+    respuestas: jsonAcotado(b.respuestas),
+    enviado: ahora(),
+  }
+  const linea = [
+    'Clase gratis · QCC',
+    qcc.nicho && `nicho: ${qcc.nicho}`,
+    ticket && `ticket: ${ticket}`,
+    qcc.resultado && `resultado: ${qcc.resultado}${qcc.plazo ? ` en ${qcc.plazo}` : ''}`,
+    qcc.servicio && `servicio: ${qcc.servicio}`,
+  ].filter(Boolean).join(' · ')
+  const etiquetas = ['clase-qcc', ...(ticket ? [`ticket:${ticket}`] : [])]
+
+  const clientId = await perfil(PERFIL_SLUG)
+  const pipeline = await embudo(clientId, PIPELINE_CLASE)
+  const etapa = pipeline.etapas[0]?.key || 'nuevo'
+
+  const previo = await buscar(clientId, correo, 'id, name, phone, whatsapp, notes, tags, custom_fields, pipeline_id, status')
+  if (previo) {
+    // Quien ya estaba no pierde nada: se rellenan los huecos y se suma la nota.
+    // Solo se mueve a «Clase gratis» si no estaba en ningún embudo (un cliente
+    // no retrocede por rellenar el lead magnet).
+    const tags = Array.from(new Set([...(Array.isArray(previo.tags) ? previo.tags : []), ...etiquetas]))
+    await actualizar(previo.id, {
+      ...(previo.name ? {} : { name: nombre }),
+      ...(previo.phone || !telefono ? {} : { phone: telefono }),
+      ...(previo.whatsapp || !telefono ? {} : { whatsapp: telefono }),
+      notes: sumaNota(previo.notes, linea),
+      tags,
+      custom_fields: { ...(previo.custom_fields || {}), clase_qcc: { ...(previo.custom_fields?.clase_qcc || {}), ...qcc } },
+      ...(pipeline.id && !previo.pipeline_id ? { pipeline_id: pipeline.id, status: etapa } : {}),
+      last_activity_at: ahora(), updated_at: ahora(),
+    })
+    return { ok: true, id: await ficha(clientId, previo.id) }
+  }
+  if (!rateLimit({ key: `clase:${ip || 'anon'}`, max: ALTAS_POR_IP_HORA, windowMs: 3_600_000 }).ok) {
+    throw fallo(429, 'Ahora mismo hay muchas altas. Prueba en un rato.')
+  }
+  cuentaAlta('clase-qcc')
+  const id = await crear({
+    client_id: clientId, name: nombre, email: correo,
+    ...(telefono ? { phone: telefono, whatsapp: telefono } : {}),
+    source: 'Clase gratis · QCC', notes: linea, tags: etiquetas,
+    pipeline_id: pipeline.id, status: etapa,
+    utm_source: 'clase-qcc', utm_medium: 'lead-magnet',
+    custom_fields: { clase_qcc: qcc },
+    last_activity_at: ahora(), updated_at: ahora(),
+  })
+  return { ok: true, id: await ficha(clientId, id) }
+}
+
+const ACCIONES = { masterclass, socio, miembro, puerta, completar, nota, school, 'clase-qcc': claseQcc, 'solicitar-acceso': solicitarAcceso, 'comprobar-acceso': comprobarAcceso }
 
 export default async function handler(req, res) {
   applyCors(req, res)

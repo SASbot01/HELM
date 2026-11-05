@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Monta tu servicio con QCC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Hanken+Grotesk:wght@400;500;600;700&display=swap">
+<style>
+/* ===== HELM Academy · QCC — identidad del PDF: cuaderno crema + bloques granate/negro ===== */
+:root{
+  --paper:#FCFAF9; --ink:#1A1719; --muted:#6E6568; --faint:#9A9195;
+  --wine:#7A1B2B; --wine-bright:#B5384A; --wine-pink:#D7596C;
+  --black:#16151A; --tint:#FBEFF0; --tint-2:#F6EBEC;
+  --hair:#EBE2E2; --chip:#F2E8E9; --chip-ink:#73505A;
+  --ok:#2E7D52; --shadow:0 1px 2px rgba(26,23,25,.04),0 10px 30px rgba(122,27,43,.06);
+  --r:16px; --r-sm:10px; --maxw:960px;
+  color-scheme: light;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:"Hanken Grotesk",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  font-size:16px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+h1,h2,h3,h4{font-family:"Archivo",system-ui,sans-serif;margin:0;line-height:1.08;text-wrap:balance;letter-spacing:-.02em}
+p{margin:0}
+button{font-family:inherit;cursor:pointer}
+a{color:inherit}
+.wrap{max-width:var(--maxw);margin:0 auto}
+.eyebrow{font-family:"Archivo";font-weight:700;font-size:.72rem;letter-spacing:.18em;text-transform:uppercase}
+.muted{color:var(--muted)}
+[hidden]{display:none!important}
+
+/* ===== Top bar ===== */
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:var(--maxw);margin:0 auto;padding:18px 0 0}
+.brand{font-family:"Archivo";font-weight:800;letter-spacing:.3em;font-size:1rem}
+.brand small{letter-spacing:.2em;color:var(--muted);font-weight:700;font-size:.62rem;margin-left:.5em}
+.badge{border:1px solid var(--wine);color:var(--wine);border-radius:999px;padding:7px 14px;font-family:"Archivo";font-weight:700;font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap}
+
+/* ===== HERO (bloque oscuro, como la portada del PDF) ===== */
+.hero{background:var(--black);color:#fff;border-radius:24px;margin:18px auto 0;max-width:var(--maxw);padding:40px clamp(22px,5vw,56px) 44px;position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;right:-120px;top:-120px;width:360px;height:360px;border-radius:50%;background:radial-gradient(circle,rgba(181,56,74,.35),transparent 70%)}
+.hero .eyebrow{color:var(--wine-pink)}
+.hero h1{font-size:clamp(2.1rem,6vw,3.6rem);font-weight:900;margin:14px 0 0}
+.hero h1 .q{color:var(--wine-pink)}
+.hero .lede{color:#D9D2D4;max-width:48ch;margin:16px 0 0;font-size:1.06rem}
+.hero .mini{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.hero .mini span{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:7px 13px;font-size:.82rem;color:#EFEAEB}
+
+/* QCC diagrama */
+.diagram{margin-top:30px;display:grid;gap:12px}
+.node{justify-self:center;text-align:center}
+.node .svc{display:inline-block;background:var(--wine);color:#fff;font-family:"Archivo";font-weight:700;letter-spacing:.08em;font-size:.82rem;padding:11px 22px;border-radius:999px;text-transform:uppercase}
+.node .qcc{display:inline-block;background:#fff;color:var(--wine);border-radius:12px;padding:10px 20px;margin-top:4px;text-align:center}
+.node .qcc b{font-family:"Archivo";font-weight:800;font-size:1.15rem;display:block;letter-spacing:.02em}
+.node .qcc span{font-size:.72rem;color:var(--wine-bright);letter-spacing:.04em}
+.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:6px}
+.qcol{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:14px;overflow:hidden}
+.qcol .head{background:var(--wine);color:#fff;font-family:"Archivo";font-weight:700;font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;padding:9px 12px;text-align:center}
+.qcol .body{padding:12px 13px}
+.qcol .q{font-size:.86rem;color:#EFEAEB;margin-bottom:8px}
+.qcol .tag{display:inline-block;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.13);border-radius:7px;padding:4px 8px;font-size:.72rem;color:#D9D2D4;margin:3px 3px 0 0}
+.start{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:30px}
+
+/* ===== Botones ===== */
+.btn{border:none;border-radius:12px;padding:15px 26px;font-family:"Archivo";font-weight:700;font-size:1rem;letter-spacing:.01em;transition:transform .06s ease,filter .15s ease}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--wine);color:#fff}
+.btn-primary:hover{filter:brightness(1.08)}
+.btn-ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.3)}
+.btn-dark{background:var(--black);color:#fff}
+.btn-outline{background:#fff;color:var(--wine);border:1.5px solid var(--wine)}
+.btn-lg{padding:17px 30px;font-size:1.06rem}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.start .note{font-size:.84rem;color:#B9B1B3}
+
+/* ===== FORM ===== */
+.stage{max-width:var(--maxw);margin:26px auto 60px}
+.card{background:#fff;border:1px solid var(--hair);border-radius:var(--r);box-shadow:var(--shadow);padding:clamp(22px,4vw,40px)}
+.progress{display:flex;align-items:center;gap:10px;margin-bottom:22px}
+.pbar{flex:1;height:7px;background:var(--tint-2);border-radius:999px;overflow:hidden}
+.pbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--wine),var(--wine-bright));border-radius:999px;transition:width .35s cubic-bezier(.4,0,.2,1)}
+.pstep{font-family:"Archivo";font-weight:700;font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.step-head{display:flex;gap:14px;align-items:flex-start;margin-bottom:6px}
+.num{flex:none;width:46px;height:46px;border-radius:12px;background:var(--wine);color:#fff;font-family:"Archivo";font-weight:800;font-size:1.3rem;display:grid;place-items:center}
+.num.black{background:var(--black)}
+.step-head .t .eyebrow{color:var(--wine-bright)}
+.step-head .t h2{font-size:clamp(1.5rem,4vw,2rem);font-weight:800;margin:3px 0 0}
+.step-sub{color:var(--muted);margin:10px 0 20px;max-width:60ch}
+.fields{display:grid;gap:18px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.field label{display:block;font-weight:600;font-size:.95rem;margin-bottom:6px}
+.field .help{color:var(--faint);font-size:.82rem;margin:-2px 0 8px}
+input[type=text],input[type=email],input[type=tel],textarea,select{
+  width:100%;border:1.5px solid var(--hair);border-radius:var(--r-sm);padding:12px 14px;font-family:inherit;font-size:1rem;color:var(--ink);background:#fff;transition:border-color .15s ease,box-shadow .15s ease}
+textarea{min-height:84px;resize:vertical}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--wine);box-shadow:0 0 0 3px rgba(122,27,43,.12)}
+input::placeholder,textarea::placeholder{color:#C3BBBD}
+
+/* opciones tipo tarjeta (radio/checkbox) */
+.opts{display:grid;gap:10px}
+.opts.g3{grid-template-columns:repeat(3,1fr)}
+.opts.g2{grid-template-columns:1fr 1fr}
+.opts.g4{grid-template-columns:repeat(2,1fr)}
+.opt{display:flex;gap:11px;align-items:flex-start;border:1.5px solid var(--hair);border-radius:12px;padding:13px 14px;background:#fff;transition:.15s;position:relative}
+.opt:hover{border-color:var(--wine-pink)}
+.opt input{position:absolute;opacity:0;pointer-events:none}
+.opt .box{flex:none;width:20px;height:20px;border:2px solid #CFC6C7;border-radius:6px;margin-top:1px;display:grid;place-items:center;transition:.15s}
+.opt.radio .box{border-radius:50%}
+.opt .box svg{width:12px;height:12px;opacity:0;transform:scale(.6);transition:.15s}
+.opt .lab b{display:block;font-weight:700;font-size:.97rem}
+.opt .lab small{color:var(--muted);font-size:.82rem;display:block;margin-top:2px;line-height:1.4}
+.opt:has(input:checked){border-color:var(--wine);background:var(--tint)}
+.opt:has(input:checked) .box{background:var(--wine);border-color:var(--wine)}
+.opt:has(input:checked) .box svg{opacity:1;transform:scale(1);stroke:#fff}
+
+.callout{background:var(--tint);border-left:4px solid var(--wine);border-radius:10px;padding:14px 16px;font-size:.9rem;margin-top:4px}
+.callout b{color:var(--wine)}
+
+.nav{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:28px;padding-top:22px;border-top:1px solid var(--hair)}
+.link-btn{background:none;border:none;color:var(--muted);font-weight:600;font-size:.95rem;padding:8px 4px}
+.link-btn:hover{color:var(--wine)}
+.req{color:var(--wine-bright)}
+.err{color:var(--wine-bright);font-size:.84rem;margin-top:6px;font-weight:600}
+
+/* consentimiento */
+.consent{display:flex;gap:11px;align-items:flex-start;font-size:.86rem;color:var(--muted);margin-top:4px}
+.consent input{margin-top:3px;accent-color:var(--wine);width:17px;height:17px}
+
+/* ===== RESULT ===== */
+.result-head{text-align:center;margin:8px auto 24px;max-width:60ch}
+.result-head .check{width:58px;height:58px;border-radius:15px;background:var(--black);display:grid;place-items:center;margin:0 auto 16px}
+.result-head h2{font-size:clamp(1.7rem,5vw,2.6rem);font-weight:900}
+.result-head p{color:var(--muted);margin-top:10px}
+
+/* ficha */
+.ficha{background:#fff;border:1px solid var(--hair);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow)}
+.ficha .cap{background:var(--wine);color:#fff;font-family:"Archivo";font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:.82rem;padding:13px 20px}
+.frow{display:grid;grid-template-columns:230px 1fr;border-top:1px solid var(--hair)}
+.frow:first-of-type{border-top:none}
+.frow dt{background:var(--tint-2);font-weight:700;font-size:.92rem;padding:13px 20px;margin:0;color:var(--ink)}
+.frow dt small{display:block;font-weight:500;color:var(--muted);font-size:.78rem}
+.frow dd{margin:0;padding:13px 20px;font-size:.98rem}
+.frow dd .pill{display:inline-block;border:1px solid var(--hair);border-radius:7px;padding:3px 9px;font-size:.82rem;margin:2px 4px 2px 0;color:var(--muted)}
+.frow dd .pill.on{background:var(--wine);color:#fff;border-color:var(--wine);font-weight:600}
+
+/* frase de oferta */
+.offer{background:var(--black);color:#fff;border-radius:var(--r);padding:clamp(22px,4vw,34px);margin-top:18px}
+.offer .eyebrow{color:var(--wine-pink)}
+.offer p{font-family:"Archivo";font-weight:700;font-size:clamp(1.25rem,3.4vw,1.9rem);line-height:1.22;margin-top:12px;letter-spacing:-.01em}
+.offer p em{font-style:normal;color:var(--wine-pink)}
+.offer .map{font-size:.78rem;color:#9C9497;letter-spacing:.08em;text-transform:uppercase;margin-top:16px;font-family:"Archivo";font-weight:700}
+
+/* funnel recomendado */
+.funnel{background:#fff;border:1px solid var(--hair);border-radius:var(--r);box-shadow:var(--shadow);padding:clamp(20px,4vw,30px);margin-top:18px}
+.funnel h3{font-size:1.2rem;font-weight:800}
+.funnel .tag{display:inline-block;background:var(--tint);color:var(--wine);border-radius:999px;padding:5px 12px;font-family:"Archivo";font-weight:700;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px}
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px}
+.flow .fstep{background:var(--tint-2);border:1px solid var(--hair);border-radius:10px;padding:9px 13px;font-weight:700;font-size:.9rem}
+.flow .fstep.hot{background:var(--wine);color:#fff;border-color:var(--wine)}
+.flow .arr{color:var(--faint);font-weight:800}
+
+/* checklist */
+.checklist{background:#fff;border:1px solid var(--hair);border-radius:var(--r);box-shadow:var(--shadow);padding:clamp(20px,4vw,30px);margin-top:18px}
+.checklist h3{font-size:1.2rem;font-weight:800;margin-bottom:14px}
+.cgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.citem{display:flex;gap:10px;align-items:flex-start;font-size:.95rem}
+.citem .dot{flex:none;width:22px;height:22px;border-radius:6px;display:grid;place-items:center;margin-top:1px;border:2px solid #D4CBCC}
+.citem.on .dot{background:var(--ok);border-color:var(--ok)}
+.citem.on .dot svg{stroke:#fff}
+.citem .dot svg{width:12px;height:12px;opacity:0}
+.citem.on .dot svg{opacity:1}
+.citem.off{color:var(--muted)}
+
+.result-cta{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin:28px 0 8px}
+.footer{max-width:var(--maxw);margin:10px auto 40px;display:flex;justify-content:space-between;gap:12px;color:var(--faint);font-size:.8rem;border-top:1px solid var(--hair);padding-top:18px;flex-wrap:wrap}
+.footer b{font-family:"Archivo";font-weight:800;letter-spacing:.14em;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--black);color:#fff;padding:13px 20px;border-radius:12px;font-weight:600;font-size:.92rem;opacity:0;transition:.3s;z-index:50;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (max-width:720px){
+  .cols{grid-template-columns:1fr}
+  .two{grid-template-columns:1fr}
+  .opts.g3,.opts.g2,.opts.g4{grid-template-columns:1fr}
+  .frow{grid-template-columns:1fr}
+  .frow dt{background:var(--tint-2)}
+  .cgrid{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">H E L M <small>ACADEMY</small></div>
+  <div class="badge">Clase 1 · En directo</div>
+</header>
+
+<!-- ============ INTRO ============ -->
+<section id="intro" class="hero wrap">
+  <div class="eyebrow">Iniciación en el negocio de IA</div>
+  <h1>Monta tu servicio con <span class="q">QCC</span></h1>
+  <p class="lede">Antes de vender, responde 3 preguntas: a quién, cómo y cuánto. En unos minutos sales con tu <b style="color:#fff">ficha de servicio</b> y tu <b style="color:#fff">frase de oferta</b>, listas para tu bio o tu primer mensaje.</p>
+  <div class="mini"><span>⏱ 5 minutos</span><span>✓ Sin registro previo</span><span>⤓ Te llevas tu ficha en PDF</span></div>
+
+  <div class="diagram">
+    <div class="node"><span class="svc">Servicio / Producto</span></div>
+    <div class="node"><span class="qcc"><b>QCC</b><span>Quién · Cómo · Cuánto</span></span></div>
+    <div class="cols">
+      <div class="qcol"><div class="head">1 · A quién</div><div class="body"><div class="q">¿Quién es mi cliente ideal?</div><span class="tag">Nicho y perfil</span><span class="tag">Su problema</span><span class="tag">Low · medium · high</span></div></div>
+      <div class="qcol"><div class="head">2 · Cómo</div><div class="body"><div class="q">¿Cómo llego a él y cómo le ayudo?</div><span class="tag">Directa</span><span class="tag">Indirecta</span><span class="tag">Ayudo al cliente</span></div></div>
+      <div class="qcol"><div class="head">3 · Cuánto</div><div class="body"><div class="q">¿Qué resultado le doy? (lo que gana)</div><span class="tag">Tiempo</span><span class="tag">Dinero</span><span class="tag">Visibilidad</span><span class="tag">Crecimiento</span></div></div>
+    </div>
+  </div>
+
+  <div class="start">
+    <button class="btn btn-primary btn-lg" onclick="start()">Montar mi servicio →</button>
+    <span class="note">Responde con frases cortas y números siempre que puedas.</span>
+  </div>
+</section>
+
+<!-- ============ FORM ============ -->
+<section id="form" class="stage" hidden>
+  <div class="card">
+    <div class="progress">
+      <span class="pstep" id="pstepLabel">Paso 1 de 5</span>
+      <div class="pbar"><i id="pbar"></i></div>
+    </div>
+    <div id="stepHost"></div>
+    <div class="nav">
+      <button class="link-btn" id="backBtn" onclick="back()">← Atrás</button>
+      <button class="btn btn-primary" id="nextBtn" onclick="next()">Siguiente →</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ RESULT ============ -->
+<section id="result" class="stage" hidden>
+  <div class="result-head">
+    <div class="check"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+    <div class="eyebrow" style="color:var(--wine-bright)">Resumen</div>
+    <h2 id="rTitle">Tu servicio en una ficha</h2>
+    <p>Esto es lo que vas a vender. Descárgalo, y si te atascas en algún punto, es justo lo que trabajamos en la clase.</p>
+  </div>
+
+  <div id="ficha" class="ficha">
+    <div class="cap">Ficha del servicio</div>
+    <dl style="margin:0">
+      <div class="frow"><dt>Nombre del servicio</dt><dd id="f_nombre">—</dd></div>
+      <div class="frow"><dt>Para quién <small>(Quién)</small></dt><dd id="f_quien">—</dd></div>
+      <div class="frow"><dt>Problema que resuelve</dt><dd id="f_problema">—</dd></div>
+      <div class="frow"><dt>Resultado que promete <small>(Cuánto · con número y plazo)</small></dt><dd id="f_resultado">—</dd></div>
+      <div class="frow"><dt>Qué incluye</dt><dd id="f_incluye">—</dd></div>
+      <div class="frow"><dt>Precio y forma de pago</dt><dd id="f_cobro">—</dd></div>
+      <div class="frow"><dt>Nivel de ticket</dt><dd id="f_ticket">—</dd></div>
+      <div class="frow"><dt>Cómo llego <small>(Cómo)</small></dt><dd id="f_como">—</dd></div>
+    </dl>
+  </div>
+
+  <div class="offer">
+    <div class="eyebrow">Mi frase de oferta</div>
+    <p id="offerLine">—</p>
+    <div class="map">Quién → Resultado (Cuánto) → Plazo → Cómo</div>
+  </div>
+
+  <div class="funnel">
+    <div class="tag" id="funnelTag">Tu camino recomendado</div>
+    <h3 id="funnelName">—</h3>
+    <p class="muted" id="funnelDesc" style="margin-top:6px"></p>
+    <div class="flow" id="funnelFlow"></div>
+  </div>
+
+  <div class="checklist">
+    <h3>Listo para vender</h3>
+    <div class="cgrid" id="checkGrid"></div>
+  </div>
+
+  <div class="result-cta">
+    <button class="btn btn-dark btn-lg" id="pdfBtn" onclick="downloadPDF()">⤓ Descargar mi ficha en PDF</button>
+    <a class="btn btn-outline btn-lg" id="classCta" href="#" target="_blank" rel="noopener">Reservar mi plaza en la clase →</a>
+  </div>
+  <p class="muted" style="text-align:center;font-size:.85rem">¿Algún punto en blanco? Es exactamente lo que vas a averiguar hablando con 3 o 4 clientes potenciales. Lo vemos en directo.</p>
+</section>
+
+<footer class="footer wrap">
+  <span><b>HELM</b> · El puesto de mando de tu negocio</span>
+  <span>Silvestre.AI · Academy</span>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+/* ===== Config ===== */
+var ENDPOINT = "/api/leads?action=clase-qcc";   // gateway público de HELM (api/leads.js)
+var CLASS_URL = "/helm-academy-qcc";            // página de reserva de plaza de la clase QCC
+var PREVIEW = (location.protocol === "file:" || /localhost|127\.0\.0\.1/.test(location.hostname));
+
+var check = '<svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+var data = {};
+
+/* ===== Definición de pasos ===== */
+var STEPS = [
+  {num:"1", key:"quien", eyebrow:"A quién", title:"¿Quién es tu cliente ideal?",
+   sub:"Nicho y perfil, su problema principal y cuánto puede pagar. Cuanto más estrecho el nicho, más fácil es hablarle y encontrarle.",
+   html:
+    '<div class="fields">'+
+      f_text("nicho","¿A qué se dedica exactamente?","Sector + tipo de negocio. Ej.: «clínicas de fisioterapia de 2 a 6 fisios», no «negocios de salud».",true)+
+      '<div class="two">'+
+        f_text("tamano","¿Qué tamaño tiene?","Nº de empleados, locales o clientes al mes.",false)+
+        f_text("decide","¿Quién decide la compra?","Dueño, gerente, responsable… a veces no son la misma persona.",false)+
+      '</div>'+
+      f_area("problema","¿Cuál es su problema principal?","Con sus palabras. El que ya le duele y por el que gasta tiempo o dinero.",true)+
+      f_area("pierde","¿Dónde pierde tiempo o dinero hoy?","Tareas repetitivas, leads sin contestar, citas que no se presentan…",false)+
+      '<div class="field"><label>Nivel de ticket <span class="req">*</span></label>'+
+       '<div class="help">Depende de cuánto le cuesta el problema y de cuánto puede pagar, no de lo que te cueste montarlo.</div>'+
+       '<div class="opts g3" data-radio="ticket">'+
+         opt_radio("ticket","low","Low · hasta ~500 €","Problema puntual, solución rápida o plantilla.")+
+         opt_radio("ticket","medium","Medium · 500–2.000 €","Un proceso concreto, automatizado de punta a punta.")+
+         opt_radio("ticket","high","High · +2.000 €","Resultado grande y medible, varios procesos, empresa.")+
+       '</div><div class="err" data-err="ticket" hidden>Elige un nivel.</div></div>'+
+    '</div>'},
+
+  {num:"2", key:"como", eyebrow:"Cómo", title:"¿Cómo llegas a él?",
+   sub:"Primero decides cómo llegas al cliente. La vía directa suele ser la más rápida para el primer cliente; la indirecta escala cuando ya tienes casos que enseñar.",
+   html:
+    '<div class="fields">'+
+      '<div class="field"><label>¿Cómo vas a llegar? <span class="req">*</span></label>'+
+       '<div class="opts g3" data-radio="via">'+
+         opt_radio("via","directa","Directa","Le contactas tú: Maps, LinkedIn, mensaje, llamada.")+
+         opt_radio("via","indirecta","Indirecta","Te contacta él: contenido, guía o diagnóstico gratis.")+
+         opt_radio("via","ambas","Las dos","Directa primero para arrancar, indirecta para escalar.")+
+       '</div><div class="err" data-err="via" hidden>Elige una vía.</div></div>'+
+      '<div class="two">'+
+        f_text("canal","¿Por qué canal principal?","WhatsApp, Instagram, email, llamada o visita.",true)+
+        f_text("objetivo","Tu objetivo a la semana","Nº de contactos, mensajes o publicaciones.",false)+
+      '</div>'+
+      '<div class="callout"><b>Para el primer cliente:</b> no digas «hago automatizaciones con IA». Habla de su problema y de lo que gana.</div>'+
+    '</div>'},
+
+  {num:"3", key:"cuanto", eyebrow:"Cuánto", title:"¿Qué resultado le das?",
+   sub:"Lo que gana el cliente. Elige uno o dos tipos de resultado y ponles número: si no tiene un antes y un después, no es un resultado, es una promesa.",
+   html:
+    '<div class="fields">'+
+      '<div class="field"><label>Tipo de resultado <span class="req">*</span><div class="help">Marca uno o dos.</div></label>'+
+       '<div class="opts g4" data-check="tipos">'+
+         opt_check("tipos","tiempo","Tiempo","Horas que recupera.")+
+         opt_check("tipos","dinero","Dinero","Más ingresos o menos costes.")+
+         opt_check("tipos","visibilidad","Visibilidad","Que le encuentren y le elijan.")+
+         opt_check("tipos","crecimiento","Crecimiento","Atender a más sin crecer en coste.")+
+       '</div><div class="err" data-err="tipos" hidden>Marca al menos uno.</div></div>'+
+      '<div class="two">'+
+        f_text("numero","Tu número principal","Ej.: «15 citas al mes», «6 h/semana», «600 €/mes».",true)+
+        f_text("plazo","¿En cuánto plazo?","Ej.: «60 días», «en 2 semanas».",true)+
+      '</div>'+
+      f_text("teme","¿Qué es lo que más teme o le cuesta?","Completa la frase «…sin ___». Ej.: «contratar a nadie», «complicarse», «cambiar de programa».",false)+
+    '</div>'},
+
+  {num:"4", key:"monta", eyebrow:"Ayudamos al cliente", title:"Monta el servicio", black:true,
+   sub:"Con el Quién y el Cuánto claros, diseña qué entregas y cómo. Descríbelo como lo vería él, no como lo montas tú.",
+   html:
+    '<div class="fields">'+
+      f_area("recibe","¿Qué recibe exactamente el cliente?","Ej.: «un asistente que contesta y agenda por WhatsApp», no «un flujo con API».",true)+
+      '<div class="two">'+
+        f_text("construyo","¿Con qué lo construyes?","Claude, HELM, web, WhatsApp, automatizaciones…",false)+
+        f_text("tardo","¿Cuánto tardas en entregarlo?","Ej.: «2 semanas».",false)+
+      '</div>'+
+      '<div class="field"><label>¿Cómo cobras? <span class="req">*</span></label>'+
+       '<div class="opts g2" data-radio="cobro">'+
+         opt_radio("cobro","unico","Pago único","")+
+         opt_radio("cobro","mensual","Cuota mensual","")+
+         opt_radio("cobro","montaje","Montaje + cuota mensual","")+
+         opt_radio("cobro","resultado","Una parte ligada al resultado","")+
+       '</div><div class="err" data-err="cobro" hidden>Elige una forma de cobro.</div></div>'+
+      f_text("precio","Precio orientativo (opcional)","Lo que vas a pedir. Lo puedes ajustar después.",false)+
+      f_text("servicio","Nombre del servicio (opcional)","Ej.: «Agenda llena», «Asistente de WhatsApp».",false)+
+    '</div>'},
+
+  {num:"5", key:"datos", eyebrow:"Último paso", title:"¿A dónde te mando tu ficha?", black:true,
+   sub:"Te enviamos tu ficha montada y la plaza para la clase en directo. Nada de spam.",
+   html:
+    '<div class="fields">'+
+      '<div class="two">'+
+        f_text("nombre","Tu nombre","",true)+
+        f_text("email","Tu email","",true,"email")+
+      '</div>'+
+      f_text("whatsapp","Tu WhatsApp","Para mandarte la ficha y el enlace de la clase.",true,"tel")+
+      '<input type="text" id="hp_website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">'+
+      '<label class="consent"><input type="checkbox" id="consent"> Quiero recibir mi ficha y las novedades de HELM Academy. Puedo darme de baja cuando quiera.</label>'+
+      '<div class="err" data-err="consent" hidden>Marca la casilla para continuar.</div>'+
+    '</div>'}
+];
+
+/* ===== Helpers de construcción ===== */
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function f_text(id,label,help,req,type){type=type||"text";return '<div class="field"><label>'+label+(req?' <span class="req">*</span>':'')+'</label>'+(help?'<div class="help">'+help+'</div>':'')+'<input type="'+type+'" id="fi_'+id+'" data-k="'+id+'" autocomplete="off">'+(req?'<div class="err" data-err="'+id+'" hidden>Rellena este campo.</div>':'')+'</div>'}
+function f_area(id,label,help,req){return '<div class="field"><label>'+label+(req?' <span class="req">*</span>':'')+'</label>'+(help?'<div class="help">'+help+'</div>':'')+'<textarea id="fi_'+id+'" data-k="'+id+'"></textarea>'+(req?'<div class="err" data-err="'+id+'" hidden>Rellena este campo.</div>':'')+'</div>'}
+function opt_radio(name,val,title,sub){return '<label class="opt radio"><input type="radio" name="'+name+'" value="'+val+'"><span class="box">'+check+'</span><span class="lab"><b>'+title+'</b>'+(sub?'<small>'+sub+'</small>':'')+'</span></label>'}
+function opt_check(name,val,title,sub){return '<label class="opt"><input type="checkbox" name="'+name+'" value="'+val+'"><span class="box">'+check+'</span><span class="lab"><b>'+title+'</b>'+(sub?'<small>'+sub+'</small>':'')+'</span></label>'}
+
+/* ===== Navegación ===== */
+var ci = 0;
+function start(){document.getElementById("intro").hidden=true;document.getElementById("form").hidden=false;ci=0;render();window.scrollTo({top:0,behavior:"smooth"})}
+function render(){
+  var s=STEPS[ci];
+  var host=document.getElementById("stepHost");
+  host.innerHTML=
+    '<div class="step-head"><div class="num'+(s.black?' black':'')+'">'+s.num+'</div>'+
+    '<div class="t"><div class="eyebrow">'+s.eyebrow+'</div><h2>'+s.title+'</h2></div></div>'+
+    '<p class="step-sub">'+s.sub+'</p>'+s.html;
+  restore();
+  document.getElementById("pbar").style.width=((ci)/(STEPS.length))*100+"%";
+  document.getElementById("pstepLabel").textContent="Paso "+(ci+1)+" de "+STEPS.length;
+  document.getElementById("backBtn").style.visibility = ci===0 ? "hidden":"visible";
+  document.getElementById("nextBtn").textContent = ci===STEPS.length-1 ? "Montar mi servicio ✓" : "Siguiente →";
+}
+function restore(){
+  document.querySelectorAll("#stepHost [data-k]").forEach(function(el){if(data[el.dataset.k]!=null)el.value=data[el.dataset.k]});
+  document.querySelectorAll('#stepHost [data-radio]').forEach(function(g){var k=g.dataset.radio;if(data[k])g.querySelectorAll('input').forEach(function(i){i.checked=(i.value===data[k])})});
+  document.querySelectorAll('#stepHost [data-check]').forEach(function(g){var k=g.dataset.check;var arr=data[k]||[];g.querySelectorAll('input').forEach(function(i){i.checked=arr.indexOf(i.value)>=0})});
+  var c=document.getElementById("consent");if(c&&data.consent)c.checked=true;
+}
+function collect(){
+  document.querySelectorAll("#stepHost [data-k]").forEach(function(el){data[el.dataset.k]=el.value.trim()});
+  document.querySelectorAll('#stepHost [data-radio]').forEach(function(g){var sel=g.querySelector('input:checked');data[g.dataset.radio]=sel?sel.value:""});
+  document.querySelectorAll('#stepHost [data-check]').forEach(function(g){data[g.dataset.check]=Array.prototype.map.call(g.querySelectorAll('input:checked'),function(i){return i.value})});
+  var c=document.getElementById("consent");if(c)data.consent=c.checked;
+}
+function fail(key,show){var e=document.querySelector('#stepHost [data-err="'+key+'"]');if(e)e.hidden=!show;return show}
+function validate(){
+  collect();var ok=true;var first=null;
+  document.querySelectorAll('#stepHost [data-err]').forEach(function(e){e.hidden=true});
+  var s=STEPS[ci];
+  function need(k){var v=data[k];var bad=(!v||(Array.isArray(v)&&!v.length));if(bad){fail(k,true);ok=false;if(!first)first=k}}
+  if(s.key==="quien"){need("nicho");need("problema");need("ticket")}
+  if(s.key==="como"){need("via");need("canal")}
+  if(s.key==="cuanto"){need("tipos");need("numero");need("plazo")}
+  if(s.key==="monta"){need("recibe");need("cobro")}
+  if(s.key==="datos"){need("nombre");need("email");need("whatsapp");
+    if(data.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)){fail("email",true);ok=false;if(!first)first="email"}
+    if(!data.consent){fail("consent",true);ok=false;if(!first)first="consent"}}
+  if(!ok&&first){var el=document.querySelector('[data-err="'+first+'"]');if(el)el.scrollIntoView({behavior:"smooth",block:"center"})}
+  return ok;
+}
+function back(){collect();if(ci>0){ci--;render();window.scrollTo({top:0,behavior:"smooth"})}}
+function next(){
+  if(!validate())return;
+  if(ci<STEPS.length-1){ci++;render();window.scrollTo({top:0,behavior:"smooth"})}
+  else finish();
+}
+
+/* ===== Montar resultado ===== */
+var TICKET={low:"Low · hasta ~500 €",medium:"Medium · 500–2.000 €",high:"High · +2.000 € (empresa)"};
+var COBRO={unico:"Pago único",mensual:"Cuota mensual",montaje:"Montaje + cuota mensual",resultado:"Parte ligada al resultado"};
+var VIA={directa:"Directa (le contactas tú)",indirecta:"Indirecta (te contacta él)",ambas:"Las dos (directa primero)"};
+
+function setDD(id,html){document.getElementById(id).innerHTML=html||'<span class="muted">—</span>'}
+function finish(){
+  collect();
+  // Ficha
+  setDD("f_nombre", data.servicio?esc(data.servicio):'<span class="muted">Sin nombre todavía</span>');
+  setDD("f_quien", esc(data.nicho)+(data.decide?' · decide: '+esc(data.decide):''));
+  setDD("f_problema", esc(data.problema));
+  var res=esc(data.numero)+(data.plazo?' <b>en '+esc(data.plazo)+'</b>':'');
+  setDD("f_resultado", res);
+  setDD("f_incluye", esc(data.recibe)+(data.construyo?' <span class="pill">con '+esc(data.construyo)+'</span>':'')+(data.tardo?' <span class="pill">'+esc(data.tardo)+'</span>':''));
+  setDD("f_cobro", (COBRO[data.cobro]||'—')+(data.precio?' · '+esc(data.precio):''));
+  setDD("f_ticket", ['low','medium','high'].map(function(t){return '<span class="pill'+(data.ticket===t?' on':'')+'">'+t.charAt(0).toUpperCase()+t.slice(1)+'</span>'}).join(''));
+  setDD("f_como", (VIA[data.via]||'—')+(data.canal?' · '+esc(data.canal):''));
+
+  // Frase de oferta
+  var temeV=(data.teme||'').replace(/^s[ií]n\s+/i,'');
+  var teme=temeV?(' sin <em>'+esc(temeV)+'</em>'):'';
+  var como=data.recibe?(' con <em>'+esc(data.recibe)+'</em>'):'';
+  document.getElementById("offerLine").innerHTML=
+    'Ayudo a <em>'+esc(data.nicho)+'</em> a <em>'+esc(data.numero)+'</em>'+(data.plazo?' en <em>'+esc(data.plazo)+'</em>':'')+como+teme+'.';
+
+  buildFunnel();
+  buildChecklist();
+  document.getElementById("classCta").href=CLASS_URL;
+
+  document.getElementById("form").hidden=true;
+  document.getElementById("result").hidden=false;
+  window.scrollTo({top:0,behavior:"smooth"});
+  submitLead();
+}
+
+function buildFunnel(){
+  var t=data.ticket, f;
+  if(t==="high"){f={name:"Funnel high ticket · empresas",desc:"Vendes un resultado grande a quien decide. No se cierra en un formulario: se cierra en una reunión.",flow:["Contenido","Formulario empresa","Setting","Agenda","Propuesta"]};}
+  else if(t==="medium"){f={name:"Funnel de ascensión · medium ticket",desc:"El contenido atrae, el formulario cualifica y un setter agenda tu sesión 1 a 1 para cerrar.",flow:["Contenido","Reels / Historias","Formulario","Setter","Formación 1 a 1"]};}
+  else{f={name:"Funnel directo · low ticket",desc:"Oferta clara y una vía de pago sencilla. Tú contactas o dejas que compren sin fricción.",flow:["Contenido","Formulario","Oferta clara","Checkout"]};}
+  document.getElementById("funnelName").textContent=f.name;
+  document.getElementById("funnelDesc").textContent=f.desc;
+  var host=document.getElementById("funnelFlow");host.innerHTML="";
+  f.flow.forEach(function(s,i){
+    var el=document.createElement("span");el.className="fstep"+(i===f.flow.length-1?" hot":"");el.textContent=s;host.appendChild(el);
+    if(i<f.flow.length-1){var a=document.createElement("span");a.className="arr";a.textContent="→";host.appendChild(a)}
+  });
+}
+function buildChecklist(){
+  var items=[
+    {t:"Mi nicho cabe en una frase concreta", ok:(data.nicho||"").length>0 && (data.nicho||"").split(" ").length>=2},
+    {t:"El problema es urgente y le cuesta dinero", ok:!!data.problema},
+    {t:"El resultado tiene número y plazo", ok:!!data.numero && !!data.plazo},
+    {t:"El precio es claro frente a lo que gana", ok:!!data.cobro},
+    {t:"Sé por qué canal llego a él", ok:!!data.canal && !!data.via},
+    {t:"Puedo entregarlo yo, sin promesas que no controlo", ok:!!data.recibe}
+  ];
+  var g=document.getElementById("checkGrid");g.innerHTML="";
+  items.forEach(function(it){
+    var d=document.createElement("div");d.className="citem "+(it.ok?"on":"off");
+    d.innerHTML='<span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span>'+it.t+'</span>';
+    g.appendChild(d);
+  });
+}
+
+/* ===== Guardar lead en el CRM (clase gratis) ===== */
+function submitLead(){
+  var payload={
+    nombre:data.nombre,email:data.email,whatsapp:data.whatsapp,
+    ticket:data.ticket,via:data.via,canal:data.canal,
+    nicho:data.nicho,problema:data.problema,
+    resultado:data.numero,plazo:data.plazo,tipos:data.tipos,
+    servicio:data.servicio,recibe:data.recibe,cobro:data.cobro,precio:data.precio,
+    frase:document.getElementById("offerLine").textContent,
+    respuestas:data, origen:"lead-magnet-qcc",
+    website:(document.getElementById("hp_website")||{}).value||""
+  };
+  if(PREVIEW){console.log("[PREVIEW] lead no enviado:",payload);return;}
+  try{
+    fetch(ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}).catch(function(){});
+  }catch(e){}
+}
+
+/* ===== PDF ===== */
+function toast(msg){var t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(function(){t.classList.remove("show")},2600)}
+async function downloadPDF(){
+  var btn=document.getElementById("pdfBtn");var old=btn.textContent;btn.disabled=true;btn.textContent="Generando PDF…";
+  try{
+    if(document.fonts&&document.fonts.ready){await document.fonts.ready;}
+    var node=document.getElementById("pdfRoot")||buildPdfRoot();
+    var canvas=await html2canvas(node,{scale:2,backgroundColor:"#ffffff",useCORS:true,windowWidth:820});
+    var img=canvas.toDataURL("image/jpeg",0.95);
+    var pdf=new jspdf.jsPDF({unit:"pt",format:"a4"});
+    var pw=pdf.internal.pageSize.getWidth(), ph=pdf.internal.pageSize.getHeight();
+    var m=28, iw=pw-m*2, ih=iw*canvas.height/canvas.width;
+    if(ih<=ph-m*2){pdf.addImage(img,"JPEG",m,m,iw,ih);}
+    else{ // paginar
+      var pageH=(ph-m*2)*canvas.width/iw; var y=0, first=true;
+      while(y<canvas.height){
+        var slice=document.createElement("canvas");slice.width=canvas.width;slice.height=Math.min(pageH,canvas.height-y);
+        slice.getContext("2d").drawImage(canvas,0,y,canvas.width,slice.height,0,0,canvas.width,slice.height);
+        var simg=slice.toDataURL("image/jpeg",0.95);var sih=iw*slice.height/canvas.width;
+        if(!first)pdf.addPage();pdf.addImage(simg,"JPEG",m,m,iw,sih);first=false;y+=pageH;
+      }
+    }
+    var fn=(data.servicio?data.servicio.replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"-"):"Mi-servicio")+"-QCC.pdf";
+    pdf.save(fn);
+    toast("Ficha descargada ✓");
+  }catch(e){console.error(e);toast("No se pudo generar el PDF");}
+  finally{btn.disabled=false;btn.textContent=old;}
+}
+/* Construye una versión del resumen optimizada para el PDF (ancho fijo, marca) */
+function buildPdfRoot(){
+  var root=document.createElement("div");root.id="pdfRoot";
+  root.style.cssText="position:fixed;left:-9999px;top:0;width:820px;background:#fff;padding:40px;font-family:'Hanken Grotesk',sans-serif;color:#1A1719";
+  root.innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #7A1B2B;padding-bottom:14px;margin-bottom:22px">'+
+      '<div style="font-family:Archivo;font-weight:800;letter-spacing:.25em">H E L M <span style="color:#6E6568;font-size:11px;letter-spacing:.18em">ACADEMY</span></div>'+
+      '<div style="font-family:Archivo;font-weight:700;color:#7A1B2B;font-size:13px;letter-spacing:.06em">TU SERVICIO EN UNA FICHA · QCC</div>'+
+    '</div>'+
+    document.getElementById("ficha").outerHTML+
+    '<div style="margin-top:18px">'+document.querySelector(".offer").outerHTML+'</div>'+
+    '<div style="margin-top:18px">'+document.querySelector(".funnel").outerHTML+'</div>'+
+    '<div style="margin-top:22px;color:#9A9195;font-size:12px;font-family:Archivo;font-weight:700;letter-spacing:.1em">HELM · EL PUESTO DE MANDO DE TU NEGOCIO · SILVESTRE.AI</div>';
+  document.body.appendChild(root);
+  return root;
+}
+</script>
+</body>
+</html>
