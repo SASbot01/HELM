@@ -34,6 +34,7 @@ const FilmmakingParaTodo = perezoso(() => import('./pages/filmmakingparatodo/Fil
 const FormularioPublico = perezoso(() => import('./pages/FormularioPublico.jsx'))
 const PrimerMapa = perezoso(() => import('./pages/PrimerMapa.jsx'))
 const SilvestreValor = perezoso(() => import('./pages/SilvestreValor.jsx'))
+const DetrasPdf = perezoso(() => import('./pages/DetrasPdf.jsx'))
 const PortalDocumentos = perezoso(() => import('./pages/PortalDocumentos.jsx'))
 const AltaHelm = perezoso(() => import('./pages/AltaHelm.jsx'))
 const PaginaInicio = perezoso(() => import('./pages/PaginaInicio.jsx'))
@@ -170,6 +171,11 @@ createRoot(document.getElementById('root')).render(
               /:slug/*, que si no leería "silvestreai" como slug de perfil. */}
           <Route path="/silvestreai" element={<Navigate to="/silvestreai/valor" replace />} />
           <Route path="/silvestreai/valor" element={<SilvestreValor />} />
+          {/* Detrás de Cámara · lead magnet "Chuleta de parámetros": el mismo
+              formulario que /valor, pero entrega el PDF + acceso a Skool y el
+              lead va al perfil detras-de-camra (embudo "Lead magnet"). Pública,
+              así que ANTES de /:slug/*. */}
+          <Route path="/pdf" element={<DetrasPdf />} />
           {/* La cara pública de la marca: el enlace de la bio de Instagram. Un
               solo path para todas las marcas — PaginaInicioPorHost mira el
               dominio y decide cuál enseña, así que enformaconhugo.com y s4sf.net

@@ -75,6 +75,17 @@ const DOS_PASOS = {
     por: 'Formulario de valor · Silvestre IA',
     estados: ['lead', 'contactado'],
   },
+  // Lead magnet "Chuleta de parámetros" de Detrás de Cámara (/pdf). Mismo
+  // formulario que el de valor, pero el lead va al perfil detras-de-camra, al
+  // embudo "Lead magnet" (los demás usan el perfil por defecto, silvestre).
+  detrascamara: {
+    clave: 'chuleta_pdf',
+    form: /^pdf-[a-z0-9_]{1,30}$/,
+    por: 'Chuleta de parámetros · Detrás de Cámara',
+    estados: ['lead', 'contactado'],
+    perfil: 'detras-de-camra',
+    pipeline: 'Lead magnet',
+  },
 }
 
 // Las etapas de Socio IA (ver src/pages/inicio/socio/crm.js para el porqué).
@@ -560,8 +571,9 @@ async function comprobarAcceso(b) {
 // pregunta. Si el email ya está, se reutiliza la ficha: quien repite es la
 // misma persona, no un lead nuevo.
 async function puerta(b) {
-  const landing = DOS_PASOS[b.landing] ? b.landing : null
-  if (!landing) throw fallo(400, 'Landing desconocida')
+  const cfg = DOS_PASOS[b.landing]
+  if (!cfg) throw fallo(400, 'Landing desconocida')
+  const landing = b.landing
   const correo = correoDe(b.email)
   const nombre = txt(b.nombre, 120)
   const telefono = txt(b.telefono, 40)
@@ -575,7 +587,7 @@ async function puerta(b) {
     utm_campaign: o.utm_campaign || null,
     utm_content: o.utm_content || null,
   }
-  const clientId = await perfil()
+  const clientId = await perfil(cfg.perfil)
   const previo = await buscar(clientId, correo)
 
   if (landing === 'primermapa') {
@@ -611,6 +623,19 @@ async function puerta(b) {
     await actualizar(previo.id, base)
     return { id: await ficha(clientId, previo.id) }
   }
+  // Detrás de Cámara · Chuleta PDF: el lead entra en su embudo "Lead magnet".
+  if (landing === 'detrascamara') {
+    const pipe = cfg.pipeline ? await embudo(clientId, cfg.pipeline) : { id: null, etapas: [] }
+    const etapa = (pipe.etapas.find(s => /nuevo|lead/i.test(s.key)) || pipe.etapas[0])?.key || 'lead'
+    return {
+      id: await ficha(clientId, await crear({
+        ...base, client_id: clientId, email: correo,
+        pipeline_id: pipe.id, status: etapa,
+        source: 'Chuleta de parámetros · Detrás de Cámara', tags: ['chuleta-pdf'],
+        notes: 'Empezó la Chuleta de parámetros (lead magnet). Aún sin terminar.',
+      })),
+    }
+  }
   return {
     id: await ficha(clientId, await crear({
       ...base, client_id: clientId, email: correo,
@@ -627,7 +652,7 @@ async function puerta(b) {
 async function completar(b) {
   const cfg = DOS_PASOS[b.landing]
   if (!cfg) throw fallo(400, 'Landing desconocida')
-  const clientId = await perfil()
+  const clientId = await perfil(cfg.perfil)
   const datos = jsonAcotado(b.ficha)
   if (!datos) throw fallo(400, 'Faltan las respuestas')
   const contacto = await contactoDeLaFicha(b.id, clientId, 'id, custom_fields')
