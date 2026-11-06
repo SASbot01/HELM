@@ -22,7 +22,7 @@ export default defineConfig({
     // .enformaconhugo.com — la portada de Hugo (/paginainicio) sirve desde
     // este mismo build cuando el dominio apunte al túnel; sin su host aquí,
     // Vite lo rechaza con 403 antes de que React Router llegue a decidir nada.
-    allowedHosts: ['.trycloudflare.com', 'dev.apex-closers.com', '.loca.lt', '.pinggy.link', '.serveo.net', '.ngrok-free.app', '.s4sf.net', '.enformaconhugo.com'],
+    allowedHosts: ['.trycloudflare.com', 'dev.apex-closers.com', '.loca.lt', '.pinggy.link', '.serveo.net', '.ngrok-free.app', '.s4sf.net', '.enformaconhugo.com', 'helmm.app', '.helmm.app'],
     // Preview local: reenvía las llamadas del frontend al dev-server de las
     // funciones api/ (Vercel-style) que corre en :5182 contra la Supabase local.
     proxy: {
@@ -47,7 +47,7 @@ export default defineConfig({
     // .enformaconhugo.com — la portada de Hugo (/paginainicio) sirve desde
     // este mismo build cuando el dominio apunte al túnel; sin su host aquí,
     // Vite lo rechaza con 403 antes de que React Router llegue a decidir nada.
-    allowedHosts: ['.trycloudflare.com', 'dev.apex-closers.com', '.loca.lt', '.pinggy.link', '.serveo.net', '.ngrok-free.app', '.s4sf.net', '.enformaconhugo.com'],
+    allowedHosts: ['.trycloudflare.com', 'dev.apex-closers.com', '.loca.lt', '.pinggy.link', '.serveo.net', '.ngrok-free.app', '.s4sf.net', '.enformaconhugo.com', 'helmm.app', '.helmm.app'],
     // Vite 7 rechaza por defecto todo lo que venga de un origen que no sea
     // localhost, y lo hace ANTES del proxy: el preflight de las landings moría
     // aquí sin llegar nunca a api/formularios.js (que sí responde con CORS
