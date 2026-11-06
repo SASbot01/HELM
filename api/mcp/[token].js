@@ -242,10 +242,101 @@ const TOOLS = [
       required: ['contenido'],
     },
   },
+
+  // ── CRM del perfil ─────────────────────────────────────────────────────────
+  {
+    name: 'crm_pipelines',
+    description: 'Los embudos (pipelines) del CRM de un perfil de HELM, con sus etapas en orden. Empieza por aquí para saber a qué embudo y etapa mover un contacto. Devuelve { pipelines: [{ id, nombre, por_defecto, etapas: [{ clave, nombre }] }] }.',
+    inputSchema: { type: 'object', properties: { perfil: PERFIL }, required: ['perfil'] },
+  },
+  {
+    name: 'crm_contactos',
+    description: `Los contactos (leads y clientes) del CRM de un perfil. Filtra por embudo ("pipeline", su id de "crm_pipelines"), por etapa ("etapa", la clave de la etapa) y por texto ("buscar", en nombre, email o empresa). Van del más reciente al más antiguo. Cada uno con lo justo para reconocerlo; para el detalle y el historial, usa "crm_contacto" con su id. ${PAGINACION}`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        perfil: PERFIL,
+        pipeline: { type: 'string', description: 'Opcional: solo los de este embudo (su id, de "crm_pipelines").' },
+        etapa: { type: 'string', description: 'Opcional: solo los en esta etapa (la clave de la etapa, p. ej. "nuevo").' },
+        buscar: { type: 'string', description: 'Opcional: texto a buscar en nombre, email o empresa.' },
+        limite: { type: 'integer', minimum: 1, maximum: 200, description: 'Contactos por página. Por defecto 50.' },
+        cursor: CURSOR,
+      },
+      required: ['perfil'],
+    },
+  },
+  {
+    name: 'crm_contacto',
+    description: 'Un contacto del CRM entero: todos sus datos (nombre, email, teléfono, empresa, etapa, embudo, notas, etiquetas, custom_fields, UTM) y su historial de actividades. Pasa su id, el que sale en "crm_contactos".',
+    inputSchema: {
+      type: 'object',
+      properties: { perfil: PERFIL, id: { type: 'string', description: 'El id (uuid) del contacto, de "crm_contactos".' } },
+      required: ['perfil', 'id'],
+    },
+  },
+  {
+    name: 'crm_guardar',
+    description: `Crea un contacto en el CRM del perfil o actualiza uno que ya existe. Sin "id", si ya hay un contacto con ese email se actualiza en vez de duplicar (y sin email, se crea siempre). Con "id" (de "crm_contactos") actualiza ese. Solo se tocan los campos que pasas; lo demás se queda. Para mover de etapa usa "crm_mover", y para una nota en su historial, "crm_nota". ${ESCRITURA}`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        perfil: PERFIL,
+        id: { type: 'string', description: 'Solo para actualizar uno que ya existe: su id (uuid), de "crm_contactos".' },
+        nombre: { type: 'string', description: 'Nombre del contacto.' },
+        email: { type: 'string', description: 'Email.' },
+        telefono: { type: 'string', description: 'Teléfono.' },
+        whatsapp: { type: 'string', description: 'WhatsApp.' },
+        empresa: { type: 'string', description: 'Empresa.' },
+        origen: { type: 'string', description: 'De dónde viene (source), p. ej. "Instagram", "Referido".' },
+        pipeline: { type: 'string', description: 'El embudo (su id, de "crm_pipelines").' },
+        etapa: { type: 'string', description: 'La etapa (clave) dentro de ese embudo.' },
+        notas: { type: 'string', description: 'Notas de la ficha (texto). Pisa las que hubiera.' },
+        etiquetas: { type: 'array', items: { type: 'string' }, description: 'Etiquetas (tags).' },
+        datos: { type: 'object', description: 'custom_fields: datos extra como objeto.' },
+        prueba: PRUEBA,
+      },
+      required: ['perfil'],
+    },
+  },
+  {
+    name: 'crm_mover',
+    description: `Mueve un contacto a otra etapa de su embudo (o a una etapa de otro embudo del perfil, pasando "pipeline"). Valida que la etapa exista en el embudo. ${ESCRITURA}`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        perfil: PERFIL,
+        id: { type: 'string', description: 'El id (uuid) del contacto, de "crm_contactos".' },
+        etapa: { type: 'string', description: 'La clave de la etapa de destino (de "crm_pipelines").' },
+        pipeline: { type: 'string', description: 'Opcional: el id del embudo de destino si lo cambias de embudo.' },
+        prueba: PRUEBA,
+      },
+      required: ['perfil', 'id', 'etapa'],
+    },
+  },
+  {
+    name: 'crm_nota',
+    description: `Añade una nota al historial de un contacto (una actividad en su timeline, la que se ve en su ficha). No pisa nada: se suma. ${ESCRITURA}`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        perfil: PERFIL,
+        id: { type: 'string', description: 'El id (uuid) del contacto, de "crm_contactos".' },
+        nota: { type: 'string', description: 'El texto de la nota.' },
+        titulo: { type: 'string', description: 'Opcional: un título corto para la nota.' },
+        prueba: PRUEBA,
+      },
+      required: ['perfil', 'id', 'nota'],
+    },
+  },
+  {
+    name: 'equipo',
+    description: 'El equipo de un perfil de HELM: cada persona con su rol (closer, setter, CSM…), su contacto y sus condiciones (cómo y cuánto se le paga, sin el número de cuenta). Solo lectura. Devuelve { equipo: [{ id, nombre, rol, email, telefono, whatsapp, pais, pago, comision_pct, fijo, desde, notas }] }.',
+    inputSchema: { type: 'object', properties: { perfil: PERFIL }, required: ['perfil'] },
+  },
 ]
 
 // Las que escriben: aceptan prueba y quedan en el registro del perfil.
-export const ESCRIBEN = ['anadir_reels', 'asignar_creadores', 'etiquetar_reels', 'programar_guiones', 'ordenar_video', 'guardar_memoria']
+export const ESCRIBEN = ['anadir_reels', 'asignar_creadores', 'etiquetar_reels', 'programar_guiones', 'ordenar_video', 'guardar_memoria', 'crm_guardar', 'crm_mover', 'crm_nota']
 
 // Lo que fija el enlace de un perfil o de una agencia (llamaComoCliente): el
 // perfil ya resuelto por id, que no se vuelve a buscar por texto, y de qué
@@ -910,6 +1001,192 @@ const HERRAMIENTAS = {
     if (error) throw error
     return { guardado: true, id: data.id, en, hecho: `Nota de ${texto.length} caracteres guardada en ${en}.`, comprobar: ver }
   },
+
+  // ── CRM del perfil ─────────────────────────────────────────────────────────
+  // Todas van contra el client_id del perfil fijado por el enlace (perfilDe con
+  // `fijo` no vuelve a buscar por texto): un enlace de perfil solo lee y escribe
+  // SU CRM. Ninguna borra.
+  async crm_pipelines({ perfil, [FIJO]: fijo }) {
+    const c = await perfilDe(perfil, fijo)
+    const { data, error } = await supabase.from('crm_pipelines')
+      .select('id, name, is_default, stages').eq('client_id', c.id).order('created_at')
+    if (error) throw error
+    return {
+      perfil: c.slug,
+      pipelines: (data || []).map(p => ({
+        id: p.id, nombre: p.name, por_defecto: !!p.is_default,
+        etapas: (Array.isArray(p.stages) ? p.stages : []).map(s => ({ clave: s.key, nombre: s.label })),
+      })),
+    }
+  },
+
+  async crm_contactos({ perfil, pipeline, etapa, buscar, limite = 50, cursor = 0, [FIJO]: fijo }) {
+    const c = await perfilDe(perfil, fijo)
+    const lim = Math.min(Math.max(Number(limite) || 50, 1), 200)
+    const cur = Math.max(Number(cursor) || 0, 0)
+    let q = supabase.from('crm_contacts')
+      .select('id, name, email, phone, whatsapp, company, status, pipeline_id, tags, source, last_activity_at', { count: 'exact' })
+      .eq('client_id', c.id)
+    if (pipeline) q = q.eq('pipeline_id', String(pipeline))
+    if (etapa) q = q.eq('status', String(etapa))
+    // Texto saneado: fuera los caracteres que romperían el filtro .or de PostgREST.
+    const texto = String(buscar || '').replace(/[%,()*\\]/g, ' ').trim().slice(0, 80)
+    if (texto) q = q.or(`name.ilike.%${texto}%,email.ilike.%${texto}%,company.ilike.%${texto}%`)
+    q = q.order('last_activity_at', { ascending: false, nullsFirst: false }).range(cur, cur + lim - 1)
+    const { data, count, error } = await q
+    if (error) throw error
+    const hayMas = cur + lim < (count || 0)
+    return {
+      perfil: c.slug,
+      total: count || 0,
+      contactos: (data || []).map(x => ({
+        id: x.id, nombre: x.name, email: x.email || '', telefono: x.phone || '', whatsapp: x.whatsapp || '',
+        empresa: x.company || '', etapa: x.status, pipeline_id: x.pipeline_id, etiquetas: x.tags || [],
+        origen: x.source || '', ultima_actividad: x.last_activity_at,
+      })),
+      hay_mas: hayMas,
+      ...(hayMas ? { siguiente: cur + lim } : {}),
+    }
+  },
+
+  async crm_contacto({ perfil, id, [FIJO]: fijo }) {
+    const c = await perfilDe(perfil, fijo)
+    if (!UUID.test(String(id || ''))) throw new Error('Pasa el id (uuid) del contacto, el que sale en "crm_contactos".')
+    const { data, error } = await supabase.from('crm_contacts').select('*').eq('id', id).eq('client_id', c.id).maybeSingle()
+    if (error) throw error
+    if (!data) throw new Error(`No hay ningún contacto con id ${id} en el CRM de ${c.slug}.`)
+    const { data: acts, error: e2 } = await supabase.from('crm_activities')
+      .select('type, title, description, performed_by, performed_at').eq('contact_id', id).eq('client_id', c.id)
+      .order('performed_at', { ascending: false }).limit(50)
+    if (e2) throw e2
+    const { created_at, updated_at, ...resto } = data
+    return {
+      perfil: c.slug,
+      contacto: { ...resto, creado: created_at, actualizado: updated_at },
+      historial: (acts || []).map(a => ({ tipo: a.type, titulo: a.title, texto: a.description, por: a.performed_by, cuando: a.performed_at })),
+    }
+  },
+
+  async crm_guardar({ perfil, id, nombre, email, telefono, whatsapp, empresa, origen, pipeline, etapa, notas, etiquetas, datos, prueba, [FIJO]: fijo }) {
+    const c = await perfilDe(perfil, fijo)
+    const correo = String(email || '').trim().toLowerCase()
+    // Si pasa embudo, tiene que ser suyo; y la etapa, de ese embudo.
+    let pipe = null
+    if (pipeline) {
+      const { data: p, error } = await supabase.from('crm_pipelines').select('id, stages').eq('id', String(pipeline)).eq('client_id', c.id).maybeSingle()
+      if (error) throw error
+      if (!p) throw new Error(`El embudo ${pipeline} no es de ${c.slug}. Míralos con "crm_pipelines".`)
+      pipe = p
+      if (etapa && !(Array.isArray(p.stages) ? p.stages : []).some(s => s.key === etapa)) {
+        throw new Error(`La etapa "${etapa}" no existe en ese embudo. Las que hay: ${(p.stages || []).map(s => s.key).join(', ')}.`)
+      }
+    }
+    const campos = {}
+    if (nombre != null) campos.name = String(nombre).slice(0, 300)
+    if (email != null) campos.email = correo
+    if (telefono != null) campos.phone = String(telefono).slice(0, 60)
+    if (whatsapp != null) campos.whatsapp = String(whatsapp).slice(0, 60)
+    if (empresa != null) campos.company = String(empresa).slice(0, 300)
+    if (origen != null) campos.source = String(origen).slice(0, 120)
+    if (pipeline) campos.pipeline_id = pipe.id
+    if (etapa != null) campos.status = String(etapa).slice(0, 80)
+    if (notas != null) campos.notes = String(notas).slice(0, 20000)
+    if (Array.isArray(etiquetas)) campos.tags = etiquetas.map(t => String(t).slice(0, 60)).filter(Boolean).slice(0, 20)
+    if (datos && typeof datos === 'object' && !Array.isArray(datos)) campos.custom_fields = datos
+
+    // A quién: el id si lo pasa (y es suyo), o el email si ya existe (no duplicar).
+    let previo = null
+    if (id) {
+      if (!UUID.test(String(id))) throw new Error('id no válido: es el uuid de "crm_contactos".')
+      const { data, error } = await supabase.from('crm_contacts').select('id').eq('id', id).eq('client_id', c.id).maybeSingle()
+      if (error) throw error
+      if (!data) throw new Error(`No hay ningún contacto con id ${id} en ${c.slug}.`)
+      previo = data
+    } else if (correo) {
+      const { data, error } = await supabase.from('crm_contacts').select('id').eq('client_id', c.id).ilike('email', correo.replace(/_/g, '\\_')).limit(1)
+      if (error) throw error
+      previo = data?.[0] || null
+    }
+    const accion = previo ? 'actualizado' : 'creado'
+    const ver = (cid) => comprobar('crm_contacto', { perfil: c.slug, id: cid })
+    if (prueba) {
+      return { prueba: true, perfil: c.slug, accion, campos, hecho: `Ensayo, nada escrito. Se habría ${accion} el contacto.`, ...(previo ? { comprobar: ver(previo.id) } : {}) }
+    }
+    campos.last_activity_at = new Date().toISOString()
+    campos.updated_at = new Date().toISOString()
+    let cid
+    if (previo) {
+      const { error } = await supabase.from('crm_contacts').update(campos).eq('id', previo.id).eq('client_id', c.id)
+      if (error) throw error
+      cid = previo.id
+    } else {
+      if (!campos.name && !correo) throw new Error('Para crear un contacto hace falta al menos el nombre o el email.')
+      const { data, error } = await supabase.from('crm_contacts').insert({ ...campos, client_id: c.id }).select('id').single()
+      if (error) throw error
+      cid = data.id
+    }
+    return { perfil: c.slug, id: cid, accion, hecho: `Contacto ${accion} en el CRM de ${c.slug}.`, comprobar: ver(cid) }
+  },
+
+  async crm_mover({ perfil, id, etapa, pipeline, prueba, [FIJO]: fijo }) {
+    const c = await perfilDe(perfil, fijo)
+    if (!UUID.test(String(id || ''))) throw new Error('Pasa el id (uuid) del contacto, de "crm_contactos".')
+    const { data: ct, error } = await supabase.from('crm_contacts').select('id, status, pipeline_id').eq('id', id).eq('client_id', c.id).maybeSingle()
+    if (error) throw error
+    if (!ct) throw new Error(`No hay ningún contacto con id ${id} en ${c.slug}.`)
+    const pipeId = pipeline ? String(pipeline) : ct.pipeline_id
+    if (!pipeId) throw new Error('El contacto no está en ningún embudo: pasa "pipeline" (su id, de "crm_pipelines").')
+    const { data: p, error: e2 } = await supabase.from('crm_pipelines').select('id, name, stages').eq('id', pipeId).eq('client_id', c.id).maybeSingle()
+    if (e2) throw e2
+    if (!p) throw new Error(`El embudo ${pipeId} no es de ${c.slug}. Míralos con "crm_pipelines".`)
+    const etapas = Array.isArray(p.stages) ? p.stages : []
+    const et = etapas.find(s => s.key === etapa)
+    if (!et) throw new Error(`La etapa "${etapa}" no existe en "${p.name}". Las que hay: ${etapas.map(s => s.key).join(', ')}.`)
+    const ver = comprobar('crm_contacto', { perfil: c.slug, id })
+    if (prueba) return { prueba: true, perfil: c.slug, id, a_etapa: etapa, embudo: p.name, hecho: `Ensayo, nada escrito. Se movería a "${et.label}" (${p.name}).`, comprobar: ver }
+    const { error: e3 } = await supabase.from('crm_contacts').update({
+      status: etapa, pipeline_id: pipeId, last_activity_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    }).eq('id', id).eq('client_id', c.id)
+    if (e3) throw e3
+    return { perfil: c.slug, id, etapa, embudo: p.name, hecho: `Movido a "${et.label}" en "${p.name}".`, comprobar: ver }
+  },
+
+  async crm_nota({ perfil, id, nota, titulo, prueba, [FIJO]: fijo }) {
+    const c = await perfilDe(perfil, fijo)
+    if (!UUID.test(String(id || ''))) throw new Error('Pasa el id (uuid) del contacto, de "crm_contactos".')
+    const texto = String(nota || '').trim()
+    if (!texto) throw new Error('La nota está vacía.')
+    const { data: ct, error } = await supabase.from('crm_contacts').select('id, name').eq('id', id).eq('client_id', c.id).maybeSingle()
+    if (error) throw error
+    if (!ct) throw new Error(`No hay ningún contacto con id ${id} en ${c.slug}.`)
+    const ver = comprobar('crm_contacto', { perfil: c.slug, id })
+    if (prueba) return { prueba: true, perfil: c.slug, id, hecho: `Ensayo, nada escrito. Se añadiría una nota a ${ct.name || 'el contacto'}.`, comprobar: ver }
+    const { error: e2 } = await supabase.from('crm_activities').insert({
+      client_id: c.id, contact_id: id, type: 'note',
+      title: String(titulo || 'Nota').slice(0, 200), description: texto.slice(0, 4000),
+      performed_by: 'conector', performed_at: new Date().toISOString(),
+    })
+    if (e2) throw e2
+    await supabase.from('crm_contacts').update({ last_activity_at: new Date().toISOString() }).eq('id', id).eq('client_id', c.id)
+    return { perfil: c.slug, id, hecho: `Nota añadida al historial de ${ct.name || 'el contacto'}.`, comprobar: ver }
+  },
+
+  // ── Equipo del perfil (solo lectura; sin el número de cuenta) ───────────────
+  async equipo({ perfil, [FIJO]: fijo }) {
+    const c = await perfilDe(perfil, fijo)
+    const { data, error } = await supabase.from('helm_team')
+      .select('id, name, role, email, phone, whatsapp, country, pay_method, pay_terms, commission_pct, fixed_fee, started_on, notes')
+      .eq('client_id', c.id).order('name')
+    if (error) throw error
+    return {
+      perfil: c.slug,
+      equipo: (data || []).map(m => ({
+        id: m.id, nombre: m.name, rol: m.role, email: m.email || '', telefono: m.phone || '', whatsapp: m.whatsapp || '',
+        pais: m.country || '', pago: [m.pay_method, m.pay_terms].filter(Boolean).join(' · '),
+        comision_pct: Number(m.commission_pct) || 0, fijo: Number(m.fixed_fee) || 0, desde: m.started_on || null, notas: m.notes || '',
+      })),
+    }
+  },
 }
 
 // ¿Quién es este token? El maestro (HELM_MCP_TOKEN) es el del operador y lo
@@ -978,7 +1255,7 @@ async function llamaComoAgencia(nombre, args, a) {
 // Leer y usar SU parte: sus creadores, su calendario, sus vídeos. Lo que toca
 // el corpus de todos (añadir reels, reetiquetar, asignar creadores) es del
 // operador y ni siquiera aparece.
-export const DEL_CLIENTE = ['identidades', 'perfiles', 'corpus', 'calendario', 'programar_guiones', 'ordenar_video', 'metricas', 'guardar_memoria']
+export const DEL_CLIENTE = ['identidades', 'perfiles', 'corpus', 'calendario', 'programar_guiones', 'ordenar_video', 'metricas', 'guardar_memoria', 'crm_pipelines', 'crm_contactos', 'crm_contacto', 'crm_guardar', 'crm_mover', 'crm_nota', 'equipo']
 
 async function asignadosDe(clientId) {
   const { data, error } = await supabase.from('agent_identity_clients')
