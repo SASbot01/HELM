@@ -35,7 +35,7 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'Demasiados registros seguidos. Prueba más tarde.' })
   }
 
-  const { agencia, name, email, password } = req.body || {}
+  const { agencia, name, email, password, licencia } = req.body || {}
   const nombreAgencia = String(agencia || '').trim().slice(0, 80)
   const nombre = String(name || '').trim().slice(0, 80)
   const mail = String(email || '').trim().toLowerCase()
@@ -55,6 +55,21 @@ export default async function handler(req, res) {
     return res.status(409).json({ error: 'Ya existe una cuenta con ese email' })
   }
 
+  // Hace falta una licencia disponible, que genera la plataforma. Se "reclama"
+  // de forma atómica (update … where estado='disponible'): si dos personas se
+  // registran a la vez con el mismo código, solo una se lo queda. Si luego
+  // falla crear la agencia, se libera para que no se pierda.
+  const codigo = String(licencia || '').trim().toUpperCase().slice(0, 64)
+  if (!codigo) return res.status(400).json({ error: 'Falta la licencia' })
+  const { data: lic, error: lErr } = await supabase.from('licenses')
+    .update({ estado: 'canjeada', redeemed_by: mail, redeemed_at: new Date().toISOString() })
+    .eq('estado', 'disponible').eq('code', codigo)
+    .select('id').maybeSingle()
+  if (lErr) return res.status(500).json({ error: lErr.message })
+  if (!lic) return res.status(403).json({ error: 'Licencia no válida o ya utilizada' })
+  const liberaLicencia = () => supabase.from('licenses')
+    .update({ estado: 'disponible', redeemed_by: null, redeemed_at: null }).eq('id', lic.id)
+
   const base = slugify(nombreAgencia) || 'agencia'
   let slug = base
   for (let n = 2; ; n++) {
@@ -65,7 +80,7 @@ export default async function handler(req, res) {
 
   const { data: nueva, error: aErr } = await supabase.from('agencias')
     .insert({ nombre: nombreAgencia, slug }).select('id, nombre, slug').single()
-  if (aErr) return res.status(500).json({ error: aErr.message })
+  if (aErr) { await liberaLicencia(); return res.status(500).json({ error: aErr.message }) }
 
   const { data: admin, error: uErr } = await supabase.from('superadmins').insert({
     email: mail, name: nombre, password_hash: hashPassword(String(password)),
@@ -73,8 +88,12 @@ export default async function handler(req, res) {
   }).select('*').single()
   if (uErr) {
     await supabase.from('agencias').delete().eq('id', nueva.id)   // sin admin, la agencia no sirve
+    await liberaLicencia()
     return res.status(500).json({ error: uErr.message })
   }
+
+  // La agencia ya existe: la licencia queda ligada a ella.
+  await supabase.from('licenses').update({ agencia_id: nueva.id }).eq('id', lic.id)
 
   const user = { ...toAppFormat(admin, 'superadmins'), agencia: nueva, plataforma: false }
   delete user.password
