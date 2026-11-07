@@ -1,0 +1,207 @@
+/* Landing VSL de Elena Fontecha · elenafontecha/valor
+ *
+ * Marca de Elena (respetada al pie de la letra): burdeos #4F1828, Montserrat,
+ * fondo blanco, tono editorial y preciso. Nada de autoayuda, ni degradados de
+ * efecto, ni iconos de relleno. Todo va bajo .ef-root para no tocar el panel.
+ */
+@import url('../../fonts/montserrat.css');
+
+.ef-root{
+  /* Marca */
+  --burdeos:#4F1828;        /* color principal */
+  --burdeos-2:#6B2338;      /* hover / segundo tono */
+  --vino-claro:#F7EFF1;     /* fondo tintado suave */
+  --papel:#FFFFFF;          /* fondo */
+  --papel-2:#FBF8F7;        /* fondo de sección alterno */
+  --tinta:#211A1C;          /* cuerpo de texto (negro cálido) */
+  --tinta-2:#5E5256;        /* texto secundario */
+  --apagado:#8C7A7F;        /* etiquetas y pies */
+  --linea:#E8DEE1;          /* filetes finos */
+  --linea-2:#D8C9CD;
+  --tipo:'Montserrat',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+
+  margin:0;
+  min-height:100vh;
+  background:var(--papel);
+  color:var(--tinta);
+  font-family:var(--tipo);
+  font-weight:400;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+.ef-root *{ box-sizing:border-box; }
+
+/* ── Estructura ──────────────────────────────────────────────────────────── */
+.ef-wrap{ max-width:1040px; margin:0 auto; padding:0 24px; }
+.ef-narrow{ max-width:720px; margin:0 auto; }
+.ef-section{ padding:76px 0; }
+.ef-section--alt{ background:var(--papel-2); border-top:1px solid var(--linea); border-bottom:1px solid var(--linea); }
+
+/* Etiqueta de ojal (eyebrow) */
+.ef-eyebrow{
+  font-size:12px; font-weight:600; letter-spacing:.22em; text-transform:uppercase;
+  color:var(--apagado); margin:0 0 18px;
+}
+.ef-eyebrow::before{
+  content:''; display:inline-block; width:22px; height:1px; background:var(--burdeos);
+  vertical-align:middle; margin-right:12px; transform:translateY(-3px);
+}
+
+/* ── Cabecera ────────────────────────────────────────────────────────────── */
+.ef-header{ border-bottom:1px solid var(--linea); }
+.ef-header__in{ display:flex; align-items:baseline; justify-content:space-between; gap:16px; padding:22px 24px; max-width:1040px; margin:0 auto; }
+.ef-wordmark{ font-weight:600; letter-spacing:.2em; text-transform:uppercase; font-size:15px; color:var(--burdeos); }
+.ef-header__tag{ font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--apagado); }
+
+/* ── Hero ────────────────────────────────────────────────────────────────── */
+.ef-hero{ padding:72px 0 8px; text-align:center; }
+.ef-hero .ef-eyebrow::before{ display:none; }
+.ef-hero .ef-eyebrow{ margin-bottom:26px; }
+.ef-hero h1{
+  font-weight:300;
+  font-size:clamp(28px,4.6vw,50px);
+  line-height:1.16;
+  letter-spacing:-0.015em;
+  color:var(--burdeos);
+  margin:0 auto;
+  max-width:16ch;
+  text-wrap:balance;
+}
+.ef-hero h1 em{ font-style:italic; font-weight:400; }
+.ef-standfirst{
+  max-width:60ch; margin:26px auto 0; font-size:clamp(16px,1.6vw,18px);
+  color:var(--tinta-2); line-height:1.7;
+}
+
+/* ── Vídeo (VSL) ─────────────────────────────────────────────────────────── */
+.ef-video{ padding:40px 0 8px; }
+.ef-video__frame{
+  position:relative; aspect-ratio:16/9; width:100%;
+  border:1px solid var(--linea-2); border-radius:4px; overflow:hidden;
+  background:var(--vino-claro);
+  box-shadow:0 30px 60px -40px rgba(79,24,40,.5);
+}
+.ef-video__frame iframe{ position:absolute; inset:0; width:100%; height:100%; border:0; }
+.ef-video__ph{
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:16px; text-align:center; padding:24px;
+  background:
+    radial-gradient(120% 120% at 50% 0%, rgba(79,24,40,.06), transparent 60%),
+    var(--vino-claro);
+}
+.ef-video__play{
+  width:66px; height:66px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--burdeos); color:#fff; flex:none;
+}
+.ef-video__play svg{ width:22px; height:22px; margin-left:3px; }
+.ef-video__ph span{ font-size:13px; letter-spacing:.06em; color:var(--burdeos); font-weight:500; }
+.ef-video__cap{ margin:16px 0 0; text-align:center; font-size:13px; color:var(--apagado); }
+
+/* ── Formulario ─────────────────────────────────────────────────────────── */
+.ef-form__head{ text-align:center; margin-bottom:40px; }
+.ef-form__head h2{ font-weight:400; font-size:clamp(24px,3vw,32px); color:var(--burdeos); margin:0 0 14px; letter-spacing:-0.01em; }
+.ef-form__head p{ color:var(--tinta-2); margin:0 auto; max-width:56ch; }
+
+.ef-q{ margin:0 0 30px; border:0; padding:0; min-inline-size:0; }
+.ef-q__label{ display:block; width:100%; padding:0; font-weight:500; font-size:16px; color:var(--tinta); margin:0 0 14px; }
+.ef-q__label .ef-num{ color:var(--burdeos); font-weight:600; margin-right:10px; }
+
+.ef-options{ display:grid; gap:10px; }
+.ef-opt{
+  display:flex; align-items:flex-start; gap:12px; cursor:pointer;
+  border:1px solid var(--linea-2); border-radius:4px; padding:14px 16px;
+  background:var(--papel); transition:border-color .15s, background .15s;
+  font-size:15px; color:var(--tinta);
+}
+.ef-opt:hover{ border-color:var(--burdeos); }
+.ef-opt input{ position:absolute; opacity:0; width:0; height:0; }
+.ef-opt__dot{
+  flex:none; width:18px; height:18px; border-radius:50%; margin-top:2px;
+  border:1.5px solid var(--linea-2); position:relative; transition:border-color .15s;
+}
+.ef-opt input:checked ~ .ef-opt__dot{ border-color:var(--burdeos); }
+.ef-opt input:checked ~ .ef-opt__dot::after{
+  content:''; position:absolute; inset:3px; border-radius:50%; background:var(--burdeos);
+}
+.ef-opt:has(input:checked){ border-color:var(--burdeos); background:var(--vino-claro); }
+.ef-opt input:focus-visible ~ .ef-opt__dot{ outline:2px solid var(--burdeos); outline-offset:2px; }
+
+/* Datos de contacto */
+.ef-fields{ display:grid; gap:18px; margin-top:8px; }
+.ef-field label{ display:block; font-weight:500; font-size:14px; color:var(--tinta); margin:0 0 7px; }
+.ef-field .ef-opt-lbl{ color:var(--apagado); font-weight:400; }
+.ef-input, .ef-textarea{
+  width:100%; font-family:inherit; font-size:15px; color:var(--tinta);
+  background:var(--papel); border:1px solid var(--linea-2); border-radius:4px;
+  padding:12px 14px; transition:border-color .15s, box-shadow .15s;
+}
+.ef-textarea{ resize:vertical; min-height:92px; }
+.ef-input:focus, .ef-textarea:focus{
+  outline:none; border-color:var(--burdeos); box-shadow:0 0 0 3px rgba(79,24,40,.1);
+}
+.ef-grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+
+/* Consentimiento */
+.ef-consent{ display:flex; align-items:flex-start; gap:12px; margin:26px 0 10px; font-size:13px; color:var(--tinta-2); line-height:1.5; }
+.ef-consent input{ margin-top:3px; accent-color:var(--burdeos); width:16px; height:16px; flex:none; }
+.ef-consent a{ color:var(--burdeos); text-decoration:underline; text-underline-offset:2px; }
+
+/* Botón */
+.ef-submit{
+  display:inline-flex; align-items:center; justify-content:center; gap:10px;
+  width:100%; margin-top:14px; padding:16px 24px;
+  font-family:inherit; font-size:16px; font-weight:600; letter-spacing:.02em;
+  color:#fff; background:var(--burdeos); border:1px solid var(--burdeos);
+  border-radius:4px; cursor:pointer; transition:background .15s;
+}
+.ef-submit:hover{ background:var(--burdeos-2); }
+.ef-submit:disabled{ opacity:.55; cursor:default; }
+.ef-error{ margin:16px 0 0; color:#B4232A; font-size:14px; text-align:center; }
+.ef-privacy-note{ margin:18px 0 0; text-align:center; font-size:12px; color:var(--apagado); }
+
+/* Estado "gracias" */
+.ef-done{ text-align:center; padding:28px 0; }
+.ef-done__mark{ width:56px; height:56px; border-radius:50%; border:1.5px solid var(--burdeos); color:var(--burdeos); display:flex; align-items:center; justify-content:center; margin:0 auto 26px; }
+.ef-done__mark svg{ width:26px; height:26px; }
+.ef-done h2{ font-weight:400; font-size:clamp(24px,3vw,32px); color:var(--burdeos); margin:0 0 16px; }
+.ef-done p{ color:var(--tinta-2); max-width:52ch; margin:0 auto; }
+.ef-cta{ display:inline-flex; margin-top:28px; padding:14px 30px; background:var(--burdeos); color:#fff; border-radius:4px; font-weight:600; text-decoration:none; }
+.ef-cta:hover{ background:var(--burdeos-2); }
+
+/* ── Método (el recorrido) ───────────────────────────────────────────────── */
+.ef-method__head{ max-width:640px; }
+.ef-method__head h2{ font-weight:400; font-size:clamp(24px,3vw,32px); color:var(--burdeos); margin:0 0 16px; letter-spacing:-0.01em; }
+.ef-method__head p{ color:var(--tinta-2); margin:0; }
+.ef-stations{ list-style:none; margin:44px 0 0; padding:0; counter-reset:est; display:grid; gap:0; }
+.ef-station{
+  display:grid; grid-template-columns:auto 1fr; gap:24px; align-items:start;
+  padding:24px 0; border-top:1px solid var(--linea);
+}
+.ef-station:last-child{ border-bottom:1px solid var(--linea); }
+.ef-station__n{ font-size:14px; font-weight:600; color:var(--burdeos); letter-spacing:.1em; padding-top:3px; min-width:28px; }
+.ef-station__t{ font-weight:500; font-size:17px; color:var(--tinta); margin:0 0 6px; }
+.ef-station__q{ font-style:italic; color:var(--tinta-2); margin:0; font-size:15px; }
+.ef-dims{ margin:36px 0 0; font-size:14px; color:var(--apagado); letter-spacing:.02em; }
+.ef-dims strong{ color:var(--burdeos); font-weight:600; }
+
+/* ── Autoridad ───────────────────────────────────────────────────────────── */
+.ef-author{ display:grid; grid-template-columns:1fr; gap:14px; max-width:620px; }
+.ef-author h2{ font-weight:400; font-size:clamp(22px,2.6vw,28px); color:var(--burdeos); margin:0; }
+.ef-author p{ color:var(--tinta-2); margin:0; font-size:16px; line-height:1.75; }
+
+/* ── Pie ─────────────────────────────────────────────────────────────────── */
+.ef-footer{ border-top:1px solid var(--linea); padding:34px 0; }
+.ef-footer__in{ display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; font-size:13px; color:var(--apagado); }
+.ef-footer a{ color:var(--apagado); text-decoration:none; }
+.ef-footer a:hover{ color:var(--burdeos); }
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width:600px){
+  .ef-section{ padding:52px 0; }
+  .ef-hero{ padding:48px 0 4px; }
+  .ef-grid-2{ grid-template-columns:1fr; }
+  .ef-station{ grid-template-columns:auto 1fr; gap:16px; }
+  .ef-header__tag{ display:none; }
+}
