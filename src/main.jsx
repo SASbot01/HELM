@@ -35,7 +35,6 @@ const FormularioPublico = perezoso(() => import('./pages/FormularioPublico.jsx')
 const PrimerMapa = perezoso(() => import('./pages/PrimerMapa.jsx'))
 const SilvestreValor = perezoso(() => import('./pages/SilvestreValor.jsx'))
 const DetrasPdf = perezoso(() => import('./pages/DetrasPdf.jsx'))
-const ElenaValor = perezoso(() => import('./pages/ElenaValor.jsx'))
 const PortalDocumentos = perezoso(() => import('./pages/PortalDocumentos.jsx'))
 const AltaHelm = perezoso(() => import('./pages/AltaHelm.jsx'))
 const PaginaInicio = perezoso(() => import('./pages/PaginaInicio.jsx'))
@@ -177,14 +176,6 @@ createRoot(document.getElementById('root')).render(
               lead va al perfil detras-de-camra (embudo "Lead magnet"). Pública,
               así que ANTES de /:slug/*. */}
           <Route path="/pdf" element={<DetrasPdf />} />
-          {/* Landing VSL de Elena Fontecha: hueco de vídeo + autodiagnóstico de
-              5 preguntas. El lead entra a su CRM vía POST /api/formularios
-              {slug:'elenafontecha', form:'valor'} → pipeline "Captación (leads)",
-              etapa "Lead (autodiagnóstico)". Pública, así que ANTES de /:slug/*
-              (si no, "elenafontecha" se leería como slug de perfil y abriría el
-              panel). Se sirve solo en /elenafontecha/valor; /elenafontecha a
-              secas sigue siendo el acceso a su perfil en el panel. */}
-          <Route path="/elenafontecha/valor" element={<ElenaValor />} />
           {/* La cara pública de la marca: el enlace de la bio de Instagram. Un
               solo path para todas las marcas — PaginaInicioPorHost mira el
               dominio y decide cuál enseña, así que enformaconhugo.com y s4sf.net
