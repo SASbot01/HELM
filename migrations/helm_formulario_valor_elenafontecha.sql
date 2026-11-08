@@ -7,7 +7,8 @@
 -- copia la salida (helm/helm_formulario_valor_elenafontecha.sql) aquí.
 --
 -- Dos formularios, uno por rama de la puerta («Para mí» / «Para mi equipo o
--- mi empresa»), cada uno a su embudo. La página manda {slug:'elenafontecha',
+-- mi empresa»), los dos al embudo «Funnel 1», cada uno por su
+-- etapa de entrada. La página manda {slug:'elenafontecha',
 -- form:'valor' | 'valor-empresa', ...} a https://helm.s4sf.net/api/formularios, que descarta toda
 -- clave que el formulario no declare. Los datos de contacto (nombre, correo,
 -- teléfono, empresa) no van como campos: viven en la ficha del contacto.
@@ -30,16 +31,24 @@ begin
     return;
   end if;
 
-  -- ── Autodiagnóstico · Para ti (valor) → «Captación (leads)» / lead ──
+  -- ── Embudo «Funnel 1»: se crea si no existe (si ya existe, no se tocan sus etapas) ──
   select id into v_pipeline from crm_pipelines
-   where client_id = v_client and name = 'Captación (leads)' limit 1;
+   where client_id = v_client and name = 'Funnel 1' limit 1;
   if v_pipeline is null then
-    raise notice '[HELM] Elena no tiene el embudo Captación (leads): valor queda sin embudo.';
+    insert into crm_pipelines (client_id, name, stages, is_default)
+    values (v_client, 'Funnel 1', $stages$[{"key":"lead_persona","label":"Lead · persona","tone":""},{"key":"lead_empresa","label":"Lead · empresa","tone":""},{"key":"nutricion","label":"En nutrición","tone":"cyan"},{"key":"llamada","label":"Conversación reservada","tone":"amber"},{"key":"propuesta","label":"Propuesta","tone":"violet"},{"key":"cliente","label":"Cliente","tone":"green"},{"key":"descartado","label":"Descartado","tone":"red"}]$stages$::jsonb, false);
+  end if;
+
+  -- ── Autodiagnóstico · Para ti (valor) → «Funnel 1» / lead_persona ──
+  select id into v_pipeline from crm_pipelines
+   where client_id = v_client and name = 'Funnel 1' limit 1;
+  if v_pipeline is null then
+    raise notice '[HELM] Elena no tiene el embudo Funnel 1: valor queda sin embudo.';
   end if;
   insert into helm_forms (client_id, slug, title, description, fields, active, pipeline_id, stage_key, booked_stage_key)
   values (
     v_client, 'valor', 'Autodiagnóstico · Para ti',
-    'Web de Elena (repo SASbot01/elenafontecha), rama «Para mí». Preguntas que se adaptan al rol y a lo que quiere revisar; al enviar se calcula el perfil (Rodri, Laura o alta dirección) y la estación de entrada del recorrido. Entra en «Captación (leads)», etapa «Lead (autodiagnóstico)».',
+    'Web de Elena (repo SASbot01/elenafontecha), rama «Para mí». Preguntas que se adaptan al rol y a lo que quiere revisar; al enviar se calcula el perfil (Rodri, Laura o alta dirección) y la estación de entrada del recorrido. Entra en «Funnel 1», etapa «Lead · persona».',
     $json$[
   {
     "key": "tipo",
@@ -199,23 +208,23 @@ begin
     "required": false
   }
 ]$json$::jsonb,
-    true, v_pipeline, 'lead', null
+    true, v_pipeline, 'lead_persona', null
   )
   on conflict (client_id, slug) do update
      set title = excluded.title, description = excluded.description, fields = excluded.fields,
          active = true, pipeline_id = excluded.pipeline_id, stage_key = excluded.stage_key,
          booked_stage_key = excluded.booked_stage_key, updated_at = now();
 
-  -- ── Autodiagnóstico · Empresa (valor-empresa) → «Empresas y equipos» / contacto ──
+  -- ── Autodiagnóstico · Empresa (valor-empresa) → «Funnel 1» / lead_empresa ──
   select id into v_pipeline from crm_pipelines
-   where client_id = v_client and name = 'Empresas y equipos' limit 1;
+   where client_id = v_client and name = 'Funnel 1' limit 1;
   if v_pipeline is null then
-    raise notice '[HELM] Elena no tiene el embudo Empresas y equipos: valor-empresa queda sin embudo.';
+    raise notice '[HELM] Elena no tiene el embudo Funnel 1: valor-empresa queda sin embudo.';
   end if;
   insert into helm_forms (client_id, slug, title, description, fields, active, pipeline_id, stage_key, booked_stage_key)
   values (
     v_client, 'valor-empresa', 'Autodiagnóstico · Empresa',
-    'Web de Elena (repo SASbot01/elenafontecha), rama «Para mi equipo o mi empresa»: sector, tamaño, momento, a quién va, necesidades, formato, plazo, presupuesto y quién decide. Al enviar se calcula el perfil de empresa y por dónde empezar. Entra en «Empresas y equipos», etapa «Contacto». El nombre de la empresa va a la ficha del contacto.',
+    'Web de Elena (repo SASbot01/elenafontecha), rama «Para mi equipo o mi empresa»: sector, tamaño, momento, a quién va, necesidades, formato, plazo, presupuesto y quién decide. Al enviar se calcula el perfil de empresa y por dónde empezar. Entra en «Funnel 1», etapa «Lead · empresa». El nombre de la empresa va a la ficha del contacto.',
     $json$[
   {
     "key": "tipo",
@@ -428,7 +437,7 @@ begin
     "required": false
   }
 ]$json$::jsonb,
-    true, v_pipeline, 'contacto', null
+    true, v_pipeline, 'lead_empresa', null
   )
   on conflict (client_id, slug) do update
      set title = excluded.title, description = excluded.description, fields = excluded.fields,
