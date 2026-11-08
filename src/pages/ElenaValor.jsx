@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import './elena/elena.css'
 import {
-  VIDEO_EMBED, CALENDLY, WHATSAPP, REDES, PRIVACIDAD, PREGUNTA_GANCHO, PREGUNTAS,
+  VIDEO_EMBED, REDES, PRIVACIDAD, PREGUNTA_GANCHO,
   PARA_TI, NO_ES_PARA_TI, ESTACIONES, DIMENSIONES, CIFRAS, CREDENCIALES, TRAYECTORIA, PASOS, FAQ,
 } from './elena/contenido'
+import Autodiagnostico from './elena/Autodiagnostico.jsx'
+import { dos, ir, IcoPlay, IcoCheck, IcoFlecha } from './elena/comun.jsx'
 
 // Landing VSL de Elena Fontecha · /elenafontecha/valor
 //
@@ -20,26 +22,7 @@ import {
 // Fotos: sesión de su web elenafontecha.com, recortadas en public/elena/.
 
 const IMG = '/elena'
-const dos = (n) => String(n).padStart(2, '0')
 const ANIO = new Date().getFullYear()
-
-const TEXTO_CONSENT = 'Acepto que Elena Fontecha trate mis datos para ponerse en contacto conmigo sobre este autodiagnóstico, conforme a su política de privacidad.'
-
-function utmDeLaUrl() {
-  try {
-    const p = new URLSearchParams(window.location.search)
-    const out = {}
-    for (const k of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term']) {
-      const v = p.get(k)
-      if (v) out[k] = v
-    }
-    return out
-  } catch { return {} }
-}
-
-function ir(id) {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-}
 
 // Aparición suave de los bloques marcados con data-ap al entrar en pantalla.
 function useAparecer(ref) {
@@ -62,16 +45,6 @@ function useAparecer(ref) {
     return () => io.disconnect()
   }, [ref])
 }
-
-const IcoPlay = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" /></svg>
-)
-const IcoCheck = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
-)
-const IcoFlecha = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
-)
 
 function Video() {
   const [play, setPlay] = useState(false)
@@ -161,14 +134,7 @@ function Rueda({ activa, setActiva }) {
 
 export default function ElenaValor() {
   const raiz = useRef(null)
-  const [resp, setResp] = useState({})
-  const [motivo, setMotivo] = useState('')
-  const [nombre, setNombre] = useState('')
-  const [email, setEmail] = useState('')
-  const [telefono, setTelefono] = useState('')
-  const [consent, setConsent] = useState(false)
-  const [estado, setEstado] = useState('form') // form | enviando | ok | error
-  const [error, setError] = useState('')
+  const [estado, setEstado] = useState('form') // form | ok: lo avisa el autodiagnóstico
   const [activa, setActiva] = useState(0)
   const [conSombra, setConSombra] = useState(false)
   const [pasadoHero, setPasadoHero] = useState(false)
@@ -181,7 +147,7 @@ export default function ElenaValor() {
     document.title = 'Elena Fontecha · ¿Sigo queriendo la vida que estoy construyendo?'
     const meta = document.querySelector('meta[name="description"]')
     const descAntes = meta?.getAttribute('content')
-    meta?.setAttribute('content', 'Desarrollo personal y liderazgo, integrados. Un autodiagnóstico de cinco preguntas y una primera conversación gratuita con Elena Fontecha.')
+    meta?.setAttribute('content', 'Desarrollo personal y liderazgo, integrados. Un autodiagnóstico que se adapta a ti o a tu empresa y una primera conversación gratuita con Elena Fontecha.')
     return () => {
       document.title = tituloAntes
       if (meta && descAntes != null) meta.setAttribute('content', descAntes)
@@ -207,54 +173,6 @@ export default function ElenaValor() {
     io.observe(el)
     return () => io.disconnect()
   }, [])
-
-  const elegir = (key, valor) => setResp((r) => ({ ...r, [key]: valor }))
-
-  const respondidas = PREGUNTAS.filter((q) => resp[q.key]).length
-  const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
-  const hechos = respondidas + (nombre.trim() ? 1 : 0) + (emailValido ? 1 : 0)
-  const total = PREGUNTAS.length + 2
-  const pct = Math.round((hechos / total) * 100)
-  const puedeEnviar = hechos === total && consent
-
-  const primerNombre = nombre.trim().split(/\s+/)[0] || ''
-  const calendlyUrl = `${CALENDLY}?name=${encodeURIComponent(nombre.trim())}&email=${encodeURIComponent(email.trim())}`
-
-  async function enviar(e) {
-    e.preventDefault()
-    if (!puedeEnviar || estado === 'enviando') return
-    setEstado('enviando')
-    setError('')
-    const utm = utmDeLaUrl()
-    try {
-      const r = await fetch('/api/formularios', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slug: 'elenafontecha',
-          form: 'valor',
-          nombre: nombre.trim(),
-          email: email.trim(),
-          telefono: telefono.trim(),
-          respuestas: { ...resp, motivo: motivo.trim() },
-          meta: {
-            origen: 'Landing VSL · /elenafontecha/valor',
-            url: window.location.href,
-            referrer: document.referrer || '',
-            consentimiento: { aceptado: true, texto: TEXTO_CONSENT, fecha: new Date().toISOString() },
-            ...utm,
-          },
-          ...utm,
-        }),
-      })
-      if (!r.ok) throw new Error(String(r.status))
-      setEstado('ok')
-      requestAnimationFrame(() => ir('diagnostico-tarjeta'))
-    } catch {
-      setEstado('error')
-      setError('No hemos podido enviar tus respuestas. Revisa tu conexión e inténtalo de nuevo.')
-    }
-  }
 
   const e = ESTACIONES[activa]
 
@@ -538,123 +456,8 @@ export default function ElenaValor() {
               <p className="ef-form-aside__tag"><span className="ef-tag">Esto es una foto, no una sentencia.</span></p>
             </aside>
 
-            <div className="ef-card" id="diagnostico-tarjeta">
-              {estado === 'ok' ? (
-                <div className="ef-gracias">
-                  <span className="ef-gracias__marca"><IcoCheck /></span>
-                  <p className="ef-eyebrow">Recibido</p>
-                  <h3 className="ef-h3">Gracias{primerNombre ? `, ${primerNombre}` : ''}. <em>Elena leerá tus respuestas.</em></h3>
-                  <p className="ef-p">
-                    El siguiente paso es una primera conversación, gratuita y sin compromiso, para
-                    entender tu momento. Puedes reservarla ahora mismo:
-                  </p>
-                  <a className="ef-btn ef-btn--full" href={calendlyUrl} target="_blank" rel="noopener noreferrer">
-                    Reservar mi conversación gratuita <IcoFlecha />
-                  </a>
-                  <p className="ef-gracias__alt">
-                    ¿Prefieres escribirle? <a href={WHATSAPP} target="_blank" rel="noopener noreferrer">WhatsApp</a>
-                    {' · '}
-                    <a href={REDES[0].url} target="_blank" rel="noopener noreferrer">Instagram</a>
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="ef-card__head">
-                    <p className="ef-eyebrow">Autodiagnóstico</p>
-                    <h3 className="ef-h3">Cinco preguntas para situar <em>dónde estás.</em></h3>
-                    <p className="ef-p ef-p--sm">
-                      No hay respuestas correctas. Sirven para empezar la conversación en el punto
-                      donde estás, no donde se supone que deberías estar.
-                    </p>
-                    <div className="ef-prog" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label="Progreso">
-                      <span style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-
-                  <form onSubmit={enviar} noValidate>
-                    {PREGUNTAS.map((q, i) => (
-                      <fieldset className="ef-q" key={q.key}>
-                        <legend className="ef-q__label">
-                          <span className="ef-q__n">{dos(i + 1)}</span>{q.label}
-                        </legend>
-                        <div className="ef-options">
-                          {q.options.map((op) => (
-                            <label className="ef-opt" key={op}>
-                              <input
-                                type="radio"
-                                name={q.key}
-                                value={op}
-                                checked={resp[q.key] === op}
-                                onChange={() => elegir(q.key, op)}
-                              />
-                              <span className="ef-opt__dot" aria-hidden="true" />
-                              <span>{op}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </fieldset>
-                    ))}
-
-                    <div className="ef-q">
-                      <label className="ef-q__label" htmlFor="ef-motivo">
-                        <span className="ef-q__n">05</span>En una frase, ¿qué te ha traído hoy aquí?
-                        <span className="ef-opc"> (opcional)</span>
-                      </label>
-                      <textarea
-                        id="ef-motivo"
-                        className="ef-input ef-textarea"
-                        value={motivo}
-                        onChange={(ev) => setMotivo(ev.target.value)}
-                        maxLength={600}
-                        placeholder="Escríbelo con tus palabras."
-                      />
-                    </div>
-
-                    <div className="ef-datos">
-                      <p className="ef-mini">Para enviarte el siguiente paso</p>
-                      <div className="ef-field">
-                        <label htmlFor="ef-nombre">Nombre</label>
-                        <input id="ef-nombre" className="ef-input" type="text" autoComplete="name"
-                          value={nombre} onChange={(ev) => setNombre(ev.target.value)} required />
-                      </div>
-                      <div className="ef-grid-2">
-                        <div className="ef-field">
-                          <label htmlFor="ef-email">Correo</label>
-                          <input id="ef-email" className="ef-input" type="email" autoComplete="email" inputMode="email"
-                            value={email} onChange={(ev) => setEmail(ev.target.value)} required />
-                        </div>
-                        <div className="ef-field">
-                          <label htmlFor="ef-tel">Teléfono <span className="ef-opc">(opcional)</span></label>
-                          <input id="ef-tel" className="ef-input" type="tel" autoComplete="tel" inputMode="tel"
-                            value={telefono} onChange={(ev) => setTelefono(ev.target.value)} />
-                        </div>
-                      </div>
-                    </div>
-
-                    <label className="ef-consent">
-                      <input type="checkbox" checked={consent} onChange={(ev) => setConsent(ev.target.checked)} />
-                      <span>
-                        Acepto que Elena Fontecha trate mis datos para ponerse en contacto conmigo sobre
-                        este autodiagnóstico, conforme a su{' '}
-                        <a href={PRIVACIDAD} target="_blank" rel="noopener noreferrer">política de privacidad</a>.
-                      </span>
-                    </label>
-
-                    <button className="ef-btn ef-btn--full" type="submit" disabled={!puedeEnviar || estado === 'enviando'}>
-                      {estado === 'enviando' ? 'Enviando…' : <>Enviar mi autodiagnóstico <IcoFlecha /></>}
-                    </button>
-                    {!puedeEnviar && estado !== 'enviando' ? (
-                      <p className="ef-falta">
-                        {hechos < total
-                          ? `Te ${total - hechos === 1 ? 'falta 1 dato' : `faltan ${total - hechos} datos`} para enviarlo.`
-                          : 'Acepta la política de privacidad para enviarlo.'}
-                      </p>
-                    ) : null}
-                    {error ? <p className="ef-error" role="alert">{error}</p> : null}
-                    <p className="ef-nota">Tus respuestas las lee Elena. No se comparten con terceros.</p>
-                  </form>
-                </>
-              )}
+            <div id="diagnostico-tarjeta">
+              <Autodiagnostico onEstado={setEstado} />
             </div>
           </div>
         </div>

@@ -29,41 +29,7 @@ export const PRIVACIDAD = 'https://elenafontecha.com/legales/politica-privacidad
 
 export const PREGUNTA_GANCHO = '¿Sigo queriendo la vida que estoy construyendo con mi manera de vivir y de actuar?'
 
-// Las claves (key) y las opciones son las mismas que declara el formulario
-// 'valor' en helm_forms (migrations/helm_formulario_valor_elenafontecha.sql):
-// el endpoint descarta cualquier respuesta cuya clave no esté declarada allí.
-export const PREGUNTAS = [
-  {
-    key: 'revisar',
-    label: '¿Qué quieres revisar ahora?',
-    options: ['Mi vida y mi rumbo', 'Mi manera de dirigir y de liderar', 'Las dos cosas, a la vez'],
-  },
-  {
-    key: 'momento',
-    label: '¿En qué punto te reconoces?',
-    options: [
-      'Quiero mirar con verdad dónde estoy',
-      'Sé lo que quiero, pero no cómo darle un lugar real',
-      'Tengo una decisión delante y necesito tomarla',
-      'Quiero revisar decisiones que ya tomé y ver si siguen teniendo sentido',
-    ],
-  },
-  {
-    key: 'dimension',
-    label: '¿Qué parte sientes más desatendida?',
-    options: [
-      'Lo físico (energía, cuerpo, descanso)',
-      'Lo mental (claridad, foco, criterio)',
-      'Lo emocional (cómo vivo lo que me pasa)',
-      'Lo espiritual (sentido, valores, lo que importa)',
-    ],
-  },
-  {
-    key: 'responsabilidad',
-    label: '¿Desde dónde ejerces tu liderazgo?',
-    options: ['Dirección general o consejo', 'Dirección de un área o un equipo', 'Un proyecto o un negocio propio', 'Otra situación'],
-  },
-]
+// Las preguntas del autodiagnóstico (con sus ramas) viven en ./diagnostico.js.
 
 export const PARA_TI = [
   'Tienes una trayectoria consolidada y responsabilidades de liderazgo.',
@@ -144,7 +110,7 @@ export const CREDENCIALES = [
 export const TRAYECTORIA = ['PortAventura', 'Servihabitat', 'Haya Real Estate', 'Elara Asociados', 'Fundación Mare Terra']
 
 export const PASOS = [
-  ['Respondes el autodiagnóstico', 'Cinco preguntas, tres minutos. Sin respuestas correctas.'],
+  ['Respondes el autodiagnóstico', 'Unas preguntas que se adaptan a ti o a tu empresa. Unos cinco minutos.'],
   ['Elena lo lee personalmente', 'No es un algoritmo ni un equipo: lo lee ella, antes de hablar contigo.'],
   ['Una primera conversación, gratuita', 'Para entender tu momento y decidir si tiene sentido seguir, y si ella es la persona adecuada.'],
 ]
