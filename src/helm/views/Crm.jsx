@@ -19,6 +19,8 @@ import { ContactFields } from '../crm/ContactFields'
 import {
   loadPipelines, normalizeStage, stageOf, pipelineDe, WON_KEYS, LOST_KEYS,
 } from '../crm/pipeline'
+import { contactoEnTablero } from '../crm/visibilidad'
+import { sesionHelm } from '../permisos'
 import EditorEtapas from '../crm/EditorEtapas'
 import { withRole } from '../equipo/roles'
 
@@ -99,10 +101,24 @@ export default function Crm({ clientId }) {
     setFSubetapa('__all__')
   }
 
+  // Quien no manda en el perfil solo tiene en el tablero los pipelines que el
+  // servidor le ha devuelto (el que lleva su nombre). Sin esto, un contacto
+  // con el pipeline de otro caller caería en su columna: pipelineDe lo manda
+  // al por defecto cuando no encuentra el id.
+  const yo = sesionHelm()
+  const soloSuyo = !yo.esSuperadmin && !yo.mandaEnTodo
+  const enTablero = useMemo(() => {
+    if (!rows) return null
+    // Mientras los pipelines no han llegado, las filas ya vienen recortadas
+    // por el servidor: no vaciar el tablero en ese instante.
+    if (!soloSuyo || !pipelines) return rows
+    return rows.filter(r => contactoEnTablero(r, pipelines, { soloSuyo: true }))
+  }, [rows, soloSuyo, pipelines])
+
   // Responsables que aparecen en algún contacto, para el filtro por perfil.
   const responsables = useMemo(
-    () => [...new Set((rows || []).map(r => (r.assigned_to || '').trim()).filter(Boolean))].sort(),
-    [rows],
+    () => [...new Set((enTablero || []).map(r => (r.assigned_to || '').trim()).filter(Boolean))].sort(),
+    [enTablero],
   )
 
   // Todas las subetapas definidas, aplanadas, para el desplegable de filtro.
@@ -116,9 +132,9 @@ export default function Crm({ clientId }) {
   }, [substages, stages])
 
   const filtered = useMemo(() => {
-    if (!rows) return null
+    if (!enTablero) return null
     const q = query.toLowerCase().trim()
-    return rows.filter(r => {
+    return enTablero.filter(r => {
       if (pipeline && pipelineDe(r, pipelines).id !== pipeline.id) return false
       if (fServicio !== '__all__' && (r.service_id || '') !== fServicio) return false
       if (fResponsable !== '__all__' && (r.assigned_to || '').trim() !== fResponsable) return false
@@ -128,7 +144,7 @@ export default function Crm({ clientId }) {
         .some(v => (v || '').toLowerCase().includes(q))
         || (Array.isArray(r.tags) && r.tags.some(t => String(t).toLowerCase().includes(q)))
     })
-  }, [rows, query, fServicio, fResponsable, fSubetapa, pipeline, pipelines])
+  }, [enTablero, query, fServicio, fResponsable, fSubetapa, pipeline, pipelines])
 
   const byStage = useMemo(() => {
     const map = Object.fromEntries(stages.map(s => [s.key, []]))
@@ -140,7 +156,7 @@ export default function Crm({ clientId }) {
   }, [filtered, stages])
 
   const stats = useMemo(() => {
-    const all = (rows || []).filter(r => !pipeline || pipelineDe(r, pipelines).id === pipeline.id)
+    const all = (enTablero || []).filter(r => !pipeline || pipelineDe(r, pipelines).id === pipeline.id)
     const key = (r) => normalizeStage(r.status, stages)
     const won = all.filter(r => WON_KEYS.has(key(r)))
     const lost = all.filter(r => LOST_KEYS.has(key(r)))
@@ -154,7 +170,7 @@ export default function Crm({ clientId }) {
       closed,
       winRate: closed ? Math.round((won.length / closed) * 100) : 0,
     }
-  }, [rows, stages, pipeline, pipelines])
+  }, [enTablero, stages, pipeline, pipelines])
 
   const hayFiltro = fServicio !== '__all__' || fResponsable !== '__all__' || fSubetapa !== '__all__'
 
@@ -252,7 +268,7 @@ export default function Crm({ clientId }) {
               onClick={() => elegirPipeline(p.id)}
             >
               {p.name}
-              <span>{(rows || []).filter(r => pipelineDe(r, pipelines).id === p.id).length}</span>
+              <span>{(enTablero || []).filter(r => pipelineDe(r, pipelines).id === p.id).length}</span>
             </button>
           ))}
         </div>

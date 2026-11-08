@@ -25,6 +25,9 @@
 // Cómo se recorta, según la tabla:
 //   · con columna client_id → solo filas de tus perfiles, al leer, al
 //     cambiar, al borrar y al crear
+//   · CRM (contactos, pipelines, actividad) → además, un miembro que no es
+//     propietario, administrador ni dueño solo ve el pipeline que lleva su
+//     nombre. Quien manda en el perfil sigue viéndolo entero.
 //   · clients               → tus perfiles; crear y cambiar, solo el
 //                             administrador de la agencia; borrar, nunca (eso
 //                             va por api/perfiles.js, con copia)
@@ -37,6 +40,10 @@ import { supabase } from '../lib/supabase.js'
 import { validateAuth } from './auth.js'
 import { perfilesVisibles, olvidarVisibles } from './access.js'
 import { SLUG_RE, RUTAS_DE_LA_WEB } from '../../src/helm/perfilNuevo.js'
+import {
+  esAccesoTotal, veTodosLosPipelines, pipelinesDelMiembro, pipelinePermitido,
+  nombrePermitido, clausulasDeAlcance, anadeClausula,
+} from '../../src/helm/crm/visibilidad.js'
 import { SALTO, NO_ADMITIDO, tipoDeArchivo, cspArchivo } from './almacen.js'
 
 const BASE = () => process.env.SUPABASE_URL || 'http://localhost:54321'
@@ -96,6 +103,10 @@ const NO_FILTRAN = new Set(['select', 'limit', 'offset', 'on_conflict', 'columns
 // Quien manda en un perfil: propietario ('admin,ceo,director') o admin ('admin'),
 // igual que api/equipo.js.
 const nivelTotal = (nivel) => String(nivel || '').split(',').map(s => s.trim()).includes('admin')
+
+// Tablas del CRM cuyo contenido es de un pipeline. Un miembro (ni propietario
+// ni administrador, ni dueño) solo ve el pipeline que lleva su nombre.
+const TABLAS_PIPELINE = new Set(['crm_contacts', 'crm_pipelines', 'crm_activities'])
 
 /**
  * En `team` solo se puede filtrar y ordenar por las columnas que se dejan
@@ -187,6 +198,121 @@ const esAdmin = (auth) => auth.plataforma || auth.superadmin || auth.role === 's
 
 function prohibido(msg = 'No tienes acceso a esto') {
   return Object.assign(new Error(msg), { statusCode: 403 })
+}
+
+/**
+ * El pipeline que le corresponde a esta sesión, o null si ve el CRM entero.
+ *
+ * El nombre sale de la ficha del equipo (lo que se lee en Equipo al bautizar
+ * el pipeline). Si la ficha no tiene nombre, se usa el del acceso.
+ */
+async function alcancePipeline(auth, ids) {
+  // Plataforma, agencia, propietario y administrador ven el CRM entero. Sin
+  // userId no hay persona a la que recortar (acceso suelto: el dueño).
+  if (!ids?.length || !auth?.userId) return null
+  if (auth.plataforma || auth.superadmin || auth.role === 'superadmin') return null
+  if (esAccesoTotal(auth.nivel)) return null
+
+  const { data: personas, error } = await supabase
+    .from('helm_team').select('name, role, client_id')
+    .eq('login_id', auth.userId).in('client_id', ids)
+  if (error) throw error
+  const propias = personas || []
+  // Sin ficha, o con oficio de dueño: no se recorta. La ficha vacía es quien
+  // montó el negocio antes de que existiera el directorio.
+  if (veTodosLosPipelines(auth, propias)) return null
+
+  let nombres = propias.map(p => p.name).filter(n => String(n || '').trim())
+  if (!nombres.length) {
+    const { data: acceso, error: eAcceso } = await supabase
+      .from('team').select('name').eq('id', auth.userId).maybeSingle()
+    if (eAcceso) throw eAcceso
+    if (acceso?.name) nombres = [acceso.name]
+  }
+
+  const { data: pipes, error: ePipes } = await supabase
+    .from('crm_pipelines').select('id, name, is_default, client_id')
+    .in('client_id', ids)
+  if (ePipes) throw ePipes
+  return { ...pipelinesDelMiembro(nombres, pipes || []), nombres }
+}
+
+/** Ids de contactos que caen en el alcance. La ficha (crm_activities) no
+ *  guarda el pipeline: se recorta por el contacto al que pertenece. */
+async function contactosDelAlcance(ids, alcance) {
+  if (!alcance.ids.length && !alcance.incluyeSinPipeline) return []
+  const PAGE = 1000
+  const vistos = []
+  for (let desde = 0; desde < PAGE * 50; desde += PAGE) {
+    let q = supabase.from('crm_contacts').select('id, pipeline_id').in('client_id', ids)
+    if (alcance.incluyeSinPipeline) {
+      q = alcance.ids.length
+        ? q.or(`pipeline_id.in.(${alcance.ids.join(',')}),pipeline_id.is.null`)
+        : q.is('pipeline_id', null)
+    } else {
+      q = q.in('pipeline_id', alcance.ids)
+    }
+    const { data, error } = await q.range(desde, desde + PAGE - 1)
+    if (error) throw error
+    const filas = data || []
+    for (const c of filas) {
+      if (pipelinePermitido(c.pipeline_id, alcance)) vistos.push(c.id)
+    }
+    if (filas.length < PAGE) break
+  }
+  return vistos
+}
+
+/**
+ * Recorta una petición de CRM al pipeline de quien entra. Se aplica a leer y
+ * a escribir: un PATCH con `return=representation` devolvería la ficha ajena
+ * si el filtro solo estuviera en el GET. Lo que no es suyo no coincide y
+ * PostgREST no lo toca; mover un contacto a otro pipeline, o marcar el suyo
+ * como por defecto para heredar los contactos sin pipeline, se rechaza.
+ */
+async function aplicarVisibilidadCrm({ auth, ids, metodo, tabla, query, filas, prefer }) {
+  if (!TABLAS_PIPELINE.has(tabla) || !ids) return
+  const alcance = await alcancePipeline(auth, ids)
+  if (!alcance) return
+
+  const contactos = tabla === 'crm_activities' ? await contactosDelAlcance(ids, alcance) : []
+
+  if (metodo === 'POST' || metodo === 'PATCH') {
+    const visibles = new Set(contactos)
+    for (const f of filas) {
+      if (tabla === 'crm_contacts' && 'pipeline_id' in f && !pipelinePermitido(f.pipeline_id, alcance)) {
+        throw prohibido('Ese contacto no está en tu pipeline')
+      }
+      // Sin pipeline, el contacto cae en el por defecto. Si no es el suyo,
+      // estaría creando un lead en el pipeline de otro.
+      if (tabla === 'crm_contacts' && metodo === 'POST' && !pipelinePermitido(f.pipeline_id, alcance)) {
+        throw prohibido('Ese contacto no está en tu pipeline')
+      }
+      if (tabla === 'crm_pipelines' && 'is_default' in f) {
+        throw prohibido('Solo un administrador elige el pipeline por defecto')
+      }
+      if (tabla === 'crm_pipelines' && 'name' in f && !nombrePermitido(f.name, alcance.nombres)) {
+        throw prohibido('El pipeline tiene que llevar tu nombre')
+      }
+      if (tabla === 'crm_activities' && (metodo === 'POST' || 'contact_id' in f) && !visibles.has(f.contact_id)) {
+        throw prohibido('Ese contacto no está en tu pipeline')
+      }
+    }
+    // Un upsert pisa por id, y el filtro de abajo no limita a qué fila: hay
+    // que mirar el pipeline de la que ya existe antes de dejarla reescribir.
+    if (tabla === 'crm_contacts' && metodo === 'POST' && /resolution\s*=\s*merge-duplicates/i.test(prefer || '')) {
+      const conId = filas.map(f => f.id).filter(Boolean)
+      if (conId.length) {
+        const { data, error } = await supabase.from('crm_contacts').select('id, pipeline_id').in('id', conId)
+        if (error) throw error
+        if ((data || []).some(r => !pipelinePermitido(r.pipeline_id, alcance))) {
+          throw prohibido('Ese contacto no está en tu pipeline')
+        }
+      }
+    }
+  }
+
+  for (const c of clausulasDeAlcance(tabla, alcance, contactos)) anadeClausula(query, c)
 }
 
 /**
@@ -302,6 +428,7 @@ export async function recortaTabla({ auth, ids, metodo, tabla, query, cuerpo, pr
     }
     query.append('client_id', `in.${lista(ids)}`)
   }
+  await aplicarVisibilidadCrm({ auth, ids, metodo, tabla, query, filas, prefer })
   return { query, filas: null }
 }
 

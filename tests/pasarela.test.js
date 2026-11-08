@@ -13,13 +13,23 @@ const estado = vi.hoisted(() => {
 vi.mock('../api/lib/supabase.js', () => {
   const from = (tabla) => {
     const q = { _tabla: tabla, _id: null }
+    const resultado = () => Promise.resolve({ data: estado.filas[tabla] || [], error: null })
     q.select = () => q
-    q.in = () => Promise.resolve({ data: estado.filas[tabla] || [], error: null })
     q.eq = (col, val) => { q._id = val; return q }
+    // Encadenable: la visibilidad del CRM filtra con .in().or().limit() y
+    // luego hace await. Sigue devolviendo las filas de la tabla, sin aplicar
+    // el filtro (cada test deja en `estado.filas` justo lo que la query vería).
+    q.in = () => q
+    q.is = () => q
+    q.or = () => q
+    q.limit = () => q
+    q.range = () => q
+    q.order = () => q
     q.maybeSingle = () => {
       if (tabla === 'team') return Promise.resolve({ data: estado.team[q._id] || null, error: estado.teamError })
       return Promise.resolve({ data: null, error: null })
     }
+    q.then = (onF, onR) => resultado().then(onF, onR)
     return q
   }
   return { supabase: { from } }
@@ -32,7 +42,9 @@ globalThis.fetch = vi.fn(async () => ({
   json: async () => ({
     definitions: {
       clients: DEF(['id', 'slug', 'name', 'agencia_id']),
-      crm_contacts: DEF(['id', 'client_id', 'name']),
+      crm_contacts: DEF(['id', 'client_id', 'name', 'pipeline_id']),
+      crm_pipelines: DEF(['id', 'client_id', 'name', 'is_default', 'stages']),
+      crm_activities: DEF(['id', 'client_id', 'contact_id', 'description']),
       helm_team: DEF(['id', 'client_id', 'name', 'role', 'login_id', 'pay_account']),
       helm_collaborations: DEF(['id', 'from_client_id', 'to_client_id']),
       team: DEF(['id', 'client_id', 'name', 'email', 'role', 'active', 'password_hash']),
@@ -265,5 +277,169 @@ describe('pasarela · el slug de un perfil', () => {
       .resolves.toBeTruthy()
     await expect(pide({ auth: { ...PLATAFORMA, agenciaId: 'ag-plat' }, ids: null, metodo: 'PATCH', tabla: 'clients', cuerpo: cuerpo({ slug: 'otro' }) }))
       .resolves.toBeTruthy()
+  })
+})
+
+describe('pasarela · cada miembro solo ve su pipeline', () => {
+  const SETTER = { role: 'client', clientId: 'p1', nivel: 'member', userId: 'login-ortega' }
+  const ADMIN = { role: 'client', clientId: 'p1', nivel: 'admin', userId: 'login-admin' }
+  const NINGUNO = '00000000-0000-0000-0000-000000000000'
+
+  // El mock devuelve la tabla entera: aquí solo está lo que la query vería.
+  function equipoOrtega() {
+    estado.filas.helm_team = [{ name: '~Ortega', role: 'setter', client_id: 'p1', login_id: 'login-ortega' }]
+    estado.filas.crm_pipelines = [
+      { id: 'pipe-ortega', name: 'Ortega', is_default: false, client_id: 'p1' },
+      { id: 'pipe-alex', name: 'Alex Abellaneda', is_default: true, client_id: 'p1' },
+      { id: 'pipe-aron', name: 'aron', is_default: false, client_id: 'p1' },
+    ]
+    estado.filas.crm_contacts = [
+      { id: 'c-ortega', pipeline_id: 'pipe-ortega', client_id: 'p1' },
+      { id: 'c-alex', pipeline_id: 'pipe-alex', client_id: 'p1' },
+      { id: 'c-suelto', pipeline_id: null, client_id: 'p1' },
+    ]
+  }
+
+  it('~Ortega ve el pipeline Ortega, no el de Alex ni el de aron', async () => {
+    equipoOrtega()
+    const contactos = await pide({ auth: SETTER, tabla: 'crm_contacts' })
+    expect(contactos.query.get('pipeline_id')).toBe('in.(pipe-ortega)')
+    expect(contactos.query.get('or')).toBeNull()
+
+    const pipes = await pide({ auth: SETTER, tabla: 'crm_pipelines' })
+    expect(pipes.query.get('id')).toBe('in.(pipe-ortega)')
+
+    // Buscar o abrir por id no quita el recorte: se suma al filtro.
+    const ficha = await pide({
+      auth: SETTER, tabla: 'crm_contacts',
+      query: new URLSearchParams('id=eq.c-alex&name=ilike.*alex*'),
+    })
+    expect(ficha.query.get('id')).toBe('eq.c-alex')
+    expect(ficha.query.get('name')).toBe('ilike.*alex*')
+    expect(ficha.query.get('pipeline_id')).toBe('in.(pipe-ortega)')
+  })
+
+  it('la ficha (actividad) solo sale de sus contactos', async () => {
+    equipoOrtega()
+    const r = await pide({
+      auth: SETTER, tabla: 'crm_activities',
+      query: new URLSearchParams('contact_id=eq.c-alex'),
+    })
+    expect(r.query.get('contact_id')).toBe('eq.c-alex')
+    expect(r.query.getAll('contact_id').some(v => v === 'in.(c-ortega)')).toBe(true)
+    await expect(pide({
+      auth: SETTER, metodo: 'POST', tabla: 'crm_activities',
+      cuerpo: cuerpo({ client_id: 'p1', contact_id: 'c-alex', description: 'nota' }),
+    })).rejects.toMatchObject({ statusCode: 403 })
+    await expect(pide({
+      auth: SETTER, metodo: 'POST', tabla: 'crm_activities',
+      cuerpo: cuerpo({ client_id: 'p1', contact_id: 'c-ortega', description: 'nota' }),
+    })).resolves.toBeTruthy()
+  })
+
+  it('si su pipeline es el por defecto, también ve los contactos sin pipeline', async () => {
+    estado.filas.helm_team = [{ name: 'Alex Abellaneda', role: 'closer', client_id: 'p1' }]
+    estado.filas.crm_pipelines = [
+      { id: 'pipe-alex', name: 'Alex Abellaneda', is_default: true, client_id: 'p1' },
+      { id: 'pipe-ortega', name: 'Ortega', is_default: false, client_id: 'p1' },
+    ]
+    const r = await pide({
+      auth: { ...SETTER, userId: 'login-alex' }, tabla: 'crm_contacts',
+    })
+    expect(r.query.get('and')).toBe('(or(pipeline_id.in.(pipe-alex),pipeline_id.is.null))')
+  })
+
+  it('sin pipeline a su nombre no ve ninguno', async () => {
+    estado.filas.helm_team = [{ name: 'Nadie', role: 'setter', client_id: 'p1' }]
+    estado.filas.crm_pipelines = [
+      { id: 'pipe-ortega', name: 'Ortega', is_default: true, client_id: 'p1' },
+    ]
+    const r = await pide({ auth: SETTER, tabla: 'crm_contacts' })
+    expect(r.query.get('pipeline_id')).toBe(`in.(${NINGUNO})`)
+    const pipes = await pide({ auth: SETTER, tabla: 'crm_pipelines' })
+    expect(pipes.query.get('id')).toBe(`in.(${NINGUNO})`)
+  })
+
+  it('propietario, administrador, dueño, superadmin y un acceso sin ficha ven todo', async () => {
+    equipoOrtega()
+    for (const auth of [
+      DUENO,
+      { ...DUENO, userId: 'login-dueno' },
+      ADMIN,
+      { ...AGENCIA, userId: 'login-agencia' },
+      { ...PLATAFORMA, ids: null },
+      MIEMBRO,
+    ]) {
+      const ids = auth.ids === null ? null : ['p1']
+      const r = await pide({ auth, ids, tabla: 'crm_contacts' })
+      expect(r.query.get('pipeline_id'), auth.nivel || auth.role).toBeNull()
+      expect(r.query.get('or'), auth.nivel || auth.role).toBeNull()
+    }
+    estado.filas.helm_team = [{ name: 'Ana', role: 'dueno', client_id: 'p1' }]
+    const dueno = await pide({ auth: SETTER, tabla: 'crm_contacts' })
+    expect(dueno.query.get('pipeline_id')).toBeNull()
+
+    estado.filas.helm_team = []
+    const suelto = await pide({ auth: SETTER, tabla: 'crm_contacts' })
+    expect(suelto.query.get('pipeline_id')).toBeNull()
+  })
+
+  it('no mueve un contacto a otro pipeline, ni reescribe el ajeno, ni se apropia del por defecto', async () => {
+    equipoOrtega()
+    await expect(pide({
+      auth: SETTER, metodo: 'POST', tabla: 'crm_contacts',
+      cuerpo: cuerpo({ client_id: 'p1', name: 'Lead', pipeline_id: 'pipe-alex' }),
+    })).rejects.toMatchObject({ statusCode: 403 })
+    await expect(pide({
+      auth: SETTER, metodo: 'POST', tabla: 'crm_contacts',
+      cuerpo: cuerpo({ client_id: 'p1', name: 'Lead' }),
+    })).rejects.toMatchObject({ statusCode: 403 })
+    await expect(pide({
+      auth: SETTER, metodo: 'POST', tabla: 'crm_contacts',
+      cuerpo: cuerpo({ client_id: 'p1', name: 'Lead', pipeline_id: 'pipe-ortega' }),
+    })).resolves.toBeTruthy()
+
+    await expect(pide({
+      auth: SETTER, metodo: 'PATCH', tabla: 'crm_contacts',
+      cuerpo: cuerpo({ pipeline_id: 'pipe-alex' }),
+    })).rejects.toMatchObject({ statusCode: 403 })
+    const propio = await pide({
+      auth: SETTER, metodo: 'PATCH', tabla: 'crm_contacts',
+      query: new URLSearchParams('id=eq.c-alex'),
+      cuerpo: cuerpo({ name: 'Sigue siendo mío' }),
+    })
+    expect(propio.query.get('pipeline_id')).toBe('in.(pipe-ortega)')
+
+    estado.filas.crm_contacts = [{ id: 'c-alex', client_id: 'p1', pipeline_id: 'pipe-alex' }]
+    await expect(pide({
+      auth: SETTER, metodo: 'POST', tabla: 'crm_contacts',
+      query: new URLSearchParams('on_conflict=id'),
+      cuerpo: cuerpo({ id: 'c-alex', client_id: 'p1', name: 'robado' }),
+      prefer: 'resolution=merge-duplicates',
+    })).rejects.toMatchObject({ statusCode: 403 })
+
+    await expect(pide({
+      auth: SETTER, metodo: 'PATCH', tabla: 'crm_pipelines',
+      cuerpo: cuerpo({ is_default: true }),
+    })).rejects.toMatchObject({ statusCode: 403 })
+    await expect(pide({
+      auth: SETTER, metodo: 'PATCH', tabla: 'crm_pipelines',
+      cuerpo: cuerpo({ name: 'Alex Abellaneda' }),
+    })).rejects.toMatchObject({ statusCode: 403 })
+    const etapas = await pide({
+      auth: SETTER, metodo: 'PATCH', tabla: 'crm_pipelines',
+      cuerpo: cuerpo({ name: '~Ortega', stages: [] }),
+    })
+    expect(etapas.query.get('id')).toBe('in.(pipe-ortega)')
+  })
+
+  it('si la ficha no tiene nombre, vale el del acceso', async () => {
+    estado.filas.helm_team = [{ name: '  ', role: 'setter', client_id: 'p1' }]
+    estado.filas.crm_pipelines = [
+      { id: 'pipe-aron', name: 'aron', is_default: false, client_id: 'p1' },
+    ]
+    estado.team['login-ortega'] = { name: 'aron', active: true, role: 'member', client_id: 'p1' }
+    const r = await pide({ auth: SETTER, tabla: 'crm_pipelines' })
+    expect(r.query.get('id')).toBe('in.(pipe-aron)')
   })
 })
