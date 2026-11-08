@@ -10,7 +10,8 @@
 --   · agencia_ia → la clave de Claude de cada agencia (una por agencia).
 --
 -- La agencia de la casa (agencias.sin_cobro) no necesita licencia: lo decide
--- el código (api/_lib/licencia.js), no esta tabla.
+-- el código (api/_lib/licencia.js), no esta tabla. Las demás que ya existían
+-- reciben un año de cortesía al aplicar esto (abajo).
 --
 -- La primera versión de esta migración (en esta misma rama, sin desplegar)
 -- era de CÓDIGOS que se canjeaban al registrarse. Si llegó a aplicarse, esto
@@ -118,6 +119,24 @@ begin
 end $$;
 
 revoke execute on function activar_licencia from public, anon, authenticated;
+
+-- ── Un año de cortesía para las agencias que ya existían ───────────────────
+-- Decisión de Alex (8-nov-2026): las agencias dadas de alta antes de la
+-- licencia (todas menos la de la casa, que no la necesita) reciben un año
+-- gratis desde que se aplica esta migración, sin cobro (origen 'manual').
+-- Solo la PRIMERA vez que se aplica: si ya hay alguna de cortesía, no se da
+-- otra (así, volver a aplicar la migración no regala un año a las agencias
+-- que se registren después). Cada una lleva su referencia: cortesia-2026:<id>.
+do $$
+begin
+  if not exists (select 1 from licenses where referencia like 'cortesia-2026:%') then
+    insert into licenses (agencia_id, estado, origen, referencia, importe_eur, empieza_at, vence_at, nota, created_by)
+    select a.id, 'activa', 'manual', 'cortesia-2026:' || a.id, 0, now(), now() + interval '12 months',
+           'Año de cortesía: agencia anterior a la licencia', 'migración 125'
+    from agencias a
+    where not a.sin_cobro;
+  end if;
+end $$;
 
 -- ── agencia_ia: la clave de Claude de cada agencia ─────────────────────────
 -- Como la de cada perfil (user_integrations, service 'anthropic'): nunca sale
