@@ -8,7 +8,7 @@ vi.mock('../api/_lib/web.js', () => ({ buscarWeb: vi.fn(), urlPublica: vi.fn(), 
 vi.mock('../api/_lib/places.js', () => ({ buscarNegocios: vi.fn() }))
 vi.mock('../api/_lib/anthropic.js', () => ({ claudeTurno: vi.fn() }))
 vi.mock('../api/_lib/llm.js', () => ({ proveedorDe: vi.fn() }))
-vi.mock('../api/_lib/creditos.js', () => ({ claveHelm: () => '' }))
+vi.mock('../api/_lib/licencia.js', async (original) => ({ ...(await original()), claveHelm: () => '' }))
 vi.mock('../api/_lib/notificar.js', () => ({ notificar: vi.fn() }))
 
 const {

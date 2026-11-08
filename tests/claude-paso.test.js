@@ -5,21 +5,20 @@
 // y cobre después (también cuando Claude rechaza). El SDK va simulado.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+const claves = []
 const cuerpos = []
 const stream = vi.fn()
 vi.mock('@anthropic-ai/sdk', () => ({
   default: class {
-    constructor(opciones) { this.opciones = opciones }
+    constructor(opciones) { this.opciones = opciones; claves.push(opciones.apiKey) }
     messages = { stream: (body) => { cuerpos.push(body); return stream(body) } }
   },
 }))
 
-const exigirSaldo = vi.fn()
-const cobrar = vi.fn()
-vi.mock('../api/_lib/creditos.js', () => ({
-  exigirSaldo: (...a) => exigirSaldo(...a),
-  cobrar: (...a) => cobrar(...a),
-  claveHelm: () => 'clave-de-helm',
+// Trae tu clave: la de HELM se cambia por la de la agencia (api/_lib/licencia.js).
+const claveParaLlamar = vi.fn(async (k) => (k === 'clave-de-helm' ? 'sk-de-la-agencia' : k))
+vi.mock('../api/_lib/licencia.js', () => ({
+  claveParaLlamar: (...a) => claveParaLlamar(...a),
 }))
 
 const { claudePaso, MODELO_POR_DEFECTO } = await import('../api/_lib/anthropic.js')
@@ -42,8 +41,8 @@ const HISTORIAL = [
 beforeEach(() => {
   cuerpos.length = 0
   stream.mockReset()
-  exigirSaldo.mockReset()
-  cobrar.mockReset()
+  claveParaLlamar.mockClear()
+  claves.length = 0
 })
 
 describe('claudePaso', () => {
@@ -99,33 +98,29 @@ describe('claudePaso', () => {
     for (const t of cuerpos[0].tools) expect(Object.keys(t).sort()).toEqual(['description', 'input_schema', 'name'])
   })
 
-  it('con la clave de HELM exige saldo antes y cobra después', async () => {
+  it('con la clave de HELM llama con la de la agencia (trae tu clave), pasando el perfil', async () => {
     devuelve(respuesta())
-    await claudePaso({ apiKey: 'clave-de-helm', model: 'claude-sonnet-5', messages: HISTORIAL })
-    expect(exigirSaldo).toHaveBeenCalledTimes(1)
-    expect(cobrar).toHaveBeenCalledWith('claude-sonnet-5', USO)
-    expect(exigirSaldo.mock.invocationCallOrder[0]).toBeLessThan(stream.mock.invocationCallOrder[0])
-    expect(stream.mock.invocationCallOrder[0]).toBeLessThan(cobrar.mock.invocationCallOrder[0])
+    await claudePaso({ apiKey: 'clave-de-helm', clientId: 'perfil-1', model: 'claude-sonnet-5', messages: HISTORIAL })
+    expect(claveParaLlamar).toHaveBeenCalledWith('clave-de-helm', { clientId: 'perfil-1' })
+    expect(claves).toEqual(['sk-de-la-agencia'])
+    expect(claveParaLlamar.mock.invocationCallOrder[0]).toBeLessThan(stream.mock.invocationCallOrder[0])
   })
 
-  it('sin saldo no llama a Claude', async () => {
-    exigirSaldo.mockRejectedValueOnce(Object.assign(new Error('sin créditos'), { statusCode: 402 }))
-    await expect(claudePaso({ apiKey: 'clave-de-helm', model: 'claude-sonnet-5', messages: HISTORIAL })).rejects.toMatchObject({ statusCode: 402 })
+  it('sin licencia o sin clave de la agencia no llama a Claude', async () => {
+    claveParaLlamar.mockRejectedValueOnce(Object.assign(new Error('Tu agencia no tiene clave de Claude.'), { statusCode: 412, codigo: 'sin_clave_claude' }))
+    await expect(claudePaso({ apiKey: 'clave-de-helm', model: 'claude-sonnet-5', messages: HISTORIAL })).rejects.toMatchObject({ statusCode: 412 })
     expect(stream).not.toHaveBeenCalled()
-    expect(cobrar).not.toHaveBeenCalled()
   })
 
-  it('con la clave propia de un perfil no se exige saldo ni se cobra', async () => {
+  it('con la clave propia de un perfil, esa', async () => {
     devuelve(respuesta())
     await claudePaso({ apiKey: 'sk-del-perfil', model: 'claude-sonnet-5', messages: HISTORIAL })
-    expect(exigirSaldo).not.toHaveBeenCalled()
-    expect(cobrar).not.toHaveBeenCalled()
+    expect(claves).toEqual(['sk-del-perfil'])
   })
 
-  it('un rechazo de Claude es un 422, y se cobra antes porque Anthropic ya lo ha facturado', async () => {
+  it('un rechazo de Claude es un 422 y lleva lo gastado', async () => {
     devuelve(respuesta({ content: [], stop_reason: 'refusal' }))
-    await expect(claudePaso({ apiKey: 'clave-de-helm', model: 'claude-sonnet-5', messages: HISTORIAL })).rejects.toMatchObject({ statusCode: 422 })
-    expect(cobrar).toHaveBeenCalledTimes(1)
+    await expect(claudePaso({ apiKey: 'clave-de-helm', model: 'claude-sonnet-5', messages: HISTORIAL })).rejects.toMatchObject({ statusCode: 422, usage: USO })
   })
 
   it('un error de la API sale traducido', async () => {

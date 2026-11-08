@@ -67,16 +67,14 @@ vi.mock('../api/lib/supabase.js', () => ({ supabase: { from: (t) => consulta(t) 
 vi.mock('../api/_lib/auth.js', () => ({ applyCors: () => {} }))
 const sesion = vi.hoisted(() => ({ auth: null }))
 vi.mock('../api/_lib/access.js', () => ({ requireProfileAccess: async () => sesion.auth }))
-const cobro = vi.hoisted(() => ({ paga: true, saldo: 10 }))
-const sinSaldo = async () => {
-  if (cobro.saldo <= 0) throw Object.assign(new Error('Te has quedado sin créditos. Recarga para que la IA siga trabajando.'), { statusCode: 402 })
+// La clave de Claude de la agencia (api/_lib/licencia.js): sin ella, 412.
+const clave = vi.hoisted(() => ({ tiene: true }))
+const sinClave = async () => {
+  if (!clave.tiene) throw Object.assign(new Error('Tu agencia no tiene clave de Claude. Ponla en Perfiles → Agencia → Clave de Claude.'), { statusCode: 412, codigo: 'sin_clave_claude' })
 }
-const exigirSaldo = vi.fn(sinSaldo)
-vi.mock('../api/_lib/creditos.js', () => ({
-  pagaConCreditos: async () => cobro.paga,
-  exigirSaldo: (...a) => exigirSaldo(...a),
-  costeUsd: (_m, u) => (u.input_tokens * 2 + u.output_tokens * 10) / 1e6,
-  precioEuros: (usd) => usd * 0.92 * 2,
+const exigirClaveClaude = vi.fn(sinClave)
+vi.mock('../api/_lib/licencia.js', () => ({
+  exigirClaveClaude: (...a) => exigirClaveClaude(...a),
 }))
 vi.mock('../api/_lib/instagram.js', () => ({
   getIgConfig: async (_s, clientId) => (db.user_integrations || []).find(r => r.client_id === clientId) || null,
@@ -115,10 +113,9 @@ beforeEach(() => {
   for (const k of Object.keys(rota)) delete rota[k]
   encolaEstudio.mockReset()
   encolaEstudio.mockImplementation(async () => {})
-  exigirSaldo.mockReset()
-  exigirSaldo.mockImplementation(sinSaldo)
-  cobro.paga = true
-  cobro.saldo = 10
+  exigirClaveClaude.mockReset()
+  exigirClaveClaude.mockImplementation(sinClave)
+  clave.tiene = true
   db = {
     helm_permissions: [{ client_id: 'c1', sections: {}, visible: {} }],
     helm_team: [
@@ -180,19 +177,14 @@ describe('api/estudio-contenido · lo que devuelve', () => {
     ])
     expect(r.body.en_curso).toBe(false)
     expect(r.body.conectado).toBe(true)
-    expect(r.body.coste_aprox_eur).toBeGreaterThan(0.15)
-    expect(r.body.coste_aprox_eur).toBeLessThan(0.3)
+    // HELM ya no cobra por uso (licencia anual): siempre 0.
+    expect(r.body.coste_aprox_eur).toBe(0)
     expect(r.body.algoritmo[0].etiqueta).toBe('OFICIAL')
     expect(r.body.ultimo_error).toBeNull()
   })
 
-  it('a la agencia de la casa no le cuesta nada', async () => {
-    cobro.paga = false
-    expect((await pide(PROPIETARIO)).body.coste_aprox_eur).toBe(0)
-  })
-
   it('ultimo_error: solo si lo último pedido falló después del último listo, con fecha y mensaje', async () => {
-    const fallo = { id: crypto.randomUUID(), client_id: 'c1', generado_en: hace(5), estado: 'error', error: 'No quedan créditos para hacer el estudio. Recarga y vuelve a pedirlo. No se ha cobrado nada.' }
+    const fallo = { id: crypto.randomUUID(), client_id: 'c1', generado_en: hace(5), estado: 'error', error: 'Tu agencia no tiene clave de Claude. Ponla en Perfiles → Agencia → Clave de Claude.' }
     estudios().push(fallo)
     expect((await pide(PROPIETARIO)).body.ultimo_error).toEqual({ generado_en: fallo.generado_en, mensaje: fallo.error })
     // Detrás del fallo hay otro en marcha: ese aún no ha fallado.
@@ -230,12 +222,12 @@ describe('api/estudio-contenido · lo que devuelve', () => {
     expect((await pide(PROPIETARIO)).body.en_curso).toBe(true)
   })
 
-  it('6 h en la cola sin empezar: se da por perdido, y sin cobrar nada', async () => {
+  it('6 h en la cola sin empezar: se da por perdido', async () => {
     const olvidado = { id: crypto.randomUUID(), client_id: 'c1', generado_en: hace(7 * 60), empezado_en: null, estado: 'en_curso' }
     estudios().push(olvidado)
     const r = await pide(PROPIETARIO)
     expect(r.body.en_curso).toBe(false)
-    expect(olvidado).toMatchObject({ estado: 'error', error: expect.stringMatching(/no llegó a empezar.*No se ha cobrado nada/) })
+    expect(olvidado).toMatchObject({ estado: 'error', error: expect.stringMatching(/no llegó a empezar/) })
     expect(r.body.ultimo_error.mensaje).toBe(olvidado.error)
   })
 
@@ -289,7 +281,7 @@ describe('api/estudio-contenido · pedir uno', () => {
     expect(fila).toMatchObject({ client_id: 'c1', modelo: 'claude-sonnet-5' })
     expect(r.body).toEqual({ encolado: true, id: fila.id })
     expect(encolaEstudio).toHaveBeenCalledWith('c1', { origen: 'panel', estudioId: fila.id })
-    expect(exigirSaldo).toHaveBeenCalledTimes(1)
+    expect(exigirClaveClaude).toHaveBeenCalledTimes(1)
   })
 
   it('sin Instagram conectado: 400 sin_instagram', async () => {
@@ -319,8 +311,8 @@ describe('api/estudio-contenido · pedir uno', () => {
   })
 
   it('el índice manda: si el otro clic abre su fila justo después de las comprobaciones, 409 y no se encola', async () => {
-    // El otro POST cuela su fila mientras este mira el saldo.
-    exigirSaldo.mockImplementationOnce(async () => {
+    // El otro POST cuela su fila mientras este mira la clave de Claude.
+    exigirClaveClaude.mockImplementationOnce(async () => {
       estudios().push({ id: crypto.randomUUID(), client_id: 'c1', generado_en: new Date().toISOString(), estado: 'en_curso' })
     })
     const r = await pide(PROPIETARIO, 'ahora')
@@ -337,7 +329,7 @@ describe('api/estudio-contenido · pedir uno', () => {
     expect(r.statusCode).toBe(500)
     expect(r.body.error).not.toMatch(/connection/)
     expect(estudios().some(f => f.estado === 'en_curso')).toBe(false)
-    expect(estudios().at(-1)).toMatchObject({ estado: 'error', error: expect.stringMatching(/No se ha cobrado nada/) })
+    expect(estudios().at(-1)).toMatchObject({ estado: 'error', error: expect.stringMatching(/Vuelve a pedirlo/) })
     log.mockRestore()
   })
 
@@ -365,21 +357,13 @@ describe('api/estudio-contenido · pedir uno', () => {
     expect((await pide(PROPIETARIO, 'ahora')).statusCode).toBe(200)
   })
 
-  it('sin saldo en una agencia que paga: 402 sin_saldo, ni fila ni cola', async () => {
-    cobro.saldo = 0
+  it('sin clave de Claude en la agencia: 412 sin_clave_claude, ni fila ni cola', async () => {
+    clave.tiene = false
     const r = await pide(PROPIETARIO, 'ahora')
-    expect(r.statusCode).toBe(402)
-    expect(r.body).toMatchObject({ codigo: 'sin_saldo', error: expect.stringMatching(/créditos/) })
+    expect(r.statusCode).toBe(412)
+    expect(r.body).toMatchObject({ codigo: 'sin_clave_claude', error: expect.stringMatching(/clave de Claude/) })
     expect(estudios().some(f => f.estado === 'en_curso')).toBe(false)
     expect(encolaEstudio).not.toHaveBeenCalled()
-  })
-
-  it('la agencia de la casa (sin_cobro) no paga: ni se le mira el saldo', async () => {
-    cobro.paga = false
-    cobro.saldo = 0
-    expect((await pide(PROPIETARIO, 'ahora')).statusCode).toBe(200)
-    expect(exigirSaldo).not.toHaveBeenCalled()
-    expect(encolaEstudio).toHaveBeenCalledTimes(1)
   })
 
   it('pedirlo por GET no encola', async () => {

@@ -3,9 +3,9 @@
 // directo al suyo (ver HelmApp).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, ArrowUpRight, LogOut, Users, MoreHorizontal, EyeOff, Trash2, RotateCcw, Building2, Send, Inbox, KeyRound } from 'lucide-react'
-import { brandOf, notificacionesApi, perfilesApi, creditosApi, telegramAgenciaApi, altasApi, accesosApi, enlaceAltaPublica } from './lib'
-import Creditos, { BotonCreditos, Bienvenida } from './Creditos'
+import { Plus, Search, ArrowUpRight, LogOut, Users, MoreHorizontal, EyeOff, Trash2, RotateCcw, Building2, Send, Inbox, KeyRound, Settings } from 'lucide-react'
+import { brandOf, notificacionesApi, perfilesApi, licenciaApi, telegramAgenciaApi, altasApi, accesosApi, enlaceAltaPublica } from './lib'
+import { AjustesAgencia } from './Licencia'
 import TelegramAgencia from './TelegramAgencia'
 import AltasRecibidas, { DetalleAlta } from './AltasRecibidas'
 import AccesosRecibidos from './AccesosRecibidos'
@@ -19,12 +19,10 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
   const [menu, setMenu] = useState(null)            // id del perfil con el menú abierto
   const [borrando, setBorrando] = useState(null)    // perfil en el modal de borrado
   const [error, setError] = useState(null)
-  const [agencia, setAgencia] = useState(null)      // { id, nombre, slug, plataforma }
-  const [verCreditos, setVerCreditos] = useState(false)
+  const [agencia, setAgencia] = useState(null)      // { id, nombre, slug, plataforma, licencia }
+  const [verAgencia, setVerAgencia] = useState(false)
   const [verTelegram, setVerTelegram] = useState(false)
   const [conTelegram, setConTelegram] = useState(false)  // el botón del bot: solo si la agencia lo tiene
-  const [bienvenida, setBienvenida] = useState(null)  // { saldo, pagado }: la oferta de la agencia nueva
-  const [recarga, setRecarga] = useState(0)         // para que el botón relea el saldo
   // Las altas del enlace público (helm.s4sf.net/alta): la bandeja y la que está abierta.
   const [altas, setAltas] = useState(null)
   const [falloAltas, setFalloAltas] = useState(null)
@@ -48,7 +46,15 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
     return propios.filter(c => (c.name + ' ' + (c.brand_name || '') + ' ' + c.slug).toLowerCase().includes(t))
   }, [propios, q])
 
-  const cargarInactivos = () => perfilesApi.inactivos().then(r => setInactivos(r.perfiles)).catch(() => {})
+  const cargarAgencia = () => licenciaApi.estado().then(r => {
+    if (!r?.agencia) return null
+    setAgencia({ id: r.agencia.id, nombre: r.agencia.nombre, slug: r.agencia.slug, plataforma: r.plataforma, licencia: r.licencia })
+    return r
+  }).catch(() => null)
+  // Los días que le quedan a la licencia, para avisar en el botón el último mes.
+  const caduca = agencia?.licencia && !agencia.licencia.sinCobro && agencia.licencia.valida && agencia.licencia.dias <= 30
+    ? agencia.licencia.dias : null
+  const cargarInactivos = () => perfilesApi.inactivos().then(r => setInactivos(r.perfiles || [])).catch(() => {})
   const cargarAltas = () => altasApi.lista()
     .then(r => { setAltas(r.altas || []); setFalloAltas(null) })
     .catch(e => setFalloAltas(e.message || 'No se han podido cargar las altas.'))
@@ -66,26 +72,16 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
     cargarInactivos()
     cargarAltas()
     cargarAccesos()
-    // Vuelta de pagar en Stripe: se confirma el pago (el servidor se lo
-    // pregunta a Stripe) antes de leer el saldo, para enseñar el nuevo.
-    const p = new URLSearchParams(window.location.search)
-    const sesion = p.get('session_id')
-    if (p.get('creditos')) window.history.replaceState(null, '', window.location.pathname)
-    const pago = sesion
-      ? creditosApi.confirmar(sesion).then(() => true).catch(e => { setError(e.message); return false })
-      : Promise.resolve(false)
-    pago.then(pagado => creditosApi.saldo().then(r => {
-      setAgencia({ id: r.agencia?.id, nombre: r.agencia?.nombre, slug: r.agencia?.slug, plataforma: r.plataforma })
+    // La agencia y su licencia (el pago y la vuelta de Stripe los lleva
+    // PuertaLicencia, en HelmApp).
+    cargarAgencia().then(r => {
+      if (!r) return
       // El bot de Telegram solo lo tienen las agencias de HELM_TELEGRAM_AGENCIAS
       // (y la plataforma, que lo activa). Quien quedó vinculado de antes lo
       // sigue viendo para poder desvincularse.
       if (r.plataforma) setConTelegram(true)
       else telegramAgenciaApi.vinculo().then(e => setConTelegram(Boolean(e?.permitido || e?.vinculado))).catch(() => {})
-      // Agencia recién llegada: primero la oferta de compra (o, si viene de
-      // pagar, directamente el regalo de bienvenida).
-      if (r.bienvenida?.pendiente) setBienvenida({ saldo: r, pagado })
-      else if (pagado) { setRecarga(n => n + 1); setVerCreditos(true) }
-    })).catch(() => {})
+    })
   }, [])
 
   useEffect(() => {
@@ -117,7 +113,13 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
               <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar perfil" autoFocus />
             </label>
           )}
-          <BotonCreditos onAbrir={() => setVerCreditos(true)} recarga={recarga} />
+          <button
+            type="button" className="helm-btn" onClick={() => setVerAgencia(true)}
+            title="La licencia de la agencia, su clave de Claude y el conector de Claude"
+          >
+            <Settings size={15} /> Agencia
+            {caduca != null && <span className="helm-altas-num" title={`La licencia caduca en ${caduca} ${caduca === 1 ? 'día' : 'días'}`}>{caduca} d</span>}
+          </button>
           <button
             type="button" className="helm-btn" onClick={() => { setVerAltas(true); cargarAltas() }}
             title={nuevas ? `${nuevas} ${nuevas === 1 ? 'alta nueva' : 'altas nuevas'} del enlace público` : 'Las altas del enlace público'}
@@ -144,7 +146,7 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
       </header>
 
       <FormNote>{error}</FormNote>
-      {verCreditos && <Creditos onClose={() => { setVerCreditos(false); setRecarga(n => n + 1) }} />}
+      {verAgencia && <AjustesAgencia onClose={() => { setVerAgencia(false); cargarAgencia() }} />}
       {verTelegram && (
         <Modal title="Bot de Telegram" onClose={() => setVerTelegram(false)} wide>
           <TelegramAgencia />
@@ -172,12 +174,6 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
           onCerrar={() => setAltaAbierta(null)}
           onCambio={() => { cargarAltas(); onChanged() }}
           onAbrirPerfil={p => { setAltaAbierta(null); setVerAltas(false); onPick(p) }}
-        />
-      )}
-      {bienvenida && (
-        <Bienvenida
-          saldo={bienvenida.saldo} pagado={bienvenida.pagado}
-          onFin={() => { setBienvenida(null); setRecarga(n => n + 1) }}
         />
       )}
 

@@ -38,8 +38,9 @@ process.env.HELM_LLM_TIMEOUT_MS ||= '600000'
 const { llmChat } = await import('../api/_lib/llm.js')
 const { claudeTurno } = await import('../api/_lib/anthropic.js')
 // Cada trabajo corre con su perfil en el contexto: lo que gaste en Claude se
-// cobra en créditos a la agencia de ese perfil (ver api/_lib/creditos.js).
+// hace con la clave de Claude de la agencia de ese perfil (ver api/_lib/licencia.js).
 const { enContexto } = await import('../api/_lib/contexto.js')
+const { perfilConLicencia } = await import('../api/_lib/licencia.js')
 // Jev etiqueta cuando Claude no puede, antes que el 7B local: clasificar es
 // justo lo que hace bien y justo lo que al local se le da mal.
 const { jevDisponible, etiquetaConJev } = await import('../api/_lib/jev.js')
@@ -773,6 +774,13 @@ async function bucle() {
 
       const paso = PASOS[job.tipo]
       if (!paso) throw new Error(`Tipo de trabajo desconocido: ${job.tipo}`)
+      // Sin licencia válida, la agencia no trabaja: ni lo programado ni lo que
+      // quedara en la cola. Se cierra sin reintentos (y sin gastar su IA).
+      if (job.payload?.clientId && !(await perfilConLicencia(job.payload.clientId))) {
+        log(`${job.tipo}: saltado, la agencia del perfil ${job.payload.clientId} no tiene licencia activa`)
+        await db.from('agent_jobs').update({ estado: 'hecho', acabado_en: ahora(), error: 'Saltado: la licencia de la agencia no está activa.' }).eq('id', job.id)
+        continue
+      }
       // El estudio de contenido pedido a mano se cobra como del panel; el de
       // los lunes y todo lo demás, como automático.
       const origen = job.tipo === 'estudio-contenido' && job.payload?.origen === 'panel' ? 'panel' : 'auto'

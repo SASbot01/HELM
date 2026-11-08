@@ -3,14 +3,16 @@
 // cuenta de siempre; si no es de la plataforma, el servidor dice que no y se
 // vuelve a /admin.
 //
-// Aquí se mira y se corrige a mano: sumar o quitar saldo (api/creditos.js),
+// Aquí se mira y se corrige a mano: dar o anular licencia (api/plataforma.js),
 // desactivar o reactivar a un administrador (api/users.js) y borrar una
 // agencia entera (api/plataforma.js, con copia previa en el servidor).
+//
+// Desde el 7-nov-2026 cada agencia paga una licencia anual (97 €) y pone su
+// propia clave de Claude: aquí ya no hay saldo ni consumo.
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, RotateCw, Search, ArrowUpRight, Trash2 } from 'lucide-react'
-import { plataformaApi, creditosApi, usersApi } from './lib'
-import { CONCEPTOS } from './precios'
+import { plataformaApi, usersApi } from './lib'
 import { useHelmTheme } from './theme'
 import { Kpi, Panel, Drawer, Field, Input, FormNote, Empty } from './ui'
 import './plataforma.css'
@@ -31,8 +33,13 @@ function hace(iso) {
   return d === 1 ? 'ayer' : `hace ${d} días`
 }
 
-const ORIGEN = { panel: 'Panel', auto: 'Contenido automático', mcp: 'Conector de Claude', telegram: 'Telegram', registro: 'Registro', stripe: 'Stripe', manual: 'A mano' }
-const TIPO = { consumo: 'Consumo', recarga: 'Recarga', ajuste: 'Ajuste', regalo: 'Regalo' }
+// La licencia en la tabla: casa (no la necesita), activa, caducada o sin.
+function textoLicencia(l) {
+  if (!l || l.estado === 'casa') return '—'
+  if (l.estado === 'sin') return 'Sin licencia'
+  if (l.estado === 'caducada') return `Caducó el ${fecha(l.venceAt)}`
+  return `Hasta el ${fecha(l.venceAt)}`
+}
 
 export default function Plataforma() {
   const navigate = useNavigate()
@@ -97,9 +104,9 @@ export default function Plataforma() {
             <Kpi label="Agencias" value={num(t.agencias)} sub={t.nuevas7d ? `+${num(t.nuevas7d)} esta semana` : 'Ninguna nueva esta semana'} />
             <Kpi label="Activas 7 días" value={num(t.activas7d)} sub="Han entrado al panel" />
             <Kpi label="Perfiles" value={num(t.perfiles)} sub="Clientes de las agencias" />
-            <Kpi label="Consumo 30 días" value={`${num(t.mes.consumo)} cr`} sub={`Nos cuesta ${eur(t.mes.costeEuros)}`} accent />
-            <Kpi label="Recargas 30 días" value={eur(t.mes.recargasEuros)} sub={`${num(t.saldoPendiente)} cr por gastar`} />
-            <Kpi label="Sin saldo" value={num(t.sinSaldo)} sub="No pueden usar la IA" tono={t.sinSaldo ? 'danger' : undefined} />
+            <Kpi label="Con licencia" value={num(t.conLicencia)} sub={t.caducan30d ? `${num(t.caducan30d)} caducan en 30 días` : 'Ninguna caduca este mes'} accent />
+            <Kpi label="Ingresos 30 días" value={eur(t.ingresos30d)} sub={`${eur(t.ingresos365d)} en el último año`} />
+            <Kpi label="Sin licencia" value={num(t.sinLicencia)} sub="No pueden entrar" tono={t.sinLicencia ? 'danger' : undefined} />
           </div>
         )}
 
@@ -121,9 +128,7 @@ export default function Plataforma() {
                 <span role="columnheader">Alta</span>
                 <span role="columnheader" className="pl-num">Perfiles</span>
                 <span role="columnheader">Último acceso</span>
-                <span role="columnheader" className="pl-num">Consumo 7 d</span>
-                <span role="columnheader" className="pl-num">Consumo 30 d</span>
-                <span role="columnheader" className="pl-num">Saldo</span>
+                <span role="columnheader">Licencia</span>
               </div>
               {lista.map(a => (
                 <button key={a.id} type="button" role="row" className="pl-fila" onClick={() => setAbierta(a.id)}>
@@ -133,7 +138,8 @@ export default function Plataforma() {
                     <span className="pl-marcas">
                       {a.casa && <i className="pl-marca">La casa</i>}
                       {a.sinCobro && !a.casa && <i className="pl-marca">No paga</i>}
-                      {!a.sinCobro && a.creditos <= 0 && <i className="pl-marca pl-marca--mal">Sin saldo</i>}
+                      {['sin', 'caducada'].includes(a.licencia?.estado) && <i className="pl-marca pl-marca--mal">{a.licencia.estado === 'sin' ? 'Sin licencia' : 'Caducada'}</i>}
+                      {a.licencia?.estado === 'activa' && a.licencia.dias <= 30 && <i className="pl-marca">Caduca en {a.licencia.dias} d</i>}
                       {a.fallos7d > 0 && <i className="pl-marca pl-marca--mal" title="Trabajos de sus agentes que fallaron en los últimos 7 días">{a.fallos7d} fallos</i>}
                       {a.adminsActivos === 0 && a.admins > 0 && <i className="pl-marca pl-marca--mal">Desactivada</i>}
                     </span>
@@ -141,10 +147,8 @@ export default function Plataforma() {
                   <span role="cell" data-l="Alta">{fecha(a.alta)}</span>
                   <span role="cell" data-l="Perfiles" className="pl-num">{num(a.perfiles)}</span>
                   <span role="cell" data-l="Último acceso">{hace(a.ultimoAcceso)}</span>
-                  <span role="cell" data-l="Consumo 7 d" className="pl-num">{num(a.semana.consumo)}</span>
-                  <span role="cell" data-l="Consumo 30 d" className="pl-num">{num(a.mes.consumo)}</span>
-                  <span role="cell" data-l="Saldo" className={'pl-num' + (a.creditos < 0 ? ' pl-resta' : '')}>
-                    {a.sinCobro ? '—' : `${num(a.creditos)} cr`}
+                  <span role="cell" data-l="Licencia" className={a.licencia?.estado === 'activa' || a.licencia?.estado === 'casa' ? '' : 'pl-resta'}>
+                    {textoLicencia(a.licencia)}
                   </span>
                 </button>
               ))}
@@ -152,8 +156,7 @@ export default function Plataforma() {
           )}
         </Panel>
         <p className="pl-nota">
-          El consumo y el coste salen de los movimientos de saldo, así que la agencia de la casa no tiene: lo suyo no se apunta.
-          1 € = 100 créditos.
+          Cada agencia paga 97 € al año y usa su propia clave de Claude: HELM no cobra por uso. La de la casa no necesita licencia.
         </p>
       </div>
 
@@ -166,19 +169,28 @@ function Agencia({ fila, onClose, onCambio }) {
   const navigate = useNavigate()
   const [d, setD] = useState(null)
   const [error, setError] = useState(null)
-  const [ajuste, setAjuste] = useState({ euros: '', nota: '' })
+  const [regalo, setRegalo] = useState({ meses: '12', nota: '' })
   const [guardando, setGuardando] = useState(false)
 
   const cargar = () => plataformaApi.agencia(fila.id).then(setD).catch(e => setError(e.message))
   useEffect(() => { cargar() }, [fila.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function ajustar(e) {
+  async function darLicencia(e) {
     e.preventDefault(); setError(null); setGuardando(true)
     try {
-      await creditosApi.ajuste(fila.id, Number(ajuste.euros), ajuste.nota)
-      setAjuste({ euros: '', nota: '' })
+      await plataformaApi.darLicencia(fila.id, Number(regalo.meses), regalo.nota)
+      setRegalo({ meses: '12', nota: '' })
       await Promise.all([cargar(), onCambio()])
     } catch (err) { setError(err.message) } finally { setGuardando(false) }
+  }
+
+  async function anular(l) {
+    if (!window.confirm(`¿Anular la licencia del ${fecha(l.empieza)} al ${fecha(l.vence)}? Deja de contar para entrar.`)) return
+    setError(null)
+    try {
+      await plataformaApi.anularLicencia(fila.id, l.id)
+      await Promise.all([cargar(), onCambio()])
+    } catch (err) { setError(err.message) }
   }
 
   async function activar(admin) {
@@ -189,33 +201,30 @@ function Agencia({ fila, onClose, onCambio }) {
     } catch (err) { setError(err.message) }
   }
 
-  const max = (filas) => Math.max(1, ...filas.map(f => f.consumo))
-
   return (
     <Drawer
       title={fila.nombre}
       sub={`${fila.admin || 'sin administrador'} · alta el ${fecha(fila.alta)}`}
       onClose={onClose}
-      footer={!fila.casa && (
-        <form onSubmit={ajustar} className="pl-ajuste">
-          <Field label="Sumar o quitar (€)">
-            <Input type="number" step="0.01" value={ajuste.euros} onChange={e => setAjuste({ ...ajuste, euros: e.target.value })} placeholder="10 o -10" required />
+      footer={!fila.casa && !fila.sinCobro && (
+        <form onSubmit={darLicencia} className="pl-ajuste">
+          <Field label="Dar licencia (meses)">
+            <Input type="number" min="1" max="36" step="1" value={regalo.meses} onChange={e => setRegalo({ ...regalo, meses: e.target.value })} required />
           </Field>
           <Field label="Motivo">
-            <Input value={ajuste.nota} onChange={e => setAjuste({ ...ajuste, nota: e.target.value })} placeholder="Por qué" />
+            <Input value={regalo.nota} onChange={e => setRegalo({ ...regalo, nota: e.target.value })} placeholder="Por qué, sin cobro" />
           </Field>
-          <button type="submit" className="helm-btn primary" disabled={guardando}>{guardando ? 'Aplicando…' : 'Aplicar'}</button>
-          <small className="pl-ajuste-nota">1 € = 100 créditos. En negativo, se quita.</small>
+          <button type="submit" className="helm-btn primary" disabled={guardando}>{guardando ? 'Dando…' : 'Dar'}</button>
+          <small className="pl-ajuste-nota">Sin cobro. Empieza hoy o, si aún tiene licencia, cuando acabe la que tiene.</small>
         </form>
       )}
     >
       <FormNote>{error}</FormNote>
 
       <div className="pl-cifras">
-        <div><span>Saldo</span><b className={fila.creditos < 0 ? 'pl-resta' : ''}>{fila.sinCobro ? 'No paga' : `${num(fila.creditos)} cr`}</b></div>
-        <div><span>Consumo 30 d</span><b>{num(fila.mes.consumo)} cr</b></div>
-        <div><span>Nos cuesta</span><b>{eur(fila.mes.costeEuros)}</b></div>
-        <div><span>Recargas 30 d</span><b>{eur(fila.mes.recargasEuros)}</b></div>
+        <div><span>Licencia</span><b className={['sin', 'caducada'].includes(fila.licencia?.estado) ? 'pl-resta' : ''}>{fila.licencia?.estado === 'casa' ? 'No la necesita' : textoLicencia(fila.licencia)}</b></div>
+        <div><span>Perfiles</span><b>{num(fila.perfiles)}</b></div>
+        <div><span>Último acceso</span><b>{hace(fila.ultimoAcceso)}</b></div>
       </div>
 
       {!d && !error && <Empty>Cargando…</Empty>}
@@ -258,30 +267,6 @@ function Agencia({ fila, onClose, onCambio }) {
             </ul>
           ) : <p className="pl-vacio">Aún no ha creado ningún perfil.</p>}
 
-          {d.porOrigen.length > 0 && (
-            <>
-              <h4 className="pl-h">En qué gasta <small>30 días</small></h4>
-              <div className="pl-barras">
-                {d.porOrigen.map(o => (
-                  <div key={o.clave}>
-                    <span>{ORIGEN[o.clave] || o.clave}</span>
-                    <i style={{ '--w': `${(o.consumo / max(d.porOrigen)) * 100}%` }} />
-                    <b>{num(o.consumo)} cr</b>
-                  </div>
-                ))}
-              </div>
-              <div className="pl-barras pl-barras--fino">
-                {d.porModelo.map(o => (
-                  <div key={o.clave}>
-                    <span>{CONCEPTOS[o.clave] || o.clave}</span>
-                    <i style={{ '--w': `${(o.consumo / max(d.porModelo)) * 100}%` }} />
-                    <b>{num(o.consumo)} cr</b>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
           {d.fallos.length > 0 && (
             <>
               <h4 className="pl-h">Fallos de los agentes <small>7 días</small></h4>
@@ -298,22 +283,24 @@ function Agencia({ fila, onClose, onCambio }) {
             </>
           )}
 
-          <h4 className="pl-h">Movimientos</h4>
-          {d.movimientos.length ? (
-            <ul className="helm-creditos-movs">
-              {d.movimientos.map(m => (
-                <li key={m.id}>
-                  <span>{TIPO[m.tipo] || m.tipo}{m.origen ? ` · ${ORIGEN[m.origen] || m.origen}` : ''}{m.perfil ? ` · ${m.perfil}` : ''}</span>
-                  <small>
-                    {new Date(m.fecha).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}
-                    {m.modelo ? ` · ${CONCEPTOS[m.modelo] ? `${CONCEPTOS[m.modelo]} (precio fijo)` : m.modelo}` : ''}{m.tokens ? ` · ${num(m.tokens)} tokens` : ''}
-                    {m.costeEuros != null ? ` · nos cuesta ${eur(m.costeEuros)}` : ''}
-                  </small>
-                  <b className={m.creditos < 0 ? 'resta' : ''}>{m.creditos > 0 ? '+' : ''}{num(m.creditos)}</b>
+          <h4 className="pl-h">Licencias</h4>
+          {d.licencias.length ? (
+            <ul className="pl-lista">
+              {d.licencias.map(l => (
+                <li key={l.id}>
+                  <span>
+                    <b>{fecha(l.empieza)} → {fecha(l.vence)}{l.estado === 'anulada' ? ' · anulada' : ''}</b>
+                    <small>
+                      {l.origen === 'manual' ? `Dada a mano${l.nota ? ` · ${l.nota}` : ''}` : `Pagada el ${fecha(l.pagada)} · ${eur(l.importe)}`}
+                    </small>
+                  </span>
+                  {l.estado === 'activa' && (
+                    <button type="button" className="helm-btn" onClick={() => anular(l)}>Anular</button>
+                  )}
                 </li>
               ))}
             </ul>
-          ) : <p className="pl-vacio">Sin movimientos todavía.</p>}
+          ) : <p className="pl-vacio">{fila.casa || fila.sinCobro ? 'La agencia de la casa no necesita licencia.' : 'Nunca ha tenido licencia.'}</p>}
 
           {!fila.casa && <BorrarAgencia fila={fila} onBorrada={() => { onClose(); onCambio() }} />}
         </>
@@ -341,7 +328,8 @@ function BorrarAgencia({ fila, onBorrada }) {
       <h4 className="pl-h">Borrar la agencia</h4>
       <p className="pl-vacio">
         Se borran {fila.perfiles === 1 ? 'su perfil' : `sus ${fila.perfiles} perfiles`} con todos sus datos, sus
-        administradores, su saldo y sus movimientos. Antes se guarda una copia en el servidor. No se puede deshacer.
+        administradores y su clave de Claude. Si ha pagado alguna licencia, no se deja borrar. Antes se guarda una
+        copia en el servidor. No se puede deshacer.
       </p>
       {!abierto ? (
         <button type="button" className="helm-btn danger" onClick={() => setAbierto(true)}><Trash2 size={14} /> Borrar agencia</button>

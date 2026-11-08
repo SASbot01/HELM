@@ -1,0 +1,119 @@
+/* HELM — la licencia de la agencia (Licencia.jsx): la pantalla de pago que tapa
+   el panel sin licencia, la de «pago recibido» y los Ajustes de la agencia.
+   Pinta con los tokens de .helm (tema.css): una pieza que flota sobre el
+   lienzo, el timón que gira despacio y el oro solo en lo que se puede pulsar o
+   celebrar. */
+
+.lic-velo {
+  position: fixed; inset: 0; z-index: 90;
+  display: grid; place-items: center; padding: 20px;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  animation: lic-aparece .35s ease both;
+}
+.lic-caja {
+  position: relative; width: min(560px, 100%); max-height: calc(100dvh - 40px); overflow: auto;
+  padding: 40px 32px 24px; text-align: center; color: var(--text);
+  background: linear-gradient(180deg, #18181a, #0f0f10) padding-box, var(--borde) border-box;
+  border: 1px solid transparent; border-radius: 24px;
+  box-shadow: var(--shadow), 0 60px 140px -50px #000, 0 0 120px -60px rgba(217, 182, 107, 0.45);
+  animation: lic-sube .5s cubic-bezier(.2, .9, .25, 1.15) both;
+}
+
+/* El timón: gira despacio y respira; al pagar, da una vuelta entera. */
+.lic-timon { position: relative; width: 76px; height: 76px; margin: 0 auto 22px; }
+.lic-timon img { position: relative; width: 100%; height: 100%; border-radius: 19px; animation: lic-gira 18s linear infinite; }
+.lic-halo {
+  position: absolute; inset: -18px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(217, 182, 107, 0.38), transparent 65%);
+  animation: lic-respira 3.2s ease-in-out infinite;
+}
+.lic-pagada .lic-timon img { animation: lic-vuelta 1.1s cubic-bezier(.3, .9, .3, 1) both, lic-gira 18s linear 1.1s infinite; }
+
+.lic-caja h2 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.15; }
+.lic-lead { max-width: 440px; margin: 12px auto 0; color: var(--text-dim); font-size: 14.5px; line-height: 1.6; }
+.lic-nota { margin: 14px 0 0; color: var(--text-mut); font-size: 13px; }
+.lic-error { margin: 14px 0 0; color: var(--red); font-size: 13.5px; }
+.lic-eti { margin: 0 0 6px; color: var(--oro); font-size: 13px; font-weight: 500; letter-spacing: 0.04em; }
+
+.lic-precio { display: flex; align-items: baseline; justify-content: center; gap: 10px; margin-top: 24px; }
+.lic-precio strong {
+  font-size: 52px; font-weight: 600; letter-spacing: -0.045em; font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, #f3e3b8, var(--oro) 70%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.lic-precio span { color: var(--text-mut); font-size: 14px; }
+
+.lic-incluye { display: grid; gap: 8px; max-width: 440px; margin: 18px auto 0; padding: 0; list-style: none; text-align: left; }
+.lic-incluye li { display: grid; grid-template-columns: 16px 1fr; gap: 8px; color: var(--text-dim); font-size: 13.5px; line-height: 1.5; }
+.lic-incluye svg { margin-top: 3px; color: var(--oro); }
+
+.lic-pagar, .lic-empezar {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: 24px;
+  padding: 13px 24px; border: 0; border-radius: 12px; cursor: pointer;
+  font: inherit; font-weight: 600; font-size: 15px; color: var(--on-accent);
+  background: linear-gradient(180deg, var(--violet), var(--oro));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 10px 30px -10px rgba(217, 182, 107, 0.6);
+}
+.lic-pagar:hover, .lic-empezar:hover { filter: brightness(1.07); }
+.lic-pagar:disabled { opacity: .6; cursor: wait; }
+
+.lic-salir {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 18px; padding: 8px 12px;
+  border: 0; border-radius: 10px; background: transparent; color: var(--text-mut);
+  font: inherit; font-size: 13.5px; cursor: pointer;
+}
+.lic-salir:hover { color: var(--text); background: var(--hover); }
+
+.lic-clave { max-width: 420px; margin: 20px auto 0; text-align: left; }
+
+/* Chispas que salen del timón al pagar. */
+.lic-chispas { position: absolute; left: 50%; top: 78px; width: 0; height: 0; pointer-events: none; }
+.lic-chispas i {
+  position: absolute; width: 6px; height: 6px; margin: -3px; border-radius: 50%;
+  background: var(--oro); box-shadow: 0 0 10px var(--oro);
+  --a: calc(var(--i) * 25.7deg);
+  animation: lic-chispa 1.1s cubic-bezier(.15, .8, .3, 1) both;
+  animation-delay: calc(var(--i) * 18ms);
+}
+.lic-chispas i:nth-child(3n) { width: 4px; height: 4px; background: #f3e3b8; }
+
+/* La clave de Claude (en la puerta y en Ajustes de la agencia). */
+.lic-clave-form { display: grid; gap: 10px; }
+.lic-clave-acc { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.lic-clave-ok { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.lic-clave-ok > span:first-child { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
+
+/* Ajustes de la agencia. */
+.lic-ajustes { display: grid; gap: 4px; }
+.lic-ajustes section { padding: 4px 0 18px; border-bottom: 1px solid var(--border); }
+.lic-ajustes section:last-child { border-bottom: 0; }
+.lic-ajustes h4 { display: flex; align-items: center; gap: 8px; margin: 14px 0 8px; font-size: 14px; font-weight: 600; }
+.lic-ajustes .helm-settings-lead { margin: 0 0 12px; }
+.lic-historial { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 2px; }
+.lic-historial li { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 8px 2px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.lic-historial li small { grid-column: 1; color: var(--text-mut); font-size: 12px; }
+.lic-historial li b { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-weight: 600; font-variant-numeric: tabular-nums; }
+.lic-historial li.anulada { opacity: .55; }
+.lic-mcp h4 { margin: 14px 0 8px; font-size: 14px; font-weight: 600; }
+.lic-mcp-url { display: grid; gap: 8px; }
+.lic-mcp-url code { padding: 10px 12px; border-radius: 10px; background: var(--bg-1); border: 1px solid var(--border); font-size: 12.5px; overflow-wrap: anywhere; user-select: all; }
+.lic-mcp-url small { color: var(--text-mut); font-size: 12px; }
+
+@keyframes lic-aparece { from { opacity: 0; } }
+@keyframes lic-sube { from { opacity: 0; transform: translateY(14px) scale(.98); } }
+@keyframes lic-gira { to { transform: rotate(360deg); } }
+@keyframes lic-vuelta { from { transform: rotate(-360deg) scale(.6); } }
+@keyframes lic-respira { 50% { opacity: .55; transform: scale(.92); } }
+@keyframes lic-chispa {
+  0% { opacity: 1; transform: rotate(var(--a)) translateY(0) scale(1); }
+  100% { opacity: 0; transform: rotate(var(--a)) translateY(-130px) scale(.4); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lic-velo, .lic-caja, .lic-timon img, .lic-halo, .lic-chispas i { animation: none !important; }
+}
+@media (max-width: 520px) {
+  .lic-caja { padding: 34px 18px 20px; border-radius: 20px; }
+  .lic-caja h2 { font-size: 22px; }
+  .lic-precio strong { font-size: 44px; }
+}

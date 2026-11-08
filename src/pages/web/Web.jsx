@@ -12,8 +12,9 @@
 // clientes (las del informe de la escena van marcadas como ejemplo).
 // Textos en español, inglés y alemán: textos.js.
 //
-// Los packs los decide el servidor (GET /api/creditos?action=packs). Si no
-// contesta, la sección de precios explica el modelo igual, sin las cifras.
+// Precio: una licencia anual por agencia (97 €, IVA incluido; api/licencia.js).
+// La IA la pone cada agencia (su clave de Claude o su cuenta por el conector):
+// HELM no cobra por uso.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
@@ -33,8 +34,6 @@ const SECCIONES = [
 // Las herramientas que el conector le da a Claude (api/mcp/[token].js → DEL_CLIENTE).
 const HERRAMIENTAS = ['perfiles', 'calendario', 'programar_guiones', 'corpus', 'identidades', 'metricas', 'ordenar_video', 'guardar_memoria']
 
-const LOCALE = { es: 'es-ES', en: 'en-GB', de: 'de-DE' }
-
 function Marca({ clase = '' }) {
   return (
     <span className={'hx-marca ' + clase}>
@@ -49,7 +48,6 @@ export default function Web() {
   const T = useMemo(() => traductor(lang), [lang])
   const TRef = useRef(T)
   TRef.current = T
-  const [precios, setPrecios] = useState(null)
   const [menu, setMenu] = useState(false)
   const escenaRef = useRef(null)
   const ref = {
@@ -57,7 +55,6 @@ export default function Web() {
     mascara: useRef(null), palabra: useRef(null), texto: useRef(null), intro: useRef(null),
     capitulos: useRef(null), canvas: useRef(null), etiquetas: useRef(null),
   }
-  const num = (v) => Number(v).toLocaleString(LOCALE[lang], { useGrouping: 'always' })
 
   // Idioma: título, <html lang> y la escena.
   useEffect(() => {
@@ -74,15 +71,6 @@ export default function Web() {
     u.searchParams.set('lang', l)
     window.history.replaceState(window.history.state, '', u.pathname + u.search + u.hash)
   }
-
-  useEffect(() => {
-    let vivo = true
-    fetch('/api/creditos?action=packs')
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (vivo && Array.isArray(d?.packs)) setPrecios(d) })
-      .catch(() => { /* sin cifras: la sección se pinta igual */ })
-    return () => { vivo = false }
-  }, [])
 
   // La historia y la escena 3D. Van por estilos y clases, fuera de React.
   useEffect(() => {
@@ -304,27 +292,19 @@ export default function Web() {
             <div className="hx-precio">
               <div className="hx-pieza hx-precio-reglas">
                 <dl>
-                  <div><dt>1 €</dt><dd>{T('precios.cien')}</dd></div>
-                  <div>
-                    <dt>{precios?.bienvenida ? num(precios.bienvenida) : T('precios.regalo')}</dt>
-                    <dd>{T('precios.bienvenida')}</dd>
-                  </div>
+                  <div><dt>12</dt><dd>{T('precios.meses')}</dd></div>
+                  <div><dt>0 €</dt><dd>{T('precios.uso')}</dd></div>
                 </dl>
                 <div className="hx-gasta">
-                  <div><b>{T('precios.gasta.t')}</b><span>{T('precios.gasta.p')}</span></div>
-                  <div><b>{T('precios.nogasta.t')}</b><span>{T('precios.nogasta.p')}</span></div>
+                  <div><b>{T('precios.incluye.t')}</b><span>{T('precios.incluye.p')}</span></div>
+                  <div><b>{T('precios.ia.t')}</b><span>{T('precios.ia.p')}</span></div>
                 </div>
               </div>
-              {precios?.packs?.length > 0 && (
-                <ul className="hx-packs" aria-label={T('precios.packs')}>
-                  {precios.packs.map(p => (
-                    <li key={p.id} className="hx-pieza">
-                      <span className="hx-pack-eur">{num(p.euros)} €</span>
-                      <span className="hx-pack-cr">{num(p.creditos)} {T('precios.creditos')}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <div className="hx-pieza hx-precio-cta">
+                <span className="hx-pack-eur">97 €</span>
+                <span className="hx-pack-cr">{T('precios.periodo')}</span>
+                <Link to="/registro" className="hx-btn">{T('fin.cta1')} <ArrowRight size={16} /></Link>
+              </div>
             </div>
           </div>
         </section>

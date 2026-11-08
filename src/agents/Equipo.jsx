@@ -296,7 +296,7 @@ function AgenteSheet({ sel, ahora, onLanzar, onCerrar }) {
 // parece roto.
 function Avisos({ fuentes }) {
   const avisos = [
-    !fuentes.claude && 'Falta la clave de Claude (AGENTS_ANTHROPIC_KEY): ningún agente puede correr.',
+    !fuentes.claude && 'Tu agencia no tiene clave de Claude: ningún agente puede correr. Ponla en Perfiles → Agencia → Clave de Claude.',
     !fuentes.instagram && 'Instagram no está conectado: el analista no tiene las métricas de los reels propios. Se conecta en Ajustes → Instagram.',
     !fuentes.creadores && 'Este perfil no tiene creadores de referencia asignados.',
   ].filter(Boolean)

@@ -19,6 +19,7 @@ import { timingSafeEqual, createHash } from 'node:crypto'
 import { supabase } from '../lib/supabase.js'
 import { rateLimit, getClientIp } from '../_lib/auth.js'
 import { anotar, contexto, enContexto } from '../_lib/contexto.js'
+import { agenciaDelPerfil, estadoAgencia, licenciaValida } from '../_lib/licencia.js'
 import { agenciaDe } from '../_lib/access.js'
 import { anadeReels, hashUrl, esEnlace } from '../agents.js'
 import { calendario, ordenar, enEntrada, carpetasDe, TIPOS, FASES } from '../_lib/ingesta.js'
@@ -929,8 +930,14 @@ async function alcanceDe(dado) {
     .select('client_id, agencia_id, clients(slug, name), agencias(nombre)').eq('token_hash', hash).maybeSingle()
   if (!data) return null
   supabase.from('agent_mcp_tokens').update({ ultimo_uso: new Date().toISOString() }).eq('token_hash', hash).then(() => {})
+  // Sin licencia válida la agencia no entra, tampoco por el conector.
+  const agenciaDelToken = data.agencia_id || (data.client_id ? await agenciaDelPerfil(data.client_id).catch(() => null) : null)
+  if (agenciaDelToken) {
+    const estado = await estadoAgencia(agenciaDelToken).catch(() => null)
+    if (estado?.existe && !licenciaValida(estado)) return { sinLicencia: true }
+  }
   if (data.clients) {
-    // Lo que HELM gaste en IA por este enlace se cobra a la agencia del perfil.
+    // Lo que HELM haga con Claude por este enlace va con la clave de la agencia del perfil.
     anotar({ clientId: data.client_id, origen: 'mcp' })
     return { clientId: data.client_id, slug: data.clients.slug, nombre: data.clients.name }
   }
@@ -1181,6 +1188,9 @@ export default async function handler(req, res) {
   if (!paso.ok) return res.status(429).setHeader('Retry-After', String(paso.retryAfter)).json({ error: 'Demasiadas peticiones' })
   const alcance = await alcanceDe(req.query?.token)
   if (!alcance) return res.status(404).json({ error: 'No encontrado' })
+  if (alcance.sinLicencia) {
+    return res.status(402).json({ error: 'La licencia de HELM de esta agencia no está activa. Renuévala en HELM (Perfiles → Agencia) y el conector vuelve a funcionar.' })
+  }
   // Sin sesiones ni avisos del servidor: no hay canal GET que abrir.
   if (req.method !== 'POST') return res.status(405).setHeader('Allow', 'POST').end()
 

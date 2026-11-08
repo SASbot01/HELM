@@ -20,19 +20,24 @@ import { llmChat, proveedorDe } from './_lib/llm.js'
 import { claudeTurno } from './_lib/anthropic.js'
 
 // Con qué modelo se contesta. Si el perfil tiene su propio Claude conectado
-// (Ajustes → IA), con ese. Si no, con la clave de Claude del servidor —la
-// misma que usa el worker de agentes— antes que con el modelo local: estos
-// rituales son para leerlos en el momento, y un 7B en CPU ni llega a tiempo ni
-// razona lo bastante para decir «por qué fallaría». El local queda de último
-// recurso.
+// (Ajustes → IA) o su agencia tiene clave de Claude, con ese (proveedorDe). Si
+// no, la agencia de la casa usa la clave de Claude del servidor —la misma que
+// usa el worker de agentes— antes que el modelo local: estos rituales son para
+// leerlos en el momento, y un 7B en CPU ni llega a tiempo ni razona lo bastante
+// para decir «por qué fallaría». El local queda de último recurso (y es lo que
+// usa una agencia sin clave: claudeTurno contesta 412 y se sigue con él).
 const CLAVE_SERVIDOR = process.env.AGENTS_ANTHROPIC_KEY || process.env.ANTHROPIC_API_KEY || ''
 const MODELO_SERVIDOR = process.env.HELM_DIA_MODEL || 'claude-sonnet-5'
 
 async function pregunta(clientId, opts) {
   const prov = await proveedorDe(clientId)
   if (prov.tipo !== 'claude' && CLAVE_SERVIDOR) {
-    const r = await claudeTurno({ ...opts, apiKey: CLAVE_SERVIDOR, model: MODELO_SERVIDOR })
-    if (r.content) return r.content
+    try {
+      const r = await claudeTurno({ ...opts, apiKey: CLAVE_SERVIDOR, model: MODELO_SERVIDOR })
+      if (r.content) return r.content
+    } catch (e) {
+      if (e?.codigo !== 'sin_clave_claude') throw e
+    }
   }
   return llmChat({ clientId, ...opts })
 }

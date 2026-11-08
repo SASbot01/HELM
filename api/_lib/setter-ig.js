@@ -22,7 +22,7 @@ import { supabase } from '../lib/supabase.js'
 import { enContexto } from './contexto.js'
 import { llmChatConHerramientas, proveedorDe } from './llm.js'
 import { claudeTurno } from './anthropic.js'
-import { claveHelm } from './creditos.js'
+import { claveHelm } from './licencia.js'
 import { notificar } from './notificar.js'
 import { pipelinesDe, pipelineDeContacto, resolverEtapa, normalizaEtapa } from './bot/comun.js'
 import { getToken, enviarDm, perfilDeRemitente } from './instagram.js'
@@ -426,9 +426,17 @@ export async function pensar({ clientId, cfg, mensajes, datos = {}, contactId = 
     temperature: 0.6,
   }
   const prov = await proveedorDe(clientId)
-  const r = prov.tipo === 'local' && claveHelm()
-    ? await claudeTurno({ ...peticion, apiKey: claveHelm(), model: MODELO_SETTER, esfuerzo: 'medium' })
-    : await llmChatConHerramientas(peticion)
+  // Sin Claude en el perfil ni en su agencia: la agencia de la casa sigue con
+  // la clave de HELM; otra sin clave (412), con el modelo local.
+  let r = null
+  if (prov.tipo === 'local' && claveHelm()) {
+    try {
+      r = await claudeTurno({ ...peticion, apiKey: claveHelm(), model: MODELO_SETTER, esfuerzo: 'medium' })
+    } catch (e) {
+      if (e?.codigo !== 'sin_clave_claude') throw e
+    }
+  }
+  if (!r) r = await llmChatConHerramientas(peticion)
   const args = r.toolCalls?.find(t => t.name === 'responder_dm')?.args
   // Si el modelo contesta en texto en vez de con la herramienta, se aprovecha
   // el texto como un único mensaje y se sigue.

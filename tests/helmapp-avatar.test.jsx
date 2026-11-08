@@ -35,7 +35,7 @@ vi.mock('../src/helm/permisos', async (original) => {
 })
 vi.mock('../src/helm/plugins/registry', () => ({ PLUGINS: [], PLUGIN_MAP: {} }))
 vi.mock('../src/helm/Lienzo', () => h.maniqui('Lienzo'))
-vi.mock('../src/helm/Creditos', () => ({ AvisoSinSaldo: () => null }))
+vi.mock('../src/helm/Licencia', () => ({ PuertaLicencia: () => null }))
 vi.mock('../src/helm/Guia', () => h.maniqui('Guia'))
 vi.mock('../src/helm/Perfiles', () => h.maniqui('Perfiles'))
 vi.mock('../src/helm/Notificaciones', () => h.maniqui('Notificaciones'))

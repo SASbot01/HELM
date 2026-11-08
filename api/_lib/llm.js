@@ -5,6 +5,8 @@
 //     127.0.0.1:11434 y el modelo corre en la GPU de la máquina.
 //   · Con clave de Anthropic en Ajustes → Claude, con la clave y el modelo de
 //     ESE perfil. HELM y consultoría no comparten clave, ni modelo, ni factura.
+//   · Sin clave en el perfil pero con la de su AGENCIA (Perfiles → Agencia, ver
+//     ./licencia.js) → Claude con la de la agencia.
 //
 // Quien llama no elige proveedor: pasa `clientId` y aquí se resuelve. Sin
 // `clientId` (health general, scripts) se usa el local.
@@ -17,7 +19,7 @@
 // Para cambiar de modelo local: `ollama pull <modelo>` y ajustar HELM_LLM_MODEL.
 import { supabase } from '../lib/supabase.js'
 import { claudeTurno, getIaConfig, verificarClave, MODELO_POR_DEFECTO, MODELOS_CLAUDE } from './anthropic.js'
-import { pagaConCreditos, claveHelm } from './creditos.js'
+import { iaDeAgencia } from './licencia.js'
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434'
 const MODEL = process.env.HELM_LLM_MODEL || 'qwen2.5:14b-instruct'
@@ -64,10 +66,11 @@ export async function proveedorDe(clientId) {
     const cfg = row?.config || {}
     if (row?.enabled && cfg.apiKey) {
       valor = { tipo: 'claude', apiKey: cfg.apiKey, model: cfg.model || MODELO_POR_DEFECTO }
-    } else if (await pagaConCreditos(clientId)) {
-      // Sin clave propia, el perfil de una agencia que paga con créditos usa
-      // la clave de HELM, y cada respuesta se le descuenta (./creditos.js).
-      valor = { tipo: 'claude', apiKey: claveHelm(), model: cfg.model || MODELO_POR_DEFECTO }
+    } else {
+      // Sin clave propia, la de su agencia (trae tu clave: Ajustes de la
+      // agencia, con licencia válida). Sin ninguna de las dos, el local.
+      const deAgencia = await iaDeAgencia(clientId)
+      if (deAgencia) valor = { tipo: 'claude', apiKey: deAgencia.apiKey, model: deAgencia.model || MODELO_POR_DEFECTO }
     }
   } catch {
     // Si Supabase no contesta, el perfil no se queda sin IA: sigue el local.

@@ -23,6 +23,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { supabase } from './lib/supabase.js'
 import { wrap } from './_lib/auth.js'
+import { hayClaude } from './_lib/licencia.js'
 import { puedeVerPerfil, perfilesVisibles } from './_lib/access.js'
 import { todasLasFilas } from './_lib/filas.js'
 import { esPropio } from './_lib/creadores.js'
@@ -630,7 +631,8 @@ async function handler(req, res) {
         piezas,
         tokensHoy: hoy,
         fuentes: {
-          claude: Boolean(process.env.AGENTS_ANTHROPIC_KEY || process.env.ANTHROPIC_API_KEY),
+          // Con la clave de Claude de su agencia (o la de HELM, en la casa).
+          claude: await hayClaude(clientId),
           instagram: Boolean(ig?.config?.token),
           creadores: creadores.count || 0,
         },

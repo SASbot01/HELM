@@ -188,7 +188,8 @@ vi.mock('../api/_lib/llm.js', () => ({ proveedorDe: () => 'claude' }))
 // ── El bucle de Claude: turnoAgente simulado, el resto el de verdad ────────
 const turnoAgente = vi.fn()
 vi.mock('../api/_lib/claude-agente.js', async (original) => ({ ...(await original()), turnoAgente: (...a) => turnoAgente(...a) }))
-vi.mock('../api/_lib/creditos.js', () => ({ claveHelm: () => 'clave-de-helm', exigirSaldo: async () => {}, cobrar: async () => {} }))
+// La clave de HELM tal cual (en producción, la de la agencia: claveParaLlamar).
+vi.mock('../api/_lib/licencia.js', async (original) => ({ ...(await original()), claveHelm: () => 'clave-de-helm', claveParaLlamar: async (k) => k }))
 
 const { default: handler } = await import('../api/telegram-agencia.js')
 const { signJwt } = await import('../api/_lib/auth.js')
@@ -271,6 +272,9 @@ beforeEach(() => {
     { id: AG.silvestre, nombre: 'Silvestre AI', slug: 'silvestreai' },
     { id: AG.pp, nombre: 'pp', slug: 'pp' },
   ]
+  // Con licencia en vigor: sin ella, el panel contesta 402 (api/_lib/licencia.js).
+  db.licenses = [AG.silvestre, AG.pp].map(agencia_id => ({ agencia_id, estado: 'activa', vence_at: new Date(Date.now() + 365 * 86_400_000).toISOString() }))
+  db.agencia_ia = []
   db.superadmins = [
     { id: SA.alex, name: 'Alex', email: 'alex@x.es', active: true, agencia_id: AG.silvestre, plataforma: true },
     { id: SA.otro, name: 'Otra', email: 'otra@x.es', active: true, agencia_id: AG.silvestre, plataforma: false },
@@ -490,7 +494,8 @@ describe('hablar con el bot', () => {
     const tg = nuevoTg()
     vincula(SA.alex, tg)
     const casos = [
-      [Object.assign(new Error('Te has quedado sin créditos.'), { statusCode: 402 }), 'sin créditos'],
+      [Object.assign(new Error('La licencia de la agencia no está activa.'), { statusCode: 402 }), 'licencia de HELM'],
+      [Object.assign(new Error('Tu agencia no tiene clave de Claude.'), { statusCode: 412 }), 'clave de Claude'],
       [Object.assign(new Error('Anthropic rechazó la petición: Your credit balance is too low to access the Anthropic API. req_011CXYZ'), { statusCode: 502 }), 'sin saldo'],
       [Object.assign(new Error('Claude se ha negado (refusal) en el paso 3'), { statusCode: 422 }), 'de otra forma'],
       [new Error('connect ECONNREFUSED 127.0.0.1:54321'), 'fallo por mi lado'],

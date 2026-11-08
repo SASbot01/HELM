@@ -280,8 +280,9 @@
 .hx-gasta div { display: flex; flex-direction: column; gap: 6px; padding-top: 14px; border-top: 1px solid var(--hx-linea); }
 .hx-gasta b { font-size: 15px; }
 .hx-gasta span { font-size: 14px; color: var(--hx-ink2); }
-.hx-packs { display: grid; gap: 12px; }
-.hx-packs li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 20px 22px; }
+.hx-precio-cta { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 30px; }
+.hx-precio-cta .hx-pack-eur { font-size: 72px; color: var(--hx-oro); }
+.hx-precio-cta .hx-btn { margin-top: 12px; }
 .hx-pack-eur { font: 900 38px/1 var(--hx-display); }
 .hx-pack-cr { font-size: 14px; color: var(--hx-oro); font-weight: 600; }
 

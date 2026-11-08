@@ -1,4 +1,9 @@
-// HELM — lo que cuesta cada trabajo de agente a precio fijo. Módulo puro (sin
+// HELM — lo que COSTABA cada trabajo de agente a precio fijo. Desde el
+// 7-nov-2026 HELM se paga con una licencia anual y ningún trabajo se cobra
+// (api/_lib/creditos.js contesta siempre «no paga»); esto se queda mientras el
+// Editor de reels, Portadas y Trial reels sigan teniendo el código del precio.
+//
+// Módulo puro (sin
 // React, sin navegador y sin Node): lo usan el servidor (api/_lib/creditos.js,
 // que lo reexporta, y los agentes que cobran) y la pantalla, para enseñar el
 // precio ANTES de lanzar con la misma cuenta con la que luego se cobra.

@@ -1136,11 +1136,7 @@ async function editor(ctx) {
   const enMarcha = cuenta(['subiendo', 'en_cola', 'transcribiendo', 'montando'])
   const errores = cuenta(['error'])
   await ctx.log('El Editor de reels está en Agentes → Editor de reels: subes el vídeo en bruto (y, si quieres, imágenes o clips de apoyo, tu logo y una música) y HELM devuelve el MP4 editado (sin tomas repetidas, muletillas ni silencios, 1080×1920 y con subtítulos).')
-  // El precio, de donde sale el cobro (si Alex lo cambia, esto no se queda viejo).
-  const { PRECIOS_FIJOS, CREDITOS_POR_EURO, BLOQUE_EDITOR_S } = await import('../../src/helm/precios.js')
-  const euros = PRECIOS_FIJOS['editor-reels']
-  const bloque = BLOQUE_EDITOR_S % 60 ? `${BLOQUE_EDITOR_S} segundos` : `${BLOQUE_EDITOR_S / 60} minutos`
-  await ctx.log(`Cuesta ${Math.round(euros * CREDITOS_POR_EURO)} créditos (${euros.toFixed(2).replace('.', ',')} €) por cada bloque de ${bloque} empezado del vídeo en bruto; se cobra solo si sale bien.`)
+  await ctx.log('Va incluido en la licencia de la agencia: no se cobra por vídeo.')
   await ctx.log(`Últimos 7 días en ${ctx.perfil?.name || 'este perfil'}: ${listos} listos, ${enMarcha} editándose, ${errores} con error.`)
   return `Editor de reels: ${listos} vídeos listos y ${enMarcha} en marcha esta semana. Se sube desde Agentes → Editor de reels.`
 }
@@ -1288,8 +1284,10 @@ export async function ejecutaAgente(job) {
     async log(texto) { pasos.push({ t: new Date().toISOString(), texto: String(texto).slice(0, 600) }); await guarda() },
     async pide({ system, user, herramienta, maxTokens, esfuerzo }) {
       await ctx.log(`Pregunto a ${modelo}…`)
+      // Con la clave de Claude de la agencia del perfil (claveParaLlamar, en
+      // api/_lib/licencia.js); la de la casa, con la de HELM.
       const r = await claudeTurno({
-        apiKey: CLAVE(), model: modelo, system, messages: [{ role: 'user', content: user }],
+        apiKey: CLAVE(), clientId, model: modelo, system, messages: [{ role: 'user', content: user }],
         maxTokens, tools: [herramienta], esfuerzo,
       })
       tokens.in += r.usage?.in || 0

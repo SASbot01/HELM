@@ -79,13 +79,10 @@ vi.mock('../api/_lib/anthropic.js', () => ({
   reparaArgs: (a) => a,
   modeloValido: (m) => ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5'].includes(m),
   MODELO_POR_DEFECTO: 'claude-opus-5',
-}))
-const cobro = vi.hoisted(() => ({ paga: true }))
-vi.mock('../api/_lib/creditos.js', () => ({
-  claveHelm: () => 'clave-de-helm',
   costeUsd: (_m, u) => ((u.input_tokens || 0) * 2 + (u.output_tokens || 0) * 10) / 1e6,
-  pagaConCreditos: async () => cobro.paga,
-  precioEuros: (usd) => usd * 0.92 * 2,
+}))
+vi.mock('../api/_lib/licencia.js', () => ({
+  claveHelm: () => 'clave-de-helm',
 }))
 // Instagram por dentro (api/_lib/instagram.js): la de verdad habla con Meta.
 // api/instagram.js (sincronizar, conectar) va de verdad, con esto debajo.
@@ -162,7 +159,6 @@ beforeEach(() => {
   }
   store.escrito = []
   store.falla = {}
-  cobro.paga = true
   ig.perfil = { username: 'silvesttre.ai', followers_count: 1560 }
   ig.falla = null
   claudePaso.mockReset()
@@ -451,31 +447,30 @@ describe('generaEstudio · validar lo que entrega', () => {
   })
 })
 
-describe('generaEstudio · cuando falla: mensaje para el usuario y si se cobró', () => {
-  it('sin saldo antes de empezar: lo dice, y que no se ha cobrado nada', async () => {
-    claudePaso.mockRejectedValueOnce(Object.assign(new Error('Te has quedado sin créditos. Recarga para que la IA siga trabajando.'), { statusCode: 402 }))
-    await expect(generaEstudio(pedidoDelPanel())).rejects.toThrow(/créditos/)
-    expect(filaEstudio()).toMatchObject({ estado: 'error', error: 'No quedan créditos para hacer el estudio. Recarga y vuelve a pedirlo. No se ha cobrado nada.' })
+describe('generaEstudio · cuando falla: mensaje para el usuario', () => {
+  it('sin clave de Claude en la agencia (412) o sin licencia (402): su mensaje, que dice qué hacer', async () => {
+    claudePaso.mockRejectedValueOnce(Object.assign(new Error('Tu agencia no tiene clave de Claude. Ponla en Perfiles → Agencia.'), { statusCode: 412, codigo: 'sin_clave_claude' }))
+    await expect(generaEstudio(pedidoDelPanel())).rejects.toThrow(/clave de Claude/)
+    expect(filaEstudio()).toMatchObject({ estado: 'error', error: 'Tu agencia no tiene clave de Claude. Ponla en Perfiles → Agencia.' })
     expect(store.tablas.agent_memory).toEqual([])
   })
 
-  it('si Claude lo rechaza DESPUÉS de cobrar, la fila guarda tokens y coste, y lo dice', async () => {
+  it('si Claude lo rechaza después de gastar, la fila guarda tokens y coste (lo de su cuenta de Claude)', async () => {
     claudePaso
       .mockResolvedValueOnce(respuesta(estudioBueno({ plan: [semana(1)] })))
       .mockRejectedValueOnce(Object.assign(new Error('Claude ha rechazado esta petición por sus filtros de seguridad. Reformúlala.'), { statusCode: 422, usage: { input_tokens: 1000, output_tokens: 1000 } }))
     await expect(generaEstudio(pedidoDelPanel())).rejects.toThrow(/rechazado/)
     const f = filaEstudio()
     expect(f).toMatchObject({ estado: 'error', tokens: 23_000, coste_usd: 0.102 })
-    expect(f.error).toBe('No se ha podido hacer el estudio. Vuelve a pedirlo en un rato. Se ha cobrado lo que llegó a usar la IA (0,19 €).')
+    expect(f.error).toBe('No se ha podido hacer el estudio. Vuelve a pedirlo en un rato.')
   })
 
-  it('a la agencia de la casa no se le cobra: lo gastado se apunta, pero el mensaje dice que nada', async () => {
-    cobro.paga = false
+  it('una respuesta que no vale: lo gastado se apunta y el mensaje no habla de cobros', async () => {
     claudePaso.mockResolvedValue(respuesta(estudioBueno({ objetivos: [{ nombre: 'x', metrica: 'felicidad', objetivo: 3 }] })))
     await expect(generaEstudio(pedidoDelPanel())).rejects.toThrow(/no ha devuelto un estudio válido/)
     const f = filaEstudio()
     expect(f).toMatchObject({ estado: 'error', tokens: 42_000 })
-    expect(f.error).toBe('La IA no ha devuelto un estudio que se pueda usar. Vuelve a pedirlo en un rato. No se ha cobrado nada.')
+    expect(f.error).toBe('La IA no ha devuelto un estudio que se pueda usar. Vuelve a pedirlo en un rato.')
     expect(f.datos.cuenta.piezas).toBe(20)
     expect(notificar).not.toHaveBeenCalled()
   })
@@ -486,7 +481,7 @@ describe('generaEstudio · cuando falla: mensaje para el usuario y si se cobró'
     await expect(generaEstudio(pedidoDelPanel())).rejects.toThrow()
     const f = filaEstudio()
     expect(f.estado).toBe('error')
-    expect(f.error).toBe('No se ha podido hacer el estudio. Vuelve a pedirlo en un rato. No se ha cobrado nada.')
+    expect(f.error).toBe('No se ha podido hacer el estudio. Vuelve a pedirlo en un rato.')
     expect(log.mock.calls.flat().join(' ')).toContain('helm_ig_media')
     log.mockRestore()
   })
@@ -494,7 +489,7 @@ describe('generaEstudio · cuando falla: mensaje para el usuario y si se cobró'
   it('sin piezas sincronizadas, o con todas de menos de 72 h, no se llama a Claude', async () => {
     store.tablas.helm_ig_media = []
     await expect(generaEstudio(pedidoDelPanel())).rejects.toThrow(/Sincroniza/)
-    expect(filaEstudio()).toMatchObject({ estado: 'error', error: expect.stringMatching(/Sincroniza la cuenta.*No se ha cobrado nada\.$/) })
+    expect(filaEstudio()).toMatchObject({ estado: 'error', error: expect.stringMatching(/Sincroniza la cuenta/) })
     store.tablas.helm_estudio_contenido = []
     store.tablas.helm_ig_media = piezas(3).map(p => ({ ...p, publicado_en: hace(DIA) }))
     await expect(generaEstudio(pedidoDelPanel())).rejects.toThrow(/72 horas/)

@@ -1,9 +1,9 @@
 // Trial reels: las reglas de las variantes (src/agents/trialreels/reglas.js),
 // los argumentos de ffmpeg (api/_lib/variantes.js, sin lanzar nada) y el
-// servidor (api/trial-reels.js) con Supabase, la IA e Instagram simulados. El
-// cobro va con el api/_lib/creditos.js de verdad sobre la base simulada
-// (mover_saldo incluido), y los vídeos subidos, con la subida por trozos de
-// verdad. Con ffmpeg instalado, también el montaje de principio a fin
+// servidor (api/trial-reels.js) con Supabase, la IA e Instagram simulados. Desde
+// la licencia anual no se cobra (creditos.js de verdad contesta «no paga»); los
+// vídeos subidos van con la subida por trozos de verdad. Con ffmpeg instalado,
+// también el montaje de principio a fin
 // (scripts/prueba-variantes.mjs lo prueba aparte).
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest'
 import fs from 'node:fs'
@@ -225,8 +225,8 @@ vi.mock('../api/_lib/variantes.js', async (original) => {
   return { ...o, encola: vi.fn(() => true), quitaDeCola: vi.fn(), procesaVariante: vi.fn(o.procesaVariante) }
 })
 
-const { default: trialReels, cobraVariante, nombreSeguro, mantenimiento } = await import('../api/trial-reels.js')
-const { apartadoDeAgencia, reservaTemporal, conCerrojoAgencia } = await import('../api/_lib/creditos.js')
+const { default: trialReels, nombreSeguro, mantenimiento } = await import('../api/trial-reels.js')
+const { conCerrojoAgencia } = await import('../api/_lib/creditos.js')
 const { puedeUsarAgentes, puedeVerSaldo } = await import('../api/_lib/access.js')
 const { llmChat } = await import('../api/_lib/llm.js')
 const { getMediaUrls } = await import('../api/_lib/instagram.js')
@@ -408,96 +408,9 @@ describe('api/trial-reels', () => {
   }, 60_000)
 })
 
-// ── Cobro: 0,30 € por variante, solo si sale bien ──────────────────────────
-describe('trial-reels · cobro', () => {
-  it('crear: sin saldo para todas, 402 con el precio en créditos y no se crea ninguna', async () => {
-    db.agencias[0].saldo = 0.5
-    const r = await llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}, {}] } })
-    expect(r.statusCode).toBe(402)
-    expect(r.body.error).toBe('No tienes saldo suficiente: esto cuesta 60 créditos y te quedan 50. Recarga en Créditos.')
-    expect(db.helm_trial_reels).toHaveLength(0)
-    expect(encola).not.toHaveBeenCalled()
-    // Con una sí llega, y la fila lleva su precio.
-    const una = await llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}] } })
-    expect(una.statusCode).toBe(200)
-    expect(db.helm_trial_reels[0]).toMatchObject({ precio_eur: 0.3, fuente_id: null, media_id: REEL })
-    expect(una.body.trabajos[0]).toMatchObject({ precio: 0.3, cobrado: null })
-    // Crear no cobra: se cobra al terminar.
-    expect(rpc).not.toHaveBeenCalled()
-  })
-
-  it('lo que la agencia ya tiene en cola sin cobrar (de cualquier perfil suyo) cuenta como apartado', async () => {
-    db.agencias[0].saldo = 1
-    const ahora = new Date().toISOString()
-    db.helm_trial_reels = [
-      { id: nuevoId(), client_id: HERMANO, estado: 'en_cola', precio_eur: 0.3, cobrado_eur: null, updated_at: ahora },
-      { id: nuevoId(), client_id: HERMANO, estado: 'procesando', precio_eur: 0.3, cobrado_eur: null, updated_at: ahora },
-      // Ya cobrada, colgada de un reinicio, terminada o de otra agencia: no cuentan.
-      { id: nuevoId(), client_id: PERFIL, estado: 'procesando', precio_eur: 0.3, cobrado_eur: 0.3, updated_at: ahora },
-      { id: nuevoId(), client_id: PERFIL, estado: 'procesando', precio_eur: 0.3, cobrado_eur: null, updated_at: new Date(Date.now() - 60 * 60_000).toISOString() },
-      { id: nuevoId(), client_id: PERFIL, estado: 'listo', precio_eur: 0.3, cobrado_eur: null, updated_at: ahora },
-      { id: nuevoId(), client_id: OTRO, estado: 'en_cola', precio_eur: 0.3, cobrado_eur: null, updated_at: ahora },
-    ]
-    // Lo cuenta apartadoDeAgencia (común a todos los agentes; antes, pendienteTrial).
-    expect(await apartadoDeAgencia(AGENCIA)).toBeCloseTo(0.6)
-    const r = await llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}, {}] } })
-    expect(r.statusCode).toBe(402)
-    expect(r.body.error).toMatch(/te quedan 40 \(otros 60 ya están apartados/)
-    expect((await llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}] } })).statusCode).toBe(200)
-  })
-
-  it('la agencia de la casa (sin_cobro) y un perfil sin agencia no pagan', async () => {
-    db.agencias[0] = { id: AGENCIA, saldo: 0, sin_cobro: true }
-    expect((await llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}, {}, {}] } })).statusCode).toBe(200)
-    const [f] = db.helm_trial_reels
-    expect(await cobraVariante({ id: f.id, clientId: PERFIL, precio: 0.3 })).toBe(0)
-    expect(f.cobrado_eur).toBe(0)
-    db.clients[0].agencia_id = null
-    expect((await llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}] } })).statusCode).toBe(200)
-    expect(rpc).not.toHaveBeenCalled()
-  })
-
-  it('cobraVariante: cobra una vez con su referencia, y un reintento apunta lo ya cobrado', async () => {
-    const f = { id: nuevoId(), client_id: PERFIL, estado: 'listo', precio_eur: 0.3, cobrado_eur: null }
-    db.helm_trial_reels = [f]
-    expect(await cobraVariante({ id: f.id, clientId: PERFIL, precio: 0.3 })).toBe(0.3)
-    expect(MOVIMIENTOS()).toEqual([expect.objectContaining({ importe: -0.3, modelo: 'trial-reel', origen: 'auto', referencia: `trial:${f.id}`, client_id: PERFIL })])
-    expect(db.agencias[0].saldo).toBe(9.7)
-    expect(f.cobrado_eur).toBe(0.3)
-    // El worker se cayó antes de apuntarlo: al repetir, no se cobra otra vez.
-    f.cobrado_eur = null
-    expect(await cobraVariante({ id: f.id, clientId: PERFIL, precio: 0.3 })).toBe(0.3)
-    expect(MOVIMIENTOS()).toHaveLength(1)
-    expect(db.agencias[0].saldo).toBe(9.7)
-    expect(f.cobrado_eur).toBe(0.3)
-    // Sin precio (las de antes del cobro), nada.
-    expect(await cobraVariante({ id: f.id, clientId: PERFIL, precio: null })).toBeNull()
-    // Si el apunte falla (la agencia paga y no consta el cobro), no lanza y se
-    // deja en null para que la lista lo vuelva a probar.
-    rpc.mockRejectedValueOnce(new Error('se fue la red'))
-    const g = { id: nuevoId(), client_id: PERFIL, estado: 'listo', precio_eur: 0.3, cobrado_eur: null }
-    db.helm_trial_reels.push(g)
-    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
-    expect(await cobraVariante({ id: g.id, clientId: PERFIL, precio: 0.3 })).toBeNull()
-    expect(g.cobrado_eur).toBeNull()
-    expect(MOVIMIENTOS()).toHaveLength(1)
-    log.mockRestore()
-  })
-
-  it('lista: lo que salió bien sin apuntar el cobro se vuelve a cobrar (una vez)', async () => {
-    const viejo = new Date(Date.now() - 5 * 60_000).toISOString()
-    const f = { id: nuevoId(), client_id: PERFIL, media_id: REEL, variante: 1, estado: 'listo', precio_eur: 0.3, cobrado_eur: null, created_at: viejo, updated_at: viejo }
-    db.helm_trial_reels = [f]
-    await llama({ action: 'lista' })
-    await vi.waitFor(() => expect(f.cobrado_eur).toBe(0.3))
-    await llama({ action: 'lista' })
-    expect(MOVIMIENTOS()).toHaveLength(1)
-  })
-})
-
 // ── Vídeos subidos ─────────────────────────────────────────────────────────
 describe('trial-reels · subir un vídeo propio', () => {
-  it('fuente: comprueba peso, tipo y duración; sin saldo ni para una variante, 402', async () => {
+  it('fuente: comprueba peso, tipo y duración', async () => {
     const casos = [
       [{ nombre: 'a.mp4', bytes: 0, tipo: 'video/mp4' }, 400],
       [{ nombre: 'a.mp4', bytes: 201 * 1024 * 1024, tipo: 'video/mp4' }, 413],
@@ -507,10 +420,6 @@ describe('trial-reels · subir un vídeo propio', () => {
       [{ nombre: 'a.mp4', bytes: 1000, tipo: 'video/mp4', duracion: -1 }, 400],
     ]
     for (const [body, code] of casos) expect((await llama({ method: 'POST', action: 'fuente', body })).statusCode, JSON.stringify(body)).toBe(code)
-    expect(db.helm_trial_fuentes).toHaveLength(0)
-    db.agencias[0].saldo = 0.2
-    const r = await llama({ method: 'POST', action: 'fuente', body: { nombre: 'a.mp4', bytes: 1000, tipo: 'video/mp4' } })
-    expect(r.statusCode).toBe(402)
     expect(db.helm_trial_fuentes).toHaveLength(0)
   })
 
@@ -592,9 +501,9 @@ describe('trial-reels · subir un vídeo propio', () => {
   })
 
   // De principio a fin con ffmpeg de verdad: se sube un MP4 en dos trozos,
-  // queda «lista», se crea una variante, se monta, se cobra una vez y el vídeo
-  // subido se queda (para sacar más). La que falla no se cobra.
-  it.skipIf(!hayFfmpeg)('sube, sondea, monta desde el vídeo subido y cobra solo lo que sale bien', async () => {
+  // queda «lista», se crea una variante, se monta (cobrado 0: ya no se cobra) y
+  // el vídeo subido se queda (para sacar más). La que falla, error.
+  it.skipIf(!hayFfmpeg)('sube, sondea y monta desde el vídeo subido (lo que sale bien, con cobrado 0)', async () => {
     const muestra = path.join(DATOS, 'subido.mp4')
     const gen = spawnSync(process.env.HELM_FFMPEG || 'ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=360x640:rate=25:duration=4',
       '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=44100:duration=4', '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-shortest', muestra])
@@ -616,20 +525,18 @@ describe('trial-reels · subir un vídeo propio', () => {
     expect(r.statusCode).toBe(200)
     await encola.mock.calls[0][0].ejecuta()
     const fila = db.helm_trial_reels[0]
-    expect(fila).toMatchObject({ estado: 'listo', cobrado_eur: 0.3 })
-    expect(MOVIMIENTOS()).toEqual([expect.objectContaining({ importe: -0.3, modelo: 'trial-reel', referencia: `trial:${fila.id}` })])
+    expect(fila).toMatchObject({ estado: 'listo', cobrado_eur: 0 })
     expect(fs.existsSync(rutaFuenteSubida(PERFIL, fuenteId))).toBe(true)
     // El vídeo subido se puede volver a ver (vista previa) y descargar la variante.
     expect((await llama({ action: 'fuente-video', query: { id: fuenteId } })).descargado.equals(bytes)).toBe(true)
 
-    // Una que falla (el vídeo ya no está) no se cobra.
+    // Una que falla (el vídeo ya no está).
     await llama({ method: 'POST', action: 'crear', body: { fuenteId, variantes: [{}] } })
     fs.rmSync(rutaFuenteSubida(PERFIL, fuenteId))
     await encola.mock.calls[1][0].ejecuta()
     expect(db.helm_trial_reels[1].estado).toBe('error')
     expect(db.helm_trial_reels[1].cobrado_eur).toBeUndefined()
     expect(db.helm_trial_reels[1].error).toMatch(/ya no está/)
-    expect(MOVIMIENTOS()).toHaveLength(1)
   }, 60_000)
 
   it.skipIf(!hayFfmpeg)('un archivo con cabecera de MP4 que ffprobe no lee: error y fuera del disco', async () => {
@@ -729,7 +636,7 @@ describe('trial-reels · tope de lo guardado por perfil', () => {
   })
 })
 
-describe('trial-reels · cobro seguro', () => {
+describe('trial-reels · lo que se apunta al terminar', () => {
   /** Una variante en cola desde un vídeo subido (en disco), con el montaje simulado. */
   async function enCola() {
     const f = { id: nuevoId(), client_id: PERFIL, nombre: 'a.mp4', bytes: 10, estado: 'lista', created_at: new Date().toISOString() }
@@ -742,66 +649,31 @@ describe('trial-reels · cobro seguro', () => {
     return { trabajo: encola.mock.calls.at(-1)[0], id: r.body.ids[0] }
   }
 
-  it('si la base no apunta «listo», la variante no se cobra ni se queda en el disco', async () => {
+  it('si la base no apunta «listo», la variante pasa a error y no se queda en el disco', async () => {
     const { trabajo, id } = await enCola()
     fallos.update = (tabla, cambios) => tabla === 'helm_trial_reels' && cambios.estado === 'listo'
     const log = vi.spyOn(console, 'error').mockImplementation(() => {})
     await trabajo.ejecuta()
     log.mockRestore()
     expect(db.helm_trial_reels[0]).toMatchObject({ id, estado: 'error' })
-    expect(db.helm_trial_reels[0].cobrado_eur).toBeUndefined()
-    expect(MOVIMIENTOS()).toHaveLength(0)
     expect(fs.existsSync(rutaSalida(id))).toBe(false)
   })
 
-  it('y si la apunta, se cobra una vez', async () => {
+  it('y si la apunta, queda «listo» (con cobrado 0: ya no se cobra)', async () => {
     const { trabajo, id } = await enCola()
     await trabajo.ejecuta()
-    expect(db.helm_trial_reels[0]).toMatchObject({ id, estado: 'listo', cobrado_eur: 0.3 })
-    expect(MOVIMIENTOS()).toEqual([expect.objectContaining({ importe: -0.3, referencia: `trial:${id}` })])
+    expect(db.helm_trial_reels[0]).toMatchObject({ id, estado: 'listo', cobrado_eur: 0 })
   })
 
-  it('dos «crear» a la vez con saldo para uno: pasa uno y el otro da 402', async () => {
-    db.agencias[0].saldo = 0.3
-    const [a, b] = await Promise.all([
-      llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}] } }),
-      llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}] } }),
-    ])
-    expect([a.statusCode, b.statusCode].sort()).toEqual([200, 402])
-    expect(db.helm_trial_reels).toHaveLength(1)
-    // Y también entre perfiles de la misma agencia.
-    db.helm_ig_media.push({ client_id: HERMANO, media_id: '17900000000000003', tipo: 'VIDEO', producto: 'REELS' })
-    db.agencias[0].saldo = 0.6
-    const [c, d] = await Promise.all([
-      llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}] } }),
-      llama({ method: 'POST', action: 'crear', query: { clientId: HERMANO }, body: { mediaId: '17900000000000003', variantes: [{}] } }),
-    ])
-    expect([c.statusCode, d.statusCode].sort()).toEqual([200, 402])
-  })
-
-  it('mantenimiento: cobra lo que salió bien sin apuntarlo (una vez) y limpia lo de más de 7 días', async () => {
-    const viejo = new Date(Date.now() - 5 * 60_000).toISOString()
-    const fila = (extra) => ({ id: nuevoId(), client_id: PERFIL, estado: 'listo', precio_eur: 0.3, cobrado_eur: null, created_at: viejo, updated_at: viejo, ...extra })
-    const pendiente = fila()
-    const hermana = fila({ client_id: HERMANO })
-    const reciente = fila({ updated_at: new Date().toISOString() })
-    const antigua = fila({ precio_eur: null })
-    const cobrada = fila({ cobrado_eur: 0.3 })
-    const fallida = fila({ estado: 'error' })
-    db.helm_trial_reels = [pendiente, hermana, reciente, antigua, cobrada, fallida]
+  it('mantenimiento: limpia lo de más de 7 días', async () => {
     const caducado = rutaFuenteSubida(PERFIL, nuevoId())
     fs.mkdirSync(path.dirname(caducado), { recursive: true })
     fs.writeFileSync(caducado, 'mp4')
     const hace8 = new Date(Date.now() - 8 * 86_400_000)
     fs.utimesSync(caducado, hace8, hace8)
 
-    expect(await mantenimiento()).toBe(2)
-    expect(MOVIMIENTOS().map(m => m.referencia).sort()).toEqual([`trial:${hermana.id}`, `trial:${pendiente.id}`].sort())
-    expect([pendiente.cobrado_eur, hermana.cobrado_eur, reciente.cobrado_eur, antigua.cobrado_eur, fallida.cobrado_eur]).toEqual([0.3, 0.3, null, null, null])
+    await mantenimiento()
     expect(fs.existsSync(caducado)).toBe(false)
-    // Otra vuelta no cobra nada más.
-    expect(await mantenimiento()).toBe(0)
-    expect(MOVIMIENTOS()).toHaveLength(2)
   })
 })
 
@@ -895,32 +767,7 @@ describe('trial-reels · quién puede gastar', () => {
   })
 })
 
-describe('trial-reels · lo apartado es común a todos los agentes', () => {
-  it('un vídeo del Editor en cola ya tiene apartado el saldo: no hay para variantes', async () => {
-    db.agencias[0].saldo = 1.5
-    // De otro perfil de la agencia, subiéndose hace un momento y sin cobrar.
-    db.helm_ediciones = [{ id: nuevoId(), client_id: HERMANO, estado: 'en_cola', precio_eur: 1.5, cobrado_eur: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }]
-    const r = await llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}] } })
-    expect(r.statusCode).toBe(402)
-    expect(r.body.error).toMatch(/te quedan 0 \(otros 150 ya están apartados/)
-    expect(db.helm_trial_reels).toHaveLength(0)
-    // Ni para empezar a subir un vídeo.
-    expect((await llama({ method: 'POST', action: 'fuente', body: { nombre: 'a.mp4', bytes: 1000, tipo: 'video/mp4' } })).statusCode).toBe(402)
-    // Cobrado el vídeo, ya no está apartado.
-    db.helm_ediciones[0].cobrado_eur = 1.5
-    db.agencias[0].saldo = 0.3
-    expect((await llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}] } })).statusCode).toBe(200)
-  })
-
-  it('una portada generándose (reservaTemporal) también cuenta', async () => {
-    db.agencias[0].saldo = 0.5
-    const liberar = reservaTemporal(AGENCIA, 0.4)
-    try {
-      expect((await llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}] } })).statusCode).toBe(402)
-    } finally { liberar() }
-    expect((await llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}] } })).statusCode).toBe(200)
-  })
-
+describe('trial-reels · el cerrojo común de la agencia', () => {
   it('crear espera al cerrojo COMÚN de la agencia (el que usan Portadas y el Editor)', async () => {
     let suelta
     const otroAgente = conCerrojoAgencia(AGENCIA, () => new Promise(ok => { suelta = ok }))
@@ -933,22 +780,10 @@ describe('trial-reels · lo apartado es común a todos los agentes', () => {
     expect((await crear).statusCode).toBe(200)
     expect(db.helm_trial_reels).toHaveLength(1)
   })
-
-  it('el 402 lleva cifras solo para quien puede ver el saldo', async () => {
-    db.agencias[0].saldo = 0.5
-    puedeVerSaldo.mockResolvedValue(false)
-    const r = await llama({ method: 'POST', action: 'crear', body: { mediaId: REEL, variantes: [{}, {}] } })
-    expect(r.statusCode).toBe(402)
-    expect(r.body.error).toBe('La agencia no tiene créditos suficientes para esto (cuesta 60 créditos). Pide a quien administra la agencia que recargue.')
-    db.agencias[0].saldo = 0.2
-    const f = await llama({ method: 'POST', action: 'fuente', body: { nombre: 'a.mp4', bytes: 1000, tipo: 'video/mp4' } })
-    expect(f.statusCode).toBe(402)
-    expect(f.body.error).not.toMatch(/te quedan|20/)
-  })
 })
 
 describe('trial-reels · borrada mientras se montaba', () => {
-  it('no se cobra, no se queda el MP4 y la fila no vuelve', async () => {
+  it('no se queda el MP4 y la fila no vuelve', async () => {
     const fuente = { id: nuevoId(), client_id: PERFIL, nombre: 'a.mp4', bytes: 10, estado: 'lista', created_at: new Date().toISOString() }
     db.helm_trial_fuentes = [fuente]
     fs.mkdirSync(path.dirname(rutaFuenteSubida(PERFIL, fuente.id)), { recursive: true })
@@ -966,7 +801,6 @@ describe('trial-reels · borrada mientras se montaba', () => {
     await encola.mock.calls.at(-1)[0].ejecuta()
     log.mockRestore()
     expect(db.helm_trial_reels).toHaveLength(0)
-    expect(MOVIMIENTOS()).toHaveLength(0)
     expect(fs.existsSync(rutaSalida(id))).toBe(false)
     // El vídeo subido sigue (es del usuario, para sacar más variantes).
     expect(fs.existsSync(rutaFuenteSubida(PERFIL, fuente.id))).toBe(true)

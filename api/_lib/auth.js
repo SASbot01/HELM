@@ -11,6 +11,7 @@
 
 import { supabase } from '../lib/supabase.js'
 import { anotar } from './contexto.js'
+import { exigirLicencia } from './licencia.js'
 
 const JWT_SECRET = process.env.JWT_SECRET || ''
 
@@ -113,11 +114,15 @@ export function olvidarAcceso(sub) {
   else accesosVistos.clear()
 }
 
-export async function validateAuth(req, { required = true } = {}) {
+// `licencia: false` deja pasar a una agencia sin licencia válida: solo para lo
+// que necesita para pagarla (api/licencia.js). Por defecto, sin licencia
+// pagada y sin caducar, 402 con `codigo: 'licencia'` (ver ./licencia.js).
+export async function validateAuth(req, { required = true, licencia = true } = {}) {
   const header = req.headers?.authorization || req.headers?.Authorization || ''
   const token = header.startsWith('Bearer ') ? header.slice(7) : ''
 
   if (token) {
+    let auth = null
     try {
       const payload = await verifyJwt(token)
 
@@ -157,7 +162,7 @@ export async function validateAuth(req, { required = true } = {}) {
         cuenta = { ...cuenta, nivel: acceso.nivel }
       }
 
-      const auth = {
+      auth = {
         userId: payload.sub || payload.userId || null,
         clientId: payload.clientId || null,
         clientSlug: payload.clientSlug || null,
@@ -169,16 +174,21 @@ export async function validateAuth(req, { required = true } = {}) {
         // Nivel del acceso de equipo, leído de `team` (no del navegador).
         nivel: cuenta.nivel || null,
       }
-      // Para el cobro de créditos (ver ./creditos.js): a quién se le apunta lo
-      // que gaste esta petición.
+      // De quién es esta petición: con su clave de Claude trabajan los agentes
+      // (ver claveParaLlamar en ./licencia.js).
       anotar({ agenciaId: auth.agenciaId, clientId: auth.clientId })
-      return auth
     } catch (err) {
       if (required) {
         const e = new Error('Unauthorized: ' + err.message)
         e.statusCode = 401
         throw e
       }
+    }
+    if (auth) {
+      // Fuera del try: el 402 de la licencia no es una sesión caducada (un 401
+      // haría que el panel cerrara la sesión).
+      if (licencia) await exigirLicencia(auth)
+      return auth
     }
   }
 
@@ -199,8 +209,8 @@ export async function validateAuth(req, { required = true } = {}) {
   }
 }
 
-export async function requireSuperAdmin(req) {
-  const auth = await validateAuth(req, { required: true })
+export async function requireSuperAdmin(req, { licencia = true } = {}) {
+  const auth = await validateAuth(req, { required: true, licencia })
   if (!auth.superadmin && auth.role !== 'superadmin') {
     const e = new Error('Forbidden: superadmin required')
     e.statusCode = 403

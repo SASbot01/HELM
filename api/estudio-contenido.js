@@ -13,12 +13,12 @@
 // el Informe de contenido (puedeVerMetricas, abajo).
 //
 // Los errores van como { error, codigo }: 'sin_instagram' (400), 'en_curso'
-// (409), 'tope_diario' (429) y 'sin_saldo' (402). Un fallo interno no se
+// (409), 'tope_diario' (429), 'licencia' (402) y 'sin_clave_claude' (412). Un fallo interno no se
 // enseña: el detalle va al log y al usuario le llega un mensaje genérico.
 import { supabase } from './lib/supabase.js'
 import { applyCors } from './_lib/auth.js'
 import { requireProfileAccess } from './_lib/access.js'
-import { exigirSaldo, pagaConCreditos, precioEuros, costeUsd } from './_lib/creditos.js'
+import { exigirClaveClaude } from './_lib/licencia.js'
 import { getIgConfig } from './_lib/instagram.js'
 import { encolaEstudio, modeloEstudio, TIPO } from './_lib/estudio-contenido/generar.js'
 import { ALGORITMO_RESUMEN } from './_lib/estudio-contenido/conocimiento.js'
@@ -151,11 +151,6 @@ async function pedidosHoy(clientId) {
   return (data || []).filter(j => j.payload?.origen !== 'auto').length
 }
 
-// Lo que suele gastar un estudio (unos 20.000 tokens de entrada, con la
-// doctrina, y 8.000 de salida con el pensamiento), al precio de los créditos.
-const costeAprox = () =>
-  Math.round(precioEuros(costeUsd(modeloEstudio(), { input_tokens: 20_000, output_tokens: 8_000 })) * 100) / 100
-
 const fuera = (status, message, codigo) => Object.assign(new Error(message), { statusCode: status, ...(codigo ? { codigo } : {}) })
 const GENERICO = 'No se ha podido completar ahora mismo. Vuelve a intentarlo en un rato.'
 
@@ -175,13 +170,12 @@ export default async function handler(req, res) {
       // Primero si hay uno en marcha: de paso cierra los colgados, que así
       // salen ya como error en el historial.
       const marcha = await enCurso(clientId)
-      const [listo, historial, ig, paga] = await Promise.all([
+      const [listo, historial, ig] = await Promise.all([
         supabase.from(TABLA).select(CAMPOS_ESTUDIO)
           .eq('client_id', clientId).eq('estado', 'listo').order('generado_en', { ascending: false }).limit(1),
         supabase.from(TABLA).select('id, generado_en, estado, error')
           .eq('client_id', clientId).order('generado_en', { ascending: false }).limit(HISTORIAL),
         conectado(clientId),
-        pagaConCreditos(clientId),
       ])
       if (listo.error) throw listo.error
       if (historial.error) throw historial.error
@@ -194,8 +188,9 @@ export default async function handler(req, res) {
         estudio,
         historial: (historial.data || []).map(({ id, generado_en, estado }) => ({ id, generado_en, estado })),
         en_curso: marcha,
-        // A una agencia que no paga (la de la casa) no le cuesta nada.
-        coste_aprox_eur: paga ? costeAprox() : 0,
+        // HELM ya no cobra por uso (licencia anual): lo gasta la cuenta de
+        // Claude de la agencia. Se queda en 0 para las pantallas de antes.
+        coste_aprox_eur: 0,
         conectado: ig,
         algoritmo: ALGORITMO_RESUMEN,
         ultimo_error: ultimo?.estado === 'error'
@@ -226,9 +221,9 @@ export default async function handler(req, res) {
       if ((await pedidosHoy(clientId)) >= MAX_AL_DIA) {
         throw fuera(429, `Ya se han pedido ${MAX_AL_DIA} estudios hoy para este perfil. Mañana puedes pedir otro.`, 'tope_diario')
       }
-      // Sin saldo no se encola: el worker no llegaría a llamar a Claude y el
-      // estudio saldría en error. La agencia de la casa (sin_cobro) no paga.
-      if (await pagaConCreditos(clientId)) await exigirSaldo()
+      // Sin clave de Claude en la agencia no se encola: el worker no podría
+      // llamar a Claude y el estudio saldría en error (412 con qué hacer).
+      await exigirClaveClaude()
 
       // La fila se abre AQUÍ y el worker rellena esa. Con dos clics seguidos,
       // los dos pasan las comprobaciones de arriba, pero el índice único de
@@ -242,7 +237,7 @@ export default async function handler(req, res) {
         await encolaEstudio(clientId, { origen: 'panel', estudioId: fila.id })
       } catch (e) {
         // Sin trabajo en la cola, esa fila no la va a rellenar nadie.
-        await supabase.from(TABLA).update({ estado: 'error', error: 'No se ha podido poner en marcha el estudio. Vuelve a pedirlo. No se ha cobrado nada.' }).eq('id', fila.id)
+        await supabase.from(TABLA).update({ estado: 'error', error: 'No se ha podido poner en marcha el estudio. Vuelve a pedirlo.' }).eq('id', fila.id)
         throw e
       }
       return res.status(200).json({ encolado: true, id: fila.id })
@@ -255,8 +250,8 @@ export default async function handler(req, res) {
       console.error('[estudio-contenido]', e?.message || e)
       return res.status(500).json({ error: GENERICO })
     }
-    // El 402 lo lanza exigirSaldo (creditos.js), que no sabe de códigos.
-    const codigo = e.codigo || (code === 402 ? 'sin_saldo' : null)
+    // El 402 (sin licencia) y el 412 (sin clave de Claude) llevan su código.
+    const codigo = e.codigo || null
     return res.status(code).json({ error: e.message, ...(codigo ? { codigo } : {}) })
   }
 }

@@ -36,7 +36,7 @@ import Ajustes from './views/Ajustes'
 import { PLUGINS, PLUGIN_MAP } from './plugins/registry'
 import { loadPermisos, puedeVer, accesoTotal, DEFAULT_VISIBLE, loadSecciones, saveSecciones, seccionEncendida, esOptIn } from './permisos'
 import { useHelmTheme, acentoDe } from './theme'
-import { AvisoSinSaldo } from './Creditos'
+import { PuertaLicencia } from './Licencia'
 import './theme.css'
 
 // Secciones privadas: solo las ve el perfil cuyo slug se indica.
@@ -434,7 +434,7 @@ export default function HelmApp() {
   // negocio no la haya apagado y que el rol la tenga en Permisos (quien manda
   // en todo la ve siempre, ver puedeVer). Ver el Informe no basta: al rol que
   // se ha quedado sin nada se le deja el Informe de comodín (arriba), y eso no
-  // puede abrirle de paso un estudio que gasta créditos y retrata a los clientes.
+  // puede abrirle de paso un estudio que gasta IA y retrata a los clientes.
   const verAvatar = puede('avatar')
 
   // Ajustes se pinta abajo, junto a la cuenta, pero sigue estando en `coreNav`
@@ -476,7 +476,8 @@ export default function HelmApp() {
     // prevista: cada perfil trae el suyo.
     <div className="helm" data-theme={theme} data-tono={eligiendo ? 'oro' : tono} style={acentoDe(marca.color) || undefined}>
       <Lienzo vista={view} />
-      <AvisoSinSaldo />
+      {/* Sin licencia válida, tapa el panel con el pago (o a quién avisar). */}
+      <PuertaLicencia onSalir={logout} />
       {eligiendo ? (
         <Perfiles
           clients={clients} loading={loadingClients}

@@ -2,7 +2,7 @@
 // Trial reels en pantalla (src/agents/TrialReels.jsx) con la API simulada:
 // «Subir un vídeo» abre el taller sin reel de Instagram, sube el archivo por
 // trozos (subePorTrozos simulado) con su barra, no deja crear hasta que ha
-// llegado entero, enseña el precio en el botón y crea con { fuenteId }. Los
+// llegado entero (sin precio en el botón: licencia anual) y crea con { fuenteId }. Los
 // ganchos van a mano; «Proponer ganchos» solo si cuentas de qué va el vídeo.
 // Y el ciclo de vida de la subida: «Reintentar» sigue la misma (mismo id,
 // desde lo que tiene el servidor), cancelar o salir quitan lo que no llegó y
@@ -12,7 +12,6 @@
 // con ~/code/HELM. jsdom no pinta canvas ni lee vídeos: se simulan lo justo.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
-import { PRECIOS_FIJOS } from '../src/helm/precios.js'
 
 const FUENTE = 'f0000000-0000-4000-8000-000000000001'
 const h = vi.hoisted(() => ({ precios: null, terminaSubida: null, fuentes: [] }))
@@ -53,7 +52,8 @@ const ctx = new Proxy({}, {
 const crearElemento = document.createElement.bind(document)
 
 beforeEach(() => {
-  h.precios = { paga: true, saldo: 5, precios: PRECIOS_FIJOS }
+  // Lo que contesta siempre creditosApi.precios desde la licencia anual.
+  h.precios = { paga: false, saldo: null, precios: {} }
   h.fuentes = []
   h.terminaSubida = null
   vi.clearAllMocks()
@@ -97,7 +97,7 @@ describe('Trial reels · subir un vídeo', () => {
     await waitFor(() => expect(subePorTrozos).toHaveBeenCalledTimes(1))
     expect(subePorTrozos.mock.calls[0][0]).toMatchObject({ url: `/api/trial-reels?action=trozo&clientId=perfil-1&id=${FUENTE}`, archivo })
     expect(await screen.findByText('Subiendo… 50 %')).toBeTruthy()
-    const crear = screen.getByRole('button', { name: /Crear 3 variantes · 90 créditos/ })
+    const crear = screen.getByRole('button', { name: /^Crear 3 variantes$/ })
     expect(crear.disabled).toBe(true)
     // Se ve desde el archivo local mientras sube.
     expect(container.querySelector('video.tr-oculto').getAttribute('src')).toBe('blob:local/subida')
@@ -105,11 +105,10 @@ describe('Trial reels · subir un vídeo', () => {
     h.terminaSubida()
     expect(await screen.findByText(/Subido\. Ya puedes crear/)).toBeTruthy()
     await waitFor(() => expect(screen.getByRole('button', { name: /Crear 3 variantes/ }).disabled).toBe(false))
-    expect(screen.getByText(/Cada variante se cobra solo si sale bien/)).toBeTruthy()
 
-    // Una menos, y el precio baja.
+    // Una menos.
     fireEvent.click(screen.getAllByRole('checkbox', { name: /Crearla/ })[2])
-    fireEvent.click(screen.getByRole('button', { name: /Crear 2 variantes · 60 créditos/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Crear 2 variantes$/ }))
     await waitFor(() => expect(trialReelsApi.crear).toHaveBeenCalledTimes(1))
     const [clientId, origen, variantes] = trialReelsApi.crear.mock.calls[0]
     expect(clientId).toBe('perfil-1')
@@ -144,27 +143,14 @@ describe('Trial reels · subir un vídeo', () => {
     expect(subePorTrozos).not.toHaveBeenCalled()
   })
 
-  it('los vídeos subidos antes salen en la lista y abren el taller (gratis si el perfil no paga)', async () => {
-    h.precios = { paga: false, saldo: null, precios: PRECIOS_FIJOS }
+  it('los vídeos subidos antes salen en la lista y abren el taller (sin precio en el botón)', async () => {
     h.fuentes = [{ id: FUENTE, nombre: 'de-ayer.mp4', estado: 'lista', disponible: true, duracion: 30, bytes: 1048576, creado: '2026-10-26T10:00:00Z' }]
     abre()
     fireEvent.click(await screen.findByRole('button', { name: /Crear variantes/ }))
     expect(await screen.findByText('Tu vídeo: de-ayer.mp4')).toBeTruthy()
     await waitFor(() => expect(trialReelsApi.videoFuente).toHaveBeenCalledWith('perfil-1', FUENTE))
-    expect(await screen.findByRole('button', { name: /Crear 3 variantes · gratis$/ })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: /^Crear 3 variantes$/ })).toBeTruthy()
     expect(screen.queryByText(/Cada variante se cobra/)).toBeNull()
-  })
-})
-
-describe('Trial reels · precio sin ver el saldo', () => {
-  it('quien no administra la agencia (saldo null) ve el precio y que solo se cobra si sale bien, nunca lo que queda', async () => {
-    h.precios = { paga: true, saldo: null, alcanza: { 'editor-reels': true, 'portada-ia': true, 'trial-reel': true }, precios: PRECIOS_FIJOS }
-    h.fuentes = [{ id: FUENTE, nombre: 'de-ayer.mp4', estado: 'lista', disponible: true, duracion: 30, bytes: 1048576, creado: '2026-10-26T10:00:00Z' }]
-    abre()
-    fireEvent.click(await screen.findByRole('button', { name: /Crear variantes/ }))
-    expect(await screen.findByRole('button', { name: /Crear 3 variantes · 90 créditos$/ })).toBeTruthy()
-    expect(screen.getByText(/Cada variante se cobra solo si sale bien/)).toBeTruthy()
-    expect(screen.queryByText(/te quedan|saldo/i)).toBeNull()
   })
 })
 

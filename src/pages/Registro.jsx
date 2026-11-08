@@ -12,7 +12,7 @@ const ERRORES = {
 }
 
 export default function Registro() {
-  const [form, setForm] = useState({ licencia: '', agencia: '', name: '', email: '', password: '' })
+  const [form, setForm] = useState({ agencia: '', name: '', email: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
@@ -21,7 +21,7 @@ export default function Registro() {
   async function submit(e) {
     e.preventDefault()
     setError('')
-    if (!form.licencia.trim() || !form.agencia.trim() || !form.name.trim() || !form.email.trim() || !form.password) {
+    if (!form.agencia.trim() || !form.name.trim() || !form.email.trim() || !form.password) {
       return setError('Completa todos los campos')
     }
     if (form.password.length < 8) return setError('La contraseña debe tener al menos 8 caracteres')
@@ -31,7 +31,7 @@ export default function Registro() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          licencia: form.licencia.trim(), agencia: form.agencia.trim(), name: form.name.trim(),
+          agencia: form.agencia.trim(), name: form.name.trim(),
           email: form.email.trim(), password: form.password,
         }),
       })
@@ -75,12 +75,8 @@ export default function Registro() {
         <p className="admin-login-subtitle">Crea tu agencia y opera a tus clientes</p>
         <form onSubmit={submit} className="admin-login-form">
           <div className="admin-input-group">
-            <label>Licencia</label>
-            <input value={form.licencia} onChange={e => set('licencia', e.target.value.toUpperCase())} placeholder="HELM-XXXX-XXXX-XXXX" autoComplete="off" autoCapitalize="characters" spellCheck={false} autoFocus />
-          </div>
-          <div className="admin-input-group">
             <label>Nombre de la agencia</label>
-            <input value={form.agencia} onChange={e => set('agencia', e.target.value)} placeholder="Acme Growth" autoComplete="organization" />
+            <input value={form.agencia} onChange={e => set('agencia', e.target.value)} placeholder="Acme Growth" autoComplete="organization" autoFocus />
           </div>
           <div className="admin-input-group">
             <label>Tu nombre</label>
@@ -99,6 +95,7 @@ export default function Registro() {
             {loading ? 'Creando…' : 'Crear cuenta'}
           </button>
         </form>
+        <p className="admin-login-alt">Licencia de agencia: 97 €/año, IVA incluido. La pagas al entrar.</p>
         <p className="admin-login-alt">¿Ya tienes cuenta? <Link to="/login">Entrar</Link></p>
       </div>
     </div>

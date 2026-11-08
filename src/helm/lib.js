@@ -310,6 +310,15 @@ export const humanSize = (bytes) => {
   return (n / 1024 / 1024).toFixed(1) + ' MB'
 }
 
+/**
+ * El servidor ha contestado 402: la licencia de la agencia no está activa. Lo
+ * recoge PuertaLicencia (Licencia.jsx), que tapa el panel con la pantalla de
+ * pago (o, a quien no administra la agencia, con a quién avisar).
+ */
+export function avisaSinLicencia(detalle) {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('helm:sin-licencia', { detail: detalle || null }))
+}
+
 // ── Endpoints del servidor ─────────────────────────────────────────────────
 // Lo que no puede ir directo a Supabase desde el navegador: el chat (habla con
 // el modelo local del servidor) y Stripe (la clave secreta nunca sale del
@@ -335,11 +344,10 @@ async function apiFetch(path, { method = 'GET', body } = {}) {
     if (typeof window !== 'undefined') window.location.href = '/login'
     throw new Error('Tu sesión ha caducado. Vuelve a iniciar sesión.')
   }
-  // Sin créditos: el panel abre la recarga esté donde esté (AvisoSinSaldo, en
-  // Creditos.jsx). El error sigue su camino para que la vista lo pinte también.
-  if (r.status === 402 && typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('helm:sin-saldo', { detail: data?.error || null }))
-  }
+  // Sin licencia: el panel abre la pantalla de la licencia esté donde esté
+  // (PuertaLicencia, en Licencia.jsx). El error sigue su camino para que la
+  // vista lo pinte también.
+  if (r.status === 402) avisaSinLicencia(data?.error)
   if (!r.ok) {
     // Dejamos el código de estado (y el `codigo` que mande el servidor) en el
     // error para que la vista decida el mensaje sin adivinar por el texto.
@@ -654,7 +662,7 @@ export const enlaceAltaPublica = (agenciaSlug) =>
 export async function enlaceAltaPublicaDelPerfil(clientId) {
   const { data, error } = await supabase.from('clients').select('agencia_id').eq('id', clientId).maybeSingle()
   if (error) throw error
-  const r = await creditosApi.saldo(data?.agencia_id || undefined)
+  const r = await licenciaApi.estado(data?.agencia_id || undefined)
   return r?.agencia?.slug ? enlaceAltaPublica(r.agencia.slug) : null
 }
 
@@ -718,21 +726,28 @@ export const perfilesApi = {
   borrar: (clientId, confirma) => apiFetch('/api/perfiles?action=borrar', { method: 'POST', body: { clientId, confirma } }),
 }
 
-// ── Créditos de la agencia (api/creditos.js) ───────────────────────────────
-export const creditosApi = {
-  saldo: (agenciaId) => apiFetch(`/api/creditos?action=saldo${agenciaId ? `&agenciaId=${agenciaId}` : ''}`),
-  comprar: (pack) => apiFetch('/api/creditos?action=comprar', { method: 'POST', body: { pack } }),
-  confirmar: (sessionId) => apiFetch('/api/creditos?action=confirmar', { method: 'POST', body: { sessionId } }),
-  bienvenida: () => apiFetch('/api/creditos?action=bienvenida', { method: 'POST', body: {} }),
-  agencias: () => apiFetch('/api/creditos?action=agencias'),
-  ajuste: (agenciaId, euros, nota) => apiFetch('/api/creditos?action=ajuste', { method: 'POST', body: { agenciaId, euros, nota } }),
-  // Lo que cuesta cada trabajo a precio fijo y si este perfil paga:
-  // { paga, saldo (€ o null), precios: PRECIOS_FIJOS (€) }. La cuenta del
-  // Editor por duración, con precioEditor de ./precios.js.
-  precios: (clientId) => apiFetch(`/api/creditos?action=precios&clientId=${encodeURIComponent(clientId)}`),
+// ── La agencia: su licencia y su clave de Claude (api/licencia.js) ─────────
+export const licenciaApi = {
+  // { agencia, plataforma, administra, licencia: { valida, venceAt, dias, precio,
+  // pagosActivos, historial }, ia: { clave, last4, model, deHelm, modelos } }.
+  // Al equipo de un perfil, solo { administra: false, licencia: { valida } }.
+  estado: (agenciaId) => apiFetch(`/api/licencia?action=estado${agenciaId ? `&agenciaId=${agenciaId}` : ''}`),
+  pagar: () => apiFetch('/api/licencia?action=pagar', { method: 'POST', body: {} }),
+  confirmar: (sessionId) => apiFetch('/api/licencia?action=confirmar', { method: 'POST', body: { sessionId } }),
+  guardarClave: (apiKey, model) => apiFetch('/api/licencia?action=clave', { method: 'POST', body: { apiKey, model } }),
+  quitarClave: () => apiFetch('/api/licencia?action=quitar-clave', { method: 'POST', body: {} }),
   // El enlace del conector de Claude de la agencia entera (sin perfil).
   enlaceMcp: () => apiFetch('/api/agents?action=mcp-enlace'),
   nuevoEnlaceMcp: () => apiFetch('/api/agents?action=mcp-enlace', { method: 'POST', body: {} }),
+}
+
+// Desde la licencia anual, ningún trabajo de agente se cobra. Las pantallas del
+// Editor de reels, Portadas y Trial reels siguen preguntando lo que cuesta
+// antes de lanzar: la respuesta es siempre «este perfil no paga», sin ir al
+// servidor.
+const SIN_COBRO = Object.freeze({ paga: false, saldo: null, precios: {} })
+export const creditosApi = {
+  precios: () => Promise.resolve(SIN_COBRO),
 }
 
 // ── El bot de Telegram de la agencia (api/telegram-agencia.js) ─────────────
@@ -754,6 +769,8 @@ export const plataformaApi = {
   resumen: () => apiFetch('/api/plataforma?action=resumen'),
   agencia: (id) => apiFetch(`/api/plataforma?action=agencia&id=${encodeURIComponent(id)}`),
   borrar: (id, confirma) => apiFetch('/api/plataforma?action=borrar-agencia', { method: 'POST', body: { id, confirma } }),
+  darLicencia: (id, meses, nota) => apiFetch('/api/plataforma?action=dar-licencia', { method: 'POST', body: { id, meses, nota } }),
+  anularLicencia: (id, licenciaId) => apiFetch('/api/plataforma?action=anular-licencia', { method: 'POST', body: { id, licenciaId } }),
 }
 
 // ── Mi día: los rituales diarios con la IA ─────────────────────────────────
@@ -871,7 +888,7 @@ async function pideEditor(path, { method = 'GET', body } = {}) {
     ...(body ? { body: JSON.stringify(body) } : {}),
   })
   const data = await r.json().catch(() => ({}))
-  // La sesión caducada y el sin saldo, igual que en apiFetch.
+  // La sesión caducada y el sin licencia, igual que en apiFetch.
   if (r.status === 401) {
     localStorage.removeItem('bw_admin_jwt')
     localStorage.removeItem('bw_superadmin')
@@ -879,9 +896,7 @@ async function pideEditor(path, { method = 'GET', body } = {}) {
     if (typeof window !== 'undefined') window.location.href = '/login'
     throw Object.assign(new Error('Tu sesión ha caducado. Vuelve a iniciar sesión.'), { status: 401, datos: data })
   }
-  if (r.status === 402 && typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('helm:sin-saldo', { detail: data?.error || null }))
-  }
+  if (r.status === 402) avisaSinLicencia(data?.error)
   if (!r.ok) throw Object.assign(new Error(data?.error || `Error ${r.status}`), { status: r.status, datos: data })
   return data
 }

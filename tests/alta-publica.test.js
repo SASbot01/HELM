@@ -147,6 +147,13 @@ function reinicia() {
     { id: AG.silvestre, nombre: 'Silvestre AI', slug: 'silvestreai', perfil_casa_id: PERFIL.casa },
     { id: AG.otra, nombre: 'Otra Agencia', slug: 'otra', perfil_casa_id: null },
   ]
+  // Las dos con licencia en vigor: sin ella, el panel contesta 402 (api/_lib/licencia.js).
+  const enUnAno = new Date(Date.now() + 365 * 86_400_000).toISOString()
+  db.licenses = [
+    { agencia_id: AG.silvestre, estado: 'activa', vence_at: enUnAno },
+    { agencia_id: AG.otra, estado: 'activa', vence_at: enUnAno },
+  ]
+  db.agencia_ia = []
   db.clients = [
     { id: PERFIL.casa, slug: 'silvestre', name: 'Silvestre', agencia_id: AG.silvestre, active: true },
     { id: PERFIL.ajeno, slug: 'ajeno', name: 'Ajeno', agencia_id: AG.otra, active: true },

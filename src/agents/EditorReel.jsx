@@ -28,7 +28,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowLeft, Upload, Download, Trash2, Loader2, Check, AlertTriangle, Clock, Info, Palette, ChevronRight, X, RotateCcw,
-  Scissors, Copy, Wand2, ExternalLink, Coins, Gift, Film, Image as ImagenIcono, Music, Stamp, Plus, Save,
+  Scissors, Copy, Wand2, ExternalLink, Coins, Film, Image as ImagenIcono, Music, Stamp, Plus, Save,
 } from 'lucide-react'
 import { editorApi, creditosApi } from '../helm/lib'
 import { subePorTrozos, mandaTrozo, reintentable, espera, esperaDe } from '../helm/subida'
@@ -87,20 +87,19 @@ const TIPOS_VIDEO = ['video/mp4', 'video/quicktime', 'video/x-m4v', 'video/3gpp'
 const NO_MOV = /^video\/(webm|x-matroska|matroska|x-msvideo|avi|mpeg|mp2t|ogg|x-flv|x-ms-wmv)$/
 const EN_IDIOMA = { es: 'en español', en: 'en inglés', pt: 'en portugués' }
 
-// Sin saldo, el panel abre la recarga (AvisoSinSaldo, en Creditos.jsx): con un
-// 402 ya lo hace editorApi; esto es para el botón. La compra solo la ve quien
-// administra (bw_superadmin, como allí); al resto le dice a quién avisar, y el
-// botón lo dice igual.
+// Del cobro por vídeo de antes de la licencia anual: hoy ningún perfil paga
+// (creditosApi.precios), así que el botón no sale. Un 402 es ahora la licencia
+// de la agencia, y lo coge PuertaLicencia (Licencia.jsx).
 const recargarCreditos = (detalle) => window.dispatchEvent(new CustomEvent('helm:sin-saldo', { detail: detalle || null }))
 const puedeRecargar = () => { try { return Boolean(localStorage.getItem('bw_superadmin')) } catch { return false } }
-const SIN_SALDO = /saldo suficiente|créditos suficientes|sin créditos|recarga en créditos/i
 // Lo que dice fetch (Chrome, Firefox, Safari) cuando no llega ni a salir.
 const SIN_RED = /failed to fetch|networkerror|load failed|network request failed/i
 
 /** El error, para enseñarlo: { texto, sinSaldo? }. Los de editorApi llevan `status`. */
 function explica(e) {
   const texto = e?.message || 'Algo ha fallado. Vuelve a probar.'
-  if (e?.status === 402 || SIN_SALDO.test(texto)) return { texto, sinSaldo: true }
+  // Un 402 es la licencia de la agencia: lo enseña PuertaLicencia, aquí solo el texto.
+  if (e?.status === 402) return { texto }
   if (/too many requests|demasiadas peticiones/i.test(texto)) return { texto: 'Demasiadas peticiones seguidas: espera un minuto y vuelve a probar.' }
   if (SIN_RED.test(texto)) return { texto: 'No hay conexión con HELM: comprueba la red y vuelve a probar.' }
   return { texto }
@@ -971,14 +970,9 @@ function ZonaVideo({ onElige, leyendo }) {
 
 function Precio({ precios, euros, duracion, conVideo, cerrado }) {
   const bloque = aCreditos(PRECIOS_FIJOS['editor-reels'])
-  if (precios && !precios.error && !precios.paga) {
-    return (
-      <div className="ed-precio gratis">
-        <Gift size={16} aria-hidden="true" />
-        <div><span className="ed-precio-linea"><b>Gratis en tu agencia</b></span><small>Este perfil no paga créditos por editar.</small></div>
-      </div>
-    )
-  }
+  // Desde la licencia anual nadie paga por vídeo (creditosApi.precios dice
+  // siempre «no paga»): no hay precio que enseñar.
+  if (!precios || precios.error || !precios.paga) return null
   if (!conVideo) {
     return (
       <p className="ed-precio-info">
@@ -1289,6 +1283,8 @@ function AjustesEstilo({ clientId, estilo, inicial, referencia, bloqueado, logo,
 
 /** Lo que ha costado (o costará) una edición, en créditos; '' si no hay nada que decir. */
 function cobroDe(e, paga) {
+  // Con la licencia anual no se cobra por vídeo: nada que decir.
+  if (paga !== true) return ''
   const cobrado = e.cobrado_eur == null ? null : Number(e.cobrado_eur)
   if (cobrado > 0) return `${creditos(cobrado)} créditos`
   if (paga === false) return e.estado === 'listo' ? 'gratis' : ''

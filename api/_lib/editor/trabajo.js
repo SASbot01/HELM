@@ -47,7 +47,7 @@ export const EN_CURSO = Object.freeze(['en_cola', 'transcribiendo', 'montando'])
 // la borra limpiaEdiciones a la vez: api/_lib/subida-trozos.js).
 export const CADUCA_SUBIENDO_MS = HORAS_SUBIDA * 3600_000
 export const ABANDONADA = 'La subida no terminó. Vuelve a subir el vídeo.'
-const COLGADA = 'No se pudo editar el vídeo (se quedó a medias). Vuelve a subirlo: no se te ha cobrado.'
+const COLGADA = 'No se pudo editar el vídeo (se quedó a medias). Vuelve a subirlo.'
 // Una edición en cola sin trabajo vivo se da por colgada pasado este rato (el
 // margen es para no pisar un «lanzar» que está encolando justo ahora).
 const MARGEN_COLGADA_MS = 15 * 60_000

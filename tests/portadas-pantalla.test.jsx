@@ -3,14 +3,13 @@
 // entrada «Portada desde un vídeo» abre tu vídeo en el navegador (sin subirlo)
 // con el selector de instante; los estilos sin imagen enseñan su vista previa
 // con CSS (portadas/VistaEstilo.jsx) y los de siempre, su imagen; y el botón de
-// generar dice lo que cuesta (o que es gratis) antes de pulsar.
+// generar ya no lleva precio (licencia anual: creditosApi.precios dice «no paga»).
 //
 // Usa jsdom y @testing-library/react, que vienen del node_modules compartido
 // con ~/code/HELM. jsdom no pinta canvas ni carga vídeo: se simulan lo justo.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { PRECIOS_FIJOS } from '../src/helm/precios.js'
 
 const h = vi.hoisted(() => ({ precios: null }))
 
@@ -19,7 +18,7 @@ vi.mock('../src/helm/lib', () => ({
     marca: vi.fn(async () => ({ marca: {} })),
     capacidad: vi.fn(async () => ({ fondoIa: true, portadaIa: true })),
     ejemplos: vi.fn(async () => ({ ejemplos: [] })),
-    portadaIa: vi.fn(async () => ({ imagen: 'data:image/jpeg;base64,AA==', ia: true, cobrado: 0.4, saldo: 4.6 })),
+    portadaIa: vi.fn(async () => ({ imagen: 'data:image/jpeg;base64,AA==', ia: true, cobrado: 0, saldo: null })),
     video: vi.fn(), imagen: vi.fn(), textos: vi.fn(), fondoPrompt: vi.fn(), fondoIa: vi.fn(),
     guardarMarca: vi.fn(), subirEjemplo: vi.fn(), borrarEjemplo: vi.fn(),
   },
@@ -41,7 +40,8 @@ const ctx = new Proxy({}, {
 })
 
 beforeEach(() => {
-  h.precios = { paga: true, saldo: 5, precios: PRECIOS_FIJOS }
+  // Lo que contesta siempre creditosApi.precios desde la licencia anual.
+  h.precios = { paga: false, saldo: null, precios: {} }
   HTMLCanvasElement.prototype.getContext = () => ctx
   HTMLCanvasElement.prototype.toDataURL = () => 'data:image/jpeg;base64,AA=='
   if (!document.fonts) Object.defineProperty(document, 'fonts', { value: { load: () => Promise.resolve() }, configurable: true })
@@ -103,7 +103,7 @@ describe('Portadas · pantalla', () => {
     expect(await screen.findByText(/Eso no es un vídeo/)).toBeTruthy()
   })
 
-  it('los estilos sin imagen enseñan su vista previa; los de siempre, su imagen; y el botón dice el precio', async () => {
+  it('los estilos sin imagen enseñan su vista previa; los de siempre, su imagen; y el botón de generar, sin precio', async () => {
     const { container } = render(<Portadas clientId="perfil-1" client={{ name: 'Demo' }} onVolver={() => {}} />)
     fireEvent.click(await screen.findByRole('button', { name: /Portada desde una foto/ }))
     // Con la clave de imagen, entra en «Con IA».
@@ -118,8 +118,7 @@ describe('Portadas · pantalla', () => {
     const enlace = await screen.findByRole('link', { name: 'Carlos «Máster» Muñoz' })
     expect(enlace.getAttribute('href')).toBe('https://www.youtube.com/@mastermunozoficial')
     expect(screen.getByText(/nunca su cara, su logo ni su marca/)).toBeTruthy()
-    expect(await screen.findByRole('button', { name: /Generar portada · 40 créditos/ })).toBeTruthy()
-    expect(screen.getByText(/Te quedan 500 créditos/)).toBeTruthy()
+    expect(await screen.findByRole('button', { name: /^Generar portada$/ })).toBeTruthy()
   })
 
   // jsdom no carga imágenes: esta avisa de que ha cargado en cuanto se le pone el src.
@@ -139,41 +138,12 @@ describe('Portadas · pantalla', () => {
     await screen.findByRole('button', { name: 'Versión 1' })
   }
 
-  it('quien administra la agencia ve lo que queda, y tras cobrar se actualiza', async () => {
+  it('con una foto y un titular, genera la portada (sale «Versión 1»)', async () => {
     const Antes = globalThis.Image
     globalThis.Image = ImagenQueCarga
     try {
       const { container } = render(<Portadas clientId="perfil-1" client={{ name: 'Demo' }} onVolver={() => {}} />)
       await generaConFoto(container)
-      expect(screen.getByText(/Te quedan 460 créditos/)).toBeTruthy()
     } finally { globalThis.Image = Antes }
-  })
-
-  it('sin ver el saldo (no administras la agencia): solo el precio, y tras cobrar tampoco aparece lo que queda', async () => {
-    h.precios = { paga: true, saldo: null, alcanza: { 'editor-reels': true, 'portada-ia': true, 'trial-reel': true }, precios: PRECIOS_FIJOS }
-    const Antes = globalThis.Image
-    globalThis.Image = ImagenQueCarga
-    try {
-      render(<Portadas clientId="perfil-1" client={{ name: 'Demo' }} onVolver={() => {}} />)
-      expect(await screen.findByRole('button', { name: /Portada desde una foto/ })).toBeTruthy()
-      fireEvent.click(screen.getByRole('button', { name: /Portada desde una foto/ }))
-      expect(await screen.findByRole('button', { name: /Generar portada · 40 créditos/ })).toBeTruthy()
-      expect(screen.getByText('Cada imagen se cobra solo si sale bien.')).toBeTruthy()
-      expect(screen.queryByText(/Te quedan/)).toBeNull()
-      cleanup()
-      // Aunque la respuesta de la generación trajera un saldo, no se enseña.
-      const otra = render(<Portadas clientId="perfil-1" client={{ name: 'Demo' }} onVolver={() => {}} />)
-      await generaConFoto(otra.container)
-      expect(screen.getByText('Cada imagen se cobra solo si sale bien.')).toBeTruthy()
-      expect(screen.queryByText(/Te quedan/)).toBeNull()
-    } finally { globalThis.Image = Antes }
-  })
-
-  it('si el perfil no paga (la agencia de la casa o sin agencia), el botón dice que es gratis', async () => {
-    h.precios = { paga: false, saldo: null, precios: PRECIOS_FIJOS }
-    render(<Portadas clientId="perfil-1" client={{ name: 'Demo' }} onVolver={() => {}} />)
-    fireEvent.click(await screen.findByRole('button', { name: /Portada desde una foto/ }))
-    expect(await screen.findByRole('button', { name: /Generar portada · gratis$/ })).toBeTruthy()
-    expect(screen.queryByText(/Te quedan/)).toBeNull()
   })
 })

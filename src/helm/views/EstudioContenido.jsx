@@ -35,14 +35,12 @@ const fechaCorta = (f) => (f ? aFecha(f).toLocaleDateString('es-ES', { day: 'num
 const fechaHora = (f) => (f ? aFecha(f).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '—')
 const aLista = (v) => (Array.isArray(v) ? v.filter(Boolean) : [])
 
-// El coste del estudio para la agencia, en CRÉDITOS: es lo que ve en su saldo
-// (1 € = 100 créditos, como CREDITOS_POR_EURO en api/_lib/creditos.js; aquí no
-// se importa, es del servidor). El servidor lo manda en euros. Si no paga
-// (coste 0), es gratis: nunca «cuesta unos 0 créditos» (contrato F).
+// El coste del estudio para la agencia, en CRÉDITOS (1 € = 100 créditos). Desde
+// la licencia anual HELM no cobra por uso y el servidor manda siempre 0: no se
+// enseña nada (ni «gratis»: lo paga la cuenta de Claude de la agencia).
 const CREDITOS_POR_EURO = 100
 const enCreditos = (eur) => `unos ${num(Math.max(1, Math.round(Number(eur) * CREDITOS_POR_EURO)))} créditos`
-const esGratis = (eur) => Number(eur) === 0
-const costeTexto = (eur) => (eur == null ? null : esGratis(eur) ? 'Gratis en tu agencia' : `Cuesta ${enCreditos(eur)}`)
+const costeTexto = (eur) => (eur == null || Number(eur) === 0 ? null : `Cuesta ${enCreditos(eur)}`)
 
 // Cada métrica se lee con sus decimales y su unidad: la retención en segundos,
 // las tasas «por mil» por cada 1.000 visitas, la frecuencia en piezas/semana y
@@ -101,7 +99,8 @@ function Etiqueta({ valor }) {
 function mensajeDeFallo(e) {
   const codigo = e?.codigo
   const status = e?.status
-  if (codigo === 'sin_saldo' || status === 402) return 'Sin saldo: recarga créditos para generar el estudio.'
+  if (codigo === 'licencia' || status === 402) return 'La licencia de la agencia no está activa: renuévala para generar el estudio.'
+  if (codigo === 'sin_clave_claude' || status === 412) return 'Tu agencia no tiene clave de Claude: ponla en Perfiles → Agencia (o pídeselo a quien la administra).'
   if (codigo === 'tope_diario' || status === 429) return 'Ya has pedido 3 estudios hoy. Prueba de nuevo mañana.'
   if (codigo === 'en_curso' || status === 409) return 'Ya hay un estudio en marcha. Espera a que termine.'
   if (codigo === 'sin_instagram' || status === 400) return 'Conecta tu Instagram para poder generar el estudio.'
@@ -650,7 +649,7 @@ export default function EstudioContenido({ clientId, onHayEstudio }) {
             {hayEstudio
               ? `${viendoViejo ? 'Estudio del' : 'Último estudio:'} ${fechaHora(activo.generado_en)}${activo.modelo ? ` · ${activo.modelo}` : ''}`
               : 'Un análisis a fondo de tu cuenta, con objetivos, plan y avatar de contenido.'}
-            {coste && <> · {esGratis(base.coste_aprox_eur) ? 'gratis en tu agencia' : `cada estudio, ${enCreditos(base.coste_aprox_eur)}`}</>}
+            {coste && <> · cada estudio, {enCreditos(base.coste_aprox_eur)}</>}
           </p>
         </div>
         <div className="ec-cab-acciones">

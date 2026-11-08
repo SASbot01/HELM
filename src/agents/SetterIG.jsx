@@ -8,7 +8,7 @@
 //   · Configuración  → encenderlo, modo (borrador / automático), a dónde lleva
 //                      al lead y lo que tiene que saber.
 //   · Probar         → un simulador: escribes como si fueras el lead y ves qué
-//                      contestaría, sin Instagram. Gasta créditos.
+//                      contestaría, sin Instagram. Usa la IA de la agencia.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft, Inbox, Settings2, FlaskConical, Send, Check, X, Hand, Bot, Loader2, AlertTriangle, Link2, RotateCcw, Instagram,
@@ -360,7 +360,7 @@ function Probar({ clientId, config }) {
 
   return (
     <section className="sig-probar">
-      <p className="sig-ayuda">Escribe como si fueras alguien que manda un DM. Contesta con la configuración guardada, sin Instagram. Cada respuesta gasta créditos.</p>
+      <p className="sig-ayuda">Escribe como si fueras alguien que manda un DM. Contesta con la configuración guardada, sin Instagram. Cada respuesta la escribe la IA de tu agencia.</p>
       <div className="sig-chat">
         {mensajes.map((m, i) => <div key={i} className={`sig-msj ${m.autor}`}><p>{m.texto}</p></div>)}
         {pensando && <div className="sig-msj ia"><p><Loader2 size={14} className="sig-gira" /> Escribiendo…</p></div>}

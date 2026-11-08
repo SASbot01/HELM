@@ -9,7 +9,7 @@
 // Sin clave configurada, el perfil sigue con el modelo local (Ollama). Ver
 // ./llm.js, que es quien decide cuál de los dos atiende cada petición.
 import Anthropic from '@anthropic-ai/sdk'
-import { exigirSaldo, cobrar, claveHelm } from './creditos.js'
+import { claveParaLlamar } from './licencia.js'
 
 // Modelos que se ofrecen en Ajustes. `esfuerzo` marca los que aceptan
 // `output_config.effort`: en Haiku 4.5 ese parámetro da error, así que no se
@@ -37,6 +37,31 @@ export const MODELOS_CLAUDE = [
 ]
 
 export const MODELO_POR_DEFECTO = 'claude-opus-5'
+
+// Precio por millón de tokens, en dólares (tarifas de Anthropic). Solo para
+// apuntar lo que ha gastado un trabajo en la cuenta de Claude de quien lo hizo
+// (agent_ejecuciones, el estudio de contenido): HELM ya no cobra por uso.
+const PRECIOS_USD = {
+  'claude-opus-5': { in: 5, out: 25 },
+  'claude-sonnet-5': { in: 2, out: 10 },
+  'claude-haiku-4-5': { in: 1, out: 5 },
+}
+
+/**
+ * Lo que cuesta una respuesta, en dólares, a partir de su `usage`. La caché se
+ * cobra distinto: leerla vale una décima parte de la entrada y escribirla un
+ * 25 % más.
+ */
+export function costeUsd(modelo, usage = {}) {
+  const p = PRECIOS_USD[modelo] || PRECIOS_USD['claude-opus-5']
+  const m = 1_000_000
+  return (
+    (usage.input_tokens || 0) * p.in / m +
+    (usage.cache_read_input_tokens || 0) * p.in * 0.1 / m +
+    (usage.cache_creation_input_tokens || 0) * p.in * 1.25 / m +
+    (usage.output_tokens || 0) * p.out / m
+  )
+}
 
 export const modeloValido = (id) => MODELOS_CLAUDE.some(m => m.id === id)
 const infoModelo = (id) => MODELOS_CLAUDE.find(m => m.id === id) || null
@@ -162,7 +187,7 @@ export function reparaArgs(args, schema) {
  *
  * @returns {Promise<{content: string, toolCalls: Array<{name: string, args: object}>}>}
  */
-export async function claudeTurno({ apiKey, model, system, messages, maxTokens = 2048, tools, esfuerzo }) {
+export async function claudeTurno({ apiKey, model, system, messages, maxTokens = 2048, tools, esfuerzo, clientId }) {
   const modelo = modeloValido(model) ? model : MODELO_POR_DEFECTO
   const herramientas = traducirHerramientas(tools)
   const mensajes = normalizarMensajes(messages)
@@ -172,15 +197,15 @@ export async function claudeTurno({ apiKey, model, system, messages, maxTokens =
     throw e
   }
 
-  // Con la clave de HELM, la agencia paga con créditos: sin saldo no se llama,
-  // y lo que cueste se le descuenta. Con la clave propia de un perfil, lo
-  // paga él directamente a Anthropic.
-  const deHelm = Boolean(apiKey) && apiKey === claveHelm()
-  if (deHelm) await exigirSaldo()
+  // Trae tu clave: quien pide «la clave de HELM» llama, en realidad, con la de
+  // la agencia del perfil (`clientId`, o el de la petición en curso): 402 sin
+  // licencia, 412 sin clave. La clave propia de un perfil va tal cual. Ver
+  // ./licencia.js.
+  const clave = await claveParaLlamar(apiKey, { clientId })
 
   let res
   try {
-    res = await cliente(apiKey).messages.create({
+    res = await cliente(clave).messages.create({
       model: modelo,
       max_tokens: Math.max(Number(maxTokens) || 0, SUELO_MAX_TOKENS),
       ...(system ? { system } : {}),
@@ -195,8 +220,6 @@ export async function claudeTurno({ apiKey, model, system, messages, maxTokens =
   } catch (err) {
     throw traducirError(err)
   }
-
-  if (deHelm) await cobrar(modelo, res.usage)
 
   // Los clasificadores de seguridad pueden declinar la petición: llega un 200
   // con `stop_reason: "refusal"` y el contenido vacío. Hay que mirarlo antes de
@@ -233,8 +256,8 @@ export async function claudeTurno({ apiKey, model, system, messages, maxTokens =
  * que el que lleva el bucle reenvíe ese content tal cual al historial y pueda
  * encadenar tool_result. A diferencia de `claudeTurno`, los `messages` van tal
  * como llegan (bloques tool_use/tool_result incluidos): no se normalizan ni se
- * aplanan a texto. Con la clave de HELM, se exige saldo antes y se cobra
- * después, igual que `claudeTurno`.
+ * aplanan a texto. Con la clave de HELM llama con la de la agencia, igual
+ * que `claudeTurno`.
  *
  * `tools` acepta el formato de Claude ({name, description, input_schema}) y el
  * del conector MCP ({name, description, inputSchema}); `traducirHerramientas`
@@ -249,7 +272,7 @@ export async function claudeTurno({ apiKey, model, system, messages, maxTokens =
  * acierte, el system y las herramientas tienen que llegar idénticos y en el
  * mismo orden.
  */
-export async function claudePaso({ apiKey, model, system, messages, tools, maxTokens = 8000, esfuerzo = 'medium' }) {
+export async function claudePaso({ apiKey, model, system, messages, tools, maxTokens = 8000, esfuerzo = 'medium', clientId }) {
   if (model && !modeloValido(model)) console.warn('[claude] modelo desconocido:', model, '— uso', MODELO_POR_DEFECTO)
   const modelo = modeloValido(model) ? model : MODELO_POR_DEFECTO
   const herramientas = traducirHerramientas(tools)
@@ -257,12 +280,11 @@ export async function claudePaso({ apiKey, model, system, messages, tools, maxTo
     ? [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }]
     : system
 
-  const deHelm = Boolean(apiKey) && apiKey === claveHelm()
-  if (deHelm) await exigirSaldo()
+  const clave = await claveParaLlamar(apiKey, { clientId })
 
   let res
   try {
-    res = await cliente(apiKey).messages.stream({
+    res = await cliente(clave).messages.stream({
       model: modelo,
       max_tokens: Math.max(Number(maxTokens) || 0, SUELO_MAX_TOKENS),
       cache_control: { type: 'ephemeral' },
@@ -275,12 +297,10 @@ export async function claudePaso({ apiKey, model, system, messages, tools, maxTo
     throw traducirError(err)
   }
 
-  if (deHelm) await cobrar(modelo, res.usage)
-
   if (res.stop_reason === 'refusal') {
     const e = new Error('Claude ha rechazado esta petición por sus filtros de seguridad. Reformúlala.')
     e.statusCode = 422
-    // Ya está cobrada: quien llama puede apuntar lo que costó (estudio de contenido).
+    // Ya está gastada: quien llama puede apuntar lo que costó (estudio de contenido).
     e.usage = res.usage
     throw e
   }

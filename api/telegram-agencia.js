@@ -41,7 +41,7 @@ import crypto from 'node:crypto'
 import { supabase } from './lib/supabase.js'
 import { applyCors, rateLimit, getClientIp, writeAudit, requireSuperAdmin, requirePlataforma } from './_lib/auth.js'
 import { enContexto } from './_lib/contexto.js'
-import { claveHelm } from './_lib/creditos.js'
+import { claveHelm } from './_lib/licencia.js'
 import { alcanceDesdeContexto } from './mcp/[token].js'
 import { herramientasBot, sistemaBot, resolverPerfil, perfilesDeAgencia, esAccionVacia, NO_SE_PUEDE } from './_lib/bot-herramientas.js'
 import { tapaSecretos } from './_lib/bot/comun.js'
@@ -411,9 +411,10 @@ async function conEscribiendo(token, chatId, fn) {
 function mensajeDeError(err) {
   const codigo = err?.statusCode || err?.status
   const texto = String(err?.message || '')
-  if (codigo === 402) return '⚠️ Tu agencia se ha quedado sin créditos de HELM. Recarga en el tablero de Perfiles → Créditos y vuelve a escribirme.'
+  if (codigo === 402) return '⚠️ La licencia de HELM de tu agencia no está activa. Renuévala en el tablero de Perfiles → Agencia y vuelve a escribirme.'
+  if (codigo === 412) return '⚠️ Tu agencia no tiene clave de Claude. Ponla en el tablero de Perfiles → Agencia → Clave de Claude y vuelve a escribirme.'
   if (/credit balance|credits? (is|are) too low|insufficient.*credit/i.test(texto)) {
-    return '⚠️ La cuenta de Claude de HELM se ha quedado sin saldo. Avisa a quien lleva la plataforma; en cuanto se recargue, sigo.'
+    return '⚠️ La cuenta de Claude con la que trabajo (la clave de tu agencia) se ha quedado sin saldo. Recárgala en console.anthropic.com y, en cuanto esté, sigo.'
   }
   if (codigo === 422) return '⚠️ Claude ha preferido no seguir con eso. Prueba a planteármelo de otra forma.'
   if (codigo === 429) return '⚠️ Claude está limitando las peticiones ahora mismo. Prueba en un minuto.'

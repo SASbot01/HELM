@@ -3,15 +3,14 @@
 // verdad con la API simulada:
 //   · la galería: los 31 estilos, el filtro por idioma y tema, «Crear» abre el
 //     taller con ese estilo y «Copiar prompt» copia el suyo;
-//   · el precio antes de subir («Esto cuesta… · te quedan…» o «Gratis en tu
-//     agencia») y un vídeo de más de 10 minutos que no entra;
+//   · antes de subir (sin precio: licencia anual), un vídeo de más de 10 minutos que no entra;
 //   · el flujo entero: crear → el vídeo por trozos (con subePorTrozos de
 //     verdad, trozos de 1 KB) → los recursos → lanzar, también cuando se corta
-//     o se cancela y se sigue, y cuando no hay saldo (402);
+//     o se cancela y se sigue, y cuando la licencia no está activa (402);
 //   · cuando «lanzar» falla: 422/410 solo dejan descartar o cerrar, un 409 con
 //     `recibidos` vuelve a «Seguir subiendo», y un recurso que llegó aunque se
 //     canceló no sale repetido en el vídeo;
-//   · la lista: cada estado en castellano con su barra, lo cobrado, una subida
+//   · la lista: cada estado en castellano con su barra, una subida
 //     a medias que se sigue eligiendo el mismo archivo, una entera que se lanza
 //     sin él, y que no se sondea por subidas a medias;
 //   · los 31 estilos son parámetros válidos para el motor.
@@ -88,7 +87,6 @@ vi.mock('../src/helm/subida', async (original) => {
 const { default: EditorReel } = await import('../src/agents/EditorReel.jsx')
 const { ESTILO_POR_DEFECTO, normalizaEstilo } = await import('../src/agents/editor/estilo.js')
 const { ESTILOS_REFERENCIA, TEMAS, IDIOMAS, estiloDeReferencia } = await import('../src/agents/editor/estilos-referencia.js')
-const { PRECIOS_FIJOS } = await import('../src/helm/precios.js')
 const { AGENTES } = await import('../src/agents/agentes.js')
 
 const accion = (url) => new URL(url, 'http://helm.test').searchParams
@@ -117,7 +115,8 @@ beforeEach(() => {
   h.estilo = { ...ESTILO_POR_DEFECTO }
   h.guardados = []
   h.llamadas = []
-  h.precios = { paga: true, saldo: 10, precios: PRECIOS_FIJOS }
+  // Lo que contesta siempre creditosApi.precios desde la licencia anual.
+  h.precios = { paga: false, saldo: null, precios: {} }
   h.duracion = 95
   h.recibidos = 0
   h.nRecursos = 0
@@ -126,8 +125,6 @@ beforeEach(() => {
   h.respuestaLanzar = null
   h.errorLista = null
   h.manda = mandaPorDefecto
-  // Quien administra: el botón de recarga dice «Recargar créditos».
-  localStorage.setItem('bw_superadmin', '1')
   h.ediciones = [
     { id: 'a', nombre_original: 'lista.mp4', estado: 'listo', progreso: 100, paso: 'Listo para descargar', duracion_original: 60, duracion_final: 41, created_at: ahora(), error: null, estilo_ref: 'hormozi', recursos: [{ id: 'x1', tipo: 'broll' }, { id: 'x2', tipo: 'musica' }], precio_eur: 1.5, cobrado_eur: 1.5 },
     { id: 'b', nombre_original: 'montando.mov', estado: 'montando', progreso: 63, paso: 'Montando el vídeo (1:00 → 0:41)', duracion_original: 200, duracion_final: null, created_at: ahora(), error: null, estilo_ref: null, recursos: [], precio_eur: 3, cobrado_eur: null },
@@ -142,7 +139,6 @@ const video = (nombre = 'toma.mp4', bytes = 3000) => archivo(nombre, 'video/mp4'
 const pinta = () => render(<EditorReel clientId="c1" client={{ name: 'Alex' }} onVolver={() => {}} />)
 const tarjetas = (c) => c.querySelectorAll('.ed-refs > li')
 const llamadas = (tipo) => h.llamadas.filter(l => l[0] === tipo)
-const lineaPrecio = (texto) => screen.findByText((_, el) => Boolean(el?.classList?.contains('ed-precio-linea')) && el.textContent === texto)
 
 async function abreTaller(clave = null) {
   const r = pinta()
@@ -226,40 +222,7 @@ describe('EditorReel · la galería de estilos', () => {
   })
 })
 
-describe('EditorReel · el precio, antes de subir', () => {
-  it('«Esto cuesta… · te quedan…» con la duración del vídeo; sin saldo no deja empezar y lleva a recargar', async () => {
-    h.precios = { paga: true, saldo: 5, precios: PRECIOS_FIJOS }
-    h.duracion = 200
-    await abreTaller('kallaway')
-    expect(screen.getByText(/Cuesta 150 créditos por cada 3 minutos/)).toBeTruthy()
-    await eligeVideo()
-    expect(await lineaPrecio('Esto cuesta 300 créditos · te quedan 500')).toBeTruthy()
-    expect(screen.getByText(/3:20 de vídeo: 2 × 150 créditos/)).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Editar vídeo' }).disabled).toBe(false)
-    cleanup()
-
-    h.precios = { paga: true, saldo: 2, precios: PRECIOS_FIJOS }
-    await abreTaller('kallaway')
-    await eligeVideo()
-    expect(await lineaPrecio('Esto cuesta 300 créditos · te quedan 200')).toBeTruthy()
-    expect(screen.getByText('No te llega el saldo para este vídeo.')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Editar vídeo' }).disabled).toBe(true)
-    const recarga = vi.fn()
-    window.addEventListener('helm:sin-saldo', recarga)
-    fireEvent.click(screen.getByRole('button', { name: /Recargar créditos/ }))
-    window.removeEventListener('helm:sin-saldo', recarga)
-    expect(recarga).toHaveBeenCalledTimes(1)
-  })
-
-  it('«Gratis en tu agencia» si el perfil no paga', async () => {
-    h.precios = { paga: false, saldo: null, precios: PRECIOS_FIJOS }
-    await abreTaller()
-    expect(screen.getByText('Gratis en tu agencia')).toBeTruthy()
-    await eligeVideo()
-    expect(screen.getByText('Gratis en tu agencia')).toBeTruthy()
-    expect(screen.queryByText(/Esto cuesta/)).toBeNull()
-  })
-
+describe('EditorReel · antes de subir', () => {
   it('no acepta lo que no es vídeo ni uno de más de 10 minutos', async () => {
     await abreTaller()
     fireEvent.change(screen.getByLabelText('Elegir el vídeo'), { target: { files: [archivo('notas.txt', 'text/plain', 10)] } })
@@ -273,86 +236,6 @@ describe('EditorReel · el precio, antes de subir', () => {
     expect(screen.queryByText('largo.mp4')).toBeNull()
     expect(llamadas('crear')).toEqual([])
   })
-
-  it('lo que queda se cuenta hacia abajo, como el servidor: con 1,4987 € quedan 149 y no llega', async () => {
-    h.precios = { paga: true, saldo: 1.4987, precios: PRECIOS_FIJOS }
-    await abreTaller()
-    await eligeVideo()
-    expect(await lineaPrecio('Esto cuesta 150 créditos · te quedan 149')).toBeTruthy()
-    expect(screen.getByText('No te llega el saldo para este vídeo.')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Editar vídeo' }).disabled).toBe(true)
-    cleanup()
-
-    // Justo lo que cuesta sí llega; y 0,29 € son 29 créditos (no 28 por la coma flotante).
-    h.precios = { paga: true, saldo: 1.5, precios: PRECIOS_FIJOS }
-    await abreTaller()
-    await eligeVideo()
-    expect(await lineaPrecio('Esto cuesta 150 créditos · te quedan 150')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Editar vídeo' }).disabled).toBe(false)
-    cleanup()
-    h.precios = { paga: true, saldo: 0.29, precios: PRECIOS_FIJOS }
-    await abreTaller()
-    await eligeVideo()
-    expect(await lineaPrecio('Esto cuesta 150 créditos · te quedan 29')).toBeTruthy()
-  })
-
-  it('quien no administra la agencia no compra: el botón dice «Cómo recargar»', async () => {
-    localStorage.removeItem('bw_superadmin')
-    h.precios = { paga: true, saldo: 0.2, precios: PRECIOS_FIJOS }
-    await abreTaller()
-    await eligeVideo()
-    expect(screen.queryByRole('button', { name: /Recargar créditos/ })).toBeNull()
-    const recarga = vi.fn()
-    window.addEventListener('helm:sin-saldo', recarga)
-    fireEvent.click(screen.getByRole('button', { name: 'Cómo recargar' }))
-    window.removeEventListener('helm:sin-saldo', recarga)
-    expect(recarga).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('EditorReel · el precio sin ver el saldo (no administras la agencia)', () => {
-  const sinSaldo = (alcanza = {}) => ({
-    paga: true, saldo: null,
-    alcanza: { 'editor-reels': true, 'portada-ia': true, 'trial-reel': true, ...alcanza },
-    precios: PRECIOS_FIJOS,
-  })
-
-  it('solo el precio, sin «te quedan…»; si alcanza, deja empezar', async () => {
-    localStorage.removeItem('bw_superadmin')
-    h.precios = sinSaldo()
-    h.duracion = 200
-    await abreTaller('kallaway')
-    await eligeVideo()
-    expect(await lineaPrecio('Esto cuesta 300 créditos')).toBeTruthy()
-    expect(screen.queryByText(/te quedan/)).toBeNull()
-    expect(screen.queryByText(/No te llega|no tiene créditos suficientes/)).toBeNull()
-    expect(screen.getByRole('button', { name: 'Editar vídeo' }).disabled).toBe(false)
-  })
-
-  it('si a la agencia no le alcanza ni para un bloque, lo dice sin cifras y no deja empezar', async () => {
-    localStorage.removeItem('bw_superadmin')
-    h.precios = sinSaldo({ 'editor-reels': false })
-    await abreTaller()
-    await eligeVideo()
-    expect(await lineaPrecio('Esto cuesta 150 créditos')).toBeTruthy()
-    expect(screen.queryByText(/te quedan/)).toBeNull()
-    expect(screen.getByText('La agencia no tiene créditos suficientes para este vídeo.')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Editar vídeo' }).disabled).toBe(true)
-    expect(screen.getByRole('button', { name: 'Cómo recargar' })).toBeTruthy()
-  })
-
-  it('el 402 genérico del servidor se enseña tal cual y ofrece cómo recargar', async () => {
-    localStorage.removeItem('bw_superadmin')
-    h.precios = sinSaldo()
-    const msg = 'La agencia no tiene créditos suficientes para esto (cuesta 150 créditos). Pide a quien administra la agencia que recargue.'
-    h.errorCrear = new Error(msg)
-    await abreTaller()
-    await eligeVideo()
-    fireEvent.click(screen.getByRole('button', { name: 'Editar vídeo' }))
-    expect(await screen.findByText(msg)).toBeTruthy()
-    expect(within(screen.getByRole('alert')).getByRole('button', { name: 'Cómo recargar' })).toBeTruthy()
-    expect(llamadas('trozo')).toEqual([])
-  })
 })
 
 describe('EditorReel · editar un vídeo', () => {
@@ -361,7 +244,6 @@ describe('EditorReel · editar un vídeo', () => {
     // Soltarlo encima también vale.
     fireEvent.drop(container.querySelector('.ed-subida'), { dataTransfer: { files: [video('toma.mp4', 3000)] } })
     await screen.findByText('toma.mp4')
-    expect(await lineaPrecio('Esto cuesta 150 créditos · te quedan 1000')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Editar vídeo' }))
 
     expect(await screen.findByText(/«toma\.mp4» ya está en cola/)).toBeTruthy()
@@ -412,29 +294,24 @@ describe('EditorReel · editar un vídeo', () => {
     expect(llamadas('lanzar')[0][2]).toEqual([{ id: 'r1', palabra: 'factura' }, { id: 'r2' }, { id: 'r3' }, { id: 'r4' }])
   })
 
-  it('402 al crear: no sube nada, lo dice tal cual y deja recargar', async () => {
-    const msg = 'No tienes saldo suficiente: esto cuesta 150 créditos y te quedan 20. Recarga en Créditos.'
-    h.errorCrear = new Error(msg)
+  it('402 al crear (licencia de la agencia no activa): no sube nada y lo dice tal cual', async () => {
+    const msg = 'La licencia de tu agencia no está activa. Págala (97 €/año) para seguir usando HELM.'
+    h.errorCrear = Object.assign(new Error(msg), { status: 402 })
     await abreTaller('vilmanunez')
     await eligeVideo()
     fireEvent.click(screen.getByRole('button', { name: 'Editar vídeo' }))
     expect(await screen.findByText(msg)).toBeTruthy()
     expect(llamadas('trozo')).toEqual([])
-    const recarga = vi.fn()
-    window.addEventListener('helm:sin-saldo', recarga)
-    fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: /Recargar créditos/ }))
-    window.removeEventListener('helm:sin-saldo', recarga)
-    expect(recarga.mock.calls[0][0].detail).toBe(msg)
     // Sigue en el taller, listo para volver a probar.
     expect(screen.getByRole('button', { name: 'Editar vídeo' })).toBeTruthy()
   })
 
   it('402 al lanzar: el vídeo queda subido y se lanza luego sin volver a subirlo', async () => {
-    h.errorLanzar = new Error('No tienes saldo suficiente: esto cuesta 150 créditos y te quedan 20. Recarga en Créditos.')
+    h.errorLanzar = Object.assign(new Error('La licencia de tu agencia no está activa. Págala (97 €/año) para seguir usando HELM.'), { status: 402 })
     await abreTaller()
     await eligeVideo()
     fireEvent.click(screen.getByRole('button', { name: 'Editar vídeo' }))
-    expect(await screen.findByText(/No tienes saldo suficiente/)).toBeTruthy()
+    expect(await screen.findByText(/La licencia de tu agencia no está activa/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Lanzar la edición' }))
     expect(await screen.findByText(/«toma\.mp4» ya está en cola/)).toBeTruthy()
     expect(llamadas('crear')).toHaveLength(1)
@@ -641,20 +518,17 @@ describe('EditorReel · cuando «lanzar» no sale', () => {
 })
 
 describe('EditorReel · tus vídeos', () => {
-  it('cada estado en castellano con su progreso, lo cobrado, descargar y «Qué ha quitado»', async () => {
+  it('cada estado en castellano con su progreso, descargar y «Qué ha quitado»', async () => {
     pinta()
     const fila = (await screen.findByText('lista.mp4')).closest('li')
     expect(within(fila).getByRole('button', { name: /Descargar/ })).toBeTruthy()
     expect(within(fila).getByText('0:41')).toBeTruthy()
-    expect(within(fila).getByText('150 créditos')).toBeTruthy()
     expect(within(fila).getByText(/estilo @hormozi · 2 recursos/)).toBeTruthy()
     const montando = screen.getByText('montando.mov').closest('li')
     expect(within(montando).getByText('Montando')).toBeTruthy()
     expect(within(montando).getByText(/Montando el vídeo \(1:00 → 0:41\) · 63 %/)).toBeTruthy()
-    expect(within(montando).getByText('costará 300 créditos')).toBeTruthy()
     const mal = screen.getByText('mal.mp4').closest('li')
     expect(within(mal).getByText('No se puede leer ese vídeo.')).toBeTruthy()
-    expect(within(mal).getByText('sin cobrar')).toBeTruthy()
     // «Qué ha quitado» trae el resumen del plan.
     fireEvent.click(within(fila).getByRole('button', { name: /Qué ha quitado/ }))
     expect(await screen.findByText(/«Esta IA hace que tu negocio venda más\.»/)).toBeTruthy()
@@ -676,7 +550,6 @@ describe('EditorReel · tus vídeos', () => {
     fireEvent.change(input, { target: { files: [video('medias.mp4', 3000)] } })
     expect(await screen.findByRole('heading', { name: 'Editar con el estilo de @kallaway' })).toBeTruthy()
     expect(screen.getByText(/Esta subida se quedó a medias/)).toBeTruthy()
-    expect(await lineaPrecio('Esto cuesta 150 créditos · te quedan 1000')).toBeTruthy()
     expect(screen.getByText('logo.png')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Seguir subiendo' }))
     expect(await screen.findByText(/«medias\.mp4» ya está en cola/)).toBeTruthy()
@@ -687,7 +560,7 @@ describe('EditorReel · tus vídeos', () => {
     expect(screen.queryByRole('button', { name: /Ajustar el estilo/ })).toBeNull()
   })
 
-  it('una subida que llegó entera (p. ej. sin saldo al lanzar) se lanza desde la lista, sin volver a elegir el archivo', async () => {
+  it('una subida que llegó entera (p. ej. si falló al lanzar) se lanza desde la lista, sin volver a elegir el archivo', async () => {
     h.ediciones.unshift({
       id: 'm', nombre_original: 'entero.mp4', estado: 'subiendo', progreso: 0, paso: 'Vídeo subido', duracion_original: null, duracion_final: null,
       created_at: ahora(), error: null, estilo_ref: 'kallaway', precio_eur: 3, cobrado_eur: null,
@@ -701,8 +574,6 @@ describe('EditorReel · tus vídeos', () => {
     expect(await screen.findByRole('heading', { name: 'Editar con el estilo de @kallaway' })).toBeTruthy()
     expect(screen.getByText(/El vídeo ya llegó entero/)).toBeTruthy()
     expect(screen.getByText('ya subido')).toBeTruthy()
-    expect(await lineaPrecio('Esto cuesta 300 créditos · te quedan 1000')).toBeTruthy()
-    expect(screen.getByText(/Es el precio de cuando empezaste a subirlo/)).toBeTruthy()
     // La palabra de cada recurso se pone (otra vez) aquí antes de lanzar.
     fireEvent.change(screen.getByLabelText('Cuando diga… (foto.jpg)'), { target: { value: 'factura' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lanzar la edición' }))

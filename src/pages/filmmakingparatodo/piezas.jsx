@@ -43,7 +43,7 @@ export function TrasHilo({ sk, slug }) {
       <h3>Crea tu contenido con HELM</h3>
       <p>
         Referencias, guiones, calendario y Drive en un solo panel, con agentes que trabajan solos. Para tu marca y
-        para la de cada cliente. Sin suscripción: pagas por uso, con créditos de regalo al empezar.
+        para la de cada cliente. Una licencia de 97 € al año para tu agencia, y la IA la pones tú.
       </p>
       <div className="aip-helm-btns">
         <a className="aip-btn pequeno" href={HELM_REGISTRO} onClick={() => track('clic_cta', { donde: `fmpt-helm-registro-${slug}` })}>

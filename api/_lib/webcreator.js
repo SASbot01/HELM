@@ -23,7 +23,7 @@ import { buscarWeb, urlPublica, fetchPublico, decodeEntidades } from './web.js'
 import { buscarNegocios } from './places.js'
 import { claudeTurno } from './anthropic.js'
 import { proveedorDe } from './llm.js'
-import { claveHelm } from './creditos.js'
+import { claveHelm } from './licencia.js'
 import { notificar } from './notificar.js'
 
 const recorta = (s, n) => String(s ?? '').slice(0, n)

@@ -2,10 +2,10 @@
 // (subtitulos.js), el plan (plan.js, con las imágenes y clips de apoyo, el
 // logo y la música), los argumentos de ffmpeg (render.js, sin lanzar nada),
 // los recursos (recursos.js: la firma de los bytes, la orientación EXIF), la
-// API (api/editor.js: crear, trozos, recursos, lanzar, con el saldo) con
-// Supabase simulado, y el trabajo del worker (trabajo.js) con ffmpeg de verdad
-// y Whisper simulado: monta con recursos y cobra solo si sale bien. El montaje
-// completo, con comprobaciones fotograma a fotograma: scripts/prueba-editor.mjs.
+// API (api/editor.js: crear, trozos, recursos, lanzar) con Supabase simulado,
+// y el trabajo del worker (trabajo.js) con ffmpeg de verdad y Whisper simulado:
+// monta con recursos (desde la licencia anual no se cobra: cobrado 0). El
+// montaje completo, con comprobaciones fotograma a fotograma: scripts/prueba-editor.mjs.
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -762,7 +762,7 @@ const { requireProfileAccess, puedeUsarAgentes, puedeVerSaldo } = await import('
 const { sondeaVideo } = await import('../api/_lib/editor/formato.js')
 const { sondeaVideo: sondeaVideoReal } = await vi.importActual('../api/_lib/editor/formato.js')
 const { rutaEditado, dirEdicion, dirRecursos, rutaRecurso, limpiaEdiciones, pasaDelTope } = await import('../api/_lib/editor/archivos.js')
-const { editorRender, cobraEdicion, reintentaCobros, cierraColgadas, edicionFallida, ABANDONADA } = await import('../api/_lib/editor/trabajo.js')
+const { editorRender, cierraColgadas, edicionFallida, ABANDONADA } = await import('../api/_lib/editor/trabajo.js')
 const SONDEO = { ancho: 1080, alto: 1920, duracion: 12.5, audio: true }
 
 let ip = 0
@@ -789,7 +789,6 @@ const trozo = (id, offset, datos, query = {}) => llama({ method: 'POST', action:
 const sube = (id, tipo, datos, nombre = 'x', query = {}) => llama({ method: 'POST', action: 'recurso', query: { id, tipo, nombre, ...query }, crudo: datos })
 const lanza = (id, recursos) => llama({ method: 'POST', action: 'lanzar', body: { id, ...(recursos ? { recursos } : {}) } })
 const VIDEO = Buffer.concat([ftyp('qt  '), Buffer.alloc(64 * 1024 - ftyp('qt  ').length, 5)])
-const saldo = () => db.agencias.find(a => a.id === AGENCIA).saldo
 
 beforeEach(() => {
   db.helm_ediciones = []
@@ -834,34 +833,6 @@ describe('api/editor: crear', () => {
     expect(db.helm_ediciones.find(f => f.id === s.body.edicion.id).estilo).toMatchObject({ mayusculas: false, palabrasPorBloque: 2 })
     expect((await crea({ estilo_ref: 'no-existe' })).statusCode).toBe(400)
     expect((await crea({ params: 'x' })).statusCode).toBe(400)
-  })
-
-  it('sin saldo no se empieza (402 con el mensaje); lo que ya está en marcha en la agencia cuenta; la casa y sin agencia no pagan', async () => {
-    db.agencias[0].saldo = 2
-    const r = await crea({ duracion: 200 })
-    expect(r.statusCode).toBe(402)
-    expect(r.body.error).toBe('No tienes saldo suficiente: esto cuesta 300 créditos y te quedan 200. Recarga en Créditos.')
-    expect(db.helm_ediciones).toHaveLength(0)
-    expect(fs.existsSync(path.join(DATOS, 'editor')) ? fs.readdirSync(path.join(DATOS, 'editor')).filter(n => !fs.existsSync(path.join(DATOS, 'editor', n, 'subida.json'))).length >= 0 : true).toBe(true)
-    // 3 € y otro perfil de la agencia con una de 1,50 € en cola: no llega para otra de 3 €.
-    db.agencias[0].saldo = 3
-    db.helm_ediciones.push({ id: nuevoId(), client_id: VECINO, estado: 'en_cola', precio_eur: 1.5, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    const r2 = await crea({ duracion: 200 })
-    expect(r2.statusCode).toBe(402)
-    expect(r2.body.error).toContain('ya están apartados')
-    // Pero sí para una de 1,50 €; y lo ya cobrado o terminado no cuenta.
-    expect((await crea({ duracion: 100 })).statusCode).toBe(200)
-    db.helm_ediciones = [{ id: nuevoId(), client_id: VECINO, estado: 'listo', precio_eur: 3, cobrado_eur: 3 }]
-    expect((await crea({ duracion: 200 })).statusCode).toBe(200)
-    // La agencia de la casa no paga; un perfil sin agencia, tampoco.
-    db.helm_ediciones = []
-    db.agencias[0].saldo = 0
-    db.agencias[0].sin_cobro = true
-    expect((await crea({ duracion: 500 })).statusCode).toBe(200)
-    db.agencias[0].sin_cobro = false
-    db.clients[0].agencia_id = null
-    db.helm_ediciones = []
-    expect((await crea({ duracion: 500 })).statusCode).toBe(200)
   })
 
   it('como mucho 2 subiendo o en cola por perfil (429); las abandonadas no cuentan; topes de tipo, peso y duración', async () => {
@@ -1060,26 +1031,6 @@ describe('api/editor: lanzar', () => {
     expect(db.agent_jobs).toHaveLength(1)
   })
 
-  it('sin saldo para la duración real: 402 y la edición sigue subida; al recargar, se lanza', async () => {
-    db.agencias[0].saldo = 2
-    const id = await subida({ duracion: 60 })
-    await trozo(id, 0, VIDEO)
-    sondea.mockResolvedValue({ ...SONDEO, duracion: 200 })
-    const r = await lanza(id)
-    expect(r.statusCode).toBe(402)
-    expect(r.body.error).toBe('No tienes saldo suficiente: esto cuesta 300 créditos y te quedan 200. Recarga en Créditos.')
-    expect(db.helm_ediciones[0].estado).toBe('subiendo')
-    expect(db.agent_jobs).toHaveLength(0)
-    expect(fs.existsSync(path.join(dirEdicion(id), 'subida.part'))).toBe(true)
-    db.agencias[0].saldo = 10
-    const bien = await lanza(id)
-    expect(bien.statusCode).toBe(200)
-    expect(bien.body.edicion).toMatchObject({ estado: 'en_cola', precio_eur: 3 })
-    // Lanzar no cobra: cobra el worker al terminar bien.
-    expect(saldo()).toBe(10)
-    expect(db.agencia_movimientos).toHaveLength(0)
-  })
-
   it('con la duración real de «10:00» (600,2 s según ffprobe) se lanza: el medio segundo de gracia vale también aquí', async () => {
     const id = await subida({ duracion: 599 })
     await trozo(id, 0, VIDEO)
@@ -1234,21 +1185,13 @@ describe('lo que se queda colgado (el worker, cada hora; y cuando se rinde)', ()
     const log = vi.fn()
     expect(await cierraColgadas({ log })).toBe(3)
     expect(de(subidaVieja)).toMatchObject({ estado: 'error', error: ABANDONADA })
-    expect(de(enColaSinTrabajo)).toMatchObject({ estado: 'error', paso: 'No se pudo editar', error: expect.stringContaining('no se te ha cobrado') })
+    expect(de(enColaSinTrabajo)).toMatchObject({ estado: 'error', paso: 'No se pudo editar', error: expect.stringContaining('se quedó a medias') })
     expect(de(montandoFallida).estado).toBe('error')
     // Con su trabajo pendiente, recién lanzada (puede estar encolándose) o subiendo hace poco: se quedan.
     for (const f of [subidaViva, enColaConTrabajo, recienLanzada]) expect(de(f).estado).toBe(f.estado)
     expect(de(lista).estado).toBe('listo')
     expect(log).toHaveBeenCalledTimes(2)
     expect(await cierraColgadas()).toBe(0)
-  })
-
-  it('una edición colgada en cola no aparta su precio del saldo de la agencia para siempre', async () => {
-    db.agencias[0].saldo = 1.5
-    db.helm_ediciones = [fila('en_cola', 90, { client_id: VECINO })]
-    expect((await crea({ duracion: 60 })).statusCode).toBe(402)
-    expect(await cierraColgadas()).toBe(1)
-    expect((await crea({ duracion: 60 })).statusCode).toBe(200)
   })
 
   it('cuando el worker se rinde: la fila en cola o a medias pasa a error con el motivo; una lista, de otro perfil o sin id, no se toca', async () => {
@@ -1295,7 +1238,7 @@ describe('lo que se queda colgado (el worker, cada hora; y cuando se rinde)', ()
     const nunca = conFallos(99)
     await expect(editorRender(job(enCola), { db: nunca, esperaMs: 0 })).rejects.toThrow(/no contesta/)
     expect(nunca.lecturas()).toBe(3)
-    expect(de(enCola)).toMatchObject({ estado: 'error', error: expect.stringContaining('no se te ha cobrado') })
+    expect(de(enCola)).toMatchObject({ estado: 'error', error: expect.stringContaining('se quedó a medias') })
     expect(db.agencia_movimientos).toHaveLength(0)
   })
 })
@@ -1328,7 +1271,7 @@ describe('trabajo editor-render', () => {
   const { supabase } = { supabase: { from: (t) => consulta(t), rpc: (...a) => moverSaldo(...a) } }
   const palabrasDe = () => [...dice('Esta IA hace que tu negocio venda más.', 0.4), ...dice('Esta IA hace que tu negocio venda más porque sí.', 3.4)]
 
-  it.skipIf(!hayFfmpeg)('transcribe (simulado), planifica, monta, deja la fila en «listo» y cobra su precio una sola vez', async () => {
+  it.skipIf(!hayFfmpeg)('transcribe (simulado), planifica, monta y deja la fila en «listo» (con cobrado 0: ya no se cobra)', async () => {
     const { sondea: sondeaReal } = await vi.importActual('../api/_lib/variantes.js')
     sondea.mockImplementation(sondeaReal)
     sondeaVideo.mockImplementation(sondeaVideoReal)
@@ -1341,7 +1284,7 @@ describe('trabajo editor-render', () => {
     await editorRender({ payload: { clientId: PERFIL, edicionId: id } }, { db: supabase, transcribe })
 
     const fila = db.helm_ediciones[0]
-    expect(fila).toMatchObject({ estado: 'listo', progreso: 100, error: null, cobrado_eur: 1.5 })
+    expect(fila).toMatchObject({ estado: 'listo', progreso: 100, error: null, cobrado_eur: 0 })
     expect(transcribe).toHaveBeenCalledTimes(1)
     expect(fila.plan.resumen.tomas).toBe(1)
     // ffprobe, la voz para Whisper y el montaje: los tres abren el original como MP4/MOV.
@@ -1351,13 +1294,6 @@ describe('trabajo editor-render', () => {
     expect(fila.bytes).toBe(fs.statSync(rutaEditado(id)).size)
     // Ni el audio para Whisper ni los subtítulos se quedan en la carpeta.
     expect(fs.readdirSync(dirEdicion(id)).sort()).toEqual(['editado.mp4', 'original.mp4'])
-    // Cobrado: 1,50 € a la agencia del perfil, con su referencia.
-    expect(saldo()).toBe(98.5)
-    expect(db.agencia_movimientos).toEqual([expect.objectContaining({ agencia_id: AGENCIA, importe: -1.5, tipo: 'consumo', origen: 'auto', client_id: PERFIL, modelo: 'editor-reels', referencia: `editor:${id}` })])
-    // Si el worker lo repite (se cayó antes de apuntarlo), no se cobra otra vez.
-    expect(await cobraEdicion(PERFIL, id, 1.5)).toBe(1.5)
-    expect(db.agencia_movimientos).toHaveLength(1)
-    expect(saldo()).toBe(98.5)
 
     // Si la fila ya no está (la borraron), no hace nada.
     db.helm_ediciones = []
@@ -1390,7 +1326,7 @@ describe('trabajo editor-render', () => {
     await editorRender({ payload: { clientId: PERFIL, edicionId: id } }, { db: supabase, transcribe: async () => ({ palabras }) })
 
     const fila = db.helm_ediciones[0]
-    expect(fila).toMatchObject({ estado: 'listo', error: null, cobrado_eur: 1.5 })
+    expect(fila).toMatchObject({ estado: 'listo', error: null, cobrado_eur: 0 })
     expect(fila.plan.resumen).toMatchObject({ recursos: 2, recursosEnPalabra: 1, logo: true, musica: true })
     // El clip, como MP4/MOV en el montaje; la música en WAV, tal cual.
     expect(abrenComoMov(rutaRecurso(id, ids.clip, 'mp4'))).toBe(1)
@@ -1459,7 +1395,7 @@ describe('trabajo editor-render', () => {
     expect(malos).toEqual([])
   }, 120_000)
 
-  it.skipIf(!hayFfmpeg)('si falla, no cobra; la casa (sin_cobro) no paga: cobrado 0; si el apunte falla, lo reintenta luego', async () => {
+  it.skipIf(!hayFfmpeg)('si falla (Whisper roto, o un recurso que ya no está), error claro y sin montar a medias', async () => {
     const { sondea: sondeaReal } = await vi.importActual('../api/_lib/variantes.js')
     sondea.mockImplementation(sondeaReal)
     sondeaVideo.mockImplementation(sondeaVideoReal)
@@ -1469,46 +1405,20 @@ describe('trabajo editor-render', () => {
       '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-shortest', path.join(dirEdicion(id), 'original.mp4'))
     const fila = (extra = {}) => ({ id, client_id: PERFIL, estado: 'en_cola', estilo: { subtitulos: false }, precio_eur: 1.5, recursos: [], created_at: new Date().toISOString(), ...extra })
 
-    // Whisper falla: error y ni un céntimo.
+    // Whisper falla: error.
     db.helm_ediciones = [fila()]
     await expect(editorRender({ payload: { clientId: PERFIL, edicionId: id } }, { db: supabase, transcribe: async () => { throw new Error('whisper roto') } })).rejects.toThrow('whisper roto')
     expect(db.helm_ediciones[0].estado).toBe('error')
-    expect(db.helm_ediciones[0].cobrado_eur ?? null).toBeNull()
-    expect(db.agencia_movimientos).toHaveLength(0)
-    // Un recurso cuyo archivo ya no está: error claro, sin montar a medias ni cobrar.
+    // Un recurso cuyo archivo ya no está: error claro, sin montar a medias.
     db.helm_ediciones = [fila({ recursos: [{ id: nuevoId(), tipo: 'broll', clase: 'imagen', ext: 'jpg', nombre: 'perdida.jpg', ancho: 10, alto: 10 }] })]
     await expect(editorRender({ payload: { clientId: PERFIL, edicionId: id } }, { db: supabase, transcribe: async () => ({ palabras: [] }) })).rejects.toThrow(/perdida\.jpg/)
-    expect(db.agencia_movimientos).toHaveLength(0)
-    expect(saldo()).toBe(100)
-
-    // La casa: listo y cobrado_eur = 0, sin movimiento.
-    db.agencias[0].sin_cobro = true
-    db.helm_ediciones = [fila()]
-    await editorRender({ payload: { clientId: PERFIL, edicionId: id } }, { db: supabase, transcribe: async () => ({ palabras: palabrasDe() }) })
-    expect(db.helm_ediciones[0]).toMatchObject({ estado: 'listo', cobrado_eur: 0 })
-    expect(db.agencia_movimientos).toHaveLength(0)
-
-    // La base no deja apuntar el cobro: listo, cobrado_eur vacío; reintentaCobros lo apunta luego (una vez).
-    db.agencias[0].sin_cobro = false
-    db.rpcCaida = true
-    db.helm_ediciones = [fila()]
-    await editorRender({ payload: { clientId: PERFIL, edicionId: id } }, { db: supabase, transcribe: async () => ({ palabras: palabrasDe() }) })
-    expect(db.helm_ediciones[0]).toMatchObject({ estado: 'listo' })
-    expect(db.helm_ediciones[0].cobrado_eur ?? null).toBeNull()
-    expect(await reintentaCobros({ db: supabase })).toBe(0)
-    db.rpcCaida = false
-    expect(await reintentaCobros({ db: supabase })).toBe(1)
-    expect(db.helm_ediciones[0].cobrado_eur).toBe(1.5)
-    expect(await reintentaCobros({ db: supabase })).toBe(0)
-    expect(db.agencia_movimientos).toHaveLength(1)
-    expect(saldo()).toBe(98.5)
   }, 120_000)
 })
 
-// ── El vídeo en bruto, solo MP4/MOV (por sus bytes), el rol, lo apartado y el disco ──
+// ── El vídeo en bruto, solo MP4/MOV (por sus bytes), el rol, el cerrojo y el disco ──
 const { argumentosSonda, formatoDe, esVideoMov, NO_ES_MP4 } = await import('../api/_lib/editor/formato.js')
 const { tipoAdmitido, extensionDe, ocupaEdicion } = await import('../api/_lib/editor/archivos.js')
-const { conCerrojoAgencia, reservaTemporal } = await import('../api/_lib/creditos.js')
+const { conCerrojoAgencia } = await import('../api/_lib/creditos.js')
 const KB = 1024
 const MiB = 1024 * 1024
 const SIN_ROL = 'Tu rol no puede usar los agentes de este perfil.'
@@ -1660,66 +1570,19 @@ describe('api/editor: quién puede gastar (el rol en el perfil)', () => {
   })
 })
 
-describe('api/editor: lo apartado es el de toda la agencia, con su cerrojo', () => {
-  it('una variante de Trial reels en cola o una portada generándose (de otro perfil de la agencia) también apartan', async () => {
-    db.agencias[0].saldo = 1.5
-    db.helm_trial_reels = [{ id: nuevoId(), client_id: VECINO, estado: 'en_cola', precio_eur: 0.3, cobrado_eur: null, created_at: haceDias(0), updated_at: haceDias(0) }]
-    const r = await crea({ duracion: 60 })
-    expect(r.statusCode).toBe(402)
-    expect(r.body.error).toContain('ya están apartados')
-    db.helm_trial_reels = []
-    const liberar = reservaTemporal(AGENCIA, 0.4)
-    try {
-      expect((await crea({ duracion: 60 })).statusCode).toBe(402)
-    } finally { liberar() }
-    expect((await crea({ duracion: 60 })).statusCode).toBe(200)
-  })
-
-  it('al lanzar, su propia fila no cuenta dos veces: con 1,50 € justos, se lanza', async () => {
-    db.agencias[0].saldo = 1.5
+describe('api/editor: el cerrojo de la agencia', () => {
+  it('lanzar espera al cerrojo de la agencia (el mismo de Portadas y Trial reels)', async () => {
     const { body: { edicion: { id } } } = await crea({ duracion: 60 })
     await trozo(id, 0, VIDEO)
-    sondea.mockResolvedValueOnce({ ...SONDEO, duracion: 60 })
-    const r = await lanza(id)
-    expect(r.statusCode).toBe(200)
-    expect(r.body.edicion).toMatchObject({ estado: 'en_cola', precio_eur: 1.5 })
-  })
-
-  it('a quien no administra la agencia, el 402 no le dice el saldo (ni al crear ni al lanzar)', async () => {
-    puedeVerSaldo.mockImplementation(async () => false)
-    db.agencias[0].saldo = 2
-    const r = await crea({ duracion: 200 })
-    expect(r.statusCode).toBe(402)
-    expect(r.body.error).toBe('La agencia no tiene créditos suficientes para esto (cuesta 300 créditos). Pide a quien administra la agencia que recargue.')
-    const { body: { edicion: { id } } } = await crea({ duracion: 60 })
-    await trozo(id, 0, VIDEO)
-    sondea.mockResolvedValueOnce({ ...SONDEO, duracion: 200 })
-    const l = await lanza(id)
-    expect(l.statusCode).toBe(402)
-    expect(l.body.error).toContain('créditos suficientes')
-    expect(l.body.error).not.toMatch(/te quedan|apartad/)
-    expect(puedeVerSaldo).toHaveBeenCalledWith({ userId: 'b0000000-0000-4000-8000-000000000001' }, PERFIL)
-  })
-
-  it('comprobar y apartar van dentro del cerrojo de la agencia (el mismo de Portadas y Trial reels)', async () => {
-    db.agencias[0].saldo = 1.9
-    const { body: { edicion: { id } } } = await crea({ duracion: 60 })
-    await trozo(id, 0, VIDEO)
-    // Otro agente de la agencia tiene el cerrojo: mientras, aparta 0,50 €.
+    // Otro agente de la agencia tiene el cerrojo: mientras, no se lanza.
     let suelta = null
     const otro = conCerrojoAgencia(AGENCIA, () => new Promise(ok => { suelta = ok }))
     const lanzado = lanza(id)
     await new Promise(r => setTimeout(r, 30))
     expect(db.helm_ediciones[0].estado).toBe('subiendo')
-    const liberar = reservaTemporal(AGENCIA, 0.5)
     suelta()
     await otro
-    // Al entrar ya ve lo apartado por el otro: 1,90 − 0,50 no llega para 1,50.
-    const r = await lanzado
-    expect(r.statusCode).toBe(402)
-    expect(db.helm_ediciones[0].estado).toBe('subiendo')
-    liberar()
-    expect((await lanza(id)).statusCode).toBe(200)
+    expect((await lanzado).statusCode).toBe(200)
   })
 })
 

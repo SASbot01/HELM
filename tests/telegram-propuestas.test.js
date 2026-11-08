@@ -39,7 +39,8 @@ vi.mock('../api/_lib/bot-herramientas.js', () => ({
 vi.mock('../api/_lib/equipo.js', () => ({ AGENTES_LANZABLES: [], encolaAgente: async () => {}, tokensDeHoy: async () => 0 }))
 vi.mock('../api/chat.js', () => ({ responderMensaje: async () => ({ respuesta: '' }), COMMANDS: [] }))
 vi.mock('../api/_lib/llm.js', () => ({ proveedorDe: () => 'claude' }))
-vi.mock('../api/_lib/creditos.js', () => ({ claveHelm: () => 'clave-de-helm', exigirSaldo: async () => {}, cobrar: async () => {} }))
+// La clave de HELM tal cual (en producción, la de la agencia: claveParaLlamar).
+vi.mock('../api/_lib/licencia.js', async (original) => ({ ...(await original()), claveHelm: () => 'clave-de-helm', claveParaLlamar: async (k) => k }))
 vi.mock('../api/_lib/claude-agente.js', () => ({ turnoAgente: vi.fn(), cierraPendientes: () => [{ content: [] }], RECHAZADA: 'rechazada' }))
 const decididas = vi.hoisted(() => [])
 vi.mock('../api/_lib/propuestas.js', async () => {

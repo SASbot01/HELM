@@ -73,14 +73,13 @@ function ejemploParaSubir(img) {
 }
 
 /**
- * Lo que se enseña en el botón de generar: «· 40 créditos», «· gratis» o nada
- * mientras no se sabe. `precios` es lo de creditosApi.precios. «Gratis» a
- * secas: no pagan ni la agencia de la casa ni un perfil sin agencia, y
- * creditosApi.precios no dice cuál de los dos es.
+ * Lo que se enseña en el botón de generar: «· 40 créditos» o nada. Desde la
+ * licencia anual nadie paga por imagen (creditosApi.precios dice siempre «no
+ * paga»), así que, en la práctica, nada.
  */
 function etiquetaPrecio(precios, concepto = 'portada-ia') {
   if (!precios) return ''
-  if (!precios.paga) return ' · gratis'
+  if (!precios.paga) return ''
   const euros = precios.precios?.[concepto]
   return euros > 0 ? ` · ${aCreditos(euros).toLocaleString('es-ES')} créditos` : ''
 }

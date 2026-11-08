@@ -2,7 +2,7 @@
 //
 // Un solo bot para la agencia de la casa y todos sus perfiles: se le escribe
 // normal desde el móvil y él reconoce de qué perfil se habla («DCC», «Hugo»…).
-// Lo que solo lee lo contesta al momento; lo que escribe o gasta créditos lo
+// Lo que solo lee lo contesta al momento; lo que escribe algo lo
 // propone antes con botones de Aprobar y Rechazar. Ver api/telegram-agencia.js.
 //
 // Aquí cada superadmin vincula SU Telegram con un código de un solo uso, y la
@@ -248,7 +248,7 @@ export function VistaTelegram({
       ) : (
         <p className="helm-settings-lead">
           El bot de Telegram de HELM no está disponible para tu agencia. Puedes trabajar con tus perfiles desde
-          Claude, con el conector de la agencia (en Créditos).
+          Claude, con el conector de la agencia (en Perfiles → Agencia).
         </p>
       )}
 
@@ -370,9 +370,9 @@ export function VistaTelegram({
           <p className="helm-tg-aprobar">
             <ShieldCheck size={14} />
             <span>
-              Lo que solo consulta te lo contesta en el momento. Lo que escribe algo o gasta créditos te lo propone
-              antes con dos botones, <b>Aprobar</b> y <b>Rechazar</b>, y no lo hace hasta que apruebas. Cada mensaje lo
-              contesta la IA de HELM y gasta créditos de la agencia, como en el panel.
+              Lo que solo consulta te lo contesta en el momento. Lo que escribe algo te lo propone antes con dos
+              botones, <b>Aprobar</b> y <b>Rechazar</b>, y no lo hace hasta que apruebas. Cada mensaje lo contesta
+              Claude con la clave de tu agencia (Perfiles → Agencia), como en el panel.
             </span>
           </p>
         </div>

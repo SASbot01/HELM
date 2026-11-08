@@ -54,7 +54,7 @@ export const SECCIONES = [
   { key: 'informe', label: 'Informe', desc: 'Resumen y KPIs del negocio' },
   // El avatar de ventas ya no tiene entrada en el menú: es una pestaña del
   // Informe. Pero sigue teniendo su clave aquí, porque no lo ve cualquiera que
-  // entre al Informe: cada estudio gasta créditos y retrata a los clientes del
+  // entre al Informe: cada estudio gasta IA y retrata a los clientes del
   // negocio. Ningún rol lo trae de serie; quien manda en todo lo ve mientras el
   // negocio no lo apague en Secciones.
   { key: 'avatar', label: 'Avatar de ventas', desc: 'La pestaña del Informe con el cliente tipo, sacado del CRM' },

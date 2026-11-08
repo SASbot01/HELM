@@ -4,7 +4,7 @@
 // comprueba la pantalla en sus estados —con estudio, sin estudio, en curso,
 // error, sin Instagram, con fallos 402/429/409/400—, el sondeo (con
 // temporizadores falsos), el historial (envuelto y suelto), los decimales, el
-// «gratis» y que el resumen rápido de Metricas solo se esconde con un estudio
+// coste (y que con 0 no se habla de él) y que el resumen rápido de Metricas solo se esconde con un estudio
 // 'listo'.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, act, waitFor } from '@testing-library/react'
@@ -224,12 +224,12 @@ describe('EstudioContenido · la pantalla del estudio', () => {
     expect(screen.queryByText('Diagnóstico')).toBeNull()
   })
 
-  it('gratis en la agencia: coste 0 no sale como «0,00 €»', async () => {
+  it('coste 0 (la licencia anual: HELM no cobra por uso): no se habla de coste, ni de «gratis»', async () => {
     de.mockResolvedValueOnce({ ...SIN_ESTUDIO, coste_aprox_eur: 0 })
     render(<EstudioContenido clientId="demo" />)
     await screen.findByText('Convierte tus cifras en un plan')
-    expect(screen.getByText('Gratis en tu agencia')).toBeTruthy()
-    expect(screen.queryByText(/0,00 €|0 créditos/)).toBeNull()
+    expect(screen.queryByText(/gratis/i)).toBeNull()
+    expect(screen.queryByText(/0,00 €|0 créditos|Cuesta/)).toBeNull()
   })
 
   it('estudio en error: no pinta secciones, da un texto genérico (sin el error interno) y ofrece reintentar', async () => {
@@ -291,13 +291,22 @@ describe('EstudioContenido · la pantalla del estudio', () => {
     expect(screen.queryByRole('button', { name: /estudio/i })).toBeNull()
   })
 
-  it('fallo 402: avisa de que no hay saldo para recargar', async () => {
+  it('fallo 402: la licencia de la agencia no está activa', async () => {
     de.mockResolvedValueOnce(SIN_ESTUDIO)
-    ahora.mockRejectedValueOnce(apiError(402, 'sin_saldo'))
+    ahora.mockRejectedValueOnce(apiError(402, 'licencia'))
     render(<EstudioContenido clientId="demo" />)
     await screen.findByText('Convierte tus cifras en un plan')
     fireEvent.click(screen.getAllByRole('button', { name: /Generar estudio/ })[0])
-    expect(await screen.findByText(/Sin saldo: recarga créditos/)).toBeTruthy()
+    expect(await screen.findByText(/licencia de la agencia no está activa/)).toBeTruthy()
+  })
+
+  it('fallo 412: la agencia no tiene clave de Claude, con dónde ponerla', async () => {
+    de.mockResolvedValueOnce(SIN_ESTUDIO)
+    ahora.mockRejectedValueOnce(apiError(412, 'sin_clave_claude'))
+    render(<EstudioContenido clientId="demo" />)
+    await screen.findByText('Convierte tus cifras en un plan')
+    fireEvent.click(screen.getAllByRole('button', { name: /Generar estudio/ })[0])
+    expect(await screen.findByText(/clave de Claude/)).toBeTruthy()
   })
 
   it('fallo 429: avisa del tope de tres estudios al día', async () => {
