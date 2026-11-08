@@ -27,13 +27,15 @@
 //      tipo 'aprendido'): así el guionista y los demás las usan. Las que
 //      llevan 12 semanas sin reconfirmarse caducan.
 //
-// Con la clave de HELM: lo que cueste se cobra en créditos a la agencia del
-// perfil (api/_lib/creditos.js), con el origen del trabajo. Si algo falla, la
-// fila queda en 'error' con un mensaje para el usuario que dice si se cobró
-// algo; el detalle técnico va al log.
+// La IA la pone la agencia del perfil (trae-tu-clave, api/_lib/claves-
+// agencia.js): se llama con la clave de HELM y claveParaLlamada la cambia por
+// la de esa agencia; la de la casa usa la de HELM. HELM no cobra nada. Si algo
+// falla, la fila queda en 'error' con un mensaje para el usuario; el detalle
+// técnico va al log.
 import { supabase } from '../../lib/supabase.js'
 import { claudePaso, reparaArgs, modeloValido, MODELO_POR_DEFECTO } from '../anthropic.js'
-import { claveHelm, costeUsd, pagaConCreditos, precioEuros } from '../creditos.js'
+import { costeUsd } from '../creditos.js'
+import { claveHelm, iaDelPerfil } from '../claves-agencia.js'
 import { getIgConfig } from '../instagram.js'
 import { notificar } from '../notificar.js'
 import { todasLasFilas } from '../filas.js'
@@ -71,8 +73,8 @@ const REGLAS_EN_MEMORIA = 30
 // empezar. El endpoint hace lo mismo al leer y al pedir (api/estudio-contenido.js).
 const COLGADO_MS = 30 * 60_000
 const SIN_EMPEZAR_MS = 6 * 3_600_000
-const MENSAJE_COLGADO = 'El estudio se quedó a medias y se ha dado por perdido. Vuelve a pedirlo; si llegó a usar la IA, solo se ha cobrado lo que usó.'
-const MENSAJE_SIN_EMPEZAR = 'El estudio no llegó a empezar (la cola iba muy cargada) y se ha dado por perdido. Vuelve a pedirlo. No se ha cobrado nada.'
+const MENSAJE_COLGADO = 'El estudio se quedó a medias y se ha dado por perdido. Vuelve a pedirlo.'
+const MENSAJE_SIN_EMPEZAR = 'El estudio no llegó a empezar (la cola iba muy cargada) y se ha dado por perdido. Vuelve a pedirlo.'
 // Las reglas del estratega que no se reconfirman en 12 semanas salen de la
 // memoria: los modelos de Instagram cambian, y una regla vieja sin revisar
 // acaba escribiendo guiones con lo que ya no funciona.
@@ -529,19 +531,15 @@ export async function caducaAprendido(clientId, ahora = new Date()) {
 // log y a agent_jobs, que solo ve el servidor.
 const paraUsuario = (mensaje, detalle = mensaje) => Object.assign(new Error(detalle), { paraUsuario: mensaje })
 
-const eur = (x) => x.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-/** Lo que se le enseña al usuario cuando el estudio falla: qué pasó, sin tripas, y si se cobró algo. */
-async function mensajeDeFallo(e, clientId, gasto) {
-  const que = e?.paraUsuario
-    || (e?.statusCode === 402 ? 'No quedan créditos para hacer el estudio. Recarga y vuelve a pedirlo.' : '')
+/**
+ * Lo que se le enseña al usuario cuando el estudio falla: qué pasó, sin
+ * tripas. Sin licencia (402) o sin la clave de Claude de la agencia (409), el
+ * aviso tal cual: dice qué falta y dónde ponerlo.
+ */
+function mensajeDeFallo(e) {
+  return e?.paraUsuario
+    || ((e?.statusCode === 402 || e?.statusCode === 409) && e?.codigo ? e.message : '')
     || 'No se ha podido hacer el estudio. Vuelve a pedirlo en un rato.'
-  if (!(gasto.usd > 0)) return `${que} No se ha cobrado nada.`
-  const paga = await pagaConCreditos(clientId).catch(() => null)
-  if (paga === false) return `${que} No se ha cobrado nada.`
-  if (paga == null) return `${que} Si llegó a usar la IA, solo se ha cobrado lo que usó.`
-  const euros = precioEuros(gasto.usd)
-  return `${que} Se ha cobrado lo que llegó a usar la IA (${euros >= 0.01 ? `${eur(euros)} €` : 'menos de 0,01 €'}).`
 }
 
 /**
@@ -652,7 +650,11 @@ export async function generaEstudio(job) {
   const gasto = { tokens: 0, usd: 0 }
   const usd = () => Math.round(gasto.usd * 10_000) / 10_000
   try {
-    if (!claveHelm()) throw paraUsuario('El estudio no está disponible ahora mismo. Avisa a quien lleva HELM.', 'Falta la clave de Claude (AGENTS_ANTHROPIC_KEY)')
+    // De quién es la IA: la de la casa necesita la clave de HELM; un perfil de
+    // otra agencia, la suya o la de su agencia (sin licencia o sin clave,
+    // iaDelPerfil lanza el aviso).
+    const ia = await iaDelPerfil(clientId)
+    if (ia.casa && !claveHelm()) throw paraUsuario('El estudio no está disponible ahora mismo. Avisa a quien lleva HELM.', 'Falta la clave de Claude (AGENTS_ANTHROPIC_KEY)')
     const hoy = new Date()
     const ctx = await cargaPerfil(clientId)
     datos = calculaDatos({
@@ -688,7 +690,7 @@ export async function generaEstudio(job) {
   } catch (e) {
     console.log(`[estudio-contenido] ${perfil.slug} (${origen}): falló — ${String(e?.message || e).slice(0, 600)}`)
     const { error: eErr } = await supabase.from(TABLA).update({
-      estado: 'error', error: await mensajeDeFallo(e, clientId, gasto), datos,
+      estado: 'error', error: mensajeDeFallo(e), datos,
       tokens: gasto.tokens || null, coste_usd: gasto.usd ? usd() : null,
     }).eq('id', fila.id)
     if (eErr) console.log(`[estudio-contenido] ${perfil.slug}: tampoco se pudo apuntar el fallo (${eErr.message})`)

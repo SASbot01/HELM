@@ -162,7 +162,7 @@ describe('el bot y su webhook', () => {
 })
 
 describe('vincular tu Telegram', () => {
-  it('sin vincular: el botón, los ejemplos, que lo delicado pide aprobación y que gasta créditos', () => {
+  it('sin vincular: el botón, los ejemplos, que lo delicado pide aprobación y que va con la clave de la agencia', () => {
     const { texto } = pinta({ estado: estado() })
     expect(texto).toContain('Vincular mi Telegram')
     for (const e of ['¿Cuánto ha cobrado DCC este mes?', 'Apunta en Hugo un gasto de 30 € de IA', 'Lanza el guionista en Detrás de Cámaras']) {
@@ -170,7 +170,7 @@ describe('vincular tu Telegram', () => {
     }
     expect(texto).toContain('Aprobar')
     expect(texto).toContain('Rechazar')
-    expect(texto).toContain('gasta créditos de la agencia')
+    expect(texto).toContain('con la clave de tu agencia')
   })
 
   it('con el código vivo: el enlace grande, /vincular copiable, la cuenta atrás y el QR', () => {

@@ -564,7 +564,7 @@ describe('altasApi y el enlace público', () => {
   it('el de un perfil: el de SU agencia, no el de quien mira', async () => {
     respuesta = { agencia: { id: 'ag-otra', nombre: 'Otra', slug: 'otra' }, plataforma: true }
     expect(await enlaceAltaPublicaDelPerfil('c-1')).toBe('https://helm.s4sf.net/alta?a=otra')
-    expect(llamadas[0].ruta).toBe('/api/creditos?action=saldo&agenciaId=ag-otra')
+    expect(llamadas[0].ruta).toBe('/api/creditos?action=licencia&agenciaId=ag-otra')
     respuesta = { agencia: null }
     expect(await enlaceAltaPublicaDelPerfil('c-1')).toBeNull()
   })

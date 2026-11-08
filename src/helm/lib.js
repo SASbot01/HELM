@@ -335,10 +335,10 @@ async function apiFetch(path, { method = 'GET', body } = {}) {
     if (typeof window !== 'undefined') window.location.href = '/login'
     throw new Error('Tu sesión ha caducado. Vuelve a iniciar sesión.')
   }
-  // Sin créditos: el panel abre la recarga esté donde esté (AvisoSinSaldo, en
-  // Creditos.jsx). El error sigue su camino para que la vista lo pinte también.
+  // Sin licencia (402): el panel enseña el pago esté donde esté (PuertaLicencia,
+  // en Licencia.jsx). El error sigue su camino para que la vista lo pinte también.
   if (r.status === 402 && typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('helm:sin-saldo', { detail: data?.error || null }))
+    window.dispatchEvent(new CustomEvent('helm:sin-licencia', { detail: data?.error || null }))
   }
   if (!r.ok) {
     // Dejamos el código de estado (y el `codigo` que mande el servidor) en el
@@ -457,8 +457,9 @@ export const instagramApi = {
 // aprendido de una semana a otra—. El cálculo de los datos y el trabajo de la
 // IA corren en el servidor; desde aquí solo se pide el último (con su historial
 // y la base del algoritmo), se encola uno nuevo y se abre uno viejo. `ahora`
-// puede devolver 402 (sin saldo, lo coge también el aviso global), 429 (más de
-// 3 al día), 409 (ya hay uno en curso) o 400 (sin Instagram): apiFetch deja el
+// puede devolver 402 (sin licencia, lo coge también la puerta global), 409 (ya
+// hay uno en curso, o `sin_clave_ia`: la agencia no ha puesto su clave de
+// Claude), 429 (más de 3 al día) o 400 (sin Instagram): apiFetch deja el
 // status y el `codigo` del servidor en el error, y la vista decide el mensaje
 // por ellos (nunca por el texto).
 export const estudioContenidoApi = {
@@ -654,7 +655,7 @@ export const enlaceAltaPublica = (agenciaSlug) =>
 export async function enlaceAltaPublicaDelPerfil(clientId) {
   const { data, error } = await supabase.from('clients').select('agencia_id').eq('id', clientId).maybeSingle()
   if (error) throw error
-  const r = await creditosApi.saldo(data?.agencia_id || undefined)
+  const r = await licenciaApi.estado(data?.agencia_id || undefined)
   return r?.agencia?.slug ? enlaceAltaPublica(r.agencia.slug) : null
 }
 
@@ -718,22 +719,30 @@ export const perfilesApi = {
   borrar: (clientId, confirma) => apiFetch('/api/perfiles?action=borrar', { method: 'POST', body: { clientId, confirma } }),
 }
 
-// ── Créditos de la agencia (api/creditos.js) ───────────────────────────────
-export const creditosApi = {
-  saldo: (agenciaId) => apiFetch(`/api/creditos?action=saldo${agenciaId ? `&agenciaId=${agenciaId}` : ''}`),
-  comprar: (pack) => apiFetch('/api/creditos?action=comprar', { method: 'POST', body: { pack } }),
+// ── Licencia y claves de la agencia (api/creditos.js) ──────────────────────
+// Desde el 2026-11-08: 97 €/año por agencia y la IA la pone ella con su clave.
+const conAgencia = (agenciaId) => (agenciaId ? `&agenciaId=${encodeURIComponent(agenciaId)}` : '')
+export const licenciaApi = {
+  // { agencia, exenta, vigente, venceAt, precio, meses, pagosActivos, puedePagar, esAdmin, plataforma }
+  estado: (agenciaId) => apiFetch(`/api/creditos?action=licencia${conAgencia(agenciaId)}`),
+  // { url } de Stripe Checkout: se va allí y vuelve a /admin?licencia=ok&session_id=…
+  pagar: () => apiFetch('/api/creditos?action=pagar-licencia', { method: 'POST', body: {} }),
   confirmar: (sessionId) => apiFetch('/api/creditos?action=confirmar', { method: 'POST', body: { sessionId } }),
-  bienvenida: () => apiFetch('/api/creditos?action=bienvenida', { method: 'POST', body: {} }),
-  agencias: () => apiFetch('/api/creditos?action=agencias'),
-  ajuste: (agenciaId, euros, nota) => apiFetch('/api/creditos?action=ajuste', { method: 'POST', body: { agenciaId, euros, nota } }),
-  // Lo que cuesta cada trabajo a precio fijo y si este perfil paga:
-  // { paga, saldo (€ o null), precios: PRECIOS_FIJOS (€) }. La cuenta del
-  // Editor por duración, con precioEditor de ./precios.js.
-  precios: (clientId) => apiFetch(`/api/creditos?action=precios&clientId=${encodeURIComponent(clientId)}`),
+  // { anthropic: { configurada, last4, modelo }, replicate: { configurada, last4 } }: nunca la clave.
+  claves: (agenciaId) => apiFetch(`/api/creditos?action=claves${conAgencia(agenciaId)}`),
+  // { anthropicKey?, anthropicModel?, replicateToken?, borrar?: ['anthropic'|'replicate'] }
+  guardarClaves: (cambios, agenciaId) => apiFetch(`/api/creditos?action=claves${conAgencia(agenciaId)}`, { method: 'POST', body: cambios }),
   // El enlace del conector de Claude de la agencia entera (sin perfil).
   enlaceMcp: () => apiFetch('/api/agents?action=mcp-enlace'),
   nuevoEnlaceMcp: () => apiFetch('/api/agents?action=mcp-enlace', { method: 'POST', body: {} }),
 }
+
+// Lo que preguntan los agentes antes de lanzar (Editor, Portadas, Trial
+// reels). HELM ya no cobra por trabajo: { paga: false, saldo: null, precios }.
+export const creditosApi = {
+  precios: (clientId) => apiFetch(`/api/creditos?action=precios&clientId=${encodeURIComponent(clientId)}`),
+}
+
 
 // ── El bot de Telegram de la agencia (api/telegram-agencia.js) ─────────────
 // Un solo bot para la agencia y todos sus perfiles. Cada superadmin vincula su
@@ -754,6 +763,8 @@ export const plataformaApi = {
   resumen: () => apiFetch('/api/plataforma?action=resumen'),
   agencia: (id) => apiFetch(`/api/plataforma?action=agencia&id=${encodeURIComponent(id)}`),
   borrar: (id, confirma) => apiFetch('/api/plataforma?action=borrar-agencia', { method: 'POST', body: { id, confirma } }),
+  // Alarga la licencia de una agencia a mano (cortesía, un pago por fuera…).
+  concederLicencia: (agenciaId, meses, nota) => apiFetch('/api/plataforma?action=conceder-licencia', { method: 'POST', body: { agenciaId, meses, nota } }),
 }
 
 // ── Mi día: los rituales diarios con la IA ─────────────────────────────────
@@ -806,8 +817,9 @@ export const portadasApi = {
     apiFetch('/api/portadas?action=fondo-ia', { method: 'POST', body: { clientId, prompt } }),
   // Portada entera con IA en un estilo (estilos de src/agents/portadas/estilosIa.js
   // o «ej:<id>» para un ejemplo subido). `fotograma`: data URL de la imagen real.
-  // fondoIa y portadaIa cuestan PRECIOS_FIJOS['portada-ia'] por imagen (402 si
-  // no llega) y devuelven { imagen, ia, cobrado (€), saldo (€ o null) }.
+  // fondoIa y portadaIa van con el token de Replicate de la agencia (409
+  // `sin_clave_ia` si no lo ha puesto) y devuelven { imagen, ia, cobrado, saldo }
+  // (cobrado 0 y saldo null: HELM ya no cobra por imagen).
   portadaIa: (clientId, { fotograma, titulo, estilo, detalle, mediaId }) =>
     apiFetch('/api/portadas?action=portada-ia', { method: 'POST', body: { clientId, fotograma, titulo, estilo, detalle, mediaId } }),
   ejemplos: (clientId) => apiFetch(`/api/portadas?action=ejemplos&clientId=${clientId}`),
@@ -854,8 +866,8 @@ export const trialReelsApi = {
 //   await subePorTrozos({ url: editorApi.urlTrozo(clientId, edicion.id), archivo, alProgreso, senal })
 //   const { recurso } = await mandaTrozo({ url: editorApi.urlRecurso(clientId, edicion.id, 'broll', archivo.name), cuerpo: archivo })
 //   await editorApi.lanzar(clientId, edicion.id, [{ id: recurso.id, palabra: 'factura' }])
-// Sin saldo, crear y lanzar contestan 402 con el mensaje para enseñar (y se
-// abre la recarga). `recibidos` dice cuánto tiene ya el servidor, para seguir
+// Sin licencia, crear y lanzar contestan 402 con el mensaje para enseñar (y se
+// abre el pago). `recibidos` dice cuánto tiene ya el servidor, para seguir
 // una subida cortada.
 //
 // Lo JSON del editor va por pideEditor, que es apiFetch con una cosa más: el
@@ -871,7 +883,7 @@ async function pideEditor(path, { method = 'GET', body } = {}) {
     ...(body ? { body: JSON.stringify(body) } : {}),
   })
   const data = await r.json().catch(() => ({}))
-  // La sesión caducada y el sin saldo, igual que en apiFetch.
+  // La sesión caducada y el sin licencia, igual que en apiFetch.
   if (r.status === 401) {
     localStorage.removeItem('bw_admin_jwt')
     localStorage.removeItem('bw_superadmin')
@@ -880,7 +892,7 @@ async function pideEditor(path, { method = 'GET', body } = {}) {
     throw Object.assign(new Error('Tu sesión ha caducado. Vuelve a iniciar sesión.'), { status: 401, datos: data })
   }
   if (r.status === 402 && typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('helm:sin-saldo', { detail: data?.error || null }))
+    window.dispatchEvent(new CustomEvent('helm:sin-licencia', { detail: data?.error || null }))
   }
   if (!r.ok) throw Object.assign(new Error(data?.error || `Error ${r.status}`), { status: r.status, datos: data })
   return data

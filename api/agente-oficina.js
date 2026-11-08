@@ -2,7 +2,7 @@
 //
 //   GET  ?action=estado    &clientId=&agente=            → qué hace, qué hace ahora, qué falta
 //   GET  ?action=historial &clientId=&agente=            → el hilo de chat
-//   POST ?action=hablar    { clientId, agente, texto, recordar? } → responde (gasta créditos)
+//   POST ?action=hablar    { clientId, agente, texto, recordar? } → responde (con la IA de la agencia)
 //   POST ?action=instruir  { clientId, agente, texto }   → guarda una indicación permanente
 //
 // Es lo que hace que ningún agente «se vea vacío»: aunque no tenga trabajo,

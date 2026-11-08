@@ -126,7 +126,7 @@ beforeEach(() => {
   h.respuestaLanzar = null
   h.errorLista = null
   h.manda = mandaPorDefecto
-  // Quien administra: el botón de recarga dice «Recargar créditos».
+  // Quien administra: el botón de recarga dice «Renovar la licencia».
   localStorage.setItem('bw_superadmin', '1')
   h.ediciones = [
     { id: 'a', nombre_original: 'lista.mp4', estado: 'listo', progreso: 100, paso: 'Listo para descargar', duracion_original: 60, duracion_final: 41, created_at: ahora(), error: null, estilo_ref: 'hormozi', recursos: [{ id: 'x1', tipo: 'broll' }, { id: 'x2', tipo: 'musica' }], precio_eur: 1.5, cobrado_eur: 1.5 },
@@ -245,18 +245,18 @@ describe('EditorReel · el precio, antes de subir', () => {
     expect(screen.getByText('No te llega el saldo para este vídeo.')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Editar vídeo' }).disabled).toBe(true)
     const recarga = vi.fn()
-    window.addEventListener('helm:sin-saldo', recarga)
-    fireEvent.click(screen.getByRole('button', { name: /Recargar créditos/ }))
-    window.removeEventListener('helm:sin-saldo', recarga)
+    window.addEventListener('helm:sin-licencia', recarga)
+    fireEvent.click(screen.getByRole('button', { name: /Renovar la licencia/ }))
+    window.removeEventListener('helm:sin-licencia', recarga)
     expect(recarga).toHaveBeenCalledTimes(1)
   })
 
-  it('«Gratis en tu agencia» si el perfil no paga', async () => {
+  it('«Incluido en tu licencia» si el perfil no paga', async () => {
     h.precios = { paga: false, saldo: null, precios: PRECIOS_FIJOS }
     await abreTaller()
-    expect(screen.getByText('Gratis en tu agencia')).toBeTruthy()
+    expect(screen.getByText('Incluido en tu licencia')).toBeTruthy()
     await eligeVideo()
-    expect(screen.getByText('Gratis en tu agencia')).toBeTruthy()
+    expect(screen.getByText('Incluido en tu licencia')).toBeTruthy()
     expect(screen.queryByText(/Esto cuesta/)).toBeNull()
   })
 
@@ -296,16 +296,16 @@ describe('EditorReel · el precio, antes de subir', () => {
     expect(await lineaPrecio('Esto cuesta 150 créditos · te quedan 29')).toBeTruthy()
   })
 
-  it('quien no administra la agencia no compra: el botón dice «Cómo recargar»', async () => {
+  it('quien no administra la agencia no compra: el botón dice «Cómo renovar»', async () => {
     localStorage.removeItem('bw_superadmin')
     h.precios = { paga: true, saldo: 0.2, precios: PRECIOS_FIJOS }
     await abreTaller()
     await eligeVideo()
-    expect(screen.queryByRole('button', { name: /Recargar créditos/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Renovar la licencia/ })).toBeNull()
     const recarga = vi.fn()
-    window.addEventListener('helm:sin-saldo', recarga)
-    fireEvent.click(screen.getByRole('button', { name: 'Cómo recargar' }))
-    window.removeEventListener('helm:sin-saldo', recarga)
+    window.addEventListener('helm:sin-licencia', recarga)
+    fireEvent.click(screen.getByRole('button', { name: 'Cómo renovar' }))
+    window.removeEventListener('helm:sin-licencia', recarga)
     expect(recarga).toHaveBeenCalledTimes(1)
   })
 })
@@ -338,7 +338,7 @@ describe('EditorReel · el precio sin ver el saldo (no administras la agencia)',
     expect(screen.queryByText(/te quedan/)).toBeNull()
     expect(screen.getByText('La agencia no tiene créditos suficientes para este vídeo.')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Editar vídeo' }).disabled).toBe(true)
-    expect(screen.getByRole('button', { name: 'Cómo recargar' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Cómo renovar' })).toBeTruthy()
   })
 
   it('el 402 genérico del servidor se enseña tal cual y ofrece cómo recargar', async () => {
@@ -350,7 +350,7 @@ describe('EditorReel · el precio sin ver el saldo (no administras la agencia)',
     await eligeVideo()
     fireEvent.click(screen.getByRole('button', { name: 'Editar vídeo' }))
     expect(await screen.findByText(msg)).toBeTruthy()
-    expect(within(screen.getByRole('alert')).getByRole('button', { name: 'Cómo recargar' })).toBeTruthy()
+    expect(within(screen.getByRole('alert')).getByRole('button', { name: 'Cómo renovar' })).toBeTruthy()
     expect(llamadas('trozo')).toEqual([])
   })
 })
@@ -421,9 +421,9 @@ describe('EditorReel · editar un vídeo', () => {
     expect(await screen.findByText(msg)).toBeTruthy()
     expect(llamadas('trozo')).toEqual([])
     const recarga = vi.fn()
-    window.addEventListener('helm:sin-saldo', recarga)
-    fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: /Recargar créditos/ }))
-    window.removeEventListener('helm:sin-saldo', recarga)
+    window.addEventListener('helm:sin-licencia', recarga)
+    fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: /Renovar la licencia/ }))
+    window.removeEventListener('helm:sin-licencia', recarga)
     expect(recarga.mock.calls[0][0].detail).toBe(msg)
     // Sigue en el taller, listo para volver a probar.
     expect(screen.getByRole('button', { name: 'Editar vídeo' })).toBeTruthy()

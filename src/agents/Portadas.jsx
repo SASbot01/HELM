@@ -73,14 +73,14 @@ function ejemploParaSubir(img) {
 }
 
 /**
- * Lo que se enseña en el botón de generar: «· 40 créditos», «· gratis» o nada
- * mientras no se sabe. `precios` es lo de creditosApi.precios. «Gratis» a
- * secas: no pagan ni la agencia de la casa ni un perfil sin agencia, y
- * creditosApi.precios no dice cuál de los dos es.
+ * Lo que va en el botón: el precio en créditos si el perfil paga, o nada.
+ * Desde el 2026-11-08 HELM no cobra por trabajo (licencia anual + trae-tu-
+ * clave): creditosApi.precios dice siempre `paga: false` y no se pone nada
+ * (ni «gratis»: lo que cueste en Claude o Replicate lo paga la agencia allí).
  */
 function etiquetaPrecio(precios, concepto = 'portada-ia') {
   if (!precios) return ''
-  if (!precios.paga) return ' · gratis'
+  if (!precios.paga) return ''
   const euros = precios.precios?.[concepto]
   return euros > 0 ? ` · ${aCreditos(euros).toLocaleString('es-ES')} créditos` : ''
 }

@@ -224,11 +224,11 @@ describe('EstudioContenido · la pantalla del estudio', () => {
     expect(screen.queryByText('Diagnóstico')).toBeNull()
   })
 
-  it('gratis en la agencia: coste 0 no sale como «0,00 €»', async () => {
+  it('coste 0 (HELM no cobra: va con la clave de Claude de la agencia) no sale como «0,00 €»', async () => {
     de.mockResolvedValueOnce({ ...SIN_ESTUDIO, coste_aprox_eur: 0 })
     render(<EstudioContenido clientId="demo" />)
     await screen.findByText('Convierte tus cifras en un plan')
-    expect(screen.getByText('Gratis en tu agencia')).toBeTruthy()
+    expect(screen.getByText('Con la IA de tu agencia')).toBeTruthy()
     expect(screen.queryByText(/0,00 €|0 créditos/)).toBeNull()
   })
 
@@ -291,13 +291,16 @@ describe('EstudioContenido · la pantalla del estudio', () => {
     expect(screen.queryByRole('button', { name: /estudio/i })).toBeNull()
   })
 
-  it('fallo 402: avisa de que no hay saldo para recargar', async () => {
+  it('sin la clave de Claude de la agencia (409 sin_clave_ia): el aviso del servidor tal cual, no «ya hay uno en marcha»', async () => {
     de.mockResolvedValueOnce(SIN_ESTUDIO)
-    ahora.mockRejectedValueOnce(apiError(402, 'sin_saldo'))
+    const e = apiError(409, 'sin_clave_ia')
+    e.message = 'Tu agencia aún no ha puesto su clave de Claude, y sin ella la IA no trabaja.'
+    ahora.mockRejectedValueOnce(e)
     render(<EstudioContenido clientId="demo" />)
     await screen.findByText('Convierte tus cifras en un plan')
     fireEvent.click(screen.getAllByRole('button', { name: /Generar estudio/ })[0])
-    expect(await screen.findByText(/Sin saldo: recarga créditos/)).toBeTruthy()
+    expect(await screen.findByText(/aún no ha puesto su clave de Claude/)).toBeTruthy()
+    expect(screen.queryByText(/Ya hay un estudio en marcha/)).toBeNull()
   })
 
   it('fallo 429: avisa del tope de tres estudios al día', async () => {
@@ -392,7 +395,8 @@ describe('EstudioContenido · la pantalla del estudio', () => {
     expect(screen.queryByText(/No se te ha cobrado/)).toBeNull()
     // Uno fallido más viejo: texto neutro, sin decir que no se cobró.
     fireEvent.change(selector, { target: { value: 'ex' } })
-    expect(await screen.findByText(/No se pudo terminar el estudio del .*solo se cobró lo que usó/)).toBeTruthy()
+    expect(await screen.findByText(/No se pudo terminar el estudio del .*Prueba a generarlo otra vez/)).toBeTruthy()
+    expect(screen.queryByText(/se cobró/)).toBeNull()
     expect(screen.queryByText(/No se te ha cobrado/)).toBeNull()
   })
 

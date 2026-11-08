@@ -28,23 +28,23 @@ describe('editorApi · los errores llevan su código', () => {
     expect(JSON.parse(opciones.body)).toEqual({ clientId: 'c1', id: 'e1', recursos: [{ id: 'r1', palabra: 'factura' }] })
   })
 
-  it('un 402 abre la recarga (helm:sin-saldo) y el error dice 402', async () => {
-    const msg = 'No tienes saldo suficiente: esto cuesta 150 créditos y te quedan 20. Recarga en Créditos.'
-    vi.stubGlobal('fetch', responde(402, { error: msg }))
+  it('un 402 (sin licencia) abre el pago de la licencia (helm:sin-licencia) y el error dice 402', async () => {
+    const msg = 'La licencia de HELM de tu agencia ha caducado. Renuévala (97 €/año) para seguir entrando.'
+    vi.stubGlobal('fetch', responde(402, { error: msg, codigo: 'sin_licencia' }))
     const aviso = vi.fn()
-    window.addEventListener('helm:sin-saldo', aviso)
+    window.addEventListener('helm:sin-licencia', aviso)
     const e = await editorApi.crear('c1', { nombre: 'toma.mp4', bytes: 3000 }).catch(x => x)
-    window.removeEventListener('helm:sin-saldo', aviso)
+    window.removeEventListener('helm:sin-licencia', aviso)
     expect(e.status).toBe(402)
     expect(e.message).toBe(msg)
     expect(aviso.mock.calls[0][0].detail).toBe(msg)
   })
 
-  it('el 402 sin cifras (para quien no administra) también abre la recarga; el rol (403), el MP4 (415) y el disco (429), no', async () => {
+  it('el 402 también abre el pago al lanzar; el rol (403), el MP4 (415) y el disco (429), no', async () => {
     const aviso = vi.fn()
-    window.addEventListener('helm:sin-saldo', aviso)
+    window.addEventListener('helm:sin-licencia', aviso)
     try {
-      const generico = 'La agencia no tiene créditos suficientes para esto (cuesta 150 créditos). Pide a quien administra la agencia que recargue.'
+      const generico = 'Tu agencia aún no tiene licencia de HELM. Actívala (97 €/año) para empezar.'
       vi.stubGlobal('fetch', responde(402, { error: generico }))
       expect((await editorApi.lanzar('c1', 'e1').catch(x => x)).status).toBe(402)
       expect(aviso.mock.calls.map(c => c[0].detail)).toEqual([generico])
@@ -59,7 +59,7 @@ describe('editorApi · los errores llevan su código', () => {
       }
       expect(aviso).toHaveBeenCalledTimes(1)
     } finally {
-      window.removeEventListener('helm:sin-saldo', aviso)
+      window.removeEventListener('helm:sin-licencia', aviso)
     }
   })
 

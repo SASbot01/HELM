@@ -360,7 +360,7 @@ function Probar({ clientId, config }) {
 
   return (
     <section className="sig-probar">
-      <p className="sig-ayuda">Escribe como si fueras alguien que manda un DM. Contesta con la configuración guardada, sin Instagram. Cada respuesta gasta créditos.</p>
+      <p className="sig-ayuda">Escribe como si fueras alguien que manda un DM. Contesta con la configuración guardada, sin Instagram. Cada respuesta usa la IA de tu agencia (tu clave de Claude).</p>
       <div className="sig-chat">
         {mensajes.map((m, i) => <div key={i} className={`sig-msj ${m.autor}`}><p>{m.texto}</p></div>)}
         {pensando && <div className="sig-msj ia"><p><Loader2 size={14} className="sig-gira" /> Escribiendo…</p></div>}

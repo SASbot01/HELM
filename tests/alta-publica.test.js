@@ -122,6 +122,9 @@ function consulta(t) {
 }
 vi.mock('../api/lib/supabase.js', () => ({ supabase: { from: (t) => consulta(t) } }))
 vi.mock('../api/_lib/llm.js', () => ({ llmChat: vi.fn() }))
+// La licencia no es lo que se prueba aquí: todas las agencias entran
+// (api/_lib/licencia.js tiene sus pruebas en licencias.test.js).
+vi.mock('../api/_lib/licencia.js', async (original) => ({ ...(await original()), exigirLicencia: async () => {} }))
 
 // Telegram: lo que sale por el bot se apunta aquí en vez de mandarse.
 const enviados = []

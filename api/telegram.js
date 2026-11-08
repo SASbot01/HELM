@@ -151,7 +151,7 @@ async function procesarUpdate({ clientId, row, update }) {
       ])
       await enviarMensaje(token, chatId, [
         `*Perfil:* ${client?.name || clientId}`,
-        `*Modelo:* ${prov.tipo === 'claude' ? `Claude (${prov.model}), con la clave del perfil` : `local (${prov.model}), en el servidor de HELM`}`,
+        `*Modelo:* ${prov.tipo === 'claude' ? `Claude (${prov.model}), con la clave ${prov.origen === 'agencia' ? 'de la agencia' : 'del perfil'}` : prov.tipo === 'sin_ia' ? `sin IA: ${prov.error?.message || 'falta la clave de Claude de la agencia'}` : `local (${prov.model}), en el servidor de HELM`}`,
         `*Bot:* @${cfg.username || '?'}`,
         `*Chats autorizados:* ${chats.length}`,
       ].join('\n'))

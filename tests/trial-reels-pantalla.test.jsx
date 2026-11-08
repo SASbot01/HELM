@@ -144,14 +144,14 @@ describe('Trial reels · subir un vídeo', () => {
     expect(subePorTrozos).not.toHaveBeenCalled()
   })
 
-  it('los vídeos subidos antes salen en la lista y abren el taller (gratis si el perfil no paga)', async () => {
+  it('los vídeos subidos antes salen en la lista y abren el taller (sin precio si el perfil no paga)', async () => {
     h.precios = { paga: false, saldo: null, precios: PRECIOS_FIJOS }
     h.fuentes = [{ id: FUENTE, nombre: 'de-ayer.mp4', estado: 'lista', disponible: true, duracion: 30, bytes: 1048576, creado: '2026-10-26T10:00:00Z' }]
     abre()
     fireEvent.click(await screen.findByRole('button', { name: /Crear variantes/ }))
     expect(await screen.findByText('Tu vídeo: de-ayer.mp4')).toBeTruthy()
     await waitFor(() => expect(trialReelsApi.videoFuente).toHaveBeenCalledWith('perfil-1', FUENTE))
-    expect(await screen.findByRole('button', { name: /Crear 3 variantes · gratis$/ })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: /Crear 3 variantes$/ })).toBeTruthy()
     expect(screen.queryByText(/Cada variante se cobra/)).toBeNull()
   })
 })

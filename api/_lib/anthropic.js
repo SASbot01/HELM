@@ -9,7 +9,7 @@
 // Sin clave configurada, el perfil sigue con el modelo local (Ollama). Ver
 // ./llm.js, que es quien decide cuál de los dos atiende cada petición.
 import Anthropic from '@anthropic-ai/sdk'
-import { exigirSaldo, cobrar, claveHelm } from './creditos.js'
+import { claveParaLlamada } from './claves-agencia.js'
 
 // Modelos que se ofrecen en Ajustes. `esfuerzo` marca los que aceptan
 // `output_config.effort`: en Haiku 4.5 ese parámetro da error, así que no se
@@ -172,15 +172,14 @@ export async function claudeTurno({ apiKey, model, system, messages, maxTokens =
     throw e
   }
 
-  // Con la clave de HELM, la agencia paga con créditos: sin saldo no se llama,
-  // y lo que cueste se le descuenta. Con la clave propia de un perfil, lo
-  // paga él directamente a Anthropic.
-  const deHelm = Boolean(apiKey) && apiKey === claveHelm()
-  if (deHelm) await exigirSaldo()
+  // Trae-tu-clave (./claves-agencia.js): con la clave de HELM, una petición
+  // de una agencia que no es la de la casa va con la clave de ESA agencia (y
+  // sin ella, o sin licencia, no se llama). HELM no cobra nada por uso.
+  const clave = await claveParaLlamada(apiKey)
 
   let res
   try {
-    res = await cliente(apiKey).messages.create({
+    res = await cliente(clave).messages.create({
       model: modelo,
       max_tokens: Math.max(Number(maxTokens) || 0, SUELO_MAX_TOKENS),
       ...(system ? { system } : {}),
@@ -195,8 +194,6 @@ export async function claudeTurno({ apiKey, model, system, messages, maxTokens =
   } catch (err) {
     throw traducirError(err)
   }
-
-  if (deHelm) await cobrar(modelo, res.usage)
 
   // Los clasificadores de seguridad pueden declinar la petición: llega un 200
   // con `stop_reason: "refusal"` y el contenido vacío. Hay que mirarlo antes de
@@ -233,8 +230,8 @@ export async function claudeTurno({ apiKey, model, system, messages, maxTokens =
  * que el que lleva el bucle reenvíe ese content tal cual al historial y pueda
  * encadenar tool_result. A diferencia de `claudeTurno`, los `messages` van tal
  * como llegan (bloques tool_use/tool_result incluidos): no se normalizan ni se
- * aplanan a texto. Con la clave de HELM, se exige saldo antes y se cobra
- * después, igual que `claudeTurno`.
+ * aplanan a texto. La clave se resuelve igual que en `claudeTurno`
+ * (claveParaLlamada: la de la agencia de la petición, no la de HELM).
  *
  * `tools` acepta el formato de Claude ({name, description, input_schema}) y el
  * del conector MCP ({name, description, inputSchema}); `traducirHerramientas`
@@ -257,12 +254,11 @@ export async function claudePaso({ apiKey, model, system, messages, tools, maxTo
     ? [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }]
     : system
 
-  const deHelm = Boolean(apiKey) && apiKey === claveHelm()
-  if (deHelm) await exigirSaldo()
+  const clave = await claveParaLlamada(apiKey)
 
   let res
   try {
-    res = await cliente(apiKey).messages.stream({
+    res = await cliente(clave).messages.stream({
       model: modelo,
       max_tokens: Math.max(Number(maxTokens) || 0, SUELO_MAX_TOKENS),
       cache_control: { type: 'ephemeral' },
@@ -275,12 +271,10 @@ export async function claudePaso({ apiKey, model, system, messages, tools, maxTo
     throw traducirError(err)
   }
 
-  if (deHelm) await cobrar(modelo, res.usage)
-
   if (res.stop_reason === 'refusal') {
     const e = new Error('Claude ha rechazado esta petición por sus filtros de seguridad. Reformúlala.')
     e.statusCode = 422
-    // Ya está cobrada: quien llama puede apuntar lo que costó (estudio de contenido).
+    // Quien llama puede apuntar lo que costó (estudio de contenido).
     e.usage = res.usage
     throw e
   }

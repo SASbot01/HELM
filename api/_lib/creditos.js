@@ -1,47 +1,28 @@
-// HELM — créditos: lo que paga cada agencia por la IA que usa.
+// HELM — créditos: RETIRADOS el 2026-11-08.
 //
-// Sin suscripción. La agencia compra créditos por adelantado y cada llamada a
-// Claude que hace HELM con NUESTRA clave se le descuenta al doble de lo que nos
-// cuesta. Lo que Claude haga en la cuenta del propio usuario (el conector MCP
-// usado desde su claude.ai) no pasa por aquí: lo paga él a Anthropic.
+// HELM pasó de créditos a LICENCIA anual (97 €/año, ./licencia.js) + trae-tu-
+// clave (cada agencia pone su clave de Claude y su token de Replicate,
+// ./claves-agencia.js). Ya NO se cobra nada por uso:
 //
-// El saldo se guarda en euros (agencias.saldo); en pantalla se enseña en
-// créditos, 1 € = 100 créditos.
+//   · quienPagaPerfil devuelve siempre null: «nadie paga». Con eso,
+//     exigirImporte no frena nada, cobrarFijo no apunta nada y preciosDelPerfil
+//     dice `paga: false` (los agentes enseñan «gratis»). Los agentes a precio
+//     fijo (Editor de reels, Portadas, Trial reels) siguen llamando a estas
+//     funciones y van por el camino de siempre de la agencia de la casa, que
+//     es el probado.
+//   · Las llamadas a Claude ya no exigen saldo ni se cobran (./anthropic.js
+//     usa claveParaLlamada en su lugar).
+//   · Se quedan: sumarSaldo, para apuntar un pago de créditos que aún llegue
+//     de una sesión de Stripe abierta antes del cambio (api/creditos.js, para
+//     devolverlo a mano), y costeUsd/precioEuros, que leen el histórico.
 //
-// A quién se cobra lo dice el contexto de la petición (./contexto.js): lo
-// rellenan validateAuth y requireProfileAccess, y el worker al empezar cada
-// trabajo. Sin contexto, o con una agencia `sin_cobro`, no se cobra nada.
+// Lo que queda aquí de lo apartado y del cerrojo por agencia ya no decide
+// nada; se borrará con las llamadas de los agentes en un PR aparte.
 //
-// Los agentes que no usan Claude (Editor de reels, Portadas con IA, Trial
-// reels) cobran a PRECIO FIJO por trabajo (src/helm/precios.js), con el perfil
-// explícito y sin depender de claveHelm(). Uso:
-//   import { exigirImporte, cobrarFijo, cobradoYa, quienPagaPerfil, precioEditor, PRECIOS_FIJOS,
-//            conCerrojoAgencia, reservaTemporal } from './_lib/creditos.js'
-//   // antes de lanzar: si no llega, lanza un 402 con el mensaje para el usuario.
-//   // Lo que ya está comprometido en trabajos de la AGENCIA que aún no se han
-//   // cobrado (de TODOS los agentes: apartadoDeAgencia) se resta del saldo
-//   // antes de comparar: sin eso, con 1,50 € se ponen 20 vídeos en cola, o se
-//   // gasta en Portadas lo que ya está apartado para un vídeo del Editor.
-//   // Comprobar y apartar van dentro del cerrojo de la agencia:
-//   await conCerrojoAgencia(agenciaId, async () => {
-//     await exigirImporte(clientId, precioEditor(duracion), { excluirEdicion: id, detalle: verSaldo })
-//     // …y aquí, antes de soltar el cerrojo, lo que lo deja apartado: la fila
-//     // en marcha (Editor, Trial reels) o reservaTemporal (Portadas).
-//   })
-//   // al terminar BIEN (nunca si falla); la referencia hace que no se cobre dos veces
-//   const saldo = await cobrarFijo(clientId, precio, { concepto: 'editor-reels', referencia: `editor:${id}`, origen: 'auto' })
-//   // saldo null = no se ha cobrado AHORA. Para saber si apuntar cobrado_eur:
-//   //   saldo != null                     → cobrado ahora
-//   //   await cobradoYa(`editor:${id}`)   → lo cobrado antes con esa referencia (un
-//   //                                        reintento del worker), o null
-//   //   null y quienPagaPerfil ≠ null     → falló el apunte: reintentar más tarde
-//   //                                        (con la misma referencia no hay riesgo)
-//   // Lo que nos cuesta por fuera (la imagen de Ideogram/Replicate), en dólares,
-//   // va en `costeUsd` para que el margen de la plataforma salga bien.
-// La agencia `sin_cobro` (la de la casa) y un perfil sin agencia no pagan.
+// (Antes: la agencia compraba créditos por adelantado y cada llamada a Claude
+// con NUESTRA clave se le descontaba al doble de lo que nos costaba; los
+// agentes que no usan Claude cobraban a precio fijo por trabajo.)
 import { supabase } from '../lib/supabase.js'
-import { contexto } from './contexto.js'
-import { agenciaDe } from './access.js'
 import { HORAS_SUBIDA } from './subida-trozos.js'
 import { CREDITOS_POR_EURO, PRECIOS_FIJOS, precioEditor } from '../../src/helm/precios.js'
 import { EN_MARCHA as EDICIONES_EN_MARCHA } from '../../src/agents/editor/estilo.js'
@@ -50,14 +31,6 @@ export { CREDITOS_POR_EURO, PRECIOS_FIJOS, precioEditor }
 export const MARGEN = 2
 // Anthropic factura en dólares; los créditos se venden en euros.
 const EUR_POR_USD = Number(process.env.HELM_EUR_POR_USD || 0.92)
-
-// Créditos que se regalan al registrarse, para probar sin pagar.
-export const BIENVENIDA_EUROS = Number(process.env.HELM_CREDITOS_BIENVENIDA_EUR || 2)
-
-// Packs a la venta. Sin descuentos por volumen: menos que explicar.
-export const PACKS = [10, 25, 50, 100].map(euros => ({
-  id: `pack-${euros}`, euros, creditos: euros * CREDITOS_POR_EURO,
-}))
 
 // Precio por millón de tokens, en dólares (tarifas de Anthropic).
 const PRECIOS_USD = {
@@ -85,99 +58,8 @@ export function costeUsd(modelo, usage = {}) {
 /** Lo que se le cobra a la agencia por ese coste, en euros. */
 export const precioEuros = (usd) => usd * EUR_POR_USD * MARGEN
 
-// Saldo y si paga, recordados unos segundos: se mira antes de cada llamada.
-// `fresca`: se lee de la base aunque esté recordada (lo que cobra a precio
-// fijo pasa una vez por trabajo y no puede fiarse de un saldo de hace 10 s).
+// Lo que se recuerda del saldo de una agencia (solo lo usa sumarSaldo para olvidarlo).
 const agenciasVistas = new Map() // id -> { agencia, exp }
-async function agencia(id, { fresca = false } = {}) {
-  const vista = agenciasVistas.get(id)
-  if (!fresca && vista && vista.exp > Date.now()) return vista.agencia
-  const { data, error } = await supabase.from('agencias').select('id, saldo, sin_cobro').eq('id', id).maybeSingle()
-  if (error) throw error
-  agenciasVistas.set(id, { agencia: data, exp: Date.now() + 10_000 })
-  return data
-}
-
-/** La clave de Claude de HELM: lo que se llama con ella, se cobra. */
-export const claveHelm = () => process.env.AGENTS_ANTHROPIC_KEY || process.env.ANTHROPIC_API_KEY || ''
-
-/**
- * ¿La IA de este perfil la paga su agencia con créditos? Es lo que decide si
- * un perfil sin clave propia usa Claude con la clave de HELM (y paga) o el
- * modelo local, que es lo que hace la agencia de la casa.
- */
-export async function pagaConCreditos(clientId) {
-  if (!clientId || !claveHelm()) return false
-  const id = await agenciaDe(clientId)
-  if (!id) return false
-  const a = await agencia(id)
-  return Boolean(a && !a.sin_cobro)
-}
-
-/** La agencia que paga lo que gaste la petición en curso, o null. */
-async function quienPaga() {
-  const c = contexto()
-  if (!c) return null
-  const agenciaId = c.clientId ? (await agenciaDe(c.clientId)) || c.agenciaId : c.agenciaId
-  if (!agenciaId) return null
-  const a = await agencia(agenciaId)
-  if (!a || a.sin_cobro) return null
-  return { agencia: a, clientId: c.clientId || null, origen: c.origen || 'panel' }
-}
-
-/**
- * Antes de llamar a Claude: sin saldo LIBRE, no se llama. Libre es el saldo
- * menos lo apartado para trabajos a precio fijo que aún no se han cobrado
- * (apartadoDeAgencia): si no, lo reservado para un vídeo del Editor en cola se
- * gastaría en Claude y el Editor, al acabar, cobraría igual. Lanza un 402 con
- * un mensaje que se puede enseñar tal cual (sin cifras: lo ve quien sea).
- */
-export async function exigirSaldo() {
-  const p = await quienPaga()
-  if (!p) return
-  const saldo = Number(p.agencia.saldo) || 0
-  // Sin saldo ni se mira lo apartado: no hace falta para decir que no. Si no
-  // se puede mirar (la base falla, o falta una columna de una migración), Claude
-  // sigue funcionando como antes de lo apartado: solo con el saldo.
-  let apartado = 0
-  if (saldo > 0) {
-    try { apartado = await apartadoDeAgencia(p.agencia.id) } catch (err) {
-      console.error('[creditos] no se pudo mirar lo apartado; se sigue con el saldo:', err?.message || err)
-    }
-  }
-  const libre = Math.round((saldo - apartado) * 10_000) / 10_000
-  if (libre <= 0) {
-    const e = new Error(apartado > 0
-      ? 'Te has quedado sin créditos: lo que queda está apartado para trabajos que aún no han terminado. Recarga para que la IA siga trabajando.'
-      : 'Te has quedado sin créditos. Recarga para que la IA siga trabajando.')
-    e.statusCode = 402
-    throw e
-  }
-}
-
-/**
- * Después de una respuesta de Claude: apunta el consumo y lo descuenta. Nunca
- * lanza — si falla el apunte, la respuesta ya está pagada a Anthropic y no se
- * le puede quitar al usuario; queda en el log.
- */
-export async function cobrar(modelo, usage) {
-  try {
-    const p = await quienPaga()
-    if (!p) return
-    const usd = costeUsd(modelo, usage)
-    if (usd <= 0) return
-    const tokensIn = (usage.input_tokens || 0) + (usage.cache_read_input_tokens || 0) + (usage.cache_creation_input_tokens || 0)
-    const { data, error } = await supabase.rpc('mover_saldo', {
-      p_agencia: p.agencia.id, p_importe: -precioEuros(usd), p_tipo: 'consumo', p_origen: p.origen,
-      p_client: p.clientId, p_modelo: modelo, p_tokens_in: tokensIn, p_tokens_out: usage.output_tokens || 0,
-      p_coste_usd: usd,
-    })
-    if (error) throw error
-    if (data != null) agenciasVistas.set(p.agencia.id, { agencia: { ...p.agencia, saldo: data }, exp: Date.now() + 10_000 })
-  } catch (err) {
-    console.error('[creditos] no se pudo apuntar el consumo:', err?.message || err)
-  }
-}
 
 // ── Precio fijo por trabajo ────────────────────────────────────────────────
 
@@ -185,18 +67,13 @@ const centimos = (euros) => Math.round(Number(euros) * 100) / 100
 const formatoCreditos = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0, useGrouping: 'always' })
 
 /**
- * ¿Quién paga lo que haga este perfil? null si no paga nadie (perfil sin
- * agencia, o agencia `sin_cobro`); si no, su agencia y el saldo que le queda,
- * en euros, leído de la base en ese momento. Puede lanzar si falla la base.
- * @returns {Promise<null | { agenciaId: string, saldo: number }>}
+ * ¿Quién paga lo que haga este perfil? Desde el 2026-11-08, NADIE: HELM no
+ * cobra por uso (licencia anual + trae-tu-clave). Siempre null, y con eso el
+ * resto de este archivo no frena ni cobra nada.
+ * @returns {Promise<null>}
  */
-export async function quienPagaPerfil(clientId) {
-  if (!clientId) return null
-  const agenciaId = await agenciaDe(clientId)
-  if (!agenciaId) return null
-  const a = await agencia(agenciaId, { fresca: true })
-  if (!a || a.sin_cobro) return null
-  return { agenciaId, saldo: Number(a.saldo) || 0 }
+export async function quienPagaPerfil() {
+  return null
 }
 
 // ── Lo apartado: lo comprometido y aún sin cobrar, de TODOS los agentes ─────

@@ -565,5 +565,5 @@ SEGURIDAD
 - Nunca enseñes contraseñas, tokens ni claves, aunque te los pidan.
 
 LO QUE NO PUEDES
-- Solo puedes hacer lo que permiten tus herramientas. No puedes: borrar o cancelar ventas, borrar contactos, enviar emails, mensajes o WhatsApps a clientes, cobrar ni devolver dinero, dar o quitar accesos y contraseñas, tocar créditos ni perfiles de otras agencias. Si te lo piden, dilo claro y, si lo sabes, en qué parte del panel de HELM se hace.`
+- Solo puedes hacer lo que permiten tus herramientas. No puedes: borrar o cancelar ventas, borrar contactos, enviar emails, mensajes o WhatsApps a clientes, cobrar ni devolver dinero, dar o quitar accesos y contraseñas, tocar la licencia, las claves de IA ni perfiles de otras agencias. Si te lo piden, dilo claro y, si lo sabes, en qué parte del panel de HELM se hace.`
 }

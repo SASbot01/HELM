@@ -274,16 +274,16 @@
 .hx-precio-reglas { padding: 30px; }
 .hx-precio-reglas dl { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 22px; }
 .hx-precio-reglas dl > div { padding: 18px 20px; border-radius: 16px; background: rgba(255, 255, 255, .035); border: 1px solid var(--hx-linea); }
-.hx-precio-reglas dt { font: 900 56px/.95 var(--hx-display); color: var(--hx-oro); }
+.hx-precio-reglas dt { font: 900 56px/.95 var(--hx-display); color: var(--hx-oro); overflow-wrap: anywhere; }
+.hx-precio-reglas dl > div + div dt { font-size: 40px; }
 .hx-precio-reglas dd { margin-top: 6px; font-size: 14px; color: var(--hx-ink2); }
 .hx-gasta { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .hx-gasta div { display: flex; flex-direction: column; gap: 6px; padding-top: 14px; border-top: 1px solid var(--hx-linea); }
 .hx-gasta b { font-size: 15px; }
 .hx-gasta span { font-size: 14px; color: var(--hx-ink2); }
-.hx-packs { display: grid; gap: 12px; }
-.hx-packs li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 20px 22px; }
-.hx-pack-eur { font: 900 38px/1 var(--hx-display); }
-.hx-pack-cr { font-size: 14px; color: var(--hx-oro); font-weight: 600; }
+.hx-precio-cta { display: flex; flex-direction: column; justify-content: center; gap: 18px; padding: 30px; height: 100%; }
+.hx-precio-cta p { font-size: 18px; line-height: 1.4; }
+.hx-precio-cta .hx-btn { align-self: flex-start; }
 
 .hx-sec--final { padding-top: 0; }
 .hx-final {

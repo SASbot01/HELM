@@ -194,9 +194,11 @@ const imagen = vi.hoisted(() => ({
   tardaDemasiado: () => Object.assign(new Error('La IA está tardando demasiado en hacer la imagen y se ha parado. Prueba otra vez en un momento.'), { statusCode: 504, tope: true }),
 }))
 vi.mock('../api/_lib/imagen.js', () => imagen)
+// Trae-tu-clave: las imágenes van con el token de Replicate de la agencia.
+const token = vi.hoisted(() => ({ valor: 'r8_de_la_agencia' }))
+vi.mock('../api/_lib/claves-agencia.js', async (original) => ({ ...(await original()), tokenImagenDe: async () => token.valor }))
 
 const { default: portadas, generaCobrando, vigilaConexion } = await import('../api/portadas.js')
-const { apartadoDeAgencia } = await import('../api/_lib/creditos.js')
 const { puedeUsarAgentes, puedeVerSaldo } = await import('../api/_lib/access.js')
 
 let ip = 0
@@ -226,7 +228,8 @@ beforeEach(() => {
   rpc.mockReset(); rpc.mockImplementation(async (...a) => moverSaldo(...a))
   almacen.clear(); subidas.length = 0
   db.helm_ediciones = []; db.helm_trial_reels = []
-  imagen.generaPortadaIa.mockClear(); imagen.generaFondo.mockReset(); imagen.hayClaveImagen.mockReturnValue(true)
+  imagen.generaPortadaIa.mockClear(); imagen.generaFondo.mockReset(); imagen.hayClaveImagen.mockReset(); imagen.hayClaveImagen.mockImplementation((t) => Boolean(t))
+  token.valor = 'r8_de_la_agencia'
   puedeUsarAgentes.mockReset(); puedeUsarAgentes.mockResolvedValue(true)
   puedeVerSaldo.mockReset(); puedeVerSaldo.mockResolvedValue(true)
 })
@@ -271,10 +274,12 @@ describe('portada-ia', () => {
     expect(imagen.generaPortadaIa).not.toHaveBeenCalled()
   })
 
-  it('sin clave de imagen, 503', async () => {
-    imagen.hayClaveImagen.mockReturnValue(false)
+  it('sin el token de Replicate de la agencia: 409 sin_clave_ia, y no se llama a Replicate', async () => {
+    token.valor = null
     const r = await llama({ action: 'portada-ia', body: { fotograma: JPG, titulo: 'Hola', estilo: 'oro' } })
-    expect(r.statusCode).toBe(503)
+    expect(r.statusCode).toBe(409)
+    expect(r.body).toMatchObject({ codigo: 'sin_clave_ia', error: expect.stringMatching(/token de Replicate/) })
+    expect(imagen.generaPortadaIa).not.toHaveBeenCalled()
   })
 
   it('el error de Replicate (sin saldo) llega tal cual al panel', async () => {
@@ -285,55 +290,33 @@ describe('portada-ia', () => {
   })
 })
 
-describe('cobro: 40 créditos por imagen generada', () => {
+describe('sin cobro: con el token de Replicate de la agencia (desde el 2026-11-08)', () => {
   const pide = (extra = {}) => llama({ action: 'portada-ia', body: { fotograma: JPG, titulo: 'Hola', estilo: 'oro', ...extra } })
 
-  it('portada-ia: se cobra solo cuando Replicate devuelve la imagen, con una referencia nueva cada vez', async () => {
+  it('portada-ia: genera con el token de la agencia y no cobra nada', async () => {
     const r = await pide()
     expect(r.statusCode).toBe(200)
-    expect(r.body).toMatchObject({ ia: true, cobrado: 0.4, saldo: 4.6 })
-    expect(db.agencia_movimientos).toEqual([expect.objectContaining({ importe: -0.4, modelo: 'portada-ia', origen: 'panel', client: PERFIL, coste: 0.15 })])
-    expect(db.agencia_movimientos[0].referencia).toMatch(/^portada:[0-9a-f-]{36}$/)
-    await pide()
-    expect(db.agencia_movimientos).toHaveLength(2)
-    expect(db.agencia_movimientos[1].referencia).not.toBe(db.agencia_movimientos[0].referencia)
-    expect(db.agencias[0].saldo).toBe(4.2)
-  })
-
-  it('si Replicate falla, no se cobra nada', async () => {
-    imagen.generaPortadaIa.mockRejectedValueOnce(Object.assign(new Error('La generación ha fallado: NSFW'), { statusCode: 502 }))
-    const r = await pide()
-    expect(r.statusCode).toBe(502)
+    expect(r.body).toMatchObject({ ia: true, cobrado: 0, saldo: null })
+    expect(imagen.generaPortadaIa.mock.calls[0][0].token).toBe('r8_de_la_agencia')
+    expect(db.agencia_movimientos).toEqual([])
     expect(rpc).not.toHaveBeenCalled()
     expect(db.agencias[0].saldo).toBe(5)
   })
 
-  it('sin saldo, 402 con el precio y sin llamar a Replicate', async () => {
-    db.agencias[0].saldo = 0.3
+  it('si Replicate falla, el error llega y nada más', async () => {
+    imagen.generaPortadaIa.mockRejectedValueOnce(Object.assign(new Error('La generación ha fallado: NSFW'), { statusCode: 502 }))
     const r = await pide()
-    expect(r.statusCode).toBe(402)
-    expect(r.body.error).toBe('No tienes saldo suficiente: esto cuesta 40 créditos y te quedan 30. Recarga en Créditos.')
-    expect(imagen.generaPortadaIa).not.toHaveBeenCalled()
+    expect(r.statusCode).toBe(502)
     expect(rpc).not.toHaveBeenCalled()
   })
 
-  it('lo que se está generando ya está apartado: con 50 créditos no salen dos a la vez', async () => {
-    db.agencias[0].saldo = 0.5
-    let suelta
-    imagen.generaPortadaIa.mockImplementationOnce(() => new Promise(ok => { suelta = () => ok({ dataUrl: 'data:image/jpeg;base64,UE9SVEFEQQ==' }) }))
-    const primera = pide()
-    await vi.waitFor(() => expect(suelta).toBeTypeOf('function'))
-    const segunda = await pide()
-    expect(segunda.statusCode).toBe(402)
-    expect(segunda.body.error).toMatch(/otros 40 ya están apartados/)
-    suelta()
-    expect((await primera).statusCode).toBe(200)
-    expect(db.agencias[0].saldo).toBe(0.1)
-    // Terminada, ya no hay nada apartado: con 10 créditos, no llega (y lo dice sin apartados).
-    expect((await pide()).body.error).toBe('No tienes saldo suficiente: esto cuesta 40 créditos y te quedan 10. Recarga en Créditos.')
+  it('el saldo ya no cuenta: con la agencia a 0, genera', async () => {
+    db.agencias[0].saldo = 0
+    expect((await pide()).statusCode).toBe(200)
+    expect(imagen.generaPortadaIa).toHaveBeenCalledTimes(1)
   })
 
-  it('la agencia de la casa (sin_cobro) y un perfil sin agencia no pagan', async () => {
+  it('la agencia de la casa (sin_cobro) y un perfil sin agencia, igual', async () => {
     db.agencias[0] = { id: AGENCIA, saldo: 0, sin_cobro: true }
     expect((await pide()).body).toMatchObject({ cobrado: 0, saldo: null })
     db.clients = []
@@ -341,23 +324,25 @@ describe('cobro: 40 créditos por imagen generada', () => {
     expect(rpc).not.toHaveBeenCalled()
   })
 
-  it('fondo-ia: lo mismo, con su concepto; y sin clave de imagen, 503 sin mirar el saldo', async () => {
+  it('fondo-ia: con el token de la agencia, sin cobro; sin token, 409', async () => {
     imagen.generaFondo.mockResolvedValue({ dataUrl: 'data:image/png;base64,Rk9ORE8=' })
     const r = await llama({ action: 'fondo-ia', body: { prompt: 'a gym at dawn, vertical 9:16, no text' } })
     expect(r.statusCode).toBe(200)
-    expect(r.body).toMatchObject({ imagen: 'data:image/png;base64,Rk9ORE8=', ia: true, cobrado: 0.4 })
-    expect(db.agencia_movimientos).toEqual([expect.objectContaining({ importe: -0.4, modelo: 'fondo-ia', coste: 0.03 })])
-    expect(db.agencia_movimientos[0].referencia).toMatch(/^portada:/)
+    expect(r.body).toMatchObject({ imagen: 'data:image/png;base64,Rk9ORE8=', ia: true, cobrado: 0 })
+    expect(imagen.generaFondo.mock.calls[0][0].token).toBe('r8_de_la_agencia')
     imagen.generaFondo.mockRejectedValueOnce(Object.assign(new Error('Replicate se ha quedado sin saldo.'), { statusCode: 503 }))
     expect((await llama({ action: 'fondo-ia', body: { prompt: 'otro' } })).statusCode).toBe(503)
-    expect(db.agencia_movimientos).toHaveLength(1)
     expect((await llama({ action: 'fondo-ia', body: { prompt: '' } })).statusCode).toBe(400)
-    imagen.hayClaveImagen.mockReturnValue(false)
-    rpc.mockClear()
-    expect((await llama({ action: 'fondo-ia', body: { prompt: 'x' } })).statusCode).toBe(503)
-    db.agencias[0].saldo = 0
-    imagen.hayClaveImagen.mockReturnValue(true)
-    expect((await llama({ action: 'fondo-ia', body: { prompt: 'x' } })).statusCode).toBe(402)
+    token.valor = null
+    const sin = await llama({ action: 'fondo-ia', body: { prompt: 'x' } })
+    expect([sin.statusCode, sin.body.codigo]).toEqual([409, 'sin_clave_ia'])
+    expect(db.agencia_movimientos).toEqual([])
+  })
+
+  it('capacidad: hay fondo y portada con IA solo si la agencia tiene token', async () => {
+    expect((await llama({ method: 'GET', action: 'capacidad' })).body).toEqual({ fondoIa: true, portadaIa: true })
+    token.valor = null
+    expect((await llama({ method: 'GET', action: 'capacidad' })).body).toEqual({ fondoIa: false, portadaIa: false })
   })
 
   it('los estilos de marca llevan los colores del kit; los demás, no', async () => {
@@ -387,54 +372,26 @@ describe('portadas · quién puede gastar y qué ve', () => {
     expect(rpc).not.toHaveBeenCalled()
   })
 
-  it('quien no administra la agencia: 402 genérico y el saldo no sale en la respuesta', async () => {
+  it('quien no administra la agencia: genera igual y el saldo no sale en la respuesta', async () => {
     puedeVerSaldo.mockResolvedValue(false)
-    db.agencias[0].saldo = 0.3
-    const no = await pide()
-    expect(no.statusCode).toBe(402)
-    expect(no.body.error).toBe('La agencia no tiene créditos suficientes para esto (cuesta 40 créditos). Pide a quien administra la agencia que recargue.')
-    db.agencias[0].saldo = 5
+    db.agencias[0].saldo = 0
     const si = await pide()
     expect(si.statusCode).toBe(200)
-    expect(si.body).toMatchObject({ cobrado: 0.4, saldo: null })
-    expect(db.agencias[0].saldo).toBe(4.6)
+    expect(si.body).toMatchObject({ cobrado: 0, saldo: null })
   })
 
-  it('lo apartado por el Editor o Trial reels (de cualquier perfil de la agencia) frena la portada', async () => {
-    db.agencias[0].saldo = 1.5
-    db.clients.push({ id: 'perfil-2', agencia_id: AGENCIA })
+  it('lo que el Editor o Trial reels tengan en marcha ya no frena la portada', async () => {
+    db.agencias[0].saldo = 0
     const ahora = new Date().toISOString()
-    db.helm_ediciones = [{ id: 'e1', client_id: 'perfil-2', estado: 'montando', precio_eur: 1.5, cobrado_eur: null, created_at: ahora, updated_at: ahora }]
-    const r = await pide()
-    expect(r.statusCode).toBe(402)
-    expect(r.body.error).toMatch(/te quedan 0 \(otros 150 ya están apartados/)
-    expect(imagen.generaPortadaIa).not.toHaveBeenCalled()
-    db.helm_ediciones = []
-    db.helm_trial_reels = [{ id: 't1', client_id: PERFIL, estado: 'en_cola', precio_eur: 1.2, cobrado_eur: null, updated_at: ahora }]
-    expect((await pide()).statusCode).toBe(402)
-    db.helm_trial_reels = []
+    db.helm_ediciones = [{ id: 'e1', client_id: PERFIL, estado: 'montando', precio_eur: 1.5, cobrado_eur: null, created_at: ahora, updated_at: ahora }]
     expect((await pide()).statusCode).toBe(200)
-  })
-
-  it('mientras genera, lo suyo cuenta para los demás agentes (reservaTemporal), y se suelta al acabar o al fallar', async () => {
-    let suelta
-    imagen.generaPortadaIa.mockImplementationOnce(() => new Promise(ok => { suelta = () => ok({ dataUrl: 'data:image/jpeg;base64,UE9SVEFEQQ==' }) }))
-    const primera = pide()
-    await vi.waitFor(() => expect(suelta).toBeTypeOf('function'))
-    expect(await apartadoDeAgencia(AGENCIA)).toBe(0.4)
-    suelta()
-    await primera
-    expect(await apartadoDeAgencia(AGENCIA)).toBe(0)
-    imagen.generaPortadaIa.mockRejectedValueOnce(Object.assign(new Error('NSFW'), { statusCode: 502 }))
-    await pide()
-    expect(await apartadoDeAgencia(AGENCIA)).toBe(0)
   })
 })
 
-describe('portadas · no se cobra lo que no llega', () => {
+describe('portadas · lo que no llega', () => {
   const pide = (extra = {}, opts = {}) => llama({ action: 'portada-ia', body: { fotograma: JPG, titulo: 'Hola', estilo: 'oro', ...extra }, ...opts })
 
-  it('si la conexión se cierra mientras genera (pestaña cerrada, 524 de Cloudflare), no se cobra', async () => {
+  it('si la conexión se cierra mientras genera (pestaña cerrada, 524 de Cloudflare), no se apunta nada', async () => {
     const res = nuevaRes()
     let suelta
     imagen.generaPortadaIa.mockImplementationOnce(() => new Promise(ok => { suelta = () => ok({ dataUrl: 'data:image/jpeg;base64,UE9SVEFEQQ==' }) }))
@@ -447,11 +404,6 @@ describe('portadas · no se cobra lo que no llega', () => {
     log.mockRestore()
     expect(rpc).not.toHaveBeenCalled()
     expect(db.agencias[0].saldo).toBe(5)
-    expect(await apartadoDeAgencia(AGENCIA)).toBe(0)
-    // Con el socket ya destruido, igual.
-    const otra = await pide({}, { socket: { destroyed: true } })
-    expect(otra.statusCode).toBe(499)
-    expect(rpc).not.toHaveBeenCalled()
   })
 
   it('el «close» de una respuesta ya enviada no cuenta como corte', () => {
@@ -475,33 +427,17 @@ describe('portadas · no se cobra lo que no llega', () => {
     expect(imagen.generaFondo.mock.calls[0][0].limite).toBeLessThanOrEqual(Date.now() + 85_000)
   })
 
-  it('si se pasa del límite: 504 claro, sin cobro, y lo apartado se suelta', async () => {
+  it('si se pasa del límite: 504 claro', async () => {
     const nunca = vi.fn(() => new Promise(() => {}))
     const p = generaCobrando(PERFIL, 'portada-ia', nunca, { verSaldo: true, limite: Date.now() + 40 })
-    await expect(p).rejects.toMatchObject({ statusCode: 504, tope: true, message: expect.stringMatching(/tardando demasiado.*No se ha cobrado nada/) })
+    await expect(p).rejects.toMatchObject({ statusCode: 504, tope: true, message: expect.stringMatching(/tardando demasiado/) })
     expect(nunca).toHaveBeenCalledWith({ limite: expect.any(Number) })
     expect(rpc).not.toHaveBeenCalled()
-    expect(await apartadoDeAgencia(AGENCIA)).toBe(0)
     // El 504 de imagen.js (que ya corta solo) llega igual al panel.
     imagen.generaPortadaIa.mockRejectedValueOnce(imagen.tardaDemasiado())
     const r = await pide()
     expect(r.statusCode).toBe(504)
-    expect(r.body.error).toMatch(/No se ha cobrado nada/)
-    expect(rpc).not.toHaveBeenCalled()
-  })
-
-  it('si el cobro falla tras generar: se entrega igual y queda en el log con la referencia', async () => {
-    rpc.mockResolvedValueOnce({ data: null, error: { message: 'la base no contesta' } })
-    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const r = await pide()
-    const lineas = log.mock.calls.map(c => c.join(' '))
-    log.mockRestore()
-    expect(r.statusCode).toBe(200)
-    expect(r.body).toMatchObject({ imagen: 'data:image/jpeg;base64,UE9SVEFEQQ==', cobrado: 0, saldo: null })
-    const aviso = lineas.find(l => l.includes('COBRO PENDIENTE'))
-    expect(aviso).toMatch(new RegExp(`portada-ia de 0.4 € .*perfil ${PERFIL}, agencia ${AGENCIA}, referencia portada:[0-9a-f-]{36}`))
-    // Solo se intentó una vez (no se reintenta desde la petición).
-    expect(rpc).toHaveBeenCalledTimes(1)
+    expect(r.body.error).toMatch(/tardando demasiado/)
   })
 })
 

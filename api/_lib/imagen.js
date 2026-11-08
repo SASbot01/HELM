@@ -1,6 +1,9 @@
-// Generación de imagen con IA para las portadas (9:16), por Replicate. La
-// clave la pone Alex en .env.server como REPLICATE_API_TOKEN y nunca sale de
-// aquí. Sin clave, no se inventa nada: se devuelve un error claro.
+// Generación de imagen con IA para las portadas (9:16), por Replicate. Desde
+// el 2026-11-08 (trae-tu-clave) cada agencia pone SU token de Replicate en
+// «Licencia y claves» y quien llama lo pasa en `token` (tokenImagenDe, en
+// ./claves-agencia.js). El de HELM (REPLICATE_API_TOKEN, en .env.server) es
+// solo para la agencia de la casa. El token nunca sale del servidor. Sin
+// token, no se inventa nada: se devuelve un error claro.
 //
 //   · generaFondo: solo el FONDO (Ideogram); el titular lo pone el compositor
 //     encima, nítido (src/agents/portadas/componer.js). Sin caras.
@@ -34,9 +37,9 @@ const MARGEN_WAIT_MS = 5_000
 // Una espera por 429 solo si después quedan al menos estos ms para generar.
 const MIN_TRAS_429_MS = 20_000
 
-/** ¿Hay con qué generar imágenes? (la tiene que poner Alex en el server). */
-export function hayClaveImagen() {
-  return Boolean(process.env.REPLICATE_API_TOKEN)
+/** ¿Hay con qué generar imágenes? Con `token` (el de la agencia), ese; sin él, el del servidor. */
+export function hayClaveImagen(token) {
+  return Boolean(token === undefined ? process.env.REPLICATE_API_TOKEN : token)
 }
 
 function faltaClave() {
@@ -148,8 +151,7 @@ async function bajaImagen(url, limite, error) {
  * compositor lo pinte. `aspecto` por defecto 9:16 (la portada del reel).
  * `limite`: hasta cuándo se puede esperar (ver TIEMPO arriba).
  */
-export async function generaFondo({ prompt, aspecto = '9:16', limite = Date.now() + TOPE_IMAGEN_MS } = {}) {
-  const token = process.env.REPLICATE_API_TOKEN
+export async function generaFondo({ prompt, aspecto = '9:16', limite = Date.now() + TOPE_IMAGEN_MS, token = process.env.REPLICATE_API_TOKEN } = {}) {
   if (!token) throw faltaClave()
   const limpio = String(prompt || '').trim()
   if (!limpio) { const e = new Error('Hace falta una descripción del fondo'); e.statusCode = 400; throw e }
@@ -180,8 +182,7 @@ export async function generaFondo({ prompt, aspecto = '9:16', limite = Date.now(
  * dice y lo reintenta un par de veces, solo si después aún da tiempo a generar.
  * `limite`: hasta cuándo se puede esperar (ver TIEMPO arriba).
  */
-export async function generaPortadaIa({ prompt, imagenes, aspecto = '9:16', limite = Date.now() + TOPE_IMAGEN_MS } = {}) {
-  const token = process.env.REPLICATE_API_TOKEN
+export async function generaPortadaIa({ prompt, imagenes, aspecto = '9:16', limite = Date.now() + TOPE_IMAGEN_MS, token = process.env.REPLICATE_API_TOKEN } = {}) {
   if (!token) throw faltaClave()
   if (!prompt || !imagenes?.length) throw Object.assign(new Error('Falta el fotograma o el estilo'), { statusCode: 400 })
 

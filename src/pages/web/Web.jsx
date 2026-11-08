@@ -12,8 +12,8 @@
 // clientes (las del informe de la escena van marcadas como ejemplo).
 // Textos en español, inglés y alemán: textos.js.
 //
-// Los packs los decide el servidor (GET /api/creditos?action=packs). Si no
-// contesta, la sección de precios explica el modelo igual, sin las cifras.
+// El precio de la licencia lo dice el servidor (GET /api/creditos?action=precio,
+// 97 €/año por defecto). Si no contesta, se enseña el de por defecto.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
@@ -23,6 +23,9 @@ import { crearHistoria } from './historia.js'
 import { IDIOMAS, traductor, idiomaInicial } from './textos.js'
 import '../../fonts/barlow-condensed.css'
 import './web.css'
+
+// Lo que cuesta la licencia si el servidor no contesta (HELM_LICENCIA_EUR por defecto).
+const PRECIO_LICENCIA = 97
 
 // Secciones reales del panel, con su nombre del menú.
 const SECCIONES = [
@@ -77,10 +80,10 @@ export default function Web() {
 
   useEffect(() => {
     let vivo = true
-    fetch('/api/creditos?action=packs')
+    fetch('/api/creditos?action=precio')
       .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (vivo && Array.isArray(d?.packs)) setPrecios(d) })
-      .catch(() => { /* sin cifras: la sección se pinta igual */ })
+      .then(d => { if (vivo && Number(d?.euros) > 0) setPrecios(d) })
+      .catch(() => { /* sin respuesta: el precio de por defecto */ })
     return () => { vivo = false }
   }, [])
 
@@ -304,27 +307,18 @@ export default function Web() {
             <div className="hx-precio">
               <div className="hx-pieza hx-precio-reglas">
                 <dl>
-                  <div><dt>1 €</dt><dd>{T('precios.cien')}</dd></div>
-                  <div>
-                    <dt>{precios?.bienvenida ? num(precios.bienvenida) : T('precios.regalo')}</dt>
-                    <dd>{T('precios.bienvenida')}</dd>
-                  </div>
+                  <div><dt>{num(precios?.euros || PRECIO_LICENCIA)} €</dt><dd>{T('precios.anio')}</dd></div>
+                  <div><dt>{T('precios.tuclave')}</dt><dd>{T('precios.tuclave.p')}</dd></div>
                 </dl>
                 <div className="hx-gasta">
                   <div><b>{T('precios.gasta.t')}</b><span>{T('precios.gasta.p')}</span></div>
                   <div><b>{T('precios.nogasta.t')}</b><span>{T('precios.nogasta.p')}</span></div>
                 </div>
               </div>
-              {precios?.packs?.length > 0 && (
-                <ul className="hx-packs" aria-label={T('precios.packs')}>
-                  {precios.packs.map(p => (
-                    <li key={p.id} className="hx-pieza">
-                      <span className="hx-pack-eur">{num(p.euros)} €</span>
-                      <span className="hx-pack-cr">{num(p.creditos)} {T('precios.creditos')}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <div className="hx-pieza hx-precio-cta">
+                <p>{T('precios.cta.t')}</p>
+                <Link to="/registro" className="hx-btn hx-btn--xl">{T('fin.cta1')} <ArrowRight size={17} /></Link>
+              </div>
             </div>
           </div>
         </section>

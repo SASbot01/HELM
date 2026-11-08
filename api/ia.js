@@ -2,9 +2,10 @@
 //
 // Cada perfil corre su IA por su cuenta. Si mete su clave de Anthropic, sus
 // chats, sus Biblias y sus lecturas de facturas van contra Claude con SU clave
-// y SU modelo; si no la mete, siguen con el modelo local del servidor. HELM y
-// consultoría son perfiles distintos: uno puede estar en Claude Opus y el otro
-// en el local, sin tocarse.
+// y SU modelo; si no la mete, usan la clave de Claude de SU AGENCIA (trae-tu-
+// clave, api/_lib/claves-agencia.js), y la agencia de la casa sigue con el
+// modelo local del servidor. `status` dice en `respaldo` qué se usa sin clave
+// propia: { tipo: 'agencia' | 'local' | 'sin_ia', … }.
 //
 //   GET    ?action=status &clientId=            → proveedor activo y modelo
 //   POST   ?action=link   { clientId, apiKey, model } → valida la clave y la guarda
@@ -22,6 +23,23 @@ import {
   verificarClave, getIaConfig, saveIaConfig, deleteIaConfig,
 } from './_lib/anthropic.js'
 import { llmHealth, llmInfo, olvidarProveedor } from './_lib/llm.js'
+import { agenciaDe } from './_lib/access.js'
+import { licenciaDe } from './_lib/licencia.js'
+import { estadoClaves } from './_lib/claves-agencia.js'
+
+/** Lo que atiende al perfil si no tiene clave propia: la de su agencia, el local (la casa) o nada. */
+async function respaldoDe(clientId) {
+  try {
+    const agenciaId = await agenciaDe(clientId)
+    if (!agenciaId || (await licenciaDe(agenciaId)).exenta) return { tipo: 'local' }
+    const { anthropic } = await estadoClaves(agenciaId)
+    return anthropic.configurada
+      ? { tipo: 'agencia', last4: anthropic.last4, model: anthropic.modelo || MODELO_POR_DEFECTO }
+      : { tipo: 'sin_ia' }
+  } catch {
+    return { tipo: 'local' }
+  }
+}
 
 const catalogo = MODELOS_CLAUDE.map(({ id, label, desc }) => ({ id, label, desc }))
 
@@ -63,6 +81,7 @@ export default async function handler(req, res) {
       updatedAt: row?.updated_at || null,
       local: llmInfo,
       modelos: catalogo,
+      respaldo: await respaldoDe(clientId),
     })
   }
 

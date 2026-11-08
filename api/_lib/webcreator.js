@@ -23,7 +23,7 @@ import { buscarWeb, urlPublica, fetchPublico, decodeEntidades } from './web.js'
 import { buscarNegocios } from './places.js'
 import { claudeTurno } from './anthropic.js'
 import { proveedorDe } from './llm.js'
-import { claveHelm } from './creditos.js'
+import { claveHelm } from './claves-agencia.js'
 import { notificar } from './notificar.js'
 
 const recorta = (s, n) => String(s ?? '').slice(0, n)
@@ -521,6 +521,9 @@ const HERRAMIENTA_IA = {
 
 async function direccionConIa({ clientId, cliente, sector, ciudad, competidores, patrones }) {
   const prov = await proveedorDe(clientId)
+  // Sin licencia o sin la clave de Claude de la agencia: no hay IA (el aviso dice qué falta).
+  if (prov.tipo === 'sin_ia') return { ia: null, error: prov.error?.message || 'No hay IA disponible' }
+  // Solo la agencia de la casa (y un perfil sin agencia) cae en el local: esa usa la clave de HELM.
   const usarHelm = prov.tipo === 'local'
   if (usarHelm && !claveHelm()) return { ia: null, error: 'No hay IA disponible' }
   const resumenCompetencia = competidores.map(c => ({
