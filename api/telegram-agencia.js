@@ -40,8 +40,8 @@
 import crypto from 'node:crypto'
 import { supabase } from './lib/supabase.js'
 import { applyCors, rateLimit, getClientIp, writeAudit, requireSuperAdmin, requirePlataforma } from './_lib/auth.js'
-import { enContexto } from './_lib/contexto.js'
-import { claveHelm } from './_lib/creditos.js'
+import { enContexto, contexto } from './_lib/contexto.js'
+import { claveHelm, claveClaudeDeAgencia } from './_lib/creditos.js'
 import { alcanceDesdeContexto } from './mcp/[token].js'
 import { herramientasBot, sistemaBot, resolverPerfil, perfilesDeAgencia, esAccionVacia, NO_SE_PUEDE } from './_lib/bot-herramientas.js'
 import { tapaSecretos } from './_lib/bot/comun.js'
@@ -430,8 +430,12 @@ function resumenGenerico(nombre, input) {
 /** Un turno de Claude sobre unos messages ya montados, y lo que venga después. */
 async function darPaso(c, messages) {
   const { token, chatId, system, model, p } = c
+  // «Trae tu propia clave»: el bot corre dentro de enContexto({ agenciaId }),
+  // así que usa la clave de Claude de esa agencia. Si la agencia no la ha
+  // puesto, cae en la de HELM (FLAG: pendiente de exigir clave de agencia).
+  const apiKey = (await claveClaudeDeAgencia(contexto()?.agenciaId)) || claveHelm()
   const r = await conEscribiendo(token, chatId, () => turnoAgente({
-    apiKey: claveHelm(), model, system, messages, tools: p.tools, ejecutar: p.ejecutar, esDelicada: p.esDelicada,
+    apiKey, model, system, messages, tools: p.tools, ejecutar: p.ejecutar, esDelicada: p.esDelicada,
   }))
   await despues(r, c)
 }

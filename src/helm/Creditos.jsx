@@ -118,7 +118,7 @@ export default function Creditos({ onClose, aviso }) {
 }
 
 /** El conector de Claude de toda la agencia: un enlace para todos sus perfiles. */
-function EnlaceMcp() {
+export function EnlaceMcp() {
   const [estado, setEstado] = useState(null)   // { existe, created_at, ultimo_uso }
   const [url, setUrl] = useState('')
   const [copiado, setCopiado] = useState(false)

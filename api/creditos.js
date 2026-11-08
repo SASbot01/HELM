@@ -48,7 +48,9 @@ import crypto from 'node:crypto'
 import { supabase } from './lib/supabase.js'
 import { applyCors, requireSuperAdmin, requirePlataforma, writeAudit } from './_lib/auth.js'
 import { requireProfileAccess, puedeVerSaldo } from './_lib/access.js'
-import { PACKS, CREDITOS_POR_EURO, BIENVENIDA_EUROS, sumarSaldo, preciosDelPerfil } from './_lib/creditos.js'
+import { PACKS, CREDITOS_POR_EURO, BIENVENIDA_EUROS, sumarSaldo, preciosDelPerfil, COBRO_POR_USO, olvidarClaveAgencia } from './_lib/creditos.js'
+import { licenciaActivaDeAgencia, activarLicencia, canjearCodigo, PRECIO_LICENCIA_EUR, MESES_LICENCIA } from './_lib/licencias.js'
+import { verificarClave } from './_lib/anthropic.js'
 
 const STRIPE = 'https://api.stripe.com/v1'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -81,14 +83,24 @@ function esDeCreditos(s) {
   return !m.helm && UUID.test(String(m.agencia_id || ''))
 }
 
+// Marca de las sesiones de licencia (97 €/año). Igual que las de créditos, pero
+// lo que activan es la licencia de la agencia, no saldo.
+const MARCA_LICENCIA = 'licencia'
+/** Qué pagó una sesión de HELM: 'licencia', 'creditos' o null (ajena a HELM). */
+function tipoHelm(s) {
+  if (s?.metadata?.helm === MARCA_LICENCIA) return 'licencia'
+  if (esDeCreditos(s)) return 'creditos'
+  return null
+}
+
 /** Lo que se añade a la sesión para que salga la factura con el IVA dentro. */
-export function camposFactura(env = process.env) {
+export function camposFactura(env = process.env, { descripcion } = {}) {
   const f = {
     customer_creation: 'always',
     billing_address_collection: 'required',
     'tax_id_collection[enabled]': 'true',
     'invoice_creation[enabled]': 'true',
-    'invoice_creation[invoice_data][description]': 'Créditos de HELM para usar los agentes (editor de reels, portadas, estudios…).',
+    'invoice_creation[invoice_data][description]': descripcion || 'Créditos de HELM para usar los agentes (editor de reels, portadas, estudios…).',
     'line_items[0][price_data][tax_behavior]': 'inclusive',
   }
   if (env.HELM_CREDITOS_STRIPE_TAX === '1') f['automatic_tax[enabled]'] = 'true'
@@ -154,19 +166,29 @@ async function agenciaDeSesion(s) {
  * `claves`: las cuentas donde buscarla, por orden (por defecto, la propia y
  * luego la compartida).
  */
-async function acreditarSesion(sessionId, claves = [claveNueva(), claveCompartida()]) {
+async function confirmarSesion(sessionId, claves = [claveNueva(), claveCompartida()]) {
   if (!/^cs_[A-Za-z0-9_]+$/.test(String(sessionId || ''))) throw falla('Sesión de pago inválida')
   const s = await sesionDeStripe(sessionId, claves)
   if (s.payment_status !== 'paid') return { pagado: false }
-  // Solo las sesiones que abrió HELM para créditos, con su agencia.
+
+  // Una licencia: se activa (o renueva +1 año) la agencia que pagó. Idempotente
+  // por el id de la sesión (activarLicencia), para que la vuelta del navegador
+  // y el webhook no sumen dos veces.
+  if (tipoHelm(s) === 'licencia') {
+    const agenciaId = s.metadata?.agencia_id || null
+    if (!agenciaId) return { pagado: false }
+    const { venceAt } = await activarLicencia(agenciaId, { referencia: s.id, origen: 'stripe' })
+    return { pagado: true, tipo: 'licencia', venceAt }
+  }
+
+  // Créditos (legado / recargas de plataforma). Solo las sesiones que abrió HELM
+  // para créditos, con su agencia. Lo que se suma es lo que se cobró (subtotal,
+  // con el IVA dentro), no lo que diga el pack que se pidió.
   const agenciaId = await agenciaDeSesion(s)
   if (!agenciaId) return { pagado: false }
-  // Lo que se suma es lo que se cobró, no lo que diga el pack que se pidió:
-  // el importe del pack (subtotal, con el IVA dentro); si un día el IVA fuera
-  // aparte, el total lo llevaría encima y no se convierte en créditos.
   const euros = Number(s.amount_subtotal ?? s.amount_total ?? 0) / 100
   const saldo = await sumarSaldo(agenciaId, euros, { tipo: 'recarga', origen: 'stripe', referencia: s.id })
-  return { pagado: true, nuevo: saldo != null, euros }
+  return { pagado: true, tipo: 'creditos', nuevo: saldo != null, euros }
 }
 
 // Stripe firma "t.cuerpo" con el secreto del webhook.
@@ -216,8 +238,8 @@ export default async function handler(req, res) {
       // para que Stripe no los reintente). La sesión se pide a la cuenta que
       // avisa (sin su clave, 503: Stripe lo reintenta y queda en el log).
       if (['checkout.session.completed', 'checkout.session.async_payment_succeeded'].includes(ev.type)
-          && esDeCreditos(ev.data?.object)) {
-        await acreditarSesion(ev.data.object.id, [cuenta.clave])
+          && tipoHelm(ev.data?.object)) {
+        await confirmarSesion(ev.data.object.id, [cuenta.clave])
       }
       return res.status(200).json({ received: true })
     }
@@ -266,7 +288,8 @@ export default async function handler(req, res) {
         packs: PACKS,
         // La oferta de bienvenida sale mientras no se haya cobrado el regalo.
         bienvenida: {
-          pendiente: !agencia.sin_cobro && BIENVENIDA_EUROS > 0 && !regalo,
+          // Modelo de licencia: sin regalo de bienvenida (COBRO_POR_USO off).
+          pendiente: COBRO_POR_USO && !agencia.sin_cobro && BIENVENIDA_EUROS > 0 && !regalo,
           creditos: aCreditos(BIENVENIDA_EUROS),
         },
         movimientos: (movs || []).map(m => ({
@@ -276,6 +299,74 @@ export default async function handler(req, res) {
           perfil: m.clients?.name || null, fecha: m.created_at,
         })),
       })
+    }
+
+    // ── Licencia de la agencia (97 €/año) ──────────────────────────────────
+    if (accion === 'licencia') {
+      const info = await licenciaActivaDeAgencia(agenciaId)
+      if (req.method === 'GET') {
+        const { data: ag } = await supabase.from('agencias').select('id, nombre, slug, sin_cobro').eq('id', agenciaId).maybeSingle()
+        return res.status(200).json({
+          agencia: ag ? { id: ag.id, nombre: ag.nombre, slug: ag.slug, sinCobro: ag.sin_cobro } : null,
+          plataforma: Boolean(auth.plataforma),
+          activa: info.activa, venceAt: info.venceAt, motivo: info.motivo,
+          precio: PRECIO_LICENCIA_EUR, meses: MESES_LICENCIA,
+          pagosActivos: Boolean(claveStripe()),
+        })
+      }
+      // POST: canjear un código de cortesía, o abrir el pago de la licencia.
+      const codigo = String(req.body?.codigo || '').trim()
+      if (codigo) {
+        const r = await canjearCodigo(agenciaId, codigo, { redeemedBy: auth.email || '' })
+        await writeAudit({ actor: auth, action: 'licencia.canjear', resourceType: 'agencia', resourceId: agenciaId, req, metadata: { codigo } })
+        return res.status(200).json({ canjeada: true, activa: r.activa, venceAt: r.venceAt })
+      }
+      const base = process.env.HELM_PUBLIC_URL || 'https://helm.s4sf.net'
+      const s = await stripe('/checkout/sessions', {
+        method: 'POST',
+        form: {
+          mode: 'payment',
+          client_reference_id: agenciaId,
+          'metadata[agencia_id]': agenciaId,
+          'metadata[helm]': MARCA_LICENCIA,
+          locale: 'es',
+          // La factura, solo desde la cuenta propia de HELM (como los créditos).
+          ...(claveNueva() ? camposFactura(process.env, { descripcion: 'Licencia anual de HELM: acceso de la agencia a la plataforma.' }) : {}),
+          ...(auth.email ? { customer_email: auth.email } : {}),
+          'line_items[0][quantity]': '1',
+          'line_items[0][price_data][currency]': 'eur',
+          'line_items[0][price_data][unit_amount]': String(PRECIO_LICENCIA_EUR * 100),
+          'line_items[0][price_data][product_data][name]': 'HELM · Licencia anual',
+          success_url: `${base}/admin?licencia=ok&session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${base}/admin?licencia=cancelado`,
+        },
+      })
+      return res.status(200).json({ url: s.url })
+    }
+
+    // ── Clave de Claude de la agencia («trae tu propia clave») ──────────────
+    if (accion === 'clave-claude') {
+      if (req.method === 'GET') {
+        const { data } = await supabase.from('agencias').select('claude_api_key').eq('id', agenciaId).maybeSingle()
+        const clave = String(data?.claude_api_key || '')
+        return res.status(200).json({ tiene: Boolean(clave), last4: clave ? clave.slice(-4) : null })
+      }
+      const apiKey = String(req.body?.apiKey || '').trim()
+      if (!apiKey) {
+        const { error } = await supabase.from('agencias').update({ claude_api_key: null }).eq('id', agenciaId)
+        if (error) throw error
+        olvidarClaveAgencia(agenciaId)
+        await writeAudit({ actor: auth, action: 'agencia.clave_claude.borrar', resourceType: 'agencia', resourceId: agenciaId, req })
+        return res.status(200).json({ tiene: false, last4: null })
+      }
+      // Que valga y tenga acceso al modelo antes de guardarla: si no, nadie
+      // descubre el fallo a mitad de un trabajo (igual que la clave por perfil).
+      const info = await verificarClave(apiKey)
+      const { error } = await supabase.from('agencias').update({ claude_api_key: apiKey }).eq('id', agenciaId)
+      if (error) throw error
+      olvidarClaveAgencia(agenciaId)
+      await writeAudit({ actor: auth, action: 'agencia.clave_claude.guardar', resourceType: 'agencia', resourceId: agenciaId, req, metadata: { last4: apiKey.slice(-4) } })
+      return res.status(200).json({ tiene: true, last4: apiKey.slice(-4), modelo: info?.model })
     }
 
     if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' })
@@ -308,7 +399,7 @@ export default async function handler(req, res) {
     }
 
     if (accion === 'confirmar') {
-      const r = await acreditarSesion(req.body?.sessionId)
+      const r = await confirmarSesion(req.body?.sessionId)
       return res.status(200).json(r)
     }
 
@@ -317,7 +408,8 @@ export default async function handler(req, res) {
       const suya = auth.agenciaId
       if (!suya) throw falla('Tu cuenta no tiene agencia', 403)
       const { data: a } = await supabase.from('agencias').select('sin_cobro').eq('id', suya).maybeSingle()
-      if (!a || a.sin_cobro || BIENVENIDA_EUROS <= 0) return res.status(200).json({ nuevo: false, creditos: 0 })
+      // Modelo de licencia: no se regalan créditos (COBRO_POR_USO off).
+      if (!COBRO_POR_USO || !a || a.sin_cobro || BIENVENIDA_EUROS <= 0) return res.status(200).json({ nuevo: false, creditos: 0 })
       // La referencia es única: dos clics (o dos pestañas) no regalan dos veces.
       const saldo = await sumarSaldo(suya, BIENVENIDA_EUROS, { tipo: 'regalo', origen: 'registro', referencia: `bienvenida:${suya}` })
       return res.status(200).json({ nuevo: saldo != null, creditos: aCreditos(BIENVENIDA_EUROS), saldo: saldo != null ? aCreditos(saldo) : null })

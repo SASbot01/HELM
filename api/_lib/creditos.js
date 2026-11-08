@@ -48,6 +48,14 @@ import { EN_MARCHA as EDICIONES_EN_MARCHA } from '../../src/agents/editor/estilo
 
 export { CREDITOS_POR_EURO, PRECIOS_FIJOS, precioEditor }
 export const MARGEN = 2
+
+// ── Modelo nuevo (nov-2026): licencia anual + «trae tu propia clave» ─────────
+// HELM ya no vende créditos ni cobra por uso: la agencia paga una LICENCIA
+// (api/_lib/licencias.js) y pone SU propia clave de Claude. Todo el cableado de
+// créditos se deja por si hubiera que volver atrás, pero INERTE: con
+// COBRO_POR_USO=false nadie paga por uso, no se exige saldo y no se regala nada.
+// Para reactivar el cobro por uso: COBRO_POR_USO=true (y revisar el panel).
+export const COBRO_POR_USO = process.env.HELM_COBRO_POR_USO === '1'
 // Anthropic factura en dólares; los créditos se venden en euros.
 const EUR_POR_USD = Number(process.env.HELM_EUR_POR_USD || 0.92)
 
@@ -101,12 +109,47 @@ async function agencia(id, { fresca = false } = {}) {
 /** La clave de Claude de HELM: lo que se llama con ella, se cobra. */
 export const claveHelm = () => process.env.AGENTS_ANTHROPIC_KEY || process.env.ANTHROPIC_API_KEY || ''
 
+// ── «Trae tu propia clave»: la clave de Claude de la AGENCIA ─────────────────
+// El administrador la mete en Ajustes de la agencia y se guarda en
+// agencias.claude_api_key (migración 127). Los agentes de esa agencia llaman a
+// Claude con ella y la agencia paga a Anthropic directamente. '' si no la ha
+// puesto, o si falta la columna (migración sin aplicar).
+const clavesAgencia = new Map() // agenciaId -> { clave, exp }
+export function olvidarClaveAgencia(agenciaId) {
+  if (agenciaId) clavesAgencia.delete(agenciaId)
+  else clavesAgencia.clear()
+}
+export async function claveClaudeDeAgencia(agenciaId) {
+  if (!agenciaId) return ''
+  const visto = clavesAgencia.get(agenciaId)
+  if (visto && visto.exp > Date.now()) return visto.clave
+  let clave = ''
+  try {
+    const { data, error } = await supabase.from('agencias')
+      .select('claude_api_key').eq('id', agenciaId).maybeSingle()
+    if (error) throw error
+    clave = String(data?.claude_api_key || '').trim()
+  } catch {
+    // Falta la columna (migración sin aplicar) u otro fallo: sin clave de agencia.
+    clave = ''
+  }
+  clavesAgencia.set(agenciaId, { clave, exp: Date.now() + 30_000 })
+  return clave
+}
+/** La clave de Claude de la agencia de un perfil (vía agenciaDe). '' si no hay. */
+export async function claveClaudeDePerfil(clientId) {
+  if (!clientId) return ''
+  const agenciaId = await agenciaDe(clientId)
+  return agenciaId ? claveClaudeDeAgencia(agenciaId) : ''
+}
+
 /**
  * ¿La IA de este perfil la paga su agencia con créditos? Es lo que decide si
  * un perfil sin clave propia usa Claude con la clave de HELM (y paga) o el
  * modelo local, que es lo que hace la agencia de la casa.
  */
 export async function pagaConCreditos(clientId) {
+  if (!COBRO_POR_USO) return false   // modelo de licencia: nadie paga por uso
   if (!clientId || !claveHelm()) return false
   const id = await agenciaDe(clientId)
   if (!id) return false
@@ -116,6 +159,7 @@ export async function pagaConCreditos(clientId) {
 
 /** La agencia que paga lo que gaste la petición en curso, o null. */
 async function quienPaga() {
+  if (!COBRO_POR_USO) return null   // modelo de licencia: no se cobra por uso
   const c = contexto()
   if (!c) return null
   const agenciaId = c.clientId ? (await agenciaDe(c.clientId)) || c.agenciaId : c.agenciaId
@@ -191,6 +235,7 @@ const formatoCreditos = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 
  * @returns {Promise<null | { agenciaId: string, saldo: number }>}
  */
 export async function quienPagaPerfil(clientId) {
+  if (!COBRO_POR_USO) return null   // modelo de licencia: no se cobra por uso
   if (!clientId) return null
   const agenciaId = await agenciaDe(clientId)
   if (!agenciaId) return null

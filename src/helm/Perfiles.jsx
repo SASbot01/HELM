@@ -3,9 +3,9 @@
 // directo al suyo (ver HelmApp).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, ArrowUpRight, LogOut, Users, MoreHorizontal, EyeOff, Trash2, RotateCcw, Building2, Send, Inbox, KeyRound } from 'lucide-react'
+import { Plus, Search, ArrowUpRight, LogOut, Users, MoreHorizontal, EyeOff, Trash2, RotateCcw, Building2, Send, Inbox, KeyRound, ShieldCheck } from 'lucide-react'
 import { brandOf, notificacionesApi, perfilesApi, creditosApi, telegramAgenciaApi, altasApi, accesosApi, enlaceAltaPublica } from './lib'
-import Creditos, { BotonCreditos, Bienvenida } from './Creditos'
+import { LicenciaGate, LicenciaPanel } from './Licencia'
 import TelegramAgencia from './TelegramAgencia'
 import AltasRecibidas, { DetalleAlta } from './AltasRecibidas'
 import AccesosRecibidos from './AccesosRecibidos'
@@ -20,11 +20,12 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
   const [borrando, setBorrando] = useState(null)    // perfil en el modal de borrado
   const [error, setError] = useState(null)
   const [agencia, setAgencia] = useState(null)      // { id, nombre, slug, plataforma }
-  const [verCreditos, setVerCreditos] = useState(false)
+  const [verLicencia, setVerLicencia] = useState(false)
   const [verTelegram, setVerTelegram] = useState(false)
   const [conTelegram, setConTelegram] = useState(false)  // el botón del bot: solo si la agencia lo tiene
-  const [bienvenida, setBienvenida] = useState(null)  // { saldo, pagado }: la oferta de la agencia nueva
-  const [recarga, setRecarga] = useState(0)         // para que el botón relea el saldo
+  const [licencia, setLicencia] = useState(null)    // estado de la licencia de la agencia (api/creditos?action=licencia)
+  const [pagando, setPagando] = useState(false)     // abriendo el pago de la licencia en Stripe
+  const [licError, setLicError] = useState(null)    // fallo al pagar o canjear la licencia
   // Las altas del enlace público (helm.s4sf.net/alta): la bandeja y la que está abierta.
   const [altas, setAltas] = useState(null)
   const [falloAltas, setFalloAltas] = useState(null)
@@ -60,33 +61,45 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
   const nuevas = useMemo(() => (altas || []).filter(a => a.estado === 'enviada').length, [altas])
   // La plataforma ve las de todas las agencias: entonces cada una dice de cuál es.
   const variasAgencias = useMemo(() => new Set((altas || []).map(a => a.agencia?.id).filter(Boolean)).size > 1, [altas])
+  // Estado de la licencia de la agencia: decide si se entra al panel o se ve la
+  // pantalla de «activa tu licencia». También trae la agencia (id, nombre, slug).
+  const cargarLicencia = () => creditosApi.licencia().then(r => {
+    setLicencia(r)
+    setAgencia({ id: r.agencia?.id, nombre: r.agencia?.nombre, slug: r.agencia?.slug, plataforma: r.plataforma })
+    // El bot de Telegram solo lo tienen las agencias de HELM_TELEGRAM_AGENCIAS
+    // (y la plataforma, que lo activa). Quien quedó vinculado de antes lo sigue
+    // viendo para poder desvincularse.
+    if (r.plataforma) setConTelegram(true)
+    else telegramAgenciaApi.vinculo().then(e => setConTelegram(Boolean(e?.permitido || e?.vinculado))).catch(() => {})
+  }).catch(() => {})
+
   useEffect(() => {
     if (!localStorage.getItem('bw_admin_jwt')) return
     notificacionesApi.resumen().then(r => setAvisos(r.porPerfil || {})).catch(() => {})
     cargarInactivos()
     cargarAltas()
     cargarAccesos()
-    // Vuelta de pagar en Stripe: se confirma el pago (el servidor se lo
-    // pregunta a Stripe) antes de leer el saldo, para enseñar el nuevo.
+    // Vuelta de pagar la licencia en Stripe: se confirma el pago (el servidor se
+    // lo pregunta a Stripe y activa la licencia) antes de leer su estado.
     const p = new URLSearchParams(window.location.search)
     const sesion = p.get('session_id')
-    if (p.get('creditos')) window.history.replaceState(null, '', window.location.pathname)
+    if (p.get('licencia') || p.get('creditos')) window.history.replaceState(null, '', window.location.pathname)
     const pago = sesion
-      ? creditosApi.confirmar(sesion).then(() => true).catch(e => { setError(e.message); return false })
-      : Promise.resolve(false)
-    pago.then(pagado => creditosApi.saldo().then(r => {
-      setAgencia({ id: r.agencia?.id, nombre: r.agencia?.nombre, slug: r.agencia?.slug, plataforma: r.plataforma })
-      // El bot de Telegram solo lo tienen las agencias de HELM_TELEGRAM_AGENCIAS
-      // (y la plataforma, que lo activa). Quien quedó vinculado de antes lo
-      // sigue viendo para poder desvincularse.
-      if (r.plataforma) setConTelegram(true)
-      else telegramAgenciaApi.vinculo().then(e => setConTelegram(Boolean(e?.permitido || e?.vinculado))).catch(() => {})
-      // Agencia recién llegada: primero la oferta de compra (o, si viene de
-      // pagar, directamente el regalo de bienvenida).
-      if (r.bienvenida?.pendiente) setBienvenida({ saldo: r, pagado })
-      else if (pagado) { setRecarga(n => n + 1); setVerCreditos(true) }
-    })).catch(() => {})
+      ? creditosApi.confirmar(sesion).catch(e => { setError(e.message) })
+      : Promise.resolve()
+    pago.then(() => cargarLicencia())
   }, [])
+
+  async function pagarLicencia() {
+    setLicError(null); setPagando(true)
+    try { window.location.assign((await creditosApi.comprarLicencia()).url) }
+    catch (e) { setLicError(e.message); setPagando(false) }
+  }
+  async function canjearCodigo(codigo) {
+    setLicError(null)
+    try { await creditosApi.canjearLicencia(codigo); await cargarLicencia() }
+    catch (e) { setLicError(e.message); throw e }
+  }
 
   useEffect(() => {
     if (!menu) return
@@ -103,6 +116,17 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
     } catch (e) { setError(e.message) }
   }
 
+  // Sin licencia activa (y no es la plataforma ni una agencia de la casa): en
+  // vez del panel, la pantalla para activar la licencia de 97 €/año.
+  if (licencia && !licencia.activa && !licencia.plataforma && !licencia.agencia?.sinCobro) {
+    return (
+      <LicenciaGate
+        licencia={licencia} pagando={pagando} error={licError}
+        onPagar={pagarLicencia} onCanjear={canjearCodigo}
+      />
+    )
+  }
+
   return (
     <div className="helm-perfiles" ref={caja}>
       <header className="helm-perfiles-cab">
@@ -117,7 +141,9 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
               <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar perfil" autoFocus />
             </label>
           )}
-          <BotonCreditos onAbrir={() => setVerCreditos(true)} recarga={recarga} />
+          <button type="button" className="helm-btn" onClick={() => setVerLicencia(true)} title="Licencia de la agencia">
+            <ShieldCheck size={15} /> Licencia
+          </button>
           <button
             type="button" className="helm-btn" onClick={() => { setVerAltas(true); cargarAltas() }}
             title={nuevas ? `${nuevas} ${nuevas === 1 ? 'alta nueva' : 'altas nuevas'} del enlace público` : 'Las altas del enlace público'}
@@ -144,7 +170,13 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
       </header>
 
       <FormNote>{error}</FormNote>
-      {verCreditos && <Creditos onClose={() => { setVerCreditos(false); setRecarga(n => n + 1) }} />}
+      {verLicencia && (
+        <LicenciaPanel
+          licencia={licencia} pagando={pagando}
+          onPagar={pagarLicencia}
+          onClose={() => { setVerLicencia(false); cargarLicencia() }}
+        />
+      )}
       {verTelegram && (
         <Modal title="Bot de Telegram" onClose={() => setVerTelegram(false)} wide>
           <TelegramAgencia />
@@ -174,13 +206,6 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
           onAbrirPerfil={p => { setAltaAbierta(null); setVerAltas(false); onPick(p) }}
         />
       )}
-      {bienvenida && (
-        <Bienvenida
-          saldo={bienvenida.saldo} pagado={bienvenida.pagado}
-          onFin={() => { setBienvenida(null); setRecarga(n => n + 1) }}
-        />
-      )}
-
       {!loading && (
         <div className="helm-perfiles-grid">
           {agencia?.plataforma && !q && (

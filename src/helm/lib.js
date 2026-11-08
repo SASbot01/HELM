@@ -718,7 +718,7 @@ export const perfilesApi = {
   borrar: (clientId, confirma) => apiFetch('/api/perfiles?action=borrar', { method: 'POST', body: { clientId, confirma } }),
 }
 
-// ── Créditos de la agencia (api/creditos.js) ───────────────────────────────
+// ── Licencia y créditos de la agencia (api/creditos.js) ────────────────────
 export const creditosApi = {
   saldo: (agenciaId) => apiFetch(`/api/creditos?action=saldo${agenciaId ? `&agenciaId=${agenciaId}` : ''}`),
   comprar: (pack) => apiFetch('/api/creditos?action=comprar', { method: 'POST', body: { pack } }),
@@ -726,6 +726,13 @@ export const creditosApi = {
   bienvenida: () => apiFetch('/api/creditos?action=bienvenida', { method: 'POST', body: {} }),
   agencias: () => apiFetch('/api/creditos?action=agencias'),
   ajuste: (agenciaId, euros, nota) => apiFetch('/api/creditos?action=ajuste', { method: 'POST', body: { agenciaId, euros, nota } }),
+  // Licencia anual (97 €/año) de la agencia: estado, pago y canje de código.
+  licencia: () => apiFetch('/api/creditos?action=licencia'),
+  comprarLicencia: () => apiFetch('/api/creditos?action=licencia', { method: 'POST', body: {} }),
+  canjearLicencia: (codigo) => apiFetch('/api/creditos?action=licencia', { method: 'POST', body: { codigo } }),
+  // La clave de Claude de la agencia («trae tu propia clave»). El panel solo ve los últimos 4.
+  claveClaude: () => apiFetch('/api/creditos?action=clave-claude'),
+  guardarClaveClaude: (apiKey) => apiFetch('/api/creditos?action=clave-claude', { method: 'POST', body: { apiKey } }),
   // Lo que cuesta cada trabajo a precio fijo y si este perfil paga:
   // { paga, saldo (€ o null), precios: PRECIOS_FIJOS (€) }. La cuenta del
   // Editor por duración, con precioEditor de ./precios.js.

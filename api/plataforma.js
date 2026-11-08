@@ -16,6 +16,7 @@
 // (sin_cobro) no tiene: lo suyo no se apunta.
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { randomInt } from 'node:crypto'
 import { supabase } from './lib/supabase.js'
 import { applyCors, requirePlataforma, writeAudit } from './_lib/auth.js'
 import { CREDITOS_POR_EURO, MARGEN, precioEuros } from './_lib/creditos.js'
@@ -253,6 +254,37 @@ async function borrarAgencia(id, confirma, auth, req) {
   return { copia: dir, perfiles: borrados.length, admins: admins.length }
 }
 
+// ── Licencias de cortesía (códigos manuales) ────────────────────────────────
+// La vía normal de licencia es el pago de 97 €/año por Stripe (api/creditos.js).
+// Aparte, la plataforma puede generar CÓDIGOS para dar acceso a mano (cortesías,
+// pruebas): se canjean desde el panel de la agencia (api/creditos.js,
+// action=licencia con { codigo }) y entonces dan 1 año. Alfabeto sin O/0/I/1
+// para poder dictarlos sin líos.
+const ALFABETO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+function nuevoCodigo() {
+  const bloque = () => Array.from({ length: 4 }, () => ALFABETO[randomInt(ALFABETO.length)]).join('')
+  return `HELM-${bloque()}-${bloque()}-${bloque()}`
+}
+async function generarLicencias(cantidad, nota, auth) {
+  const n = Math.max(1, Math.min(100, Math.floor(Number(cantidad) || 1)))
+  const filas = Array.from({ length: n }, () => ({
+    code: nuevoCodigo(), nota: String(nota || '').slice(0, 200), created_by: auth.email || '',
+  }))
+  const { data, error } = await supabase.from('licenses').insert(filas).select('code, estado, created_at')
+  if (error) throw error
+  return { generadas: data.length, licencias: data }
+}
+async function listaLicencias() {
+  const filas = await todas(supabase.from('licenses')
+    .select('id, code, estado, nota, redeemed_by, agencia_id, vence_at, created_at, redeemed_at')
+    .order('created_at', { ascending: false }).limit(1000))
+  return {
+    total: filas.length,
+    disponibles: filas.filter(l => l.estado === 'disponible').length,
+    licencias: filas,
+  }
+}
+
 export default async function handler(req, res) {
   applyCors(req, res)
   if (req.method === 'OPTIONS') return res.status(200).end()
@@ -265,6 +297,12 @@ export default async function handler(req, res) {
       if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' })
       const b = req.body || {}
       return res.status(200).json({ ok: true, ...(await borrarAgencia(b.id, b.confirma, auth, req)) })
+    }
+    if (accion === 'licencias') return res.status(200).json(await listaLicencias())
+    if (accion === 'generar-licencias') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' })
+      const b = req.body || {}
+      return res.status(200).json(await generarLicencias(b.cantidad, b.nota, auth))
     }
     return res.status(400).json({ error: `Acción desconocida: ${accion}` })
   } catch (e) {
