@@ -8,6 +8,7 @@ import { productoActual, seccionDelProducto, seccionSiempre } from './producto'
 import { Modal, Field, Input } from './ui'
 import Guia from './Guia'
 import Perfiles from './Perfiles'
+import { esPropio, agenciaDeSesion } from './perfilesPropios'
 import Notificaciones from './Notificaciones'
 import Informe from './views/Informe'
 import Metricas from './views/Metricas'
@@ -331,6 +332,17 @@ export default function HelmApp() {
   const client = useMemo(() => clients.find(c => c.id === clientId) || null, [clients, clientId])
   const marca = brandOf(client)
 
+  // El selector de arriba enseña lo mismo que el tablero: los perfiles de la
+  // agencia de la sesión (ver perfilesPropios). La plataforma recibe los de
+  // todas, pero esos se abren desde /plataforma. `clients` se queda entero para
+  // que /<slug> resuelva también un perfil de otra agencia, y ese, mientras
+  // está abierto, sale en el selector para que diga dónde estás.
+  const agenciaSesion = useMemo(() => agenciaDeSesion(), [])
+  const enSelector = useMemo(
+    () => clients.filter(c => c.id === clientId || esPropio(c, agenciaSesion)),
+    [clients, clientId, agenciaSesion],
+  )
+
   // Guardar la marca en Ajustes tiene que verse arriba a la izquierda al
   // instante, sin recargar ni volver a pedir la lista de perfiles.
   function onClientUpdate(row) {
@@ -562,9 +574,9 @@ export default function HelmApp() {
                   <button className="helm-btn" onClick={() => navigate('/admin')} title="Ver todos los perfiles">
                     <LayoutGrid size={16} /> Perfiles
                   </button>
-                  {clients.length > 0 && (
+                  {enSelector.length > 0 && (
                     <select className="helm-select" value={clientId || ''} onChange={e => goToClient(e.target.value)}>
-                      {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      {enSelector.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   )}
                   <button className="helm-btn" onClick={() => setShowNew(true)}>
