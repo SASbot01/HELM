@@ -20,7 +20,7 @@ import { supabase } from './lib'
 export const AREAS = [
   { key: 'crm', label: 'CRM', desc: 'Contactos, etapas y actividad' },
   { key: 'servicios', label: 'Servicios', desc: 'El catálogo' },
-  { key: 'documentos', label: 'Documentos', desc: 'Presupuestos y facturas' },
+  { key: 'documentos', label: 'Documentos', desc: 'Facturas y presupuestos. Si un setter o closer puede editarlos, también los ve.' },
   { key: 'gastos', label: 'Gastos', desc: 'Facturas de compra' },
   { key: 'equipo', label: 'Equipo', desc: 'Personas, pagos y contratos' },
   { key: 'ventas', label: 'Ventas', desc: 'Registrar y cancelar ventas' },
@@ -62,7 +62,7 @@ export const SECCIONES = [
   { key: 'crm', label: 'CRM', desc: 'Contactos y pipeline' },
   { key: 'radar', label: 'Radar', desc: 'Tecnología e ideas nuevas para investigar (privado)' },
   { key: 'servicios', label: 'Servicios', desc: 'Catálogo de servicios' },
-  { key: 'documentos', label: 'Documentos', desc: 'Presupuestos y facturas' },
+  { key: 'documentos', label: 'Documentos', desc: 'Presupuestos, facturas y material comercial' },
   { key: 'gastos', label: 'Gastos', desc: 'Facturas de compra' },
   { key: 'equipo', label: 'Equipo', desc: 'Personas, pagos y contratos' },
   { key: 'ventas', label: 'Ventas', desc: 'Reporte de ventas' },
@@ -88,10 +88,12 @@ export const SECCIONES = [
 ]
 
 // Lo que ve cada rol si nadie ha tocado nada. Un closer entra a hacer su
-// trabajo: sus contactos y su reporte. Nada de finanzas ni de nóminas ajenas.
+// trabajo: sus contactos, su reporte y los PDF de venta. Nada de finanzas ni
+// de nóminas ajenas. Documentos, para setter y closer, es solo el material
+// comercial: las facturas las decide puedeVerFacturacion.
 export const DEFAULT_VISIBLE = {
-  closer: ['crm', 'diario', 'tareas'],
-  setter: ['crm', 'diario', 'tareas'],
+  closer: ['crm', 'diario', 'tareas', 'documentos'],
+  setter: ['crm', 'diario', 'tareas', 'documentos'],
   csm: ['crm', 'diario', 'tareas', 'formularios', 'biblioteca'],
   // El editor ve la estrategia que ejecuta: sin ella graba a ciegas. Y el
   // Informe de contenido, que es cómo le ha ido a lo que ha editado.
@@ -169,6 +171,21 @@ export function puedeVer(visible, role, seccion, nivelAcceso = null) {
   if (!role || role === OWNER_ROLE) return true
   const lista = visible?.[role] ?? DEFAULT_VISIBLE[role] ?? []
   return lista.includes(seccion)
+}
+
+// Setter y closer ven la sección Documentos por el material comercial. Eso no
+// es derecho a la facturación: las facturas y los presupuestos siguen ocultos
+// salvo que puedan editar el área (o que manden en el perfil). El resto de
+// roles, si ve la sección, ve la facturación — es el mismo derecho de ver que
+// ya tenía Documentos antes de existir el material.
+const ROLES_SOLO_MATERIAL = new Set(['setter', 'closer'])
+
+export function puedeVerFacturacion(matrix, visible, role, nivelAcceso = null) {
+  if (nivelAcceso && NIVELES_TOTALES.includes(nivelAcceso)) return true
+  if (!role || role === OWNER_ROLE) return true
+  if (puedeEditar(matrix, role, 'documentos', nivelAcceso)) return true
+  if (ROLES_SOLO_MATERIAL.has(role)) return false
+  return puedeVer(visible, role, 'documentos', nivelAcceso)
 }
 
 export async function loadPermisos(clientId) {

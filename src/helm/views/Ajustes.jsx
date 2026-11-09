@@ -1519,6 +1519,8 @@ function PermisosCard({ clientId }) {
               Las secciones marcadas son las que le <b>aparecen en el menú</b> a quien entra con
               ese rol. Lo que no está marcado no existe para esa persona: tampoco escribiendo
               la URL a mano. Un <b>closer</b> con solo CRM y Diario verá dos entradas y nada más.
+              En Documentos, setter y closer ven el material comercial; las facturas y los
+              presupuestos solo si, además, pueden editar esa área.
             </>
           ) : (
             <>

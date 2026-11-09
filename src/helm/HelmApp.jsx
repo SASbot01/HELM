@@ -34,7 +34,7 @@ import Fiscal from './views/Fiscal'
 import Copiloto from './views/Copiloto'
 import Ajustes from './views/Ajustes'
 import { PLUGINS, PLUGIN_MAP } from './plugins/registry'
-import { loadPermisos, puedeVer, accesoTotal, DEFAULT_VISIBLE, loadSecciones, saveSecciones, seccionEncendida, esOptIn } from './permisos'
+import { loadPermisos, puedeVer, puedeVerFacturacion, accesoTotal, DEFAULT_VISIBLE, DEFAULT_MATRIX, loadSecciones, saveSecciones, seccionEncendida, esOptIn } from './permisos'
 import { useHelmTheme, acentoDe } from './theme'
 import { AvisoSinSaldo } from './Creditos'
 import './theme.css'
@@ -51,7 +51,7 @@ const NAV = [
   // Radar: privado, solo para el perfil silvestre (se gatea por slug en `puede`).
   { key: 'radar', tono: 'rojo', label: 'Radar', icon: Radar, title: 'Radar', sub: 'Tecnología e ideas nuevas para investigar', C: RadarView },
   { key: 'servicios', tono: 'oro', label: 'Servicios', icon: Package, title: 'Servicios', sub: 'El catálogo que lo conecta todo', C: Servicios },
-  { key: 'documentos', tono: 'oro', label: 'Documentos', icon: FileText, title: 'Presupuestos y facturas', sub: 'Del presupuesto a la factura, con tu marca', C: Documentos },
+  { key: 'documentos', tono: 'oro', label: 'Documentos', icon: FileText, title: 'Documentos', sub: 'Facturas, presupuestos y material comercial', C: Documentos },
   { key: 'gastos', tono: 'oro', label: 'Gastos', icon: Receipt, title: 'Gastos', sub: 'Facturas de compra, con captura por IA', C: Gastos },
   { key: 'equipo', tono: 'azul', label: 'Equipo', icon: UserCog, title: 'Equipo y perfiles', sub: 'Quién es quién, cómo se le paga y su contrato', C: Equipo },
   { key: 'ventas', tono: 'oro', label: 'Ventas', icon: TrendingUp, title: 'Ventas', sub: 'Reporte de ventas', C: Ventas },
@@ -371,10 +371,21 @@ export default function HelmApp() {
   // secciones que su perfil le marque en Ajustes → Permisos. Mientras cargan
   // se usan los valores por defecto, así el menú no parpadea.
   const [visible, setVisible] = useState(DEFAULT_VISIBLE)
+  const [matrix, setMatrix] = useState(DEFAULT_MATRIX)
   useEffect(() => {
     if (!clientId) return
-    loadPermisos(clientId).then(({ visible: v }) => setVisible(v)).catch(() => {})
-    loadSecciones(clientId).then(setSecciones).catch(() => setSecciones({}))
+    let vivo = true
+    // Al cambiar de perfil se vuelve a los permisos de serie hasta que lleguen
+    // los suyos: si no, el de antes podría enseñar facturas un instante.
+    setVisible(DEFAULT_VISIBLE)
+    setMatrix(DEFAULT_MATRIX)
+    loadPermisos(clientId).then(({ visible: v, matrix: m }) => {
+      if (!vivo) return
+      setVisible(v)
+      setMatrix(m)
+    }).catch(() => {})
+    loadSecciones(clientId).then(s => { if (vivo) setSecciones(s) }).catch(() => { if (vivo) setSecciones({}) })
+    return () => { vivo = false }
   }, [clientId])
 
   // Tres filtros, y en este orden: qué secciones EXISTEN en este producto (el
@@ -451,7 +462,12 @@ export default function HelmApp() {
   const isPlugin = !NAV.includes(current)
   const View = isPlugin ? current.View : current.C
   const title = isPlugin ? current.name : current.title
-  const sub = isPlugin ? current.desc : current.sub
+  // Setter y closer entran a Documentos, pero la cabecera no les promete
+  // facturas: de esta sección solo ven el material comercial.
+  const veFacturacion = puedeVerFacturacion(matrix, visible, clientSession?.teamRole, clientSession?.level)
+  const sub = !isPlugin && current.key === 'documentos' && !veFacturacion
+    ? 'Los PDF de venta de este negocio'
+    : (isPlugin ? current.desc : current.sub)
   const tono = current.tono || 'plata'
   // /admin sin slug: el tablero de perfiles, sin menú ni cabecera.
   const eligiendo = !isClient && !urlSlug
@@ -607,6 +623,7 @@ export default function HelmApp() {
                 client={client}
                 onClientUpdate={onClientUpdate}
                 onNavigate={setView}
+                veFacturacion={veFacturacion}
                 // Solo lo usa el Informe (ver verAvatar arriba).
                 verAvatar={verAvatar}
               />

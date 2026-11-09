@@ -1,4 +1,10 @@
-// HELM — Documentos: presupuestos y facturas del despacho a sus clientes.
+// HELM — Documentos: presupuestos y facturas, y el material comercial.
+//
+// Las facturas viven en helm_documentos_venta. El material comercial son los
+// PDF de la Biblioteca (helm_library) con la etiqueta `comercial`: mismo
+// archivo y mismo enlace que ya se abre desde allí. Setter y closer entran
+// a esta sección solo por ese material; sin derecho a la facturación no se
+// cargan facturas ni presupuestos.
 //
 // El módulo que le faltaba a HELM frente a un Sage/A3: crear un presupuesto,
 // convertirlo en factura con un clic, documento con el logo del despacho,
@@ -20,19 +26,23 @@ import {
   siguienteNumero, lineaVacia, importeLinea, calcularTotales, IVA_DEFECTO, ESTADOS, estadoLabel,
 } from '../documentos/calculo'
 import { emitirConHash, datosQR } from '../documentos/verifactu'
+import { enlaceDelPerfil, esMaterialComercial, pestañasDeDocumentos, TAG_COMERCIAL } from '../documentos/material'
 
-const TABS = [
-  { key: 'factura', label: 'Facturas', icon: <FileText size={15} /> },
-  { key: 'presupuesto', label: 'Presupuestos', icon: <FileText size={15} /> },
-]
-
-export default function Documentos({ clientId, client }) {
-  const [tipo, setTipo] = useState('factura')
+export default function Documentos({ clientId, client, veFacturacion = true }) {
+  // null = todavía no ha elegido: con facturación se abre Facturas; sin ella,
+  // el material. No hace falta un efecto para forzarlo.
+  const [tipoPedido, setTipoPedido] = useState(null)
+  const tipo = !veFacturacion ? 'material' : (tipoPedido || 'factura')
   const [docs, setDocs] = useState(null)
   const [contactos, setContactos] = useState([])
   const [edit, setEdit] = useState(null)     // documento en el editor ({} = nuevo)
   const [ver, setVer] = useState(null)       // documento en la vista de impresión
   const [error, setError] = useState(null)
+
+  const pestañas = useMemo(
+    () => pestañasDeDocumentos(veFacturacion).map(t => ({ ...t, icon: <FileText size={15} /> })),
+    [veFacturacion],
+  )
 
   const load = useCallback(async () => {
     const [d, c] = await Promise.all([
@@ -43,7 +53,18 @@ export default function Documentos({ clientId, client }) {
     setContactos(c || [])
   }, [clientId])
 
-  useEffect(() => { load() }, [load])
+  // Sin derecho a facturar no se pide helm_documentos_venta: un setter no
+  // debe ni cargar las facturas del perfil. El material sale de helm_library
+  // y solo cuando se abre esa pestaña.
+  useEffect(() => {
+    if (!veFacturacion) return
+    load()
+  }, [load, veFacturacion])
+
+  function cambiarTipo(key) {
+    if (!veFacturacion && key !== 'material') return
+    setTipoPedido(key)
+  }
 
   const marca = brandOf(client)
   const delTipo = useMemo(() => (docs || []).filter(d => d.tipo === tipo), [docs, tipo])
@@ -152,7 +173,7 @@ export default function Documentos({ clientId, client }) {
       })
       await updateRow('helm_documentos_venta', p.id, { estado: 'pagado', updated_at: new Date().toISOString() })
       load()
-      setTipo('factura')
+      setTipoPedido('factura')
     } catch (e) { setError('No se pudo convertir: ' + e.message) }
   }
 
@@ -164,7 +185,7 @@ export default function Documentos({ clientId, client }) {
 
   return (
     <div className="helm-grid" style={{ gap: 20 }}>
-      {tipo === 'factura' && (
+      {veFacturacion && tipo === 'factura' && (
         <div className="helm-grid helm-kpis">
           <Kpi label="Facturado" value={money(kpis.facturado)} accent />
           <Kpi label="Pendiente de cobro" value={money(kpis.pendiente)} />
@@ -174,7 +195,7 @@ export default function Documentos({ clientId, client }) {
 
       {error && <FormNote>{error}</FormNote>}
 
-      {tipo === 'factura' && docs && docs.some(d => d.tipo === 'factura') && (
+      {veFacturacion && tipo === 'factura' && docs && docs.some(d => d.tipo === 'factura') && (
         <Panel title="Facturación mensual">
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={porMes} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
@@ -191,8 +212,11 @@ export default function Documentos({ clientId, client }) {
         </Panel>
       )}
 
-      <Tabs tabs={TABS} value={tipo} onChange={setTipo} />
+      <Tabs tabs={pestañas} value={tipo} onChange={cambiarTipo} />
 
+      {tipo === 'material' ? (
+        <MaterialComercial key={clientId} clientId={clientId} />
+      ) : (
       <Panel
         title={tipo === 'factura' ? 'Facturas' : 'Presupuestos'}
         action={
@@ -254,15 +278,86 @@ export default function Documentos({ clientId, client }) {
               </div>
             )}
       </Panel>
+      )}
 
-      {edit && (
+      {veFacturacion && edit && (
         <EditorModal
           doc={edit} contactos={contactos}
           onClose={() => setEdit(null)} onSave={guardar}
         />
       )}
-      {ver && <VistaImpresion doc={ver} marca={marca} onClose={() => setVer(null)} />}
+      {veFacturacion && ver && <VistaImpresion doc={ver} marca={marca} onClose={() => setVer(null)} />}
     </div>
+  )
+}
+
+// PDF de helm_library con la etiqueta `comercial`. El enlace es el mismo
+// file_url que ya enseña la Biblioteca (el bucket público, servido por la
+// pasarela). La consulta va por client_id: en HELM el perfil es esa columna.
+function MaterialComercial({ clientId }) {
+  const [rows, setRows] = useState(null)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let vivo = true
+    supabase.from('helm_library')
+      .select('id, client_id, title, file_name, file_url, tags')
+      .eq('client_id', clientId)
+      .contains('tags', [TAG_COMERCIAL])
+      .order('title', { ascending: true })
+      .limit(500)
+      .then(({ data, error: e }) => {
+        if (!vivo) return
+        if (e) {
+          setError(e.message)
+          setRows([])
+          return
+        }
+        const lista = (data || [])
+          .filter(d => d.client_id === clientId && esMaterialComercial(d))
+          .map(d => ({ ...d, href: enlaceDelPerfil(d, clientId) }))
+          .filter(d => d.href)
+        setRows(lista)
+      })
+    return () => { vivo = false }
+  }, [clientId])
+
+  return (
+    <Panel title="Material comercial">
+      {error && <FormNote>{error}</FormNote>}
+      {rows === null ? <Empty>Cargando…</Empty>
+        : rows.length === 0 ? (
+          <Empty>
+            Todavía no hay PDF de venta. En la Biblioteca, quien lleva el negocio marca un PDF como material comercial y aparece aquí.
+          </Empty>
+        ) : (
+          <div className="helm-tablewrap">
+            <table className="helm-table">
+              <thead>
+                <tr><th>Título</th><th>Archivo</th><th></th></tr>
+              </thead>
+              <tbody>
+                {rows.map(d => (
+                  <tr key={d.id}>
+                    <td><b>{d.title}</b></td>
+                    <td>{d.file_name || 'PDF'}</td>
+                    <td>
+                      <div className="helm-curso-acts">
+                        <a className="helm-btn sm" href={d.href} target="_blank" rel="noreferrer">
+                          <FileText size={13} /> Abrir
+                        </a>
+                        <a className="helm-btn sm" href={d.href} download={d.file_name || 'material.pdf'} rel="noreferrer">
+                          <Download size={13} /> Descargar
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+    </Panel>
   )
 }
 
