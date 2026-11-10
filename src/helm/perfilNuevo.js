@@ -37,6 +37,7 @@ export const RUTAS_DE_LA_WEB = new Set([
 export const DEFAULT_STAGES = [
   { key: 'lead', label: 'Lead', tone: '' },
   { key: 'contactado', label: 'Contactado', tone: 'cyan' },
+  { key: 'interesado', label: 'Interesado', tone: 'cyan' },
   { key: 'cita', label: 'Cita agendada', tone: 'amber' },
   { key: 'propuesta', label: 'Propuesta', tone: 'violet' },
   { key: 'seguimiento', label: 'Seguimiento futuro', tone: 'amber' },

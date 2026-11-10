@@ -20,13 +20,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import QRCode from 'qrcode'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { FileText, Plus, Check, Trash2, ArrowRight, Printer, Mail, Download, ShieldCheck } from 'lucide-react'
-import { supabase, fetchRows, insertRow, updateRow, deleteRow, fmtDate, money, brandOf, exportCSV } from '../lib'
+import { supabase, fetchRows, insertRow, updateRow, deleteRow, fmtDate, money, brandOf } from '../lib'
 import { Panel, Empty, Modal, Field, Input, Select, Textarea, Kpi, Tabs, FormNote } from '../ui'
 import {
   siguienteNumero, lineaVacia, importeLinea, calcularTotales, IVA_DEFECTO, ESTADOS, estadoLabel,
 } from '../documentos/calculo'
 import { emitirConHash, datosQR } from '../documentos/verifactu'
 import { enlaceDelPerfil, esMaterialComercial, pestañasDeDocumentos, TAG_COMERCIAL } from '../documentos/material'
+import { sesionHelm } from '../permisos'
 
 export default function Documentos({ clientId, client, veFacturacion = true }) {
   // null = todavía no ha elegido: con facturación se abre Facturas; sin ella,
@@ -37,7 +38,19 @@ export default function Documentos({ clientId, client, veFacturacion = true }) {
   const [contactos, setContactos] = useState([])
   const [edit, setEdit] = useState(null)     // documento en el editor ({} = nuevo)
   const [ver, setVer] = useState(null)       // documento en la vista de impresión
+  const [verLista, setVerLista] = useState(false) // listado completo para imprimir
   const [error, setError] = useState(null)
+
+  // El enlace de pago (Stripe) de quien está en la sesión. Va impreso en SUS
+  // facturas y presupuestos para que el cliente pague ahí. Se guarda por
+  // persona en helm_team.payment_link; cada comercial pone el suyo.
+  const [miLink, setMiLink] = useState('')
+  useEffect(() => {
+    const s = sesionHelm()
+    if (!s.helmTeamId) { setMiLink(''); return }
+    supabase.from('helm_team').select('payment_link').eq('id', s.helmTeamId).maybeSingle()
+      .then(({ data }) => setMiLink((data?.payment_link || '').trim()))
+  }, [clientId])
 
   const pestañas = useMemo(
     () => pestañasDeDocumentos(veFacturacion).map(t => ({ ...t, icon: <FileText size={15} /> })),
@@ -95,20 +108,6 @@ export default function Documentos({ clientId, client, veFacturacion = true }) {
     }
     return meses
   }, [docs])
-
-  function exportar() {
-    exportCSV(`${tipo === 'factura' ? 'facturas' : 'presupuestos'}.csv`, [
-      { label: 'Número', value: 'numero' },
-      { label: 'Cliente', value: 'cliente_nombre' },
-      { label: 'NIF', value: 'cliente_nif' },
-      { label: 'Fecha', value: 'fecha' },
-      { label: 'Subtotal', value: r => Number(r.subtotal).toFixed(2) },
-      { label: 'IVA %', value: 'iva_pct' },
-      { label: 'IVA', value: r => Number(r.iva).toFixed(2) },
-      { label: 'Total', value: r => Number(r.total).toFixed(2) },
-      { label: 'Estado', value: r => estadoLabel(r.tipo, r.estado) },
-    ], delTipo)
-  }
 
   async function guardar(form) {
     const { subtotal, iva, total } = calcularTotales(form.lineas, form.iva_pct)
@@ -221,8 +220,8 @@ export default function Documentos({ clientId, client, veFacturacion = true }) {
         title={tipo === 'factura' ? 'Facturas' : 'Presupuestos'}
         action={
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="helm-btn" onClick={exportar} disabled={!delTipo.length}>
-              <Download size={15} /> Exportar CSV
+            <button className="helm-btn" onClick={() => setVerLista(true)} disabled={!delTipo.length}>
+              <Printer size={15} /> Exportar PDF
             </button>
             <button className="helm-btn primary" onClick={() => setEdit(nuevoDoc(tipo))}>
               <Plus size={15} /> {tipo === 'factura' ? 'Nueva factura' : 'Nuevo presupuesto'}
@@ -286,7 +285,8 @@ export default function Documentos({ clientId, client, veFacturacion = true }) {
           onClose={() => setEdit(null)} onSave={guardar}
         />
       )}
-      {veFacturacion && ver && <VistaImpresion doc={ver} marca={marca} onClose={() => setVer(null)} />}
+      {veFacturacion && ver && <VistaImpresion doc={ver} marca={marca} pagoLink={miLink} onClose={() => setVer(null)} />}
+      {veFacturacion && verLista && <VistaImpresionLista docs={delTipo} tipo={tipo} marca={marca} onClose={() => setVerLista(false)} />}
     </div>
   )
 }
@@ -479,12 +479,17 @@ function EditorModal({ doc, contactos, onClose, onSave }) {
 // Sin librería de PDF: el navegador ya sabe imprimir a PDF, y es exactamente
 // lo que usa el diagnóstico de Silvestre para su informe. Cero dependencias
 // nuevas por un botón que el sistema operativo ya resuelve mejor que nosotros.
-function VistaImpresion({ doc, marca, onClose }) {
+function VistaImpresion({ doc, marca, pagoLink, onClose }) {
   const [qr, setQr] = useState(null)
+  const [pagoQr, setPagoQr] = useState(null)
   useEffect(() => {
     if (!doc.hash) return
     QRCode.toDataURL(datosQR(doc), { margin: 0, width: 108 }).then(setQr).catch(() => {})
   }, [doc])
+  useEffect(() => {
+    if (!pagoLink) { setPagoQr(null); return }
+    QRCode.toDataURL(pagoLink, { margin: 0, width: 108 }).then(setPagoQr).catch(() => setPagoQr(null))
+  }, [pagoLink])
 
   function imprimir() {
     const antes = document.title
@@ -558,6 +563,17 @@ function VistaImpresion({ doc, marca, onClose }) {
           <span className="helm-doc-total-final">TOTAL <b>{money(doc.total)}</b></span>
         </div>
 
+        {pagoLink && (
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginTop: 18, padding: '12px 14px', border: '1px solid var(--border, #e7dccb)', borderRadius: 10 }}>
+            {pagoQr && <img src={pagoQr} alt="" width={84} height={84} style={{ flex: '0 0 auto' }} />}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+              <b>Pagar {doc.tipo === 'factura' ? 'esta factura' : 'este presupuesto'}</b>
+              <span style={{ fontSize: 12, color: 'var(--text-mut, #6b6b6b)' }}>Escanea el QR o entra en el enlace y pon el importe:</span>
+              <a href={pagoLink} style={{ wordBreak: 'break-all', fontSize: 12 }}>{pagoLink}</a>
+            </div>
+          </div>
+        )}
+
         {doc.notas && <p className="helm-doc-notas">{doc.notas}</p>}
 
         {doc.hash && (
@@ -570,6 +586,68 @@ function VistaImpresion({ doc, marca, onClose }) {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ── Listado completo a PDF ─────────────────────────────────────────────────
+// Reemplaza el viejo "Exportar CSV": misma hoja branded que una factura, pero
+// con la tabla de todos los documentos del tipo. Imprime igual, con el
+// window.print() del navegador (cero dependencias nuevas).
+function VistaImpresionLista({ docs, tipo, marca, onClose }) {
+  function imprimir() {
+    const antes = document.title
+    document.title = `${tipo === 'factura' ? 'Facturas' : 'Presupuestos'} · ${marca?.name || ''}`
+    const restaurar = () => { document.title = antes; window.removeEventListener('afterprint', restaurar) }
+    window.addEventListener('afterprint', restaurar)
+    window.print()
+  }
+  const total = (docs || []).reduce((a, d) => a + Number(d.total || 0), 0)
+
+  return (
+    <div className="helm-doc-print-overlay">
+      <div className="helm-doc-print-bar">
+        <button className="helm-btn" onClick={onClose}>Cerrar</button>
+        <button className="helm-btn primary" onClick={imprimir}><Printer size={15} /> Imprimir / Guardar PDF</button>
+      </div>
+
+      <div className="helm-doc-hoja">
+        <div className="helm-doc-cab">
+          {marca?.logo
+            ? <img src={marca.logo} alt="" className="helm-doc-logo" />
+            : <div className="helm-doc-logo-ini">{(marca?.name || 'H')[0].toUpperCase()}</div>}
+          <div className="helm-doc-cab-marca">
+            <b>{marca?.name}</b>
+            {marca?.subtitle && <span>{marca.subtitle}</span>}
+          </div>
+          <div className="helm-doc-cab-num">
+            <b>{tipo === 'factura' ? 'FACTURAS' : 'PRESUPUESTOS'}</b>
+            <span>{fmtDate(new Date().toISOString().slice(0, 10))}</span>
+            <span>{(docs || []).length} documento{(docs || []).length === 1 ? '' : 's'}</span>
+          </div>
+        </div>
+
+        <table className="helm-doc-tabla">
+          <thead>
+            <tr><th>Número</th><th>Cliente</th><th>Fecha</th><th>Estado</th><th>Total</th></tr>
+          </thead>
+          <tbody>
+            {(docs || []).map(d => (
+              <tr key={d.id}>
+                <td>{d.numero}</td>
+                <td>{d.cliente_nombre}</td>
+                <td>{fmtDate(d.fecha)}</td>
+                <td>{estadoLabel(d.tipo, d.estado)}</td>
+                <td>{money(d.total)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="helm-doc-totales-final">
+          <span className="helm-doc-total-final">TOTAL {tipo === 'factura' ? 'facturado' : 'presupuestado'} <b>{money(total)}</b></span>
+        </div>
       </div>
     </div>
   )
