@@ -43,10 +43,12 @@ const ROLES_HELM = [
     // «Call caller» (WebSeller): el que llama en frío a los negocios del
     // scraper, los mueve por su pipeline y cierra la venta de la web. Su día
     // es llamadas + ventas; es el rol que puntúa en el Ranking (ver Equipo).
+    // La clave interna sigue siendo 'call_caller' (así están guardados los
+    // miembros en la base); lo que se ve es «Cold caller».
     key: 'call_caller',
-    label: 'Call caller',
-    short: 'call caller',
-    desc: 'Llama a los leads, los mueve por su pipeline y cierra la venta.',
+    label: 'Cold caller',
+    short: 'cold caller',
+    desc: 'Llama en frío a los leads, los mueve por su pipeline y cierra la venta.',
     diario: [
       { field: 'calls_made', label: 'Llamadas del día' },
       { field: 'closes', label: 'Ventas' },
