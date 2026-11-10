@@ -26,7 +26,7 @@ import {
   siguienteNumero, lineaVacia, importeLinea, calcularTotales, IVA_DEFECTO, ESTADOS, estadoLabel,
 } from '../documentos/calculo'
 import { emitirConHash, datosQR } from '../documentos/verifactu'
-import { enlaceDelPerfil, esMaterialComercial, pestañasDeDocumentos, TAG_COMERCIAL } from '../documentos/material'
+import { enlaceDelPerfil, esMaterialComercial, pestañasDeDocumentos } from '../documentos/material'
 import { sesionHelm } from '../permisos'
 
 export default function Documentos({ clientId, client, veFacturacion = true }) {
@@ -300,10 +300,16 @@ function MaterialComercial({ clientId }) {
 
   useEffect(() => {
     let vivo = true
+    // No se filtra la etiqueta en el servidor: `tags` es jsonb y
+    // `.contains('tags', [...])` manda un literal de array de Postgres
+    // (`cs.{comercial}`), que jsonb rechaza con «invalid input syntax for
+    // type json». Además la Biblioteca guarda `tags` en varios formatos
+    // (array jsonb, texto «ventas, comercial», array serializado). Por eso
+    // se trae el material del perfil y filtra `esMaterialComercial`, que ya
+    // entiende todos esos formatos y además exige PDF + enlace abrible.
     supabase.from('helm_library')
       .select('id, client_id, title, file_name, file_url, tags')
       .eq('client_id', clientId)
-      .contains('tags', [TAG_COMERCIAL])
       .order('title', { ascending: true })
       .limit(500)
       .then(({ data, error: e }) => {
