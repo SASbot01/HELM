@@ -1295,11 +1295,10 @@ function MarcaCard({ clientId, client, onClientUpdate }) {
 }
 
 // ── IA del perfil ──────────────────────────────────────────────────────────
-// Cada perfil corre su IA por su cuenta: o el modelo local del servidor (gratis
-// y sin que salga un dato) o Claude con SU clave y SU modelo. HELM y
-// consultoría son perfiles distintos, así que uno puede estar en Claude Opus y
-// el otro en el local sin que se toquen — ni la clave, ni el modelo, ni la
-// factura.
+// Cada perfil puede tener SU clave y SU modelo de Claude. Si no la tiene, usa
+// la clave de Claude de su agencia (trae-tu-clave: Perfiles → Licencia y
+// claves); la agencia de la casa, el modelo local del servidor. `respaldo`
+// (api/ia.js) dice cuál de los dos, o que la agencia aún no ha puesto clave.
 //
 // La clave se manda una vez y no vuelve: aquí solo se ven los 4 últimos.
 function IaCard({ clientId }) {
@@ -1343,9 +1342,11 @@ function IaCard({ clientId }) {
   }
 
   async function desenlazar() {
-    if (!confirm('¿Quitar la clave de Claude? Este perfil volverá al modelo local del servidor.')) return
+    if (!confirm(status?.respaldo?.tipo === 'local'
+      ? '¿Quitar la clave de Claude? Este perfil volverá al modelo local del servidor.'
+      : '¿Quitar la clave de Claude de este perfil? Volverá a usar la clave de la agencia.')) return
     setBusy(true); setError(null); setMsg(null)
-    try { await iaApi.unlink(clientId); setMsg('Clave borrada. Vuelves al modelo local.'); await load() }
+    try { await iaApi.unlink(clientId); setMsg('Clave del perfil borrada.'); await load() }
     catch (err) { setError(err.message) }
     setBusy(false)
   }
@@ -1360,6 +1361,7 @@ function IaCard({ clientId }) {
   }
 
   const enClaude = status.proveedor === 'claude'
+  const respaldo = status.respaldo || { tipo: 'local' }
   const modelos = status.modelos || []
   const etiqueta = modelos.find(m => m.id === status.model)?.label || status.model
 
@@ -1375,11 +1377,20 @@ function IaCard({ clientId }) {
       <div className="helm-settings-body">
         <div className="helm-settings-row">
           <div>
-            <b>{enClaude ? <Sparkles size={14} /> : <Cpu size={14} />} {enClaude ? etiqueta : status.model}</b>
+            <b>
+              {enClaude || respaldo.tipo === 'agencia' ? <Sparkles size={14} /> : <Cpu size={14} />}{' '}
+              {enClaude ? etiqueta
+                : respaldo.tipo === 'agencia' ? (modelos.find(m => m.id === respaldo.model)?.label || respaldo.model)
+                  : respaldo.tipo === 'sin_ia' ? 'Sin IA' : status.model}
+            </b>
             <small>
               {enClaude
                 ? `Claude, con la clave de este perfil (…${status.last4 || '????'}) · se factura a tu cuenta de Anthropic`
-                : `Modelo local en este servidor vía Ollama (${status.local?.url || '—'}) · contexto ${status.local?.ctx || '—'} tokens`}
+                : respaldo.tipo === 'agencia'
+                  ? `Claude, con la clave de tu agencia (…${respaldo.last4 || '????'}) · se factura a la cuenta de Anthropic de la agencia`
+                  : respaldo.tipo === 'sin_ia'
+                    ? 'Tu agencia aún no ha puesto su clave de Claude: quien la administra puede añadirla en Perfiles → Licencia y claves.'
+                    : `Modelo local en este servidor vía Ollama (${status.local?.url || '—'}) · contexto ${status.local?.ctx || '—'} tokens`}
             </small>
           </div>
           {enClaude && (
@@ -1403,16 +1414,16 @@ function IaCard({ clientId }) {
             </div>
             <small className="helm-settings-note">
               El chat, las Biblias y la lectura de facturas de <b>este perfil</b> van contra Claude con esta
-              clave. Los demás perfiles siguen con lo suyo. Si quitas la clave, todo vuelve al modelo local
-              sin perder nada.
+              clave. Los demás perfiles siguen con lo suyo. Si quitas la clave, vuelve a la de la agencia (o al
+              modelo local, en la agencia de la casa) sin perder nada.
             </small>
           </>
         ) : (
           <>
             <p className="helm-settings-lead">
-              Ahora mismo la IA de este perfil corre en el servidor: ni tokens, ni facturas, ni datos saliendo
-              de aquí. Si quieres respuestas mejores, mete tu clave de Anthropic y este perfil pasará a
-              Claude — pagando tú, y solo tú.
+              {respaldo.tipo === 'local'
+                ? 'Ahora mismo la IA de este perfil corre en el servidor: ni tokens, ni facturas, ni datos saliendo de aquí. Si quieres respuestas mejores, mete tu clave de Anthropic y este perfil pasará a Claude — pagando tú, y solo tú.'
+                : 'Si este perfil tiene que usar otra cuenta de Anthropic que la de la agencia (por ejemplo, la del propio cliente), pon aquí su clave: solo este perfil irá con ella.'}
             </p>
             <form className="helm-settings-form" onSubmit={enlazar}>
               <Field label="API key de Anthropic">

@@ -188,7 +188,11 @@ vi.mock('../api/_lib/llm.js', () => ({ proveedorDe: () => 'claude' }))
 // ── El bucle de Claude: turnoAgente simulado, el resto el de verdad ────────
 const turnoAgente = vi.fn()
 vi.mock('../api/_lib/claude-agente.js', async (original) => ({ ...(await original()), turnoAgente: (...a) => turnoAgente(...a) }))
-vi.mock('../api/_lib/creditos.js', () => ({ claveHelm: () => 'clave-de-helm', exigirSaldo: async () => {}, cobrar: async () => {} }))
+vi.mock('../api/_lib/claves-agencia.js', async (original) => ({ ...(await original()), claveHelm: () => 'clave-de-helm' }))
+// La licencia no es lo que se prueba aquí: todas las agencias entran
+// (api/_lib/licencia.js tiene sus pruebas en licencias.test.js).
+vi.mock('../api/_lib/licencia.js', async (original) => ({ ...(await original()), exigirLicencia: async () => {} }))
+
 
 const { default: handler } = await import('../api/telegram-agencia.js')
 const { signJwt } = await import('../api/_lib/auth.js')
@@ -490,7 +494,8 @@ describe('hablar con el bot', () => {
     const tg = nuevoTg()
     vincula(SA.alex, tg)
     const casos = [
-      [Object.assign(new Error('Te has quedado sin créditos.'), { statusCode: 402 }), 'sin créditos'],
+      [Object.assign(new Error('La licencia de HELM de tu agencia ha caducado.'), { statusCode: 402, codigo: 'sin_licencia' }), 'ha caducado'],
+      [Object.assign(new Error('Tu agencia aún no ha puesto su clave de Claude.'), { statusCode: 409, codigo: 'sin_clave_ia' }), 'clave de Claude'],
       [Object.assign(new Error('Anthropic rechazó la petición: Your credit balance is too low to access the Anthropic API. req_011CXYZ'), { statusCode: 502 }), 'sin saldo'],
       [Object.assign(new Error('Claude se ha negado (refusal) en el paso 3'), { statusCode: 422 }), 'de otra forma'],
       [new Error('connect ECONNREFUSED 127.0.0.1:54321'), 'fallo por mi lado'],

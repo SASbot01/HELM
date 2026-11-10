@@ -836,26 +836,16 @@ describe('api/editor: crear', () => {
     expect((await crea({ params: 'x' })).statusCode).toBe(400)
   })
 
-  it('sin saldo no se empieza (402 con el mensaje); lo que ya está en marcha en la agencia cuenta; la casa y sin agencia no pagan', async () => {
-    db.agencias[0].saldo = 2
-    const r = await crea({ duracion: 200 })
-    expect(r.statusCode).toBe(402)
-    expect(r.body.error).toBe('No tienes saldo suficiente: esto cuesta 300 créditos y te quedan 200. Recarga en Créditos.')
-    expect(db.helm_ediciones).toHaveLength(0)
-    expect(fs.existsSync(path.join(DATOS, 'editor')) ? fs.readdirSync(path.join(DATOS, 'editor')).filter(n => !fs.existsSync(path.join(DATOS, 'editor', n, 'subida.json'))).length >= 0 : true).toBe(true)
-    // 3 € y otro perfil de la agencia con una de 1,50 € en cola: no llega para otra de 3 €.
-    db.agencias[0].saldo = 3
-    db.helm_ediciones.push({ id: nuevoId(), client_id: VECINO, estado: 'en_cola', precio_eur: 1.5, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    const r2 = await crea({ duracion: 200 })
-    expect(r2.statusCode).toBe(402)
-    expect(r2.body.error).toContain('ya están apartados')
-    // Pero sí para una de 1,50 €; y lo ya cobrado o terminado no cuenta.
-    expect((await crea({ duracion: 100 })).statusCode).toBe(200)
-    db.helm_ediciones = [{ id: nuevoId(), client_id: VECINO, estado: 'listo', precio_eur: 3, cobrado_eur: 3 }]
-    expect((await crea({ duracion: 200 })).statusCode).toBe(200)
-    // La agencia de la casa no paga; un perfil sin agencia, tampoco.
-    db.helm_ediciones = []
+  it('el saldo ya no cuenta (licencia + trae-tu-clave): con la agencia a 0 se empieza, con su precio de referencia', async () => {
     db.agencias[0].saldo = 0
+    const r = await crea({ duracion: 200 })
+    expect(r.statusCode).toBe(200)
+    expect(db.helm_ediciones[0]).toMatchObject({ estado: 'subiendo', precio_eur: 3 })
+    // Lo que otro perfil de la agencia tenga en cola tampoco frena.
+    db.helm_ediciones.push({ id: nuevoId(), client_id: VECINO, estado: 'en_cola', precio_eur: 1.5, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    expect((await crea({ duracion: 100 })).statusCode).toBe(200)
+    // La casa y un perfil sin agencia, igual.
+    db.helm_ediciones = []
     db.agencias[0].sin_cobro = true
     expect((await crea({ duracion: 500 })).statusCode).toBe(200)
     db.agencias[0].sin_cobro = false
@@ -1060,24 +1050,15 @@ describe('api/editor: lanzar', () => {
     expect(db.agent_jobs).toHaveLength(1)
   })
 
-  it('sin saldo para la duración real: 402 y la edición sigue subida; al recargar, se lanza', async () => {
-    db.agencias[0].saldo = 2
+  it('con la duración real se lanza aunque la agencia esté a 0: en cola, con su precio de referencia y sin cobrar', async () => {
+    db.agencias[0].saldo = 0
     const id = await subida({ duracion: 60 })
     await trozo(id, 0, VIDEO)
     sondea.mockResolvedValue({ ...SONDEO, duracion: 200 })
     const r = await lanza(id)
-    expect(r.statusCode).toBe(402)
-    expect(r.body.error).toBe('No tienes saldo suficiente: esto cuesta 300 créditos y te quedan 200. Recarga en Créditos.')
-    expect(db.helm_ediciones[0].estado).toBe('subiendo')
-    expect(db.agent_jobs).toHaveLength(0)
-    expect(fs.existsSync(path.join(dirEdicion(id), 'subida.part'))).toBe(true)
-    db.agencias[0].saldo = 10
-    const bien = await lanza(id)
-    expect(bien.statusCode).toBe(200)
-    expect(bien.body.edicion).toMatchObject({ estado: 'en_cola', precio_eur: 3 })
-    // Lanzar no cobra: cobra el worker al terminar bien.
-    expect(saldo()).toBe(10)
-    expect(db.agencia_movimientos).toHaveLength(0)
+    expect(r.statusCode).toBe(200)
+    expect(r.body.edicion).toMatchObject({ estado: 'en_cola', precio_eur: 3 })
+    expect(db.agencia_movimientos || []).toHaveLength(0)
   })
 
   it('con la duración real de «10:00» (600,2 s según ffprobe) se lanza: el medio segundo de gracia vale también aquí', async () => {
@@ -1243,12 +1224,11 @@ describe('lo que se queda colgado (el worker, cada hora; y cuando se rinde)', ()
     expect(await cierraColgadas()).toBe(0)
   })
 
-  it('una edición colgada en cola no aparta su precio del saldo de la agencia para siempre', async () => {
-    db.agencias[0].saldo = 1.5
+  it('una edición colgada en cola de otro perfil no frena (ya no hay saldo que apartar) y se cierra', async () => {
+    db.agencias[0].saldo = 0
     db.helm_ediciones = [fila('en_cola', 90, { client_id: VECINO })]
-    expect((await crea({ duracion: 60 })).statusCode).toBe(402)
-    expect(await cierraColgadas()).toBe(1)
     expect((await crea({ duracion: 60 })).statusCode).toBe(200)
+    expect(await cierraColgadas()).toBe(1)
   })
 
   it('cuando el worker se rinde: la fila en cola o a medias pasa a error con el motivo; una lista, de otro perfil o sin id, no se toca', async () => {
@@ -1328,7 +1308,7 @@ describe('trabajo editor-render', () => {
   const { supabase } = { supabase: { from: (t) => consulta(t), rpc: (...a) => moverSaldo(...a) } }
   const palabrasDe = () => [...dice('Esta IA hace que tu negocio venda más.', 0.4), ...dice('Esta IA hace que tu negocio venda más porque sí.', 3.4)]
 
-  it.skipIf(!hayFfmpeg)('transcribe (simulado), planifica, monta, deja la fila en «listo» y cobra su precio una sola vez', async () => {
+  it.skipIf(!hayFfmpeg)('transcribe (simulado), planifica, monta y deja la fila en «listo», sin cobrar', async () => {
     const { sondea: sondeaReal } = await vi.importActual('../api/_lib/variantes.js')
     sondea.mockImplementation(sondeaReal)
     sondeaVideo.mockImplementation(sondeaVideoReal)
@@ -1341,7 +1321,7 @@ describe('trabajo editor-render', () => {
     await editorRender({ payload: { clientId: PERFIL, edicionId: id } }, { db: supabase, transcribe })
 
     const fila = db.helm_ediciones[0]
-    expect(fila).toMatchObject({ estado: 'listo', progreso: 100, error: null, cobrado_eur: 1.5 })
+    expect(fila).toMatchObject({ estado: 'listo', progreso: 100, error: null, cobrado_eur: 0 })
     expect(transcribe).toHaveBeenCalledTimes(1)
     expect(fila.plan.resumen.tomas).toBe(1)
     // ffprobe, la voz para Whisper y el montaje: los tres abren el original como MP4/MOV.
@@ -1351,13 +1331,11 @@ describe('trabajo editor-render', () => {
     expect(fila.bytes).toBe(fs.statSync(rutaEditado(id)).size)
     // Ni el audio para Whisper ni los subtítulos se quedan en la carpeta.
     expect(fs.readdirSync(dirEdicion(id)).sort()).toEqual(['editado.mp4', 'original.mp4'])
-    // Cobrado: 1,50 € a la agencia del perfil, con su referencia.
-    expect(saldo()).toBe(98.5)
-    expect(db.agencia_movimientos).toEqual([expect.objectContaining({ agencia_id: AGENCIA, importe: -1.5, tipo: 'consumo', origen: 'auto', client_id: PERFIL, modelo: 'editor-reels', referencia: `editor:${id}` })])
-    // Si el worker lo repite (se cayó antes de apuntarlo), no se cobra otra vez.
-    expect(await cobraEdicion(PERFIL, id, 1.5)).toBe(1.5)
-    expect(db.agencia_movimientos).toHaveLength(1)
-    expect(saldo()).toBe(98.5)
+    // Sin cobro (licencia + trae-tu-clave): ni movimiento ni saldo tocado.
+    expect(saldo()).toBe(100)
+    expect(db.agencia_movimientos).toHaveLength(0)
+    expect(await cobraEdicion(PERFIL, id, 1.5)).toBe(0)
+    expect(db.agencia_movimientos).toHaveLength(0)
 
     // Si la fila ya no está (la borraron), no hace nada.
     db.helm_ediciones = []
@@ -1390,7 +1368,7 @@ describe('trabajo editor-render', () => {
     await editorRender({ payload: { clientId: PERFIL, edicionId: id } }, { db: supabase, transcribe: async () => ({ palabras }) })
 
     const fila = db.helm_ediciones[0]
-    expect(fila).toMatchObject({ estado: 'listo', error: null, cobrado_eur: 1.5 })
+    expect(fila).toMatchObject({ estado: 'listo', error: null, cobrado_eur: 0 })
     expect(fila.plan.resumen).toMatchObject({ recursos: 2, recursosEnPalabra: 1, logo: true, musica: true })
     // El clip, como MP4/MOV en el montaje; la música en WAV, tal cual.
     expect(abrenComoMov(rutaRecurso(id, ids.clip, 'mp4'))).toBe(1)
@@ -1459,7 +1437,7 @@ describe('trabajo editor-render', () => {
     expect(malos).toEqual([])
   }, 120_000)
 
-  it.skipIf(!hayFfmpeg)('si falla, no cobra; la casa (sin_cobro) no paga: cobrado 0; si el apunte falla, lo reintenta luego', async () => {
+  it.skipIf(!hayFfmpeg)('si falla, error sin cobro; si sale bien, cobrado 0 (también la casa); reintentaCobros no tiene nada que cobrar', async () => {
     const { sondea: sondeaReal } = await vi.importActual('../api/_lib/variantes.js')
     sondea.mockImplementation(sondeaReal)
     sondeaVideo.mockImplementation(sondeaVideoReal)
@@ -1488,20 +1466,16 @@ describe('trabajo editor-render', () => {
     expect(db.helm_ediciones[0]).toMatchObject({ estado: 'listo', cobrado_eur: 0 })
     expect(db.agencia_movimientos).toHaveLength(0)
 
-    // La base no deja apuntar el cobro: listo, cobrado_eur vacío; reintentaCobros lo apunta luego (una vez).
+    // Una agencia que antes pagaba: lo mismo, cobrado 0 y sin tocar la base de saldos.
     db.agencias[0].sin_cobro = false
     db.rpcCaida = true
     db.helm_ediciones = [fila()]
     await editorRender({ payload: { clientId: PERFIL, edicionId: id } }, { db: supabase, transcribe: async () => ({ palabras: palabrasDe() }) })
-    expect(db.helm_ediciones[0]).toMatchObject({ estado: 'listo' })
-    expect(db.helm_ediciones[0].cobrado_eur ?? null).toBeNull()
+    expect(db.helm_ediciones[0]).toMatchObject({ estado: 'listo', cobrado_eur: 0 })
     expect(await reintentaCobros({ db: supabase })).toBe(0)
     db.rpcCaida = false
-    expect(await reintentaCobros({ db: supabase })).toBe(1)
-    expect(db.helm_ediciones[0].cobrado_eur).toBe(1.5)
-    expect(await reintentaCobros({ db: supabase })).toBe(0)
-    expect(db.agencia_movimientos).toHaveLength(1)
-    expect(saldo()).toBe(98.5)
+    expect(db.agencia_movimientos).toHaveLength(0)
+    expect(saldo()).toBe(100)
   }, 120_000)
 })
 
@@ -1660,66 +1634,28 @@ describe('api/editor: quién puede gastar (el rol en el perfil)', () => {
   })
 })
 
-describe('api/editor: lo apartado es el de toda la agencia, con su cerrojo', () => {
-  it('una variante de Trial reels en cola o una portada generándose (de otro perfil de la agencia) también apartan', async () => {
-    db.agencias[0].saldo = 1.5
+describe('api/editor: el cerrojo común de la agencia', () => {
+  it('lo que otros agentes tengan en marcha ya no frena (no hay saldo que apartar)', async () => {
+    db.agencias[0].saldo = 0
     db.helm_trial_reels = [{ id: nuevoId(), client_id: VECINO, estado: 'en_cola', precio_eur: 0.3, cobrado_eur: null, created_at: haceDias(0), updated_at: haceDias(0) }]
-    const r = await crea({ duracion: 60 })
-    expect(r.statusCode).toBe(402)
-    expect(r.body.error).toContain('ya están apartados')
-    db.helm_trial_reels = []
     const liberar = reservaTemporal(AGENCIA, 0.4)
     try {
-      expect((await crea({ duracion: 60 })).statusCode).toBe(402)
+      expect((await crea({ duracion: 60 })).statusCode).toBe(200)
     } finally { liberar() }
-    expect((await crea({ duracion: 60 })).statusCode).toBe(200)
   })
 
-  it('al lanzar, su propia fila no cuenta dos veces: con 1,50 € justos, se lanza', async () => {
-    db.agencias[0].saldo = 1.5
+  it('lanzar espera al cerrojo de la agencia (el mismo de Portadas y Trial reels)', async () => {
     const { body: { edicion: { id } } } = await crea({ duracion: 60 })
     await trozo(id, 0, VIDEO)
-    sondea.mockResolvedValueOnce({ ...SONDEO, duracion: 60 })
-    const r = await lanza(id)
-    expect(r.statusCode).toBe(200)
-    expect(r.body.edicion).toMatchObject({ estado: 'en_cola', precio_eur: 1.5 })
-  })
-
-  it('a quien no administra la agencia, el 402 no le dice el saldo (ni al crear ni al lanzar)', async () => {
-    puedeVerSaldo.mockImplementation(async () => false)
-    db.agencias[0].saldo = 2
-    const r = await crea({ duracion: 200 })
-    expect(r.statusCode).toBe(402)
-    expect(r.body.error).toBe('La agencia no tiene créditos suficientes para esto (cuesta 300 créditos). Pide a quien administra la agencia que recargue.')
-    const { body: { edicion: { id } } } = await crea({ duracion: 60 })
-    await trozo(id, 0, VIDEO)
-    sondea.mockResolvedValueOnce({ ...SONDEO, duracion: 200 })
-    const l = await lanza(id)
-    expect(l.statusCode).toBe(402)
-    expect(l.body.error).toContain('créditos suficientes')
-    expect(l.body.error).not.toMatch(/te quedan|apartad/)
-    expect(puedeVerSaldo).toHaveBeenCalledWith({ userId: 'b0000000-0000-4000-8000-000000000001' }, PERFIL)
-  })
-
-  it('comprobar y apartar van dentro del cerrojo de la agencia (el mismo de Portadas y Trial reels)', async () => {
-    db.agencias[0].saldo = 1.9
-    const { body: { edicion: { id } } } = await crea({ duracion: 60 })
-    await trozo(id, 0, VIDEO)
-    // Otro agente de la agencia tiene el cerrojo: mientras, aparta 0,50 €.
     let suelta = null
     const otro = conCerrojoAgencia(AGENCIA, () => new Promise(ok => { suelta = ok }))
     const lanzado = lanza(id)
     await new Promise(r => setTimeout(r, 30))
     expect(db.helm_ediciones[0].estado).toBe('subiendo')
-    const liberar = reservaTemporal(AGENCIA, 0.5)
     suelta()
     await otro
-    // Al entrar ya ve lo apartado por el otro: 1,90 − 0,50 no llega para 1,50.
-    const r = await lanzado
-    expect(r.statusCode).toBe(402)
-    expect(db.helm_ediciones[0].estado).toBe('subiendo')
-    liberar()
-    expect((await lanza(id)).statusCode).toBe(200)
+    expect((await lanzado).statusCode).toBe(200)
+    expect(db.helm_ediciones[0].estado).toBe('en_cola')
   })
 })
 

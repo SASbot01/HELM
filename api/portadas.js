@@ -29,6 +29,10 @@
 // y conservando a la persona tal cual (src/agents/portadas/estilosIa.js). El
 // titular lo escribe la IA dentro de la imagen; el panel avisa de revisarlo.
 //
+// Desde el 2026-11-08 (licencia + trae-tu-clave) las imágenes se generan con
+// el token de Replicate de la AGENCIA (tokenImagenDe) y HELM no cobra nada: lo
+// de los créditos de aquí abajo ya no frena ni apunta (api/_lib/creditos.js).
+//
 // Desde el 2026-10-27 cada imagen generada (portada-ia y fondo-ia) cuesta a
 // PRECIO FIJO: 0,40 € de saldo (PRECIOS_FIJOS['portada-ia'], src/helm/
 // precios.js). Antes de llamar a Replicate se mira que llegue (402 si no) y se
@@ -64,6 +68,7 @@ import { getToken, getMediaUrls } from './_lib/instagram.js'
 import { fetchPublico } from './_lib/web.js'
 import { generaFondo, generaPortadaIa, hayClaveImagen, tardaDemasiado, TOPE_IMAGEN_MS } from './_lib/imagen.js'
 import { exigirImporte, cobrarFijo, conCerrojoAgencia, reservaTemporal, PRECIOS_FIJOS } from './_lib/creditos.js'
+import { tokenImagenDe, errorSinClave } from './_lib/claves-agencia.js'
 import {
   estiloIaPorClave, referenciaDe, promptPortadaIa, MAX_TITULO_IA, MAX_DETALLE_IA, MAX_EJEMPLOS, MAX_NOMBRE_EJEMPLO,
 } from '../src/agents/portadas/estilosIa.js'
@@ -412,9 +417,12 @@ export default async function handler(req, res) {
     }
 
     // ── GET ?action=capacidad ──────────────────────────────────────────────
-    // ¿Hay clave de imagen en el server? El panel enseña u oculta el fondo IA.
+    // ¿Hay con qué generar imágenes? El token de Replicate de la agencia del
+    // perfil (trae-tu-clave; el del servidor solo para la casa). El panel
+    // enseña u oculta el fondo y la portada con IA.
     if (req.method === 'GET' && action === 'capacidad') {
-      return res.status(200).json({ fondoIa: hayClaveImagen(), portadaIa: hayClaveImagen() })
+      const hay = hayClaveImagen(await tokenImagenDe(clientId).catch(() => null))
+      return res.status(200).json({ fondoIa: hay, portadaIa: hay })
     }
 
     // ── GET ?action=ejemplos ───────────────────────────────────────────────
@@ -466,7 +474,8 @@ export default async function handler(req, res) {
     // ── POST ?action=portada-ia ────────────────────────────────────────────
     // La portada entera con IA en un estilo, desde un fotograma real.
     if (req.method === 'POST' && action === 'portada-ia') {
-      if (!hayClaveImagen()) return res.status(503).json({ error: 'Falta la clave de imagen (REPLICATE_API_TOKEN) en el servidor' })
+      const token = await tokenImagenDe(clientId)
+      if (!hayClaveImagen(token)) { const e = errorSinClave('Replicate'); return res.status(e.statusCode).json({ error: e.message, codigo: e.codigo }) }
       const fotograma = imagenDeDataUrl(req.body?.fotograma, MAX_FOTOGRAMA)
       const titulo = String(req.body?.titulo || '').trim()
       const detalle = recorta(String(req.body?.detalle || '').trim(), MAX_DETALLE_IA)
@@ -514,7 +523,7 @@ export default async function handler(req, res) {
       const tope = rateLimit({ key: `portada-ia:${clientId}`, max: 30, windowMs: 3_600_000 })
       if (!tope.ok) return res.status(429).json({ error: 'Has generado muchas portadas seguidas. Prueba dentro de un rato.', retryAfter: tope.retryAfter })
       try {
-        const { dataUrl, cobrado, saldo } = await generaCobrando(clientId, 'portada-ia', ({ limite }) => generaPortadaIa({ prompt, imagenes, limite }), {
+        const { dataUrl, cobrado, saldo } = await generaCobrando(clientId, 'portada-ia', ({ limite }) => generaPortadaIa({ prompt, imagenes, limite, token }), {
           verSaldo: await puedeVerSaldo(auth, clientId), req, res, limite: inicio + TOPE_IMAGEN_MS,
         })
         return res.status(200).json({ imagen: dataUrl, ia: true, cobrado, saldo })
@@ -553,17 +562,18 @@ export default async function handler(req, res) {
     }
 
     // ── POST ?action=fondo-ia ──────────────────────────────────────────────
-    // Genera el fondo con Ideogram (cuesta en Replicate y se cobra como una
-    // portada: 40 créditos, solo si sale). Sin clave → 503 claro.
+    // Genera el fondo con Ideogram, con el token de Replicate de la agencia
+    // (trae-tu-clave: lo paga ella en Replicate). Sin token → 409 claro.
     if (req.method === 'POST' && action === 'fondo-ia') {
-      if (!hayClaveImagen()) return res.status(503).json({ error: 'Falta la clave de imagen (REPLICATE_API_TOKEN) en el servidor' })
+      const token = await tokenImagenDe(clientId)
+      if (!hayClaveImagen(token)) { const e = errorSinClave('Replicate'); return res.status(e.statusCode).json({ error: e.message, codigo: e.codigo }) }
       const prompt = recorta(String(req.body?.prompt || '').trim(), 1500)
       if (!prompt) return res.status(400).json({ error: 'Escribe la descripción del fondo' })
       // Como la portada: cuesta en Replicate, tope por perfil y hora.
       const tope = rateLimit({ key: `fondo-ia:${clientId}`, max: 30, windowMs: 3_600_000 })
       if (!tope.ok) return res.status(429).json({ error: 'Has generado muchos fondos seguidos. Prueba dentro de un rato.', retryAfter: tope.retryAfter })
       try {
-        const { dataUrl, cobrado, saldo } = await generaCobrando(clientId, 'fondo-ia', ({ limite }) => generaFondo({ prompt, aspecto: '9:16', limite }), {
+        const { dataUrl, cobrado, saldo } = await generaCobrando(clientId, 'fondo-ia', ({ limite }) => generaFondo({ prompt, aspecto: '9:16', limite, token }), {
           verSaldo: await puedeVerSaldo(auth, clientId), req, res, limite: inicio + TOPE_IMAGEN_MS,
         })
         return res.status(200).json({ imagen: dataUrl, ia: true, cobrado, saldo })

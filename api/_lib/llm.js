@@ -1,10 +1,14 @@
-// HELM — capa de IA. Dos proveedores, uno por perfil.
+// HELM — capa de IA. Qué modelo atiende a cada perfil (proveedorDe):
 //
-//   · Sin configurar → modelo LOCAL vía Ollama, en este mismo servidor. Nada
-//     sale a internet y no se gasta un token de nadie: Ollama escucha en
-//     127.0.0.1:11434 y el modelo corre en la GPU de la máquina.
-//   · Con clave de Anthropic en Ajustes → Claude, con la clave y el modelo de
-//     ESE perfil. HELM y consultoría no comparten clave, ni modelo, ni factura.
+//   · Con clave de Anthropic en Ajustes del perfil → Claude, con la clave y el
+//     modelo de ESE perfil.
+//   · Si no, el perfil de una agencia con licencia usa la clave de Claude de
+//     SU AGENCIA (trae-tu-clave, ./claves-agencia.js). Sin ella, la IA de ese
+//     perfil está parada: { tipo: 'sin_ia' }, y llmChat lanza el aviso (409)
+//     para que la agencia ponga su clave. Sin licencia vigente, igual (402).
+//   · La agencia de la casa (sin_cobro) y un perfil sin agencia → modelo LOCAL
+//     vía Ollama, en este mismo servidor. Nada sale a internet: Ollama escucha
+//     en 127.0.0.1:11434 y el modelo corre en la GPU de la máquina.
 //
 // Quien llama no elige proveedor: pasa `clientId` y aquí se resuelve. Sin
 // `clientId` (health general, scripts) se usa el local.
@@ -17,7 +21,9 @@
 // Para cambiar de modelo local: `ollama pull <modelo>` y ajustar HELM_LLM_MODEL.
 import { supabase } from '../lib/supabase.js'
 import { claudeTurno, getIaConfig, verificarClave, MODELO_POR_DEFECTO, MODELOS_CLAUDE } from './anthropic.js'
-import { pagaConCreditos, claveHelm } from './creditos.js'
+import { agenciaDe } from './access.js'
+import { licenciaDe, errorSinLicencia } from './licencia.js'
+import { clavesDeAgencia, errorSinClave } from './claves-agencia.js'
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434'
 const MODEL = process.env.HELM_LLM_MODEL || 'qwen2.5:14b-instruct'
@@ -49,7 +55,10 @@ export function olvidarProveedor(clientId) {
 }
 
 /**
- * @returns {Promise<{tipo: 'claude'|'local', apiKey?: string, model: string}>}
+ * `origen`: de quién es la clave ('perfil' o 'agencia'). Con `tipo: 'sin_ia'`,
+ * `error` es lo que se le dice al usuario (sin licencia o sin clave de la
+ * agencia) y llmChat lo lanza.
+ * @returns {Promise<{tipo: 'claude'|'local'|'sin_ia', apiKey?: string, model: string, origen?: 'perfil'|'agencia', error?: Error}>}
  */
 export async function proveedorDe(clientId) {
   const local = { tipo: 'local', model: MODEL }
@@ -60,22 +69,37 @@ export async function proveedorDe(clientId) {
 
   let valor = local
   try {
+    const agenciaId = await agenciaDe(clientId)
+    const lic = agenciaId ? await licenciaDe(agenciaId) : { exenta: true, vigente: true }
+    // Sin licencia, ni con la clave del perfil: la agencia no usa HELM.
+    if (!lic.exenta && !lic.vigente) throw errorSinLicencia(lic.venceAt)
     const row = await getIaConfig(supabase, clientId)
     const cfg = row?.config || {}
     if (row?.enabled && cfg.apiKey) {
-      valor = { tipo: 'claude', apiKey: cfg.apiKey, model: cfg.model || MODELO_POR_DEFECTO }
-    } else if (await pagaConCreditos(clientId)) {
-      // Sin clave propia, el perfil de una agencia que paga con créditos usa
-      // la clave de HELM, y cada respuesta se le descuenta (./creditos.js).
-      valor = { tipo: 'claude', apiKey: claveHelm(), model: cfg.model || MODELO_POR_DEFECTO }
+      valor = { tipo: 'claude', apiKey: cfg.apiKey, model: cfg.model || MODELO_POR_DEFECTO, origen: 'perfil' }
+    } else if (!lic.exenta) {
+      // Trae-tu-clave: el perfil de una agencia usa la clave de su agencia.
+      const claves = await clavesDeAgencia(agenciaId)
+      if (!claves.anthropicKey) throw errorSinClave('Claude')
+      valor = { tipo: 'claude', apiKey: claves.anthropicKey, model: claves.anthropicModel || MODELO_POR_DEFECTO, origen: 'agencia' }
     }
-  } catch {
+  } catch (err) {
+    // Sin licencia o sin clave: no se recuerda (en cuanto la pongan, vale).
+    if (err?.statusCode === 402 || err?.statusCode === 409) return { tipo: 'sin_ia', model: '', error: err }
     // Si Supabase no contesta, el perfil no se queda sin IA: sigue el local.
     valor = local
   }
 
   cache.set(clientId, { valor, exp: Date.now() + CACHE_MS })
   return valor
+}
+
+/** Lanza el aviso de un proveedor `sin_ia` (sin licencia o sin clave de la agencia). */
+function sinIa(prov) {
+  const e = new Error(prov.error?.message || 'La IA de este perfil no está disponible.')
+  e.statusCode = prov.error?.statusCode || 409
+  if (prov.error?.codigo) e.codigo = prov.error.codigo
+  return e
 }
 
 /**
@@ -85,6 +109,7 @@ export async function proveedorDe(clientId) {
  */
 export async function llmHealth(clientId) {
   const prov = await proveedorDe(clientId)
+  if (prov.tipo === 'sin_ia') return { ok: false, proveedor: 'sin_ia', model: '', error: sinIa(prov).message }
   if (prov.tipo === 'claude') {
     const etiqueta = MODELOS_CLAUDE.find(m => m.id === prov.model)?.label || prov.model
     // Se comprueba contra el catálogo de modelos, no generando texto: valida
@@ -135,6 +160,7 @@ async function ollamaHealth() {
  */
 export async function llmChat(opts) {
   const prov = await proveedorDe(opts.clientId)
+  if (prov.tipo === 'sin_ia') throw sinIa(prov)
   if (prov.tipo === 'claude') {
     const { content } = await claudeTurno({ ...opts, apiKey: prov.apiKey, model: prov.model })
     if (!content) {
@@ -168,6 +194,7 @@ export async function llmChat(opts) {
  */
 export async function llmChatConHerramientas(opts) {
   const prov = await proveedorDe(opts.clientId)
+  if (prov.tipo === 'sin_ia') throw sinIa(prov)
   if (prov.tipo === 'claude') {
     return claudeTurno({ ...opts, apiKey: prov.apiKey, model: prov.model })
   }

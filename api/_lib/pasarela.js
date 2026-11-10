@@ -47,6 +47,8 @@ const MAX_CUERPO = 30 * 1024 * 1024
 // Credenciales, tokens y dinero: solo el servidor, con sus propios endpoints.
 const SECRETAS = new Set([
   'superadmins', 'user_integrations', 'agent_mcp_tokens', 'agencias', 'agencia_movimientos',
+  // La licencia de cada agencia y sus claves de IA (trae-tu-clave): api/creditos.js.
+  'licenses', 'agencia_claves',
   'audit_logs', 'portal_tokens',
   'helm_telegram_vinculos', 'helm_telegram_conversaciones', 'helm_telegram_aprobaciones',
   // Las altas públicas: datos de contacto de quien aún no tiene perfil.
@@ -429,7 +431,11 @@ export async function pasarela(req, res) {
 
     let auth
     try { auth = await validateAuth(req, { required: true }) }
-    catch { return corta(res, 401, 'Tu sesión ha caducado. Vuelve a entrar.') }
+    catch (e) {
+      // Sin licencia no es «sesión caducada»: el panel enseña el pago (402).
+      if (e?.statusCode === 402) return corta(res, 402, e.message)
+      return corta(res, 401, 'Tu sesión ha caducado. Vuelve a entrar.')
+    }
     const ids = await perfilesVisibles(auth)
     // Una subida se mira antes de leer el cuerpo: si no va a entrar, no se
     // espera a sus megas (ver revisaSubida).

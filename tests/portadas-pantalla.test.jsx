@@ -169,11 +169,11 @@ describe('Portadas · pantalla', () => {
     } finally { globalThis.Image = Antes }
   })
 
-  it('si el perfil no paga (la agencia de la casa o sin agencia), el botón dice que es gratis', async () => {
+  it('si el perfil no paga (desde la licencia, nadie), el botón no lleva precio ni «gratis»', async () => {
     h.precios = { paga: false, saldo: null, precios: PRECIOS_FIJOS }
     render(<Portadas clientId="perfil-1" client={{ name: 'Demo' }} onVolver={() => {}} />)
     fireEvent.click(await screen.findByRole('button', { name: /Portada desde una foto/ }))
-    expect(await screen.findByRole('button', { name: /Generar portada · gratis$/ })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: /Generar portada$/ })).toBeTruthy()
     expect(screen.queryByText(/Te quedan/)).toBeNull()
   })
 })

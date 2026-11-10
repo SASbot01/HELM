@@ -72,7 +72,7 @@ export default function Registro() {
       <div className="admin-login-card">
         <img src="/assets/logos/helm-mark.svg" alt="HELM" className="admin-login-logo" />
         <h1 className="admin-login-title" style={{ letterSpacing: '4px' }}>HELM</h1>
-        <p className="admin-login-subtitle">Crea tu agencia y opera a tus clientes</p>
+        <p className="admin-login-subtitle">Crea tu agencia y opera a tus clientes · Licencia 97 €/año, con tu propia clave de Claude</p>
         <form onSubmit={submit} className="admin-login-form">
           <div className="admin-input-group">
             <label>Nombre de la agencia</label>

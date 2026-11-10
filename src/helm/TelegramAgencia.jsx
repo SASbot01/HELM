@@ -370,9 +370,9 @@ export function VistaTelegram({
           <p className="helm-tg-aprobar">
             <ShieldCheck size={14} />
             <span>
-              Lo que solo consulta te lo contesta en el momento. Lo que escribe algo o gasta créditos te lo propone
-              antes con dos botones, <b>Aprobar</b> y <b>Rechazar</b>, y no lo hace hasta que apruebas. Cada mensaje lo
-              contesta la IA de HELM y gasta créditos de la agencia, como en el panel.
+              Lo que solo consulta te lo contesta en el momento. Lo que escribe algo te lo propone antes con dos
+              botones, <b>Aprobar</b> y <b>Rechazar</b>, y no lo hace hasta que apruebas. Cada mensaje lo contesta Claude
+              con la clave de tu agencia, como en el panel.
             </span>
           </p>
         </div>

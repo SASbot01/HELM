@@ -87,11 +87,10 @@ const TIPOS_VIDEO = ['video/mp4', 'video/quicktime', 'video/x-m4v', 'video/3gpp'
 const NO_MOV = /^video\/(webm|x-matroska|matroska|x-msvideo|avi|mpeg|mp2t|ogg|x-flv|x-ms-wmv)$/
 const EN_IDIOMA = { es: 'en español', en: 'en inglés', pt: 'en portugués' }
 
-// Sin saldo, el panel abre la recarga (AvisoSinSaldo, en Creditos.jsx): con un
-// 402 ya lo hace editorApi; esto es para el botón. La compra solo la ve quien
-// administra (bw_superadmin, como allí); al resto le dice a quién avisar, y el
-// botón lo dice igual.
-const recargarCreditos = (detalle) => window.dispatchEvent(new CustomEvent('helm:sin-saldo', { detail: detalle || null }))
+// Desde el 2026-11-08 HELM no cobra por vídeo (licencia anual): un 402 es que
+// la licencia de la agencia ha caducado y el panel enseña el pago (PuertaLicencia,
+// en src/helm/Licencia.jsx). El botón lo abre también.
+const recargarCreditos = (detalle) => window.dispatchEvent(new CustomEvent('helm:sin-licencia', { detail: detalle || null }))
 const puedeRecargar = () => { try { return Boolean(localStorage.getItem('bw_superadmin')) } catch { return false } }
 const SIN_SALDO = /saldo suficiente|créditos suficientes|sin créditos|recarga en créditos/i
 // Lo que dice fetch (Chrome, Firefox, Safari) cuando no llega ni a salir.
@@ -330,7 +329,6 @@ export default function EditorReel({ clientId, client, onVolver }) {
 
 function ComoFunciona() {
   const [abierto, setAbierto] = useState(false)
-  const bloque = aCreditos(PRECIOS_FIJOS['editor-reels'])
   return (
     <section className="ed-caja">
       <button type="button" className="ed-caja-cab" onClick={() => setAbierto(a => !a)} aria-expanded={abierto}>
@@ -350,8 +348,7 @@ function ComoFunciona() {
             de tu voz, bajando cuando hablas.
           </p>
           <p>
-            Cuesta <b>{bloque} créditos por cada 3 minutos</b> de vídeo en bruto (hasta 10 minutos), lo ves antes de empezar y
-            <b> solo se cobra si sale bien</b>. Tarda unos minutos; puedes cerrar esta pantalla y el vídeo se queda aquí {DIAS_GUARDADO} días.
+            Va <b>incluido en tu licencia</b> de HELM (vídeos de hasta 10 minutos). Tarda unos minutos; puedes cerrar esta pantalla y el vídeo se queda aquí {DIAS_GUARDADO} días.
             {' '}<b>HELM no publica nada</b>: lo descargas y lo subes tú desde la app.
           </p>
         </div>
@@ -938,7 +935,7 @@ function Aviso({ error }) {
 function BotonRecarga({ detalle = null }) {
   return (
     <button type="button" className="ag-btn sm primario" onClick={() => recargarCreditos(detalle)}>
-      <Coins size={13} /> {puedeRecargar() ? 'Recargar créditos' : 'Cómo recargar'}
+      <Coins size={13} /> {puedeRecargar() ? 'Renovar la licencia' : 'Cómo renovar'}
     </button>
   )
 }
@@ -975,7 +972,7 @@ function Precio({ precios, euros, duracion, conVideo, cerrado }) {
     return (
       <div className="ed-precio gratis">
         <Gift size={16} aria-hidden="true" />
-        <div><span className="ed-precio-linea"><b>Gratis en tu agencia</b></span><small>Este perfil no paga créditos por editar.</small></div>
+        <div><span className="ed-precio-linea"><b>Incluido en tu licencia</b></span><small>Editar vídeos no se cobra aparte.</small></div>
       </div>
     )
   }

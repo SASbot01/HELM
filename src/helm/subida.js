@@ -96,9 +96,9 @@ export function mandaTrozo({ url, cuerpo, alAvanzar = null, senal = null }) {
         sesionCaducada()
         return fin(mal, Object.assign(new Error('Tu sesión ha caducado. Vuelve a iniciar sesión.'), { status: 401, datos }))
       }
-      // Sin créditos: el panel abre la recarga, como con apiFetch.
+      // Sin licencia: el panel enseña el pago, como con apiFetch.
       if (xhr.status === 402 && typeof window !== 'undefined' && window.dispatchEvent) {
-        window.dispatchEvent(new CustomEvent('helm:sin-saldo', { detail: datos?.error || null }))
+        window.dispatchEvent(new CustomEvent('helm:sin-licencia', { detail: datos?.error || null }))
       }
       if (xhr.status < 200 || xhr.status >= 300) {
         return fin(mal, Object.assign(new Error(datos?.error || `Error ${xhr.status}`), { status: xhr.status, datos }))

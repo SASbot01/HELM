@@ -1136,11 +1136,8 @@ async function editor(ctx) {
   const enMarcha = cuenta(['subiendo', 'en_cola', 'transcribiendo', 'montando'])
   const errores = cuenta(['error'])
   await ctx.log('El Editor de reels está en Agentes → Editor de reels: subes el vídeo en bruto (y, si quieres, imágenes o clips de apoyo, tu logo y una música) y HELM devuelve el MP4 editado (sin tomas repetidas, muletillas ni silencios, 1080×1920 y con subtítulos).')
-  // El precio, de donde sale el cobro (si Alex lo cambia, esto no se queda viejo).
-  const { PRECIOS_FIJOS, CREDITOS_POR_EURO, BLOQUE_EDITOR_S } = await import('../../src/helm/precios.js')
-  const euros = PRECIOS_FIJOS['editor-reels']
-  const bloque = BLOQUE_EDITOR_S % 60 ? `${BLOQUE_EDITOR_S} segundos` : `${BLOQUE_EDITOR_S / 60} minutos`
-  await ctx.log(`Cuesta ${Math.round(euros * CREDITOS_POR_EURO)} créditos (${euros.toFixed(2).replace('.', ',')} €) por cada bloque de ${bloque} empezado del vídeo en bruto; se cobra solo si sale bien.`)
+  // Desde el 2026-11-08 va incluido en la licencia: HELM no cobra por vídeo.
+  await ctx.log('Va incluido en la licencia de HELM: no se cobra por vídeo.')
   await ctx.log(`Últimos 7 días en ${ctx.perfil?.name || 'este perfil'}: ${listos} listos, ${enMarcha} editándose, ${errores} con error.`)
   return `Editor de reels: ${listos} vídeos listos y ${enMarcha} en marcha esta semana. Se sube desde Agentes → Editor de reels.`
 }

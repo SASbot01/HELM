@@ -37,8 +37,9 @@ process.env.HELM_LLM_TIMEOUT_MS ||= '600000'
 
 const { llmChat } = await import('../api/_lib/llm.js')
 const { claudeTurno } = await import('../api/_lib/anthropic.js')
-// Cada trabajo corre con su perfil en el contexto: lo que gaste en Claude se
-// cobra en créditos a la agencia de ese perfil (ver api/_lib/creditos.js).
+// Cada trabajo corre con su perfil en el contexto: una llamada a Claude con la
+// clave de HELM va con la clave de la AGENCIA de ese perfil (trae-tu-clave,
+// ver api/_lib/claves-agencia.js); la de la casa, con la de HELM.
 const { enContexto } = await import('../api/_lib/contexto.js')
 // Jev etiqueta cuando Claude no puede, antes que el 7B local: clasificar es
 // justo lo que hace bien y justo lo que al local se le da mal.
@@ -61,9 +62,10 @@ async function pideAlModelo({ system, user, maxTokens }) {
       const r = await claudeTurno({ apiKey: CLAUDE_KEY, model: CLAUDE_MODELO, system, messages: [{ role: 'user', content: user }], maxTokens })
       return { texto: r.content, por: 'claude-api' }
     } catch (err) {
-      // Sin créditos es la agencia de ESE perfil, no la cuenta de Anthropic:
-      // no se pausa Claude para todos, solo falla este trabajo.
-      if (err.statusCode === 402) throw err
+      // Sin licencia (402) o sin clave de Claude (409, `codigo`) es cosa de la
+      // agencia de ESE perfil, no de la cuenta de Anthropic: no se pausa Claude
+      // para todos, solo falla este trabajo con el aviso.
+      if (err.statusCode === 402 || (err.statusCode === 409 && err.codigo)) throw err
       const msg = String(err.message || '')
       // Sin crédito, clave mala o sin acceso: una hora de pausa. Límite de
       // peticiones o Anthropic caído: cinco minutos. Mientras, el local.
@@ -773,8 +775,8 @@ async function bucle() {
 
       const paso = PASOS[job.tipo]
       if (!paso) throw new Error(`Tipo de trabajo desconocido: ${job.tipo}`)
-      // El estudio de contenido pedido a mano se cobra como del panel; el de
-      // los lunes y todo lo demás, como automático.
+      // El estudio de contenido pedido a mano va como del panel; el de los
+      // lunes y todo lo demás, como automático.
       const origen = job.tipo === 'estudio-contenido' && job.payload?.origen === 'panel' ? 'panel' : 'auto'
       await enContexto({ clientId: job.payload?.clientId || null, origen }, () => paso(job))
       await hecho(job)

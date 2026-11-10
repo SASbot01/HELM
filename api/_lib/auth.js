@@ -11,6 +11,7 @@
 
 import { supabase } from '../lib/supabase.js'
 import { anotar } from './contexto.js'
+import { exigirLicencia, agenciaDelPerfil } from './licencia.js'
 
 const JWT_SECRET = process.env.JWT_SECRET || ''
 
@@ -113,11 +114,32 @@ export function olvidarAcceso(sub) {
   else accesosVistos.clear()
 }
 
-export async function validateAuth(req, { required = true } = {}) {
+/**
+ * Sin licencia vigente, la agencia no entra (./licencia.js): 402 con
+ * `codigo: 'sin_licencia'`. Va FUERA del try de validateAuth para que no se
+ * convierta en un 401 (que en el panel es «vuelve a entrar»). La plataforma
+ * entra siempre; la agencia de la casa no necesita licencia. Si la base no
+ * contesta, se deja pasar.
+ */
+async function exigirLicenciaDe(auth) {
+  if (!auth || auth.plataforma) return
+  let agenciaId = auth.agenciaId
+  if (!agenciaId && auth.clientId) {
+    try { agenciaId = await agenciaDelPerfil(auth.clientId) } catch (err) {
+      console.error('[licencia] no se pudo saber la agencia del perfil; se deja pasar:', err?.message || err)
+      return
+    }
+  }
+  await exigirLicencia(agenciaId)
+}
+
+// `sinLicencia: true` solo para lo que hace falta para pagarla (api/creditos.js).
+export async function validateAuth(req, { required = true, sinLicencia = false } = {}) {
   const header = req.headers?.authorization || req.headers?.Authorization || ''
   const token = header.startsWith('Bearer ') ? header.slice(7) : ''
 
   if (token) {
+    let auth = null
     try {
       const payload = await verifyJwt(token)
 
@@ -157,7 +179,7 @@ export async function validateAuth(req, { required = true } = {}) {
         cuenta = { ...cuenta, nivel: acceso.nivel }
       }
 
-      const auth = {
+      auth = {
         userId: payload.sub || payload.userId || null,
         clientId: payload.clientId || null,
         clientSlug: payload.clientSlug || null,
@@ -169,16 +191,20 @@ export async function validateAuth(req, { required = true } = {}) {
         // Nivel del acceso de equipo, leído de `team` (no del navegador).
         nivel: cuenta.nivel || null,
       }
-      // Para el cobro de créditos (ver ./creditos.js): a quién se le apunta lo
-      // que gaste esta petición.
+      // De quién es esta petición (ver ./contexto.js): con eso, una llamada a
+      // Claude con la clave de HELM usa la de su agencia (./claves-agencia.js).
       anotar({ agenciaId: auth.agenciaId, clientId: auth.clientId })
-      return auth
     } catch (err) {
+      auth = null
       if (required) {
         const e = new Error('Unauthorized: ' + err.message)
         e.statusCode = 401
         throw e
       }
+    }
+    if (auth) {
+      if (!sinLicencia) await exigirLicenciaDe(auth)
+      return auth
     }
   }
 
@@ -199,8 +225,8 @@ export async function validateAuth(req, { required = true } = {}) {
   }
 }
 
-export async function requireSuperAdmin(req) {
-  const auth = await validateAuth(req, { required: true })
+export async function requireSuperAdmin(req, { sinLicencia = false } = {}) {
+  const auth = await validateAuth(req, { required: true, sinLicencia })
   if (!auth.superadmin && auth.role !== 'superadmin') {
     const e = new Error('Forbidden: superadmin required')
     e.statusCode = 403

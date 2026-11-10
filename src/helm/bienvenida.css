@@ -1,9 +1,11 @@
-/* HELM — la bienvenida de una agencia nueva (Bienvenida en Creditos.jsx) y el
-   aviso de «sin créditos». Pinta con los tokens de .helm (tema.css): una pieza
-   que flota sobre el lienzo, el timón que gira despacio y el oro solo en lo
-   que se puede pulsar o celebrar. */
+/* HELM — el pago de la licencia de una agencia y su confirmación
+   (PuertaLicencia en Licencia.jsx), y los avisos del modal «Licencia y claves».
+   Pinta con los tokens de .helm (tema.css): una pieza que flota sobre el
+   lienzo, el timón que gira despacio y el oro solo en lo que se puede pulsar o
+   celebrar. */
 
 .helm-creditos-aviso {
+  display: flex; align-items: center; gap: 8px;
   margin: 0 0 14px; padding: 12px 14px; border-radius: 12px;
   color: var(--text); font-size: 14px;
   background: color-mix(in srgb, var(--red) 12%, transparent);
@@ -70,6 +72,27 @@
   text-decoration: underline; text-decoration-color: rgba(255, 255, 255, 0.2); text-underline-offset: 4px;
 }
 .bv-saltar:hover { color: var(--text); background: var(--hover); }
+
+/* La licencia: el precio, lo que incluye y el modal de Perfiles. */
+.lic-precio { display: flex; align-items: baseline; justify-content: center; gap: 8px; margin-top: 22px; }
+.lic-precio b {
+  font-size: 44px; font-weight: 600; letter-spacing: -0.04em; font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, #f3e3b8, var(--oro) 70%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.lic-precio span { color: var(--text-mut); font-size: 14px; }
+.lic-incluye { display: grid; gap: 10px; max-width: 440px; margin: 20px auto 4px; padding: 0; list-style: none; text-align: left; }
+.lic-incluye li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; color: var(--text-dim); font-size: 14px; line-height: 1.5; }
+.lic-incluye li svg { margin-top: 3px; color: var(--oro); }
+.lic-estado { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.lic-estado strong { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+.lic-estado span { color: var(--text-mut); font-size: 13px; }
+.lic-estado span.lic-pronto { color: var(--red); }
+.lic-clave { margin-top: 6px; }
+.lic-clave h4 small { color: var(--text-mut); font-weight: 400; }
+.lic-form { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 10px; align-items: end; margin: 10px 0 6px; }
+.lic-form .lic-acc { grid-column: 1 / -1; display: flex; gap: 8px; }
+@media (max-width: 520px) { .lic-form { grid-template-columns: 1fr; } }
 
 /* El regalo. */
 .bv-eti { margin: 0 0 6px; color: var(--oro); font-size: 13px; font-weight: 500; letter-spacing: 0.04em; }

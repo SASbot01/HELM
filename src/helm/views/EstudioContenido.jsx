@@ -42,7 +42,8 @@ const aLista = (v) => (Array.isArray(v) ? v.filter(Boolean) : [])
 const CREDITOS_POR_EURO = 100
 const enCreditos = (eur) => `unos ${num(Math.max(1, Math.round(Number(eur) * CREDITOS_POR_EURO)))} créditos`
 const esGratis = (eur) => Number(eur) === 0
-const costeTexto = (eur) => (eur == null ? null : esGratis(eur) ? 'Gratis en tu agencia' : `Cuesta ${enCreditos(eur)}`)
+// Desde el 2026-11-08 HELM no cobra por estudio: va con la clave de Claude de la agencia (coste 0).
+const costeTexto = (eur) => (eur == null ? null : esGratis(eur) ? 'Con la IA de tu agencia' : `Cuesta ${enCreditos(eur)}`)
 
 // Cada métrica se lee con sus decimales y su unidad: la retención en segundos,
 // las tasas «por mil» por cada 1.000 visitas, la frecuencia en piezas/semana y
@@ -101,7 +102,8 @@ function Etiqueta({ valor }) {
 function mensajeDeFallo(e) {
   const codigo = e?.codigo
   const status = e?.status
-  if (codigo === 'sin_saldo' || status === 402) return 'Sin saldo: recarga créditos para generar el estudio.'
+  // Sin la clave de Claude de la agencia, o sin licencia: el aviso del servidor dice qué falta y dónde.
+  if (codigo === 'sin_clave_ia' || codigo === 'sin_licencia' || status === 402) return e?.message || 'La IA de tu agencia no está disponible.'
   if (codigo === 'tope_diario' || status === 429) return 'Ya has pedido 3 estudios hoy. Prueba de nuevo mañana.'
   if (codigo === 'en_curso' || status === 409) return 'Ya hay un estudio en marcha. Espera a que termine.'
   if (codigo === 'sin_instagram' || status === 400) return 'Conecta tu Instagram para poder generar el estudio.'
@@ -109,7 +111,8 @@ function mensajeDeFallo(e) {
 }
 // Un 409 no es un error: ya hay uno en curso (el cron del lunes, otra pestaña…).
 // En vez de avisar, nos enganchamos a su progreso.
-const esEnCurso = (e) => e?.codigo === 'en_curso' || e?.status === 409
+// (Un 409 con otro `codigo`, como 'sin_clave_ia', sí es un aviso.)
+const esEnCurso = (e) => e?.codigo === 'en_curso' || (e?.status === 409 && !e?.codigo)
 
 function Bloque({ icono, titulo, sub, children, className = '' }) {
   return (
@@ -650,7 +653,7 @@ export default function EstudioContenido({ clientId, onHayEstudio }) {
             {hayEstudio
               ? `${viendoViejo ? 'Estudio del' : 'Último estudio:'} ${fechaHora(activo.generado_en)}${activo.modelo ? ` · ${activo.modelo}` : ''}`
               : 'Un análisis a fondo de tu cuenta, con objetivos, plan y avatar de contenido.'}
-            {coste && <> · {esGratis(base.coste_aprox_eur) ? 'gratis en tu agencia' : `cada estudio, ${enCreditos(base.coste_aprox_eur)}`}</>}
+            {coste && <> · {esGratis(base.coste_aprox_eur) ? 'con la clave de Claude de tu agencia' : `cada estudio, ${enCreditos(base.coste_aprox_eur)}`}</>}
           </p>
         </div>
         <div className="ec-cab-acciones">
@@ -691,7 +694,7 @@ export default function EstudioContenido({ clientId, onHayEstudio }) {
           sabe: el worker cobra lo que la IA llegó a gastar antes de fallar. */}
       {falloElegido && (
         <div className="ec-fallo">
-          <AlertTriangle size={15} /> No se pudo terminar el estudio del {fechaCorta(activo.generado_en)}. Si llegó a usar la IA, solo se cobró lo que usó. Prueba a generarlo otra vez.
+          <AlertTriangle size={15} /> No se pudo terminar el estudio del {fechaCorta(activo.generado_en)}. Prueba a generarlo otra vez.
         </div>
       )}
 

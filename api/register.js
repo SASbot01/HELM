@@ -2,9 +2,9 @@
 //
 // Quien se registra crea SU agencia y entra como su administrador: el mismo
 // papel que tiene Silvestre AI con sus clientes, pero con los suyos. Sin
-// aprobación manual — se paga por uso. Los créditos de bienvenida no se dan
-// aquí: al entrar se le ofrece comprar y, si cierra la oferta, se le regalan
-// (api/creditos.js → action=bienvenida).
+// aprobación manual y sin licencia todavía: al entrar, lo primero que ve es
+// el pago de la licencia (97 €/año, api/creditos.js → action=pagar-licencia),
+// y hasta que la paga no entra a nada más (api/_lib/licencia.js).
 //
 // Los perfiles (sus clientes) los crea luego desde el panel.
 //

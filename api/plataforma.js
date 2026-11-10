@@ -7,18 +7,23 @@
 //   POST ?action=borrar-agencia { id, confirma }
 //                                 → borra la agencia entera; `confirma` es su
 //                                   slug, escrito a mano por quien borra
+//   POST ?action=conceder-licencia { agenciaId, meses, nota }
+//                                 → alarga su licencia a mano (cortesía, un
+//                                   pago por fuera…), desde que acabe la vigente
 //
-// Solo la plataforma (superadmins.plataforma). Sumar o quitar saldo sigue en
-// /api/creditos?action=ajuste y desactivar a un administrador en
-// /api/users?action=set-active.
+// Solo la plataforma (superadmins.plataforma). Desactivar a un administrador,
+// en /api/users?action=set-active.
 //
-// El consumo sale de agencia_movimientos, así que la agencia de la casa
-// (sin_cobro) no tiene: lo suyo no se apunta.
+// Desde el 2026-11-08 las agencias pagan una LICENCIA anual (api/_lib/
+// licencia.js) y ponen su propia clave de IA: HELM ya no cobra por uso. El
+// consumo y las recargas de abajo salen de agencia_movimientos y son el
+// histórico de cuando había créditos.
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { supabase } from './lib/supabase.js'
 import { applyCors, requirePlataforma, writeAudit } from './_lib/auth.js'
 import { CREDITOS_POR_EURO, MARGEN, precioEuros } from './_lib/creditos.js'
+import { extenderLicencia, MESES_LICENCIA } from './_lib/licencia.js'
 import { borrarPerfil, DIR_COPIAS } from './perfiles.js'
 
 const DIA = 86_400_000
@@ -80,8 +85,26 @@ const redondea = (t) => t && {
   llamadas: t.llamadas,
 }
 
+// La licencia de cada agencia, de las filas de `licenses`: el último
+// vencimiento, si está vigente y lo cobrado por licencias en los últimos 30 días.
+function licenciasPorAgencia(filas) {
+  const g = {}
+  const desde30 = Date.now() - 30 * DIA
+  for (const l of filas) {
+    const t = (g[l.agencia_id] ||= { venceAt: null, cobrado30d: 0 })
+    if (!t.venceAt || Date.parse(l.vence_at) > Date.parse(t.venceAt)) t.venceAt = l.vence_at
+    if (l.origen === 'stripe' && Date.parse(l.created_at) >= desde30) t.cobrado30d += Number(l.euros || 0)
+  }
+  return g
+}
+const licenciaDeFila = (a, lic) => ({
+  exenta: Boolean(a.sin_cobro),
+  vigente: Boolean(a.sin_cobro) || Boolean(lic?.venceAt && Date.parse(lic.venceAt) > Date.now()),
+  venceAt: lic?.venceAt || null,
+})
+
 async function resumen() {
-  const [agencias, admins, perfiles, movs30, accesos, fallos] = await Promise.all([
+  const [agencias, admins, perfiles, movs30, accesos, fallos, licencias] = await Promise.all([
     todas(supabase.from('agencias').select('id, nombre, slug, saldo, sin_cobro, created_at').order('created_at', { ascending: false })),
     todas(supabase.from('superadmins').select('id, name, email, active, plataforma, agencia_id, created_at')),
     todas(supabase.from('clients').select('id, agencia_id, active, created_at')),
@@ -90,8 +113,10 @@ async function resumen() {
       .gte('created_at', hace(30)).limit(50000)),
     ultimosAccesos(),
     todas(supabase.from('agent_jobs').select('payload').eq('estado', 'error').gte('created_at', hace(7)).limit(2000)),
+    todas(supabase.from('licenses').select('agencia_id, vence_at, origen, euros, created_at').limit(50000)),
   ])
 
+  const licDe = licenciasPorAgencia(licencias)
   const agenciaDePerfil = Object.fromEntries(perfiles.map(p => [p.id, p.agencia_id]))
   const desde7 = Date.now() - 7 * DIA
   const mes = agrupa(movs30, m => m.agencia_id)
@@ -115,7 +140,7 @@ async function resumen() {
       alta: a.created_at,
       sinCobro: a.sin_cobro,
       casa: suyos.some(s => s.plataforma),
-      creditos: aCreditos(a.saldo),
+      licencia: licenciaDeFila(a, licDe[a.id]),
       admin: (suyos.find(s => s.active && !s.plataforma) || suyos.find(s => s.active) || suyos[0])?.email || null,
       admins: suyos.length,
       adminsActivos: suyos.filter(s => s.active).length,
@@ -140,8 +165,9 @@ async function resumen() {
       nuevas7d: deFuera.filter(a => Date.parse(a.alta) >= desde7).length,
       perfiles: deFuera.reduce((s, a) => s + a.perfiles, 0),
       activas7d: deFuera.filter(a => a.ultimoAcceso && Date.parse(a.ultimoAcceso) >= desde7).length,
-      saldoPendiente: deFuera.reduce((s, a) => s + Math.max(0, a.creditos), 0),
-      sinSaldo: deFuera.filter(a => !a.sinCobro && a.creditos <= 0).length,
+      conLicencia: deFuera.filter(a => !a.licencia.exenta && a.licencia.vigente).length,
+      sinLicencia: deFuera.filter(a => !a.licencia.vigente).length,
+      licencias30dEuros: Math.round(deFuera.reduce((s, a) => s + (licDe[a.id]?.cobrado30d || 0), 0) * 100) / 100,
       mes: redondea(total),
     },
     agencias: lista,
@@ -150,7 +176,7 @@ async function resumen() {
 
 async function agencia(id) {
   if (!/^[0-9a-f-]{36}$/i.test(String(id || ''))) throw falla('Agencia inválida')
-  const [{ data: a, error }, admins, perfiles, movs, movs30, accesos] = await Promise.all([
+  const [{ data: a, error }, admins, perfiles, movs, movs30, accesos, licencias] = await Promise.all([
     supabase.from('agencias').select('id, nombre, slug, saldo, sin_cobro, created_at').eq('id', id).maybeSingle(),
     todas(supabase.from('superadmins').select('id, name, email, active, plataforma, created_at').eq('agencia_id', id).order('created_at')),
     todas(supabase.from('clients').select('id, name, brand_name, slug, logo_url, active, created_at').eq('agencia_id', id).order('created_at', { ascending: false })),
@@ -161,6 +187,8 @@ async function agencia(id) {
       .select('tipo, importe, origen, modelo, coste_usd, tokens_in, tokens_out, created_at')
       .eq('agencia_id', id).gte('created_at', hace(30)).limit(50000)),
     ultimosAccesos(),
+    todas(supabase.from('licenses').select('id, inicio_at, vence_at, origen, euros, nota, created_by, created_at')
+      .eq('agencia_id', id).order('vence_at', { ascending: false }).limit(100)),
   ])
   if (error) throw error
   if (!a) throw falla('Esa agencia no existe', 404)
@@ -183,8 +211,13 @@ async function agencia(id) {
   return {
     agencia: {
       id: a.id, nombre: a.nombre, slug: a.slug, alta: a.created_at,
-      sinCobro: a.sin_cobro, creditos: aCreditos(a.saldo),
+      sinCobro: a.sin_cobro,
+      licencia: licenciaDeFila(a, { venceAt: licencias[0]?.vence_at || null }),
     },
+    licencias: licencias.map(l => ({
+      id: l.id, inicio: l.inicio_at, vence: l.vence_at, origen: l.origen,
+      euros: l.euros != null ? Number(l.euros) : null, nota: l.nota, por: l.created_by, fecha: l.created_at,
+    })),
     admins: admins.map(s => ({
       id: s.id, nombre: s.name, email: s.email, activo: s.active, plataforma: s.plataforma,
       alta: s.created_at, ultimoAcceso: accesos[String(s.email || '').toLowerCase()] || null,
@@ -227,12 +260,17 @@ async function borrarAgencia(id, confirma, auth, req) {
   if (movs.some(m => m.tipo === 'recarga')) {
     throw falla('Esta agencia ha pagado recargas y sus pagos hay que conservarlos. Desactiva a sus administradores en lugar de borrarla.', 409)
   }
+  // Lo mismo con las licencias pagadas (caerían con la agencia: ON DELETE CASCADE).
+  const licencias = await todas(supabase.from('licenses').select('*').eq('agencia_id', id))
+  if (licencias.some(l => l.origen === 'stripe')) {
+    throw falla('Esta agencia ha pagado su licencia y esos pagos hay que conservarlos. Desactiva a sus administradores en lugar de borrarla.', 409)
+  }
 
   const sello = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const dir = path.join(DIR_COPIAS, `agencia-${a.slug}-${sello}`)
   await fs.mkdir(dir, { recursive: true, mode: 0o700 })
   // Lleva hashes de contraseña: solo el dueño la lee.
-  await fs.writeFile(path.join(dir, 'agencia.json'), JSON.stringify({ agencia: a, admins, movimientos: movs }, null, 1), { mode: 0o600 })
+  await fs.writeFile(path.join(dir, 'agencia.json'), JSON.stringify({ agencia: a, admins, movimientos: movs, licencias }, null, 1), { mode: 0o600 })
 
   const perfiles = await todas(supabase.from('clients').select('*').eq('agencia_id', id))
   const borrados = []
@@ -253,6 +291,22 @@ async function borrarAgencia(id, confirma, auth, req) {
   return { copia: dir, perfiles: borrados.length, admins: admins.length }
 }
 
+// ── Conceder licencia a mano ─────────────────────────────────────────────────
+// Para una cortesía o un pago que llegó por fuera de Stripe. Se suma desde que
+// acabe la vigente (extender_licencia), como un pago.
+async function concederLicencia(agenciaId, meses, nota, auth, req) {
+  if (!/^[0-9a-f-]{36}$/i.test(String(agenciaId || ''))) throw falla('Agencia inválida')
+  const n = Math.floor(Number(meses ?? MESES_LICENCIA))
+  if (!Number.isFinite(n) || n < 1 || n > 60) throw falla('Los meses van de 1 a 60')
+  const { data: a, error } = await supabase.from('agencias').select('id, sin_cobro').eq('id', agenciaId).maybeSingle()
+  if (error) throw error
+  if (!a) throw falla('Esa agencia no existe', 404)
+  if (a.sin_cobro) throw falla('La agencia de la casa no necesita licencia')
+  const venceAt = await extenderLicencia(agenciaId, { meses: n, origen: 'manual', nota, por: auth.email || '' })
+  await writeAudit({ actor: auth, action: 'licencia.concedida', resourceType: 'agencia', resourceId: agenciaId, req, metadata: { meses: n, nota, venceAt } })
+  return { venceAt }
+}
+
 export default async function handler(req, res) {
   applyCors(req, res)
   if (req.method === 'OPTIONS') return res.status(200).end()
@@ -265,6 +319,11 @@ export default async function handler(req, res) {
       if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' })
       const b = req.body || {}
       return res.status(200).json({ ok: true, ...(await borrarAgencia(b.id, b.confirma, auth, req)) })
+    }
+    if (accion === 'conceder-licencia') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' })
+      const b = req.body || {}
+      return res.status(200).json({ ok: true, ...(await concederLicencia(b.agenciaId, b.meses, String(b.nota || ''), auth, req)) })
     }
     return res.status(400).json({ error: `Acción desconocida: ${accion}` })
   } catch (e) {

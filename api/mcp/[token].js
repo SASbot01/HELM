@@ -20,6 +20,7 @@ import { supabase } from '../lib/supabase.js'
 import { rateLimit, getClientIp } from '../_lib/auth.js'
 import { anotar, contexto, enContexto } from '../_lib/contexto.js'
 import { agenciaDe } from '../_lib/access.js'
+import { exigirLicencia } from '../_lib/licencia.js'
 import { anadeReels, hashUrl, esEnlace } from '../agents.js'
 import { calendario, ordenar, enEntrada, carpetasDe, TIPOS, FASES } from '../_lib/ingesta.js'
 import { archivo as archivoDrive } from '../_lib/drive-helm.js'
@@ -1161,6 +1162,10 @@ async function responde(msg, alcance) {
     case 'tools/list':
       return ok(id, { tools: herramientasDe(alcance) })
     case 'tools/call': {
+      // Sin licencia vigente, la agencia no usa HELM tampoco desde Claude. Se
+      // deja conectar (initialize, tools/list) para que el aviso llegue: va
+      // como resultado con isError y Claude se lo cuenta al usuario.
+      if (alcance.sinLicencia) return ok(id, { content: [{ type: 'text', text: alcance.sinLicencia }], isError: true })
       // Un fallo de la herramienta va como resultado con isError, no como
       // error JSON-RPC: así Claude lo lee y puede corregir (p. ej. el nombre
       // de la identidad) en vez de dar la llamada por rota. Solo una
@@ -1183,6 +1188,16 @@ export default async function handler(req, res) {
   if (!alcance) return res.status(404).json({ error: 'No encontrado' })
   // Sin sesiones ni avisos del servidor: no hay canal GET que abrir.
   if (req.method !== 'POST') return res.status(405).setHeader('Allow', 'POST').end()
+  // La licencia de su agencia (el enlace del operador no tiene). Si la base no
+  // contesta, se deja pasar (exigirLicencia).
+  if (!alcance.operador) {
+    try {
+      await exigirLicencia(alcance.agenciaId || await agenciaDe(alcance.clientId).catch(() => null))
+    } catch (e) {
+      if (e?.statusCode !== 402) throw e
+      alcance.sinLicencia = e.message
+    }
+  }
 
   const body = req.body
   const lote = Array.isArray(body) ? body : [body]
