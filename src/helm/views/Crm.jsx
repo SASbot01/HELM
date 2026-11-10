@@ -114,6 +114,11 @@ export default function Crm({ clientId }) {
   const stages = useMemo(() => pipeline?.stages || [], [pipeline])
   const substages = useMemo(() => pipeline?.substages || {}, [pipeline])
 
+  // Un miembro con pipeline propio (de verdad, con id) puede editar SUS etapas,
+  // aunque no vea el perfil entero. Quien ve todo gestiona todos los pipelines;
+  // el miembro solo las etapas del suyo (modo soloEtapas del EditorEtapas).
+  const miPipelineEditable = !vePerfilEntero && !!pipeline?.id
+
   function elegirPipeline(id) {
     setPipelineId(id)
     localStorage.setItem(`helm_pipeline_${clientId}`, String(id))
@@ -304,11 +309,13 @@ export default function Crm({ clientId }) {
             <Search size={15} />
             <input placeholder="Buscar por nombre, empresa, email, etiqueta…" value={query} onChange={e => setQuery(e.target.value)} />
           </div>
-          {/* Gestionar pipelines (renombrar, borrar, etapas) es cosa de quien
-              ve el perfil entero: un miembro no toca los pipelines de otros. */}
-          {vePerfilEntero && (
-            <button className="helm-btn" onClick={() => setEditEtapas(true)} title="Pipelines, etapas y subetapas">
-              <SlidersHorizontal size={15} />Pipelines
+          {/* Quien ve el perfil entero gestiona TODOS los pipelines (crear,
+              renombrar, borrar, etapas). Un miembro con pipeline propio puede
+              editar solo SUS etapas (no toca los pipelines de otros). */}
+          {(vePerfilEntero || miPipelineEditable) && (
+            <button className="helm-btn" onClick={() => setEditEtapas(true)}
+              title={vePerfilEntero ? 'Pipelines, etapas y subetapas' : 'Edita las etapas de tu pipeline'}>
+              <SlidersHorizontal size={15} />{vePerfilEntero ? 'Pipelines' : 'Etapas'}
             </button>
           )}
           <button className="helm-btn primary" onClick={() => setOpen(true)}><Plus size={15} />Nuevo contacto</button>
@@ -468,6 +475,7 @@ export default function Crm({ clientId }) {
           clientId={clientId}
           pipelines={pipelines}
           activeId={pipeline.id}
+          soloEtapas={!vePerfilEntero}
           contacts={rows || []}
           onContactsChanged={load}
           onClose={() => setEditEtapas(false)}

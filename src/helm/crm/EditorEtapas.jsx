@@ -21,6 +21,11 @@ const TONE_LABEL = {
 
 export default function EditorEtapas({
   clientId, pipelines, activeId, contacts = [], onClose, onSaved, onContactsChanged,
+  // Modo «solo etapas»: un miembro con pipeline propio edita SUS etapas y
+  // subetapas, pero no ve ni toca la lista de pipelines (crear, borrar,
+  // renombrar, marcar por defecto) ni cambia el nombre de su pipeline —ese
+  // nombre sostiene la visibilidad por miembro (visibilidadMiembro.js)—.
+  soloEtapas = false,
 }) {
   // Se trabaja sobre una copia: hasta que no se pulsa Guardar, la vista de
   // detrás no cambia. Las operaciones sobre la LISTA (crear, renombrar, borrar,
@@ -185,9 +190,10 @@ export default function EditorEtapas({
   }
 
   return (
-    <Modal title="Pipelines y etapas" onClose={onClose} wide>
-      <div className="helm-pipe-layout">
-        {/* ── Lista de pipelines ───────────────────────────────────────── */}
+    <Modal title={soloEtapas ? 'Etapas de tu pipeline' : 'Pipelines y etapas'} onClose={onClose} wide>
+      <div className="helm-pipe-layout" style={soloEtapas ? { display: 'block' } : undefined}>
+        {/* ── Lista de pipelines (solo quien ve el perfil entero) ───────── */}
+        {!soloEtapas && (
         <aside className="helm-pipe-list">
           <div className="helm-drawer-section" style={{ margin: '0 0 10px' }}>Pipelines</div>
 
@@ -266,13 +272,16 @@ export default function EditorEtapas({
             tienen otro asignado.
           </p>
         </aside>
+        )}
 
         {/* ── Etapas del pipeline seleccionado ─────────────────────────── */}
         <form onSubmit={submit} noValidate className="helm-pipe-detail">
           <div className="helm-form-2" style={{ gridTemplateColumns: '1fr auto', alignItems: 'end' }}>
             <div className="helm-field" style={{ marginBottom: 0 }}>
-              <label>Nombre del pipeline</label>
-              <Input value={nombre} onChange={e => { setNombre(e.target.value); setSucio(true) }} />
+              <label>{soloEtapas ? 'Tu pipeline' : 'Nombre del pipeline'}</label>
+              {soloEtapas
+                ? <div className="helm-input" style={{ background: 'transparent', fontWeight: 600 }}>{nombre}</div>
+                : <Input value={nombre} onChange={e => { setNombre(e.target.value); setSucio(true) }} />}
             </div>
             <button type="button" className="helm-btn" onClick={addStage}><Plus size={14} />Etapa</button>
           </div>
