@@ -10,10 +10,17 @@
 //
 // Las filas antiguas (source != 'evento') son el histórico de cuando se
 // reportaba a mano: se siguen viendo abajo, no se pierde nada.
+//
+// Lo único que se sigue marcando a mano es lo que el CRM no puede saber: las
+// llamadas que hace un caller, las conversaciones de un setter… Cada persona
+// tiene arriba su «parte de hoy» con los contadores de su rol, y eso alimenta
+// el progreso de nivel del Ranking. Las ventas NO van ahí: se cuentan solas al
+// mover el lead. El parte de hoy se guarda en una fila `source='manual'`.
 import { useEffect, useMemo, useState } from 'react'
-import { fetchRows, fetchRowsOrError, fmtDate } from '../lib'
-import { Panel, Empty, Kpi, FormNote } from '../ui'
-import { roleLabel } from '../equipo/roles'
+import { fetchRows, fetchRowsOrError, fmtDate, insertRow, updateRow, todayISO } from '../lib'
+import { Panel, Empty, Kpi, FormNote, Field, CountInput } from '../ui'
+import { roleLabel, roleMapDelProducto } from '../equipo/roles'
+import { sesionHelm } from '../permisos'
 
 // Tipo de evento → cómo se pinta.
 const TIPOS = {
@@ -51,6 +58,53 @@ export default function Diario({ clientId }) {
     fetchRowsOrError('helm_team', clientId, { order: 'created_at', asc: true })
       .then(({ rows: r }) => setPeople(r || []))
   }, [clientId])
+
+  // ── «Mi parte de hoy» ────────────────────────────────────────────────────
+  // Quién soy en este perfil (por el id de equipo de la sesión) y qué campos
+  // reporto a mano: los de mi rol MENOS 'closes', porque las ventas ya las
+  // cuenta el CRM por eventos (si no, se apuntarían dos veces).
+  const sesion = useMemo(() => sesionHelm(), [])
+  const hoyISO = todayISO()
+  const yo = useMemo(
+    () => (people || []).find(p => p.id === sesion.helmTeamId) || null,
+    [people, sesion],
+  )
+  const misCampos = useMemo(() => {
+    const def = yo ? roleMapDelProducto()[yo.role] : null
+    return (def?.diario || []).filter(c => c.field !== 'closes')
+  }, [yo])
+  // Mi fila manual de hoy, si ya guardé algo (para rellenar y poder editarla).
+  const miParte = useMemo(
+    () => (rows || []).find(r => r.source !== 'evento' && r.person_id === yo?.id && r.date === hoyISO) || null,
+    [rows, yo, hoyISO],
+  )
+  const [parte, setParte] = useState({})
+  const [guardando, setGuardando] = useState(false)
+  useEffect(() => {
+    const init = {}
+    for (const c of misCampos) init[c.field] = miParte?.[c.field] ?? ''
+    setParte(init)
+  }, [miParte, misCampos])
+
+  async function guardarParte() {
+    if (!yo || !misCampos.length) return
+    setGuardando(true)
+    const valores = {}
+    for (const c of misCampos) valores[c.field] = Number(parte[c.field]) || 0
+    try {
+      if (miParte) {
+        await updateRow('reports', miParte.id, { ...valores, updated_at: new Date().toISOString() })
+      } else {
+        await insertRow('reports', {
+          client_id: clientId, date: hoyISO, source: 'manual',
+          person_id: yo.id, name: yo.name, role: yo.role, ...valores,
+        })
+      }
+      setRows(await fetchRows('reports', clientId, { order: 'date' }))
+    } finally {
+      setGuardando(false)
+    }
+  }
 
   // Nombre de rol: primero el que trae la fila; si no, el de la ficha de equipo.
   const rolDe = (r) => {
@@ -104,6 +158,29 @@ export default function Diario({ clientId }) {
         contactado, interesado o venta queda apuntado aquí, en el día que ocurrió y a
         nombre de quien lleva ese pipeline.
       </FormNote>
+
+      {yo && misCampos.length > 0 && (
+        <Panel title="Mi parte de hoy">
+          <div className="helm-grid helm-kpis" style={{ gap: 12 }}>
+            {misCampos.map(c => (
+              <Field key={c.field} label={c.label}>
+                <CountInput
+                  value={parte[c.field] ?? ''}
+                  onChange={(v) => setParte(p => ({ ...p, [c.field]: v }))}
+                />
+              </Field>
+            ))}
+          </div>
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <button className="helm-btn" onClick={guardarParte} disabled={guardando}>
+              {guardando ? 'Guardando…' : 'Guardar mi parte'}
+            </button>
+            <small style={{ opacity: .7 }}>
+              Tus llamadas de hoy cuentan para tu progreso de nivel. Las ventas se apuntan solas al mover el lead en el CRM.
+            </small>
+          </div>
+        </Panel>
+      )}
 
       <Panel title="Actividad del día">
         {porDia.length === 0 ? (

@@ -11,12 +11,13 @@
 //       cuentan—, acumulando puntos.
 //   L3–L6  existen pero están BLOQUEADOS (candado, sin información).
 //
-// ⚠️ SUPUESTOS A CONFIRMAR CON ALEX (marcados abajo con FLAG):
-//   · La FÓRMULA de puntos (PUNTOS_POR).
-//   · De dónde salen las «50 llamadas/día»: hoy se leen de reports.calls_made
-//     (el contador del histórico); el reporte por eventos no cuenta llamadas,
-//     así que hasta que se defina la fuente, los días válidos saldrán a 0.
-//   · El objetivo de días válidos para L2 (DIAS_PARA_L2 ≈ 13 semanas × 5).
+// De dónde sale cada cosa:
+//   · VENTAS → del reporte por eventos del CRM (mover el lead a venta).
+//   · LLAMADAS → del «parte de hoy» que el caller marca en el Diario (fila
+//     source='manual', columna calls_made). Un día cuenta como válido si tuvo
+//     ≥1 venta Y ≥50 llamadas; se suman días válidos hasta DIAS_PARA_L2.
+//   · PUNTOS → fórmula PUNTOS_POR (abajo).
+// Valores confirmados por Alex; si se tocan, se toca aquí.
 import { useEffect, useMemo, useState } from 'react'
 import { Trophy, Lock } from 'lucide-react'
 import { fetchRows } from '../lib'
@@ -25,10 +26,10 @@ import { roleLabel } from './roles'
 
 const WEBSELLER_ID = 'eac2511a-3dda-47a5-88d4-a5550596b53f'
 
-// FLAG (fórmula de puntos): venta pesa 10, interesado 2, contactado 1.
+// Fórmula de puntos: venta pesa 10, interesado 2, contactado 1.
 const PUNTOS_POR = { venta: 10, interesado: 2, contactado: 1 }
 
-// FLAG (umbrales de L2).
+// Umbrales de L2.
 const VENTAS_MIN_DIA = 1
 const LLAMADAS_MIN_DIA = 50
 const DIAS_PARA_L2 = 65   // ≈ 3 meses de días laborables (13 × 5)
