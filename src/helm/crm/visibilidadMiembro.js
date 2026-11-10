@@ -47,8 +47,12 @@ export function nombresCoinciden(a, b) {
 export function veTodos(sesion, persona) {
   if (!sesion) return true
   if (sesion.esSuperadmin || sesion.mandaEnTodo) return true
+  // Sin ficha de equipo no se recorta: acceso suelto o sesión antigua sin rol.
   if (!sesion.helmTeamId) return true
-  if (!persona || !persona.role || persona.role === 'dueno') return true
+  // Con ficha de equipo, solo ve todo el oficio de dueño. Mientras la ficha aún
+  // no ha cargado (persona null) se recorta por defecto: más vale una pantalla
+  // vacía un instante que enseñarle los pipelines de otros al entrar.
+  if (persona && (!persona.role || persona.role === 'dueno')) return true
   return false
 }
 
