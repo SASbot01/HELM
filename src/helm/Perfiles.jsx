@@ -10,6 +10,7 @@ import TelegramAgencia from './TelegramAgencia'
 import AltasRecibidas, { DetalleAlta } from './AltasRecibidas'
 import AccesosRecibidos from './AccesosRecibidos'
 import { Modal, Field, Input, FormNote } from './ui'
+import { perfilesPropios } from './perfilesPropios'
 import './perfiles.css'
 
 export default function Perfiles({ clients, loading, lastId, email, producto, onPick, onNew, onUsers, onLogout, onChanged }) {
@@ -38,10 +39,9 @@ export default function Perfiles({ clients, loading, lastId, email, producto, on
   const navigate = useNavigate()
 
   // La plataforma ve los perfiles de todas las agencias, pero en su tablero
-  // solo salen los de su agencia: los demás se abren desde /plataforma.
-  const propios = useMemo(() => (
-    agencia?.plataforma && agencia.id ? clients.filter(c => !c.agencia_id || c.agencia_id === agencia.id) : clients
-  ), [clients, agencia])
+  // solo salen los de su agencia: los demás se abren desde /plataforma. El
+  // selector de arriba (HelmApp) filtra con la misma regla.
+  const propios = useMemo(() => perfilesPropios(clients, agencia), [clients, agencia])
   const lista = useMemo(() => {
     const t = q.trim().toLowerCase()
     if (!t) return propios
