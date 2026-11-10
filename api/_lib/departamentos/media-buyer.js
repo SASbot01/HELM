@@ -7,6 +7,9 @@
 //      un anuncio si su utm_content es el id del anuncio ({{ad.id}} en la URL),
 //      y sus ventas cobradas cuentan el día EN QUE ENTRÓ EL LEAD (cohorte), para
 //      no matar un anuncio de hace 4 días al que aún le pueden llegar ventas.
+//      Si el perfil tiene Metricool (api/_lib/metricool.js), el gasto, las
+//      impresiones, los clics y los leads de plataforma salen de ahí; si no,
+//      de Meta. Pausar y cambiar presupuestos sigue siendo Meta.
 //      Queda en helm_ads_metricas.
 //   2. Decide con REGLAS, sin IA (la clave de Claude no tiene saldo y esto no
 //      necesita un modelo): antes de juzgar, días y gasto mínimos; luego coste
@@ -34,6 +37,7 @@ import {
   unidadesDePresupuesto, sumaDiaria, topeDuro, pararTodo, puedeGastar,
   diaEn, masDias, diasQuedanMes, dinero, porcentaje, redondea, TEXTO_APRENDIZAJE,
 } from '../meta-ads.js'
+import { configDe, sincronizaPerfil, filasGuardadas, comoInsight } from '../metricool.js'
 
 const AGENTE = 'media-buyer'
 // Sin la migración 117 aún aplicada, la tabla no existe: no es un fallo del agente.
@@ -76,7 +80,7 @@ const trozos = (lista, n = 150) => {
  * Leads y ventas cobradas por anuncio y día de entrada del lead.
  * → Map('<ad_id>|<dia>' → { leads, ventas, cobrado })
  */
-export async function crmPorAnuncio(clientId, adIds, { desde, hasta, zona = 'Europe/Madrid' }) {
+export async function crmPorAnuncio(clientId, adIds, { desde, hasta, zona = 'Europe/Madrid', db = supabase } = {}) {
   const salida = new Map()
   const ids = [...new Set((adIds || []).map(String))]
   if (!ids.length) return salida
@@ -95,7 +99,7 @@ export async function crmPorAnuncio(clientId, adIds, { desde, hasta, zona = 'Eur
   // inflado y propondría pausar lo que va bien).
   const contactos = []
   for (const t of trozos(ids)) {
-    contactos.push(...await todasLasFilas(() => supabase.from('crm_contacts').select('id, created_at, utm_content')
+    contactos.push(...await todasLasFilas(() => db.from('crm_contacts').select('id, created_at, utm_content')
       .eq('client_id', clientId).in('utm_content', t).gte('created_at', d0).lt('created_at', d1).order('id')))
   }
   const cohorte = new Map()
@@ -107,13 +111,13 @@ export async function crmPorAnuncio(clientId, adIds, { desde, hasta, zona = 'Eur
 
   const ventas = new Map()
   for (const t of trozos([...cohorte.keys()])) {
-    const filas = await todasLasFilas(() => supabase.from('sales').select('id, contact_id, utm_content, cash_collected, status, date, created_at')
+    const filas = await todasLasFilas(() => db.from('sales').select('id, contact_id, utm_content, cash_collected, status, date, created_at')
       .eq('client_id', clientId).in('contact_id', t).order('id'))
     for (const v of filas) ventas.set(v.id, v)
   }
   // Las que llevan el UTM pero no tienen ficha (o es de otro anuncio): por su fecha.
   for (const t of trozos(ids)) {
-    const filas = await todasLasFilas(() => supabase.from('sales').select('id, contact_id, utm_content, cash_collected, status, date, created_at')
+    const filas = await todasLasFilas(() => db.from('sales').select('id, contact_id, utm_content, cash_collected, status, date, created_at')
       .eq('client_id', clientId).in('utm_content', t).gte('created_at', d0).lt('created_at', d1).order('id'))
     for (const v of filas) if (!ventas.has(v.id)) ventas.set(v.id, v)
   }
@@ -140,7 +144,23 @@ export async function sincronizaCuenta({ clientId, cuenta, token, ahora = new Da
   const hoy = diaEn(cuenta.zona, ahora)
   const desde = masDias(hoy, -2 * REGLAS.dias)
   const hasta = masDias(hoy, -1)
-  const deMeta = await insightsPorAnuncioDia(token, cuenta.cuenta_id, { desde, hasta })
+  // Metricool, si el perfil lo tiene: el gasto y los resultados de plataforma.
+  // Si no hay anuncios (solo campañas, o no está configurado, o falla), se
+  // sigue leyendo Meta. Las escrituras no pasan por aquí.
+  let deMetricool = null
+  try {
+    const cfg = await configDe(supabase, clientId)
+    if (cfg) {
+      const sync = await sincronizaPerfil({ db: supabase, clientId, desde, hasta, cfg, zona: cuenta.zona })
+      if (sync.avisos?.length) console.warn('[media-buyer] Metricool:', sync.avisos.join(' | '))
+      const guardadas = await filasGuardadas(supabase, clientId, { desde, hasta, red: 'meta' })
+      const ads = guardadas.filter(f => f.ad_id)
+      if (ads.length) deMetricool = ads.map(comoInsight)
+    }
+  } catch (e) {
+    console.warn('[media-buyer] Metricool no se ha podido leer; se usa Meta:', e?.message || e)
+  }
+  const deMeta = deMetricool || await insightsPorAnuncioDia(token, cuenta.cuenta_id, { desde, hasta })
   const crm = await crmPorAnuncio(clientId, deMeta.map(f => f.ad_id), { desde, hasta, zona: cuenta.zona })
   const porClave = new Map(deMeta.map(f => [`${f.ad_id}|${f.dia}`, f]))
   // Un lead de un día en que el anuncio no gastó (llega tarde) también cuenta.
@@ -164,7 +184,7 @@ export async function sincronizaCuenta({ clientId, cuenta, token, ahora = new Da
     const { error } = await supabase.from('helm_ads_metricas').upsert(t, { onConflict: 'cuenta_id,ad_id,dia' })
     if (error) console.warn('[media-buyer] no se pudo guardar la foto de métricas:', error.message)
   }
-  return filas
+  return { filas, fuente: deMetricool ? 'metricool' : 'meta' }
 }
 
 const VACIO = () => ({ gasto: 0, impresiones: 0, clics_enlace: 0, leads_meta: 0, compras_meta: 0, leads_crm: 0, ventas_crm: 0, cobrado_crm: 0 })
@@ -211,7 +231,7 @@ const bonito = (x) => (x >= 10 ? Math.floor(x) : Math.floor(x * 100) / 100)
  * @param {Date}   o.ahora
  * @returns {{ propuestas: Array, notas: string[] }}
  */
-export function decide({ cuenta, unidades = [], anuncios: ads = [], porAnuncio = new Map(), frecuencias = new Map(), subidasRecientes = new Set(), gastadoMes = 0, hoy, ahora = new Date(), reglas = REGLAS }) {
+export function decide({ cuenta, unidades = [], anuncios: ads = [], porAnuncio = new Map(), frecuencias = new Map(), subidasRecientes = new Set(), gastadoMes = 0, hoy, ahora = new Date(), reglas = REGLAS, plataforma = 'Meta' }) {
   const propuestas = []
   const notas = []
   const moneda = cuenta.moneda || 'EUR'
@@ -245,7 +265,7 @@ export function decide({ cuenta, unidades = [], anuncios: ads = [], porAnuncio =
     const metaLeads = Number(agg.leads_meta) || 0
     const crmLeads = Number(agg.leads_crm) || 0
     if (metaLeads >= 3 && crmLeads < metaLeads * reglas.atribucionMin) {
-      return { juzgable: false, res, coste, pronto: `Meta cuenta ${metaLeads} leads y HELM solo ve ${crmLeads}: la atribución está rota (falta utm_content={{ad.id}} en el enlace del anuncio, o son formularios de Meta), así que no lo juzgo` }
+      return { juzgable: false, res, coste, pronto: `${plataforma} cuenta ${metaLeads} leads y HELM solo ve ${crmLeads}: la atribución está rota (falta utm_content={{ad.id}} en el enlace del anuncio, o son formularios de Meta), así que no lo juzgo` }
     }
     // Sin ventas solo es «no vende» si ha pasado el tiempo de la llamada.
     const sinResultadoCuenta = res === 0 && (!porVenta || horas >= reglas.diasVentaPorLlamada * 24)
@@ -254,7 +274,7 @@ export function decide({ cuenta, unidades = [], anuncios: ads = [], porAnuncio =
   }
   const cifras = (agg, j, extra = '') => {
     const coste = j.coste != null ? `${$(j.coste)}/${que}, ${veces(j.coste / objetivo)} tu objetivo de ${$(objetivo)}` : (porVenta ? 'ninguna venta' : 'ningún lead')
-    const meta = porVenta ? '' : ` Meta cuenta ${agg.leads_meta} leads.`
+    const meta = porVenta ? '' : ` ${plataforma} cuenta ${agg.leads_meta} leads.`
     const ventas = !porVenta && agg.ventas_crm ? ` ${agg.ventas_crm} ${agg.ventas_crm === 1 ? 'venta cobrada' : 'ventas cobradas'} (${$(agg.cobrado_crm)}).` : ''
     return `En ${dias} días: ${$(agg.gasto)} gastados y ${j.res} ${ques} según HELM (${coste}).${meta}${ventas}${extra}`
   }
@@ -415,7 +435,7 @@ const fmtFecha = (hoy) => new Intl.DateTimeFormat('es-ES', { timeZone: 'UTC', we
 const FASE = { captacion: 'captación', carrito: 'carrito abierto', cierre: 'cierre' }
 
 /** El parte del día de una cuenta, en texto plano. */
-export function textoParte({ perfil, cuenta, hoy, porAnuncio, creadas, notas }) {
+export function textoParte({ perfil, cuenta, hoy, porAnuncio, creadas, notas, plataforma = 'Meta' }) {
   const $ = (n) => dinero(n, cuenta.moneda)
   const total = (campo) => [...porAnuncio.values()].reduce((a, x) => acumula(a, x[campo]), VACIO())
   const ayer = total('ayer')
@@ -423,7 +443,7 @@ export function textoParte({ perfil, cuenta, hoy, porAnuncio, creadas, notas }) 
   const coste = (g, n) => (n ? `${$(g / n)}` : '—')
   const lineas = [
     `📣 ${perfil} · «${cuenta.nombre || cuenta.cuenta_id}» · ${fmtFecha(hoy)} · ${FASE[cuenta.fase] || cuenta.fase}`,
-    `Ayer: ${$(ayer.gasto)} gastados${cuenta.tope_diario ? ` (tope ${$(cuenta.tope_diario)}/día)` : ''}. ${ayer.leads_crm} leads a ${coste(ayer.gasto, ayer.leads_crm)} según HELM; Meta cuenta ${ayer.leads_meta}${ayer.leads_meta > ayer.leads_crm ? ` (${ayer.leads_meta - ayer.leads_crm} que no están en el CRM)` : ''}.${ayer.ventas_crm ? ` ${ayer.ventas_crm} ${ayer.ventas_crm === 1 ? 'venta cobrada' : 'ventas cobradas'} (${$(ayer.cobrado_crm)}).` : ''}`,
+    `Ayer: ${$(ayer.gasto)} gastados${cuenta.tope_diario ? ` (tope ${$(cuenta.tope_diario)}/día)` : ''}. ${ayer.leads_crm} leads a ${coste(ayer.gasto, ayer.leads_crm)} según HELM; ${plataforma} cuenta ${ayer.leads_meta}${ayer.leads_meta > ayer.leads_crm ? ` (${ayer.leads_meta - ayer.leads_crm} que no están en el CRM)` : ''}.${ayer.ventas_crm ? ` ${ayer.ventas_crm} ${ayer.ventas_crm === 1 ? 'venta cobrada' : 'ventas cobradas'} (${$(ayer.cobrado_crm)}).` : ''}`,
     `7 días: ${$(semana.gasto)} · ${semana.leads_crm} leads (${coste(semana.gasto, semana.leads_crm)}/lead) · ${semana.ventas_crm} ${semana.ventas_crm === 1 ? 'venta cobrada' : 'ventas cobradas'} (${$(semana.cobrado_crm)}).`,
   ]
   if (creadas.length) {
@@ -435,6 +455,7 @@ export function textoParte({ perfil, cuenta, hoy, porAnuncio, creadas, notas }) 
     lineas.push('Hoy no propongo cambios.')
   }
   if (notas.length) lineas.push(...notas.slice(0, 8).map(n => `· ${n}`))
+  if (plataforma === 'Metricool') lineas.push('Gasto, impresiones y clics: Metricool (solo lectura). Pausar y cambiar el presupuesto sigue siendo Meta, cuando lo apruebas.')
   return lineas.join('\n')
 }
 
@@ -442,7 +463,8 @@ export function textoParte({ perfil, cuenta, hoy, porAnuncio, creadas, notas }) 
 async function pasaCuenta(ctx, cuenta, token) {
   const ahora = ctx.hoy instanceof Date ? ctx.hoy : new Date()
   const hoy = diaEn(cuenta.zona, ahora)
-  const filas = await sincronizaCuenta({ clientId: ctx.clientId, cuenta, token, ahora })
+  const { filas, fuente } = await sincronizaCuenta({ clientId: ctx.clientId, cuenta, token, ahora })
+  const plataforma = fuente === 'metricool' ? 'Metricool' : 'Meta'
   const [cs, as, ads, frec, gastadoMes, recientes] = await Promise.all([
     campanas(token, cuenta.cuenta_id), conjuntos(token, cuenta.cuenta_id), anuncios(token, cuenta.cuenta_id),
     insightsPorAnuncio(token, cuenta.cuenta_id, { desde: masDias(hoy, -REGLAS.dias), hasta: masDias(hoy, -1) }),
@@ -451,7 +473,7 @@ async function pasaCuenta(ctx, cuenta, token) {
   const unidades = unidadesDePresupuesto({ campanas: cs, conjuntos: as, moneda: cuenta.moneda })
   const porAnuncio = agrupaPorAnuncio(filas, hoy)
   const frecuencias = new Map(frec.map(f => [f.ad_id, f.frecuencia]))
-  const { propuestas, notas } = decide({ cuenta, unidades, anuncios: ads, porAnuncio, frecuencias, subidasRecientes: recientes, gastadoMes, hoy, ahora })
+  const { propuestas, notas } = decide({ cuenta, unidades, anuncios: ads, porAnuncio, frecuencias, subidasRecientes: recientes, gastadoMes, hoy, ahora, plataforma })
   const creadas = []
   if (Number(cuenta.nivel) >= 1) {
     for (const p of propuestas) {
@@ -466,7 +488,7 @@ async function pasaCuenta(ctx, cuenta, token) {
   } else if (propuestas.length) {
     notas.unshift(`Nivel 0 (solo mira): habría propuesto ${propuestas.length} ${propuestas.length === 1 ? 'cambio' : 'cambios'}.`)
   }
-  const parte = textoParte({ perfil: ctx.perfil?.name || ctx.perfil?.slug || 'Perfil', cuenta, hoy, porAnuncio, creadas, notas })
+  const parte = textoParte({ perfil: ctx.perfil?.name || ctx.perfil?.slug || 'Perfil', cuenta, hoy, porAnuncio, creadas, notas, plataforma })
   return { propuestas: creadas.length, parte }
 }
 
