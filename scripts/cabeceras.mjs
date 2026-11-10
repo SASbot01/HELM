@@ -87,7 +87,14 @@ export function cabecerasSeguridad() {
               if ((conHash && l === 'cache-control') || (archivo && l === 'content-security-policy')) delete fijas[k]
             }
             if (conHash) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
-            if (archivo) res.setHeader('Content-Security-Policy', cspArchivo(tipo))
+            if (archivo) {
+              // null = PDF/vídeo/audio: se quita la CSP (incluida la que se
+              // puso por defecto antes de saber el tipo) para que el visor del
+              // navegador no deje el documento en blanco.
+              const cspArch = cspArchivo(tipo)
+              if (cspArch) res.setHeader('Content-Security-Policy', cspArch)
+              else res.removeHeader('Content-Security-Policy')
+            }
             return writeHead.call(this, estado, ...resto)
           }
         }

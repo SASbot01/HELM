@@ -83,22 +83,26 @@ export function tipoDeArchivo(nombre) {
 // HTML o un SVG que ya estuviera en el bucket ejecutaría su script. `sandbox`
 // lo deja además en un origen opaco: aunque algo se ejecutara, no ve la sesión.
 const CSP_ARCHIVO = "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; sandbox"
-// Al PDF, al vídeo y al audio no se les pone `sandbox`: los abre un visor del
-// propio navegador, y dentro de un sandbox no funciona. Comprobado en Chrome
-// (octubre de 2026): un .mp4 abierto en su pestaña sale con el reproductor
-// vacío, sin cargar; al PDF se le quedan las miniaturas en blanco (Firefox y
-// Safari llevan el visor de PDF peor aún). Ninguno de los tres ejecuta nada
-// con el origen del panel: el JS de un PDF, si lleva, va dentro del visor, y un
-// archivo que sale como vídeo o audio no se lee como página (nosniff).
-// `object-src 'self'` porque Safari mete el PDF en la pestaña como un objeto
-// incrustado (un plugin), y con `default-src 'none'` a secas a veces lo dejaba
-// en blanco. Solo el mismo dominio, y solo para estos tres: un HTML o un SVG
-// nunca sale con esta CSP, sino con la de arriba.
-const CSP_VISOR = "default-src 'none'; img-src 'self' data:; media-src 'self'; object-src 'self'; style-src 'unsafe-inline'"
+// Al PDF, al vídeo y al audio NO se les pone CSP ninguna: los abre un visor del
+// propio navegador, que para pintar las páginas carga sus recursos por
+// `blob:`/worker, y cualquier `default-src 'none'` se los corta y deja el
+// documento en blanco. Comprobado en Chrome (nov. 2026): el visor abre, lee el
+// título y el número de páginas del PDF, pero las pinta TODAS en blanco; con un
+// .mp4 el reproductor sale vacío (Firefox y Safari, peor aún). Se probó a
+// abrirle hueco (`object-src 'self'`, etc.) y seguía en blanco: lo único que
+// renderiza de verdad es no mandar CSP. Y no hace falta: ninguno de los tres
+// ejecuta nada con el origen del panel (el JS de un PDF va dentro del visor) y
+// `nosniff` + su content-type impiden que se lean como HTML. La CSP cerrada
+// (con `sandbox`) se queda SOLO para HTML/SVG, que son los que sí podrían
+// ejecutar algo. `cspArchivo` devuelve null para estos tres y quien llama no
+// pone la cabecera (y si había una puesta por defecto, la quita).
 const CON_VISOR = /^(application\/pdf|video\/[\w.+-]+|audio\/[\w.+-]+)$/
 
-/** La CSP para un archivo del almacén según el tipo con que sale. */
+/** La CSP para un archivo del almacén según el tipo con que sale, o null si es
+ *  un PDF/vídeo/audio (lo abre el visor del navegador: sin CSP para que no salga
+ *  en blanco; su aislamiento lo da el propio visor + nosniff, no esta cabecera). */
 export function cspArchivo(tipo) {
   const esencia = String(tipo || '').split(';')[0].trim().toLowerCase()
-  return CON_VISOR.test(esencia) ? CSP_VISOR : CSP_ARCHIVO
+  if (CON_VISOR.test(esencia)) return null
+  return CSP_ARCHIVO
 }

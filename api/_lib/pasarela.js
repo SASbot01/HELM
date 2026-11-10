@@ -397,7 +397,9 @@ async function reenvia(req, res, { ruta, query, cuerpo, conClave = true, cabecer
   // el bucket no se ejecuta. La misma que pone scripts/cabeceras.mjs delante;
   // esta vale también cuando se llega aquí sin pasar por `vite preview`.
   if (ruta.startsWith('/storage/')) {
-    res.setHeader('Content-Security-Policy', cspArchivo(r.headers.get('content-type')))
+    // null = PDF/vídeo/audio: sin CSP, que el visor del navegador los pinte.
+    const cspArch = cspArchivo(r.headers.get('content-type'))
+    if (cspArch) res.setHeader('Content-Security-Policy', cspArch)
     res.setHeader('X-Content-Type-Options', 'nosniff')
   }
   res.end(Buffer.from(await r.arrayBuffer()))
