@@ -20,6 +20,7 @@ import {
 import { Panel, Empty, Modal, Field, Input, Textarea, Select, Kpi, FormNote, SearchSelect } from '../ui'
 import Adjuntos from '../Adjuntos'
 import MigracionPendiente from '../MigracionPendiente'
+import { TAG_COMERCIAL, conEtiqueta, esComercial, esPdf, etiquetas } from '../documentos/material'
 
 const KINDS = [
   { key: 'documento', label: 'Documento', icon: FileText, desc: 'Un manual, una oferta, el proceso de onboarding…' },
@@ -30,7 +31,7 @@ const kindOf = (k) => KINDS.find(x => x.key === k) || KINDS[0]
 
 const EMPTY = {
   kind: 'documento', title: '', content: '', occurred_on: '',
-  contact: { id: null, label: '' }, tags: '', in_context: true, files: [],
+  contact: { id: null, label: '' }, tags: '', comercial: false, in_context: true, files: [],
 }
 
 // Referencia grosera de cuánto contexto ocupa un documento. Cuatro caracteres
@@ -85,7 +86,9 @@ export default function Biblioteca({ clientId }) {
       kind: form.kind, title: form.title.trim(), content: form.content.trim(),
       contact_id: form.contact.id,
       occurred_on: form.occurred_on || null,
-      tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
+      // La etiqueta `comercial` la manda el interruptor, no el texto libre:
+      // así no se duplica ni se queda escrita de otra forma.
+      tags: conEtiqueta(form.tags, TAG_COMERCIAL, form.comercial),
       in_context: form.in_context,
       file_url: form.files[0]?.url || '',
       file_name: form.files[0]?.name || '',
@@ -99,6 +102,14 @@ export default function Biblioteca({ clientId }) {
       setRows(rs => [saved, ...(rs || [])])
     }
     setEdit(null)
+  }
+
+  async function toggleComercial(d) {
+    const next = !esComercial(d)
+    const tags = conEtiqueta(d.tags, TAG_COMERCIAL, next)
+    setRows(rs => rs.map(r => r.id === d.id ? { ...r, tags } : r))
+    try { await updateRow('helm_library', d.id, { tags, updated_at: new Date().toISOString() }) }
+    catch { load() }
   }
 
   async function toggleContexto(d) {
@@ -197,9 +208,20 @@ export default function Biblioteca({ clientId }) {
                   )}
 
                   <div className="helm-svc-foot">
-                    <button className="helm-btn sm" onClick={() => toggleContexto(d)}>
-                      {d.in_context ? <><Eye size={13} />En contexto</> : <><EyeOff size={13} />Fuera</>}
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button className="helm-btn sm" onClick={() => toggleContexto(d)}>
+                        {d.in_context ? <><Eye size={13} />En contexto</> : <><EyeOff size={13} />Fuera</>}
+                      </button>
+                      {(esPdf(d) || esComercial(d)) && (
+                        <button
+                          className="helm-btn sm"
+                          title="Lo verá el equipo de ventas en Documentos → Material comercial"
+                          onClick={() => toggleComercial(d)}
+                        >
+                          {esComercial(d) ? 'Quitar de material' : 'Material comercial'}
+                        </button>
+                      )}
+                    </div>
                     <div style={{ display: 'flex', gap: 12 }}>
                       <Pencil size={15} className="helm-x" title="Editar" onClick={() => setEdit(toForm(d))} />
                       <Trash2 size={15} className="helm-x" title="Eliminar" onClick={() => remove(d)} />
@@ -227,7 +249,8 @@ const toForm = (d) => ({
   id: d.id, kind: d.kind, title: d.title || '', content: d.content || '',
   occurred_on: d.occurred_on || '',
   contact: { id: d.contact_id || null, label: '' },
-  tags: Array.isArray(d.tags) ? d.tags.join(', ') : '',
+  tags: etiquetas(d).filter(t => t.toLowerCase() !== TAG_COMERCIAL).join(', '),
+  comercial: esComercial(d),
   in_context: d.in_context !== false,
   files: d.file_url ? [{ name: d.file_name || 'Archivo', url: d.file_url }] : [],
 })
@@ -314,9 +337,14 @@ function DocModal({ inicial, clientId, contacts, onClose, onSave }) {
           <Adjuntos clientId={clientId} carpeta="biblioteca" value={f.files} onChange={v => set('files', v)} />
         </Field>
 
-        <Field label="Etiquetas" hint="Separadas por comas">
+        <Field label="Etiquetas" hint="Separadas por comas. La de material comercial se marca abajo.">
           <Input value={f.tags} onChange={e => set('tags', e.target.value)} placeholder="ventas, objeciones, onboarding" />
         </Field>
+
+        <label className="helm-checkline">
+          <input type="checkbox" checked={f.comercial} onChange={e => set('comercial', e.target.checked)} />
+          Material comercial. Si el archivo es un PDF, el equipo de ventas lo verá en Documentos.
+        </label>
 
         <label className="helm-checkline">
           <input type="checkbox" checked={f.in_context} onChange={e => set('in_context', e.target.checked)} />

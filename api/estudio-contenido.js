@@ -46,8 +46,8 @@ const CAMPOS_ESTUDIO = 'id, generado_en, estado, datos, estudio, modelo'
 // navegador y api/ no lo importa (lo mismo hace api/avatar.js).
 const NIVELES_TOTALES = ['admin,ceo,director', 'admin']
 const DEFAULT_VISIBLE = {
-  closer: ['crm', 'diario', 'tareas'],
-  setter: ['crm', 'diario', 'tareas'],
+  closer: ['crm', 'diario', 'tareas', 'documentos'],
+  setter: ['crm', 'diario', 'tareas', 'documentos'],
   csm: ['crm', 'diario', 'tareas', 'formularios', 'biblioteca'],
   editor: ['contenido', 'tareas', 'biblioteca', 'equipos-ia', 'metricas'],
   otro: ['tareas'],
