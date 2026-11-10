@@ -40,7 +40,9 @@ export const AREAS = [
 // mientras nadie haya tocado la matriz.
 export const DEFAULT_MATRIX = {
   closer: ['crm', 'ventas', 'diario', 'tareas'],
+  call_caller: ['crm', 'ventas', 'diario', 'tareas'],
   setter: ['crm', 'diario', 'tareas'],
+  cdm: ['crm', 'diario', 'tareas'],
   csm: ['crm', 'diario', 'tareas', 'formularios', 'biblioteca'],
   editor: ['contenido', 'tareas'],
   otro: [],
@@ -93,7 +95,9 @@ export const SECCIONES = [
 // comercial: las facturas las decide puedeVerFacturacion.
 export const DEFAULT_VISIBLE = {
   closer: ['crm', 'diario', 'tareas', 'documentos'],
+  call_caller: ['crm', 'diario', 'tareas', 'documentos'],
   setter: ['crm', 'diario', 'tareas', 'documentos'],
+  cdm: ['crm', 'diario', 'tareas', 'documentos'],
   csm: ['crm', 'diario', 'tareas', 'formularios', 'biblioteca'],
   // El editor ve la estrategia que ejecuta: sin ella graba a ciegas. Y el
   // Informe de contenido, que es cómo le ha ido a lo que ha editado.

@@ -13,7 +13,7 @@ import {
   supabase, fetchRows, fetchRowsOrError, insertRow, updateRow, deleteRow, fetchActivities,
   money, fmtDate, isSaleCancelled,
 } from '../lib'
-import { Panel, Empty, Modal, Field, Input, Select, Tabs, Kpi, Drawer, FormNote } from '../ui'
+import { Panel, Empty, Modal, Field, Input, Textarea, Select, Tabs, Kpi, Drawer, FormNote } from '../ui'
 import { EMPTY_CONTACT, validate, toRow, toForm } from '../crm/contact'
 import { ContactFields } from '../crm/ContactFields'
 import {
@@ -21,6 +21,12 @@ import {
 } from '../crm/pipeline'
 import EditorEtapas from '../crm/EditorEtapas'
 import { withRole } from '../equipo/roles'
+import { sesionHelm } from '../permisos'
+import { pipelinesVisibles, veTodos } from '../crm/visibilidadMiembro'
+import Adjuntos from '../Adjuntos'
+
+// WebSeller: el campo «Cambios para la web» y el ladder de niveles son suyos.
+const WEBSELLER_ID = 'eac2511a-3dda-47a5-88d4-a5550596b53f'
 
 const ACT_TYPES = [
   { key: 'note', label: 'Nota' },
@@ -82,10 +88,27 @@ export default function Crm({ clientId }) {
     return () => clearTimeout(t)
   }, [toast])
 
-  const pipeline = useMemo(
-    () => (pipelines || []).find(p => p.id === pipelineId) || (pipelines || [])[0] || null,
-    [pipelines, pipelineId],
+  // ── Visibilidad por miembro ────────────────────────────────────────────────
+  // Un «call caller» (WebSeller) solo ve su pipeline; el dueño y los admin lo
+  // ven todo. El emparejamiento es por nombre (pipeline llamado como la persona).
+  const sesion = useMemo(() => sesionHelm(), [])
+  const persona = useMemo(() => {
+    if (!sesion.helmTeamId) return null
+    return (people || []).find(p => p.id === sesion.helmTeamId) || null
+  }, [people, sesion.helmTeamId])
+  const vePerfilEntero = veTodos(sesion, persona)
+  const visibles = useMemo(
+    () => pipelinesVisibles(pipelines || [], sesion, persona),
+    [pipelines, sesion, persona],
   )
+
+  // El pipeline activo sale SIEMPRE del conjunto permitido: un miembro restringido
+  // nunca cae por defecto en un pipeline que no es suyo (ni aunque el localStorage
+  // recordara otro). Si no tiene ninguno propio, no hay pipeline y se le dice.
+  const pipeline = useMemo(() => {
+    const permitidos = vePerfilEntero ? (pipelines || []) : visibles
+    return permitidos.find(p => p.id === pipelineId) || permitidos[0] || null
+  }, [pipelines, pipelineId, vePerfilEntero, visibles])
   // Memoizados: si no, cada render crea un array/objeto nuevo y todos los
   // useMemo que dependen de ellos se recalculan siempre.
   const stages = useMemo(() => pipeline?.stages || [], [pipeline])
@@ -221,7 +244,17 @@ export default function Crm({ clientId }) {
     }
   }
 
-  if (pipelines == null || pipeline == null) return <Empty>Cargando…</Empty>
+  if (pipelines == null) return <Empty>Cargando…</Empty>
+  // Miembro restringido sin pipeline propio: no se le enseña el de nadie más.
+  if (pipeline == null) {
+    return (
+      <Empty>
+        {vePerfilEntero
+          ? 'Cargando…'
+          : 'Todavía no tienes ningún pipeline asignado. Pídele a quien administra el equipo que cree uno con tu nombre.'}
+      </Empty>
+    )
+  }
 
   return (
     <>
@@ -243,9 +276,9 @@ export default function Crm({ clientId }) {
 
       {/* Con un solo pipeline el selector sobra y solo añade ruido; aparece
           en cuanto hay más de uno. */}
-      {pipelines.length > 1 && (
+      {visibles.length > 1 && (
         <div className="helm-pipe-tabs">
-          {pipelines.map(p => (
+          {visibles.map(p => (
             <button
               key={p.id ?? 'virtual'}
               className={'helm-pipe-tab' + (p.id === pipeline.id ? ' on' : '')}
@@ -271,9 +304,13 @@ export default function Crm({ clientId }) {
             <Search size={15} />
             <input placeholder="Buscar por nombre, empresa, email, etiqueta…" value={query} onChange={e => setQuery(e.target.value)} />
           </div>
-          <button className="helm-btn" onClick={() => setEditEtapas(true)} title="Pipelines, etapas y subetapas">
-            <SlidersHorizontal size={15} />Pipelines
-          </button>
+          {/* Gestionar pipelines (renombrar, borrar, etapas) es cosa de quien
+              ve el perfil entero: un miembro no toca los pipelines de otros. */}
+          {vePerfilEntero && (
+            <button className="helm-btn" onClick={() => setEditEtapas(true)} title="Pipelines, etapas y subetapas">
+              <SlidersHorizontal size={15} />Pipelines
+            </button>
+          )}
           <button className="helm-btn primary" onClick={() => setOpen(true)}><Plus size={15} />Nuevo contacto</button>
         </div>
       </div>
@@ -449,11 +486,12 @@ export default function Crm({ clientId }) {
           rows={rows || []}
           stages={stages}
           substages={substages}
-          pipelines={pipelines}
+          pipelines={vePerfilEntero ? pipelines : visibles}
           onMovePipeline={moverDePipeline}
           services={services}
           people={people}
           sales={sales}
+          webSeller={clientId === WEBSELLER_ID}
           onClose={() => setActive(null)}
           onMove={moveTo}
           onSaved={(patch) => { setRows(rs => rs.map(r => r.id === active.id ? { ...r, ...patch } : r)); setActive(a => ({ ...a, ...patch })) }}
@@ -521,7 +559,7 @@ function NewContactModal({ rows, stages, services, onClose, onCreate }) {
 // ── Ficha ──────────────────────────────────────────────────────────────────
 function ContactDrawer({
   contact, rows, stages, substages, services, people, sales, pipelines,
-  onClose, onMove, onMovePipeline, onSaved, onDelete,
+  onClose, onMove, onMovePipeline, onSaved, onDelete, webSeller = false,
 }) {
   const [form, setForm] = useState(() => toForm(contact, stages))
   const [touched, setTouched] = useState(false)
@@ -534,6 +572,35 @@ function ContactDrawer({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [saved, setSaved] = useState(false)
+
+  // ── «Cambios para la web» (WebSeller) ───────────────────────────────────────
+  // Lo que el cliente pide para su web: texto + adjuntos (archivos Y enlaces).
+  // Vive en custom_fields.cambios_web para no tocar el esquema del contacto; se
+  // guarda con su propio botón, fusionando sobre el resto de custom_fields.
+  const cambiosGuardados = contact.custom_fields?.cambios_web || {}
+  const [cambiosTexto, setCambiosTexto] = useState(cambiosGuardados.texto || '')
+  const [cambiosAdj, setCambiosAdj] = useState(
+    Array.isArray(cambiosGuardados.adjuntos) ? cambiosGuardados.adjuntos : [],
+  )
+  const [cambiosSaving, setCambiosSaving] = useState(false)
+  const [cambiosSaved, setCambiosSaved] = useState(false)
+
+  async function guardarCambiosWeb() {
+    setCambiosSaving(true); setError(null)
+    try {
+      const custom_fields = {
+        ...(contact.custom_fields || {}),
+        cambios_web: { texto: cambiosTexto, adjuntos: cambiosAdj },
+      }
+      await updateRow('crm_contacts', contact.id, { custom_fields, updated_at: new Date().toISOString() })
+      onSaved({ custom_fields })
+      setCambiosSaved(true)
+    } catch (err) {
+      setError('No se pudieron guardar los cambios para la web: ' + (err?.message || 'error'))
+    } finally {
+      setCambiosSaving(false)
+    }
+  }
   // Formularios que ha rellenado este contacto. Cada uno abre su propia
   // pestaña con las respuestas: el equipo lee la ficha y el cuestionario en el
   // mismo sitio, sin salir del CRM.
@@ -771,6 +838,38 @@ function ContactDrawer({
 
       {touched && !ok && <FormNote>Revisa los campos marcados en rojo.</FormNote>}
       <FormNote>{error}</FormNote>
+
+      {webSeller && (
+        <>
+          <div className="helm-drawer-section">Cambios para la web</div>
+          <p className="helm-settings-note" style={{ marginTop: -4 }}>
+            Lo que el cliente pide para su web: escríbelo y adjunta archivos o enlaces
+            (logos, textos, referencias de Drive…).
+          </p>
+          <Textarea
+            value={cambiosTexto}
+            onChange={e => { setCambiosTexto(e.target.value); setCambiosSaved(false) }}
+            rows={3}
+            placeholder="Qué quiere cambiar, qué textos, qué colores, qué fotos…"
+          />
+          <Adjuntos
+            clientId={contact.client_id}
+            carpeta={`crm/cambios-web/${contact.id}`}
+            value={cambiosAdj}
+            onChange={(v) => { setCambiosAdj(v); setCambiosSaved(false) }}
+            enlaces
+          />
+          <button
+            type="button"
+            className="helm-btn sm primary"
+            style={{ marginTop: 8 }}
+            onClick={guardarCambiosWeb}
+            disabled={cambiosSaving}
+          >
+            {cambiosSaving ? 'Guardando…' : cambiosSaved ? 'Guardado ✓' : 'Guardar cambios para la web'}
+          </button>
+        </>
+      )}
 
       <div className="helm-drawer-section">Actividad</div>
       <form onSubmit={addActivity} className="helm-act-form">

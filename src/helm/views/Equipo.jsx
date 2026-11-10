@@ -14,6 +14,7 @@ import {
 import { Panel, Empty, Modal, Field, Input, Textarea, Select, Kpi, MoneyInput, FormNote } from '../ui'
 import { rolesDelProducto, roleLabel } from '../equipo/roles'
 import MigracionPendiente from '../MigracionPendiente'
+import Ranking from '../equipo/Ranking'
 
 const PAY_METHODS = ['Transferencia', 'Bizum', 'PayPal', 'Wise', 'Revolut', 'Stripe', 'Cripto']
 
@@ -206,6 +207,8 @@ export default function Equipo({ clientId }) {
           </div>
         )}
       </Panel>
+
+      <Ranking clientId={clientId} people={rows || []} />
 
       {edit && <PersonaModal inicial={edit} onClose={() => setEdit(null)} onSave={save} />}
     </div>

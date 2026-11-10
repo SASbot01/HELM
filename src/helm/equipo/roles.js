@@ -40,6 +40,19 @@ const ROLES_HELM = [
     ],
   },
   {
+    // «Call caller» (WebSeller): el que llama en frío a los negocios del
+    // scraper, los mueve por su pipeline y cierra la venta de la web. Su día
+    // es llamadas + ventas; es el rol que puntúa en el Ranking (ver Equipo).
+    key: 'call_caller',
+    label: 'Call caller',
+    short: 'call caller',
+    desc: 'Llama a los leads, los mueve por su pipeline y cierra la venta.',
+    diario: [
+      { field: 'calls_made', label: 'Llamadas del día' },
+      { field: 'closes', label: 'Ventas' },
+    ],
+  },
+  {
     key: 'setter',
     label: 'Setter',
     short: 'setter',
@@ -59,6 +72,16 @@ const ROLES_HELM = [
       { field: 'calls_made', label: 'Llamadas con clientes' },
       { field: 'doubts_solved', label: 'Dudas resueltas por chat' },
     ],
+  },
+  {
+    // CDM — rol pedido por Alex para WebSeller. El significado exacto (y qué
+    // métricas reporta en el Diario) está PENDIENTE de confirmar: por ahora no
+    // reporta nada a mano. Ver la nota en el informe de la tarea.
+    key: 'cdm',
+    label: 'CDM',
+    short: 'CDM',
+    desc: 'Rol de WebSeller (significado por confirmar con Alex).',
+    diario: [],
   },
   {
     key: 'editor',

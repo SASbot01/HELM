@@ -1,425 +1,185 @@
-// HELM — Diario: el reporte de actividad del día, distinto para cada rol.
+// HELM — Diario: el reporte del día, por EVENTOS.
 //
-// Antes pedía las mismas ocho casillas a todo el mundo, así que un setter
-// rellenaba "cierres" y un closer "conversaciones abiertas". Ahora las métricas
-// las define el ROL (ver ../equipo/roles.js): el closer reporta su embudo
-// —agendadas, asistieron, cualificaron, convirtieron, seguimiento, perdidos—,
-// el setter su actividad y el CSM su acompañamiento.
+// Antes el reporte se tecleaba a mano (un modal con contadores por rol). Ahora
+// se arma solo: cada vez que un lead se mueve a «contactado», «interesado» o a
+// una etapa de venta, ese evento se apunta en el reporte del día de quien es
+// dueño de ese pipeline. Lo hace un trigger en la base (migración 130,
+// helm_report_crm_event), así que cuenta mueva quien mueva el lead —el panel,
+// un webhook, Stripe/Woo— y vale para TODOS los perfiles, también el operador
+// que trabaja solo.
 //
-// Si la persona ya está dada de alta en Equipo, elegirla fija su rol sola: no
-// hay que preguntarlo.
+// Las filas antiguas (source != 'evento') son el histórico de cuando se
+// reportaba a mano: se siguen viendo abajo, no se pierde nada.
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
-import { supabase, fetchRows, fetchRowsOrError, insertRow, deleteRow, fmtDate, todayISO } from '../lib'
-import { Panel, Empty, Modal, Field, Input, Select, Kpi, CountInput, FormNote } from '../ui'
-import { rolesDelProducto, roleMapDelProducto, roleLabel } from '../equipo/roles'
-import { marcarVendidos } from '../diario/ventas'
+import { fetchRows, fetchRowsOrError, fmtDate } from '../lib'
+import { Panel, Empty, Kpi, FormNote } from '../ui'
+import { roleLabel } from '../equipo/roles'
 
-// Roles que reportan algo. Los que no tienen métricas definidas (editor, otro)
-// no aparecen en el diario: no tendrían nada que rellenar.
-const rolesDiario = () => rolesDelProducto().filter(r => r.diario.length > 0)
+// Tipo de evento → cómo se pinta.
+const TIPOS = {
+  contactado: { label: 'Contactado', tone: 'cyan' },
+  interesado: { label: 'Interesado', tone: 'violet' },
+  venta: { label: 'Venta', tone: 'green' },
+}
 
-const EMPTY = { date: todayISO(), person_id: '', name: '', role: 'closer', metrics: {}, sales: [] }
+const money = (n) => {
+  const v = Number(n) || 0
+  return v ? v.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }) : ''
+}
 
-// Roles cuyo reporte puede cerrar ventas. Un setter agenda, no cierra: pedirle
-// a quién le vendio seria pedirle algo que no hace.
-const VENDEN = new Set(['closer', 'dueno'])
+const horaDe = (at) => {
+  const d = new Date(at)
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+}
+
+// Cuenta los eventos de una fila por tipo.
+function resumen(events = []) {
+  const r = { contactado: 0, interesado: 0, venta: 0, importe: 0 }
+  for (const e of events) {
+    if (r[e.tipo] != null) r[e.tipo] += 1
+    if (e.tipo === 'venta') r.importe += Number(e.amount) || 0
+  }
+  return r
+}
 
 export default function Diario({ clientId }) {
   const [rows, setRows] = useState(null)
   const [people, setPeople] = useState([])
-  const [open, setOpen] = useState(false)
-  const [rolVista, setRolVista] = useState('closer')
-  const [error, setError] = useState(null)
-  const [aviso, setAviso] = useState(null)
 
   useEffect(() => {
     fetchRows('reports', clientId, { order: 'date' }).then(setRows)
-    fetchRowsOrError('helm_team', clientId, { order: 'created_at', asc: true }).then(({ rows: r }) => setPeople(r))
+    fetchRowsOrError('helm_team', clientId, { order: 'created_at', asc: true })
+      .then(({ rows: r }) => setPeople(r || []))
   }, [clientId])
 
-  // Cada rol tiene su tabla: mezclar columnas de closer y de setter en una sola
-  // daría una rejilla medio vacía en la que no se lee nada.
-  const rol = roleMapDelProducto()[rolVista] || rolesDiario()[0]
-  const delRol = useMemo(() => (rows || []).filter(r => r.role === rolVista), [rows, rolVista])
+  // Nombre de rol: primero el que trae la fila; si no, el de la ficha de equipo.
+  const rolDe = (r) => {
+    if (r.role) return roleLabel(r.role)
+    const p = people.find(p => p.id === r.person_id)
+    return p ? roleLabel(p.role) : ''
+  }
 
-  // Totales de las métricas de este rol, para la fila de KPIs.
-  const totales = useMemo(() => {
-    const acc = {}
-    for (const m of rol.diario) acc[m.field] = delRol.reduce((a, r) => a + (Number(r[m.field]) || 0), 0)
-    return acc
-  }, [delRol, rol])
+  const eventos = useMemo(
+    () => (rows || []).filter(r => r.source === 'evento' && Array.isArray(r.events) && r.events.length),
+    [rows],
+  )
+  const historico = useMemo(
+    () => (rows || []).filter(r => r.source !== 'evento'),
+    [rows],
+  )
 
-  // Tasa de show del closer: cuántos de los que tenían cita se presentaron.
-  const tasaShow = useMemo(() => {
-    if (rolVista !== 'closer') return null
-    const citas = totales.appointments_booked || 0
-    return citas ? Math.round(((totales.calls_made || 0) / citas) * 100) : null
-  }, [totales, rolVista])
-
-  async function save(form) {
-    const ventas = VENDEN.has(form.role) ? (form.sales || []).filter(v => v.contact_id) : []
-    const row = await insertRow('reports', {
-      client_id: clientId, date: form.date, name: form.name.trim(), role: form.role,
-      person_id: form.person_id || null,
-      sales: ventas,
-      ...Object.fromEntries((roleMapDelProducto()[form.role]?.diario || []).map(m => [m.field, Number(form.metrics[m.field]) || 0])),
-    })
-    setRows(rs => [row, ...(rs || [])])
-    setRolVista(form.role)
-    setOpen(false)
-
-    // El reporte ya esta guardado; mover el CRM va despues y no puede tumbarlo.
-    // Si un contacto se borro entre medias, se avisa y el reporte se queda.
-    if (ventas.length) {
-      const { movidos, fallos } = await marcarVendidos(clientId, ventas)
-      setAviso([
-        movidos ? `${movidos} ${movidos === 1 ? 'contacto pasado' : 'contactos pasados'} a ganado en el CRM.` : '',
-        fallos.length ? `No se pudo con: ${fallos.join('; ')}` : '',
-      ].filter(Boolean).join(' '))
+  // Agrupado por día (desc) → filas (personas) de ese día.
+  const porDia = useMemo(() => {
+    const map = new Map()
+    for (const r of eventos) {
+      if (!map.has(r.date)) map.set(r.date, [])
+      map.get(r.date).push(r)
     }
-  }
+    return [...map.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1))
+  }, [eventos])
 
-  async function remove(id) {
-    setError(null)
-    try {
-      await deleteRow('reports', id)
-      setRows(rs => rs.filter(r => r.id !== id))
-    } catch (e) { setError('No se pudo eliminar: ' + e.message) }
-  }
+  // KPIs: totales de HOY (la primera fecha del grupo, que es la más reciente).
+  const hoy = porDia[0]
+  const totHoy = useMemo(() => {
+    const t = { contactado: 0, interesado: 0, venta: 0 }
+    for (const r of (hoy?.[1] || [])) {
+      const s = resumen(r.events)
+      t.contactado += s.contactado; t.interesado += s.interesado; t.venta += s.venta
+    }
+    return t
+  }, [hoy])
+
+  if (rows == null) return <Empty>Cargando…</Empty>
 
   return (
     <div className="helm-grid" style={{ gap: 20 }}>
       <div className="helm-grid helm-kpis">
-        {rol.diario.slice(0, 4).map(m => (
-          <Kpi key={m.field} label={m.label} value={totales[m.field] || 0} />
-        ))}
-        {tasaShow != null && <Kpi label="Tasa de show" value={tasaShow + '%'} accent sub="asistieron / agendadas" />}
+        <Kpi label="Contactados hoy" value={totHoy.contactado} />
+        <Kpi label="Interesados hoy" value={totHoy.interesado} />
+        <Kpi label="Ventas hoy" value={totHoy.venta} accent />
       </div>
 
-      {error && <FormNote>{error}</FormNote>}
-      {aviso && <FormNote tone="warn">{aviso}</FormNote>}
+      <FormNote>
+        El reporte se arma solo con los movimientos del CRM: cada lead que pasa a
+        contactado, interesado o venta queda apuntado aquí, en el día que ocurrió y a
+        nombre de quien lleva ese pipeline.
+      </FormNote>
 
-      <Panel
-        title={`Reportes diarios · ${rol.label}`}
-        action={
-          <div style={{ display: 'flex', gap: 10 }}>
-            <select className="helm-select" value={rolVista} onChange={e => setRolVista(e.target.value)}>
-              {rolesDiario().map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
-            </select>
-            <button className="helm-btn primary" onClick={() => setOpen(true)}><Plus size={15} />Nuevo reporte</button>
-          </div>
-        }
-      >
-        {rows == null ? <Empty>Cargando…</Empty> : delRol.length === 0 ? (
-          <Empty>Sin reportes de {rol.label.toLowerCase()} todavía.</Empty>
+      <Panel title="Actividad del día">
+        {porDia.length === 0 ? (
+          <Empty>Aún no hay movimientos. En cuanto muevas un lead a contactado, interesado o venta, aparecerá aquí.</Empty>
         ) : (
+          <div className="helm-grid" style={{ gap: 18 }}>
+            {porDia.map(([date, filas]) => (
+              <div key={date}>
+                <div className="helm-drawer-section" style={{ marginTop: 0 }}>{fmtDate(date)}</div>
+                <div className="helm-svc-grid">
+                  {filas.map(r => {
+                    const s = resumen(r.events)
+                    return (
+                      <div key={r.id} className="helm-svc">
+                        <div className="helm-svc-head">
+                          <div className="helm-avatar lg">{(r.name || '?')[0].toUpperCase()}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <b>{r.name || 'Perfil'}</b>
+                            <small>{rolDe(r)}</small>
+                          </div>
+                        </div>
+                        <div className="helm-svc-meta">
+                          {s.contactado > 0 && <span>{s.contactado} contactado{s.contactado === 1 ? '' : 's'}</span>}
+                          {s.interesado > 0 && <span>{s.interesado} interesado{s.interesado === 1 ? '' : 's'}</span>}
+                          {s.venta > 0 && <span>{s.venta} venta{s.venta === 1 ? '' : 's'}{s.importe ? ` · ${money(s.importe)}` : ''}</span>}
+                        </div>
+                        <div className="helm-timeline">
+                          {[...r.events].reverse().map((e, i) => {
+                            const t = TIPOS[e.tipo] || { label: e.tipo, tone: '' }
+                            return (
+                              <div key={i} className="helm-tl-item">
+                                <span className={'helm-chip ' + t.tone}>{t.label}</span>
+                                <div className="helm-tl-body">
+                                  <div>{e.contact_name || '—'}{e.tipo === 'venta' && Number(e.amount) ? ` · ${money(e.amount)}` : ''}</div>
+                                  <small>{horaDe(e.at)}</small>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
+
+      {historico.length > 0 && (
+        <Panel title="Histórico (reportes antiguos)">
           <div className="helm-tablewrap">
             <table className="helm-table">
               <thead>
                 <tr>
-                  <th>Fecha</th><th>Persona</th>
-                  {rol.diario.map(m => <th key={m.field}>{m.label}</th>)}
-                  <th></th>
+                  <th>Fecha</th><th>Persona</th><th>Rol</th>
+                  <th>Llamadas</th><th>Conversaciones</th><th>Cierres</th>
                 </tr>
               </thead>
               <tbody>
-                {delRol.map(r => (
+                {historico.map(r => (
                   <tr key={r.id}>
                     <td>{fmtDate(r.date)}</td>
                     <td>{r.name || '—'}</td>
-                    {rol.diario.map(m => <td key={m.field} className="helm-num">{r[m.field] ?? 0}</td>)}
-                    <td><Trash2 size={15} className="helm-x" onClick={() => remove(r.id)} /></td>
+                    <td>{rolDe(r) || '—'}</td>
+                    <td className="helm-num">{r.calls_made ?? 0}</td>
+                    <td className="helm-num">{r.conversations_opened ?? 0}</td>
+                    <td className="helm-num">{r.closes ?? 0}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
-      </Panel>
-
-      {open && <ReporteModal clientId={clientId} people={people} onClose={() => setOpen(false)} onSave={save} />}
+        </Panel>
+      )}
     </div>
-  )
-}
-
-// ── A quién se le vendió ───────────────────────────────────────────────────
-// Los contactos se ELIGEN de la lista, no se teclean. Escribir "Ana" con tres
-// Anas en el CRM movería la ficha equivocada, y el error no se vería hasta que
-// alguien se extrañase de que un lead frío figura como cliente.
-function Ventas({ clientId, value = [], onChange, declarados }) {
-  const [contactos, setContactos] = useState(null)
-  const [busca, setBusca] = useState('')
-
-  useEffect(() => {
-    supabase.from('crm_contacts')
-      .select('id, name, email, company, status')
-      .eq('client_id', clientId)
-      .order('last_activity_at', { ascending: false, nullsFirst: false })
-      .limit(500)
-      .then(({ data }) => setContactos(data || []))
-  }, [clientId])
-
-  const sugerencias = useMemo(() => {
-    const q = busca.trim().toLowerCase()
-    if (!q) return []
-    // El set de ya elegidos se calcula aquí dentro y no fuera: si se declara
-    // arriba, el compilador de React no puede conservar la memoización.
-    const elegidos = new Set(value.map(v => v.contact_id))
-    return (contactos || [])
-      .filter(c => !elegidos.has(c.id))
-      .filter(c => [c.name, c.email, c.company].some(x => String(x || '').toLowerCase().includes(q)))
-      .slice(0, 6)
-  }, [busca, contactos, value])
-
-  const añadir = (c) => { onChange([...value, { contact_id: c.id, name: c.name, amount: '' }]); setBusca('') }
-  const quitar = (id) => onChange(value.filter(v => v.contact_id !== id))
-  const importe = (id, v) => onChange(value.map(x => (x.contact_id === id ? { ...x, amount: v } : x)))
-
-  return (
-    <>
-      <div className="helm-drawer-section">A quién se le vendió</div>
-      <p className="helm-settings-note" style={{ marginTop: -4 }}>
-        Lo que pongas aquí <b>mueve el CRM</b>: cada uno pasa a ganado con su importe. Lo demás
-        del reporte son contadores y no tocan nada.
-      </p>
-
-      {value.map(v => (
-        <div key={v.contact_id} className="helm-form-2" style={{ alignItems: 'end' }}>
-          <Field label="Cliente">
-            <div className="helm-settings-row" style={{ margin: 0 }}>
-              <b>{v.name}</b>
-              <button type="button" className="helm-btn sm" onClick={() => quitar(v.contact_id)}>
-                <Trash2 size={13} />
-              </button>
-            </div>
-          </Field>
-          <Field label="Importe (€)">
-            <Input type="number" min="0" step="1" value={v.amount}
-              onChange={e => importe(v.contact_id, e.target.value)} placeholder="1200" />
-          </Field>
-        </div>
-      ))}
-
-      <Field
-        label="Añadir cliente"
-        hint={contactos === null ? 'Cargando contactos…' : 'Busca por nombre, email o empresa'}
-      >
-        <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Empieza a escribir…" />
-      </Field>
-
-      {sugerencias.length > 0 && (
-        <div className="helm-leccion-list" style={{ marginTop: -6 }}>
-          {sugerencias.map(c => (
-            <button key={c.id} type="button" className="helm-leccion-main" onClick={() => añadir(c)}>
-              <span>
-                <b>{c.name}</b>
-                <small>{[c.company, c.email].filter(Boolean).join(' · ') || 'sin más datos'}</small>
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {busca.trim() && sugerencias.length === 0 && contactos !== null && (
-        <p className="helm-settings-note">
-          Nadie con ese nombre en el CRM. Si el cliente no está dado de alta, créalo antes en
-          <b> CRM</b> — así el reporte apunta a una ficha de verdad.
-        </p>
-      )}
-
-      {/* Aviso, no bloqueo: se puede cerrar a alguien que no esté en el CRM, y
-          el contador es el que manda para las métricas. */}
-      {value.length > 0 && declarados !== value.length && (
-        <FormNote tone="warn">
-          Has puesto {declarados} en «Convirtieron» y aquí {value.length}. No pasa nada, pero
-          revísalo por si falta alguien.
-        </FormNote>
-      )}
-    </>
-  )
-}
-
-function ReporteModal({ clientId, people, onClose, onSave }) {
-  const [form, setForm] = useState(EMPTY)
-  const [touched, setTouched] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState(null)
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
-
-  const activos = people.filter(p => p.active !== false && roleMapDelProducto()[p.role]?.diario.length)
-  const rol = roleMapDelProducto()[form.role] || rolesDiario()[0]
-
-  // Elegir a alguien del equipo trae su rol: el informe pedía que, si el
-  // sistema ya sabe el rol, no lo vuelva a preguntar.
-  function elegirPersona(id) {
-    const p = activos.find(x => x.id === id)
-    setForm(f => ({
-      ...f,
-      person_id: id,
-      name: p ? p.name : f.name,
-      role: p ? p.role : f.role,
-      metrics: {},          // las métricas del rol anterior no valen para el nuevo
-    }))
-  }
-
-  // Lo que el closer teclea a mano deja de rellenarse solo: si corrige una
-  // cifra, su corrección manda aunque cambie de fecha o añada otra venta.
-  const [aMano, setAMano] = useState({})
-  const setMetric = (field, v) => {
-    setAMano(m => ({ ...m, [field]: true }))
-    setForm(f => ({ ...f, metrics: { ...f.metrics, [field]: v } }))
-  }
-  const num = (field) => Number(form.metrics[field]) || 0
-
-  // El embudo del closer sale de lo que HELM ya sabe de ese día:
-  //   · agendadas   las llamadas de la agenda (Llamadas ← Google Calendar),
-  //                 sin las canceladas
-  //   · asistieron  de esas, las marcadas como «Hecha». Solo si alguien ha
-  //                 marcado alguna: con todas en «Agendada» no se sabe, y un
-  //                 cero inventado sería peor que el campo vacío
-  //   · convirtieron  las ventas que se apuntan aquí abajo
-  // Si las llamadas están repartidas, solo las de esta persona y las que no
-  // tienen a nadie asignado.
-  const [enAgenda, setEnAgenda] = useState(null)   // { agendadas, hechas, marcadas } | null
-  const esCloser = rol.key === 'closer'
-  useEffect(() => {
-    if (!esCloser || !form.date) return
-    let vivo = true
-    const [y, m, d] = form.date.split('-').map(Number)
-    supabase.from('helm_calls').select('status, assignee_id')
-      .eq('client_id', clientId)
-      .gte('starts_at', new Date(y, m - 1, d).toISOString())
-      .lt('starts_at', new Date(y, m - 1, d + 1).toISOString())
-      .then(({ data, error: e }) => {
-        if (!vivo) return
-        if (e) { setEnAgenda(null); return }
-        const suyas = (data || []).filter(c => c.status !== 'cancelada'
-          && (!c.assignee_id || !form.person_id || c.assignee_id === form.person_id))
-        const agenda = {
-          agendadas: suyas.length,
-          hechas: suyas.filter(c => c.status === 'hecha').length,
-          marcadas: suyas.some(c => c.status !== 'agendada'),
-        }
-        setEnAgenda(agenda)
-        setForm(f => ({
-          ...f,
-          metrics: {
-            ...f.metrics,
-            ...(aMano.appointments_booked ? {} : { appointments_booked: agenda.agendadas ? String(agenda.agendadas) : '' }),
-            ...(aMano.calls_made || !agenda.marcadas ? {} : { calls_made: String(agenda.hechas) }),
-          },
-        }))
-      })
-    return () => { vivo = false }
-  }, [clientId, form.date, form.person_id, esCloser]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // «Convirtieron» sigue a las ventas apuntadas en el reporte.
-  function setVentas(v) {
-    setForm(f => ({
-      ...f, sales: v,
-      metrics: esCloser && !aMano.closes ? { ...f.metrics, closes: v.length ? String(v.length) : '' } : f.metrics,
-    }))
-  }
-
-  const pistaDe = (m) => {
-    if (!esCloser || enAgenda === null) return m.hint
-    if (m.field === 'appointments_booked') return `${enAgenda.agendadas} en la agenda de ese día. Se rellena solo; cámbialo si no cuadra.`
-    if (m.field === 'calls_made') {
-      return enAgenda.marcadas
-        ? `${enAgenda.hechas} marcadas como «Hecha» en Llamadas. Se rellena solo.`
-        : 'Marca las llamadas como «Hecha» en Llamadas y se rellenará solo.'
-    }
-    if (m.field === 'closes') return 'Sigue a las ventas que apuntes abajo.'
-    return m.hint
-  }
-
-  const errors = {}
-  if (!form.name.trim()) errors.name = 'Di de quién es el reporte'
-  if (!form.date) errors.date = 'La fecha es obligatoria'
-  // Coherencia del embudo: no pueden asistir más de las que había agendadas,
-  // ni convertir más de los que cualificaron.
-  if (form.role === 'closer') {
-    if (num('calls_made') > num('appointments_booked')) {
-      errors.calls_made = 'No pueden asistir más llamadas de las agendadas'
-    }
-    if (num('qualified') > num('calls_made')) {
-      errors.qualified = 'No pueden cualificar más de los que asistieron'
-    }
-    if (num('closes') > num('qualified')) {
-      errors.closes = 'No pueden convertir más de los que cualificaron'
-    }
-  }
-  if (form.role === 'setter' && num('effective_conversations') > num('conversations_opened')) {
-    errors.effective_conversations = 'No puede haber más efectivas que abiertas'
-  }
-  const ok = Object.keys(errors).length === 0
-  const shown = touched ? errors : {}
-
-  async function submit(e) {
-    e.preventDefault()
-    setTouched(true); setError(null)
-    if (!ok) return
-    setSaving(true)
-    try { await onSave(form) } catch (err) { setError(err.message); setSaving(false) }
-  }
-
-  return (
-    <Modal title="Nuevo reporte diario" onClose={onClose} wide>
-      <form onSubmit={submit} noValidate>
-        <div className="helm-form-2">
-          <Field label="Fecha *" error={shown.date}>
-            <Input type="date" value={form.date} onChange={e => set('date', e.target.value)} max={todayISO()} />
-          </Field>
-          <Field label="Persona *" error={shown.name} hint={activos.length ? 'Su rol se rellena solo' : undefined}>
-            {activos.length > 0 ? (
-              <Select value={form.person_id} onChange={e => elegirPersona(e.target.value)}>
-                <option value="">— Elige a alguien —</option>
-                {activos.map(p => <option key={p.id} value={p.id}>{p.name} · {roleLabel(p.role)}</option>)}
-              </Select>
-            ) : (
-              <Input value={form.name} onChange={e => set('name', e.target.value)} autoFocus />
-            )}
-          </Field>
-        </div>
-
-        {/* El rol solo se pregunta si no viene de la ficha de la persona. */}
-        {!form.person_id && (
-          <Field label="Rol" hint={rol.desc}>
-            <Select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value, metrics: {} }))}>
-              {rolesDiario().map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
-            </Select>
-          </Field>
-        )}
-
-        <div className="helm-drawer-section">{rol.label} · {rol.key === 'closer' ? 'embudo del día' : 'actividad del día'}</div>
-
-        {rol.diario.map(m => (
-          <Field key={m.field} label={m.label} error={shown[m.field]} hint={pistaDe(m)}>
-            <CountInput value={form.metrics[m.field] ?? ''} onChange={v => setMetric(m.field, v)} placeholder="0" />
-          </Field>
-        ))}
-
-        {/* Quien cierra ventas dice a QUIÉN. Es lo único de todo el reporte que
-            mueve el CRM: el resto son contadores y no tocan nada. */}
-        {VENDEN.has(rol.key) && (
-          <Ventas
-            clientId={clientId} value={form.sales}
-            onChange={setVentas}
-            declarados={num('closes')}
-          />
-        )}
-
-        <FormNote>{error}</FormNote>
-        {touched && !ok && <FormNote>Revisa los campos marcados en rojo.</FormNote>}
-
-        <div className="helm-modal-actions">
-          <button type="button" className="helm-btn" onClick={onClose}>Cancelar</button>
-          <button type="submit" className="helm-btn primary" disabled={saving}>
-            {saving ? 'Guardando…' : 'Guardar reporte'}
-          </button>
-        </div>
-      </form>
-    </Modal>
   )
 }

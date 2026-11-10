@@ -47,6 +47,7 @@ export const LOST_KEYS = new Set(['perdido', 'lost', 'descartado'])
 const GRUPOS = [
   ['lead', 'nuevo', 'new', 'abierto', 'entrada'],
   ['contactado', 'contacted', 'contacto', 'qualified', 'calificado', 'cualificado', 'en_curso'],
+  ['interesado', 'interested'],
   ['cita', 'cita_agendada', 'reunion', 'agendado', 'booked', 'meeting'],
   ['propuesta', 'proposal', 'propuesta_enviada', 'negotiation', 'negociacion'],
   ['seguimiento', 'followup', 'follow_up', 'nurturing'],
