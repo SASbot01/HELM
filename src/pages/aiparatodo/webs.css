@@ -26,6 +26,7 @@
 .aipw-insignia.sotd { color: #efe3e5; }
 .aipw-insignia.hm { color: #a99aa0; }
 .aipw-insignia.eleccion { color: var(--rosa); border-style: dashed; }
+.aipw-insignia.propia { color: var(--verde); }
 .aipw-mejor { color: #1a0a0e; background: #f0c44c; border-color: #f0c44c; }
 
 .aipw-filtros { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 8px; }

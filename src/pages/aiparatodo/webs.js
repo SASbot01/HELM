@@ -17,12 +17,20 @@
 // herramienta y el mismo tamaño; el sector trae además recursos (un listado,
 // un artículo, un repo y un tutorial) que no son webs y no llevan prompt.
 //
+// El 13-11-2026 entró el apartado «Hechas por nosotros»: webs que hemos hecho
+// con IA (Claude Code) para negocios de verdad, sin premio y marcadas así
+// (nivel «propia»). Capturas de ese día, con la misma herramienta y el mismo
+// tamaño. Cada una lleva sus propias `secciones` para el prompt, porque en ese
+// apartado hay negocios de todo tipo.
+//
 // El prompt de cada web (promptDe) se arma aquí con todo eso: lo que se copia
 // es el estilo, nunca los textos, fotos, logos ni colores de marca.
 
 export const CAPTURAS_FECHA = '20 de octubre de 2026'
 // Las del sector de producto, más tarde.
 export const CAPTURAS_FECHA_PRODUCTO = '25 de octubre de 2026'
+// Las de las webs que hemos hecho nosotros.
+export const CAPTURAS_FECHA_PROPIAS = '13 de noviembre de 2026'
 // Sube al cambiar las capturas, para que el navegador no enseñe las viejas.
 const VERSION_CAPTURAS = '1'
 
@@ -89,6 +97,11 @@ export const SECTORES = [
       },
     ],
   },
+  {
+    key: 'nuestras', nombre: 'Hechas por nosotros',
+    desc: 'Webs que hemos hecho con IA (Claude Code) para negocios de verdad: barberías, peluquerías, talleres, tiendas de barrio, una clínica dental, una guardería y una mentora. No tienen premio: están aquí para que veas hasta dónde llega una web hecha con IA y te lleves el estilo que te guste.',
+    secciones: 'portada, servicios, sobre nosotros, opiniones de clientes y contacto',
+  },
 ]
 
 export const FUENTES = [
@@ -99,7 +112,9 @@ export const FUENTES = [
   { nombre: 'Locomotive · Caso Scout Motors', url: 'https://locomotive.ca/en/work/scout-motors' },
 ]
 
-// nivel: el premio más alto (soty, sotm, sotd, hm) o «eleccion» si no tiene.
+// nivel: el premio más alto (soty, sotm, sotd, hm), «eleccion» si no tiene o
+// «propia» si la hemos hecho nosotros. secciones: solo en las propias, las que
+// propone el prompt (si no, las de su sector).
 // mejor: la mejor de su sector. pies: los pies de las capturas, si no son los
 // de siempre (una sola entrada = solo hay una captura que valga).
 export const WEBS = [
@@ -638,12 +653,270 @@ export const WEBS = [
     copiar: ["Enseña el producto recortado sobre un gris muy claro, con las miniaturas en columna a la izquierda y la tarjeta de compra a la derecha.", "Resume el producto en cuatro datos en lista y deja un único botón ancho de color vivo para comprar.", "Cuenta la calidad en una sección negra con fotos grandes del taller en carrusel, cada una con un título corto en mayúsculas."],
     pies: ["La ficha del producto, al entrar", "Más abajo: las características, en negro con fotos del taller"],
   },
+  // ── Hechas por nosotros (13-11-2026): de la más nueva a la más antigua. ──
+  {
+    slug: "trebol-barber",
+    sector: "nuestras",
+    nombre: "Trébol Barber",
+    url: "https://trebolbarber-logrono.vercel.app/",
+    nivel: "propia",
+    insignias: [["propia", "Hecha por nosotros"]],
+    premio: "Sin premio: la hicimos nosotros con IA (Claude Code) en noviembre de 2026 para una barbería de Logroño.",
+    meta: "Barbería en Logroño · Web de una página con cita por teléfono",
+    porque: "Cómo hacer que la web se parezca al local: el techo de luz en panal se vuelve un fondo que se enciende con el ratón, y el verde del trébol del rótulo es el único color de acento.",
+    estilo: "Al entrar, fondo negro con un panal de hexágonos de línea fina que se enciende como tubos de luz blanca: parpadea al cargar y se ilumina alrededor del ratón. Arriba van el logo manuscrito, el menú, una píldora que dice si está abierto o cerrado en ese momento y un botón blanco para llamar. A la izquierda, un rótulo pequeño en mayúsculas espaciadas, el titular grande en blanco, una frase gris, dos botones en píldora (uno blanco y otro solo con borde) y la nota de Google con estrellas; a la derecha, un vídeo vertical de un corte con esquinas redondas y un marco de luz blanca. Abajo, pegado al borde de la pantalla y casi de lado a lado, va el nombre gigante, que pasa por delante del vídeo y lleva la O cambiada por un trébol verde que brilla; al cargar, las letras suben una a una y el trébol gira. Más abajo, sobre negro liso, un titular enorme lleva metidas entre las palabras dos fotos pequeñas en forma de píldora, una con borde de luz blanca y otra con brillo verde. Debajo empiezan las fotos del local, con esquinas redondas, a distintas alturas y con movimiento por dentro al bajar.",
+    paleta: ["#070707", "#F4F4F2", "#FFFFFF", "#2FD16B", "#9A9A98"],
+    tipografia: "Una sola familia, Archivo, una palo seco variable que se puede ensanchar: muy ancha y muy gruesa para el nombre gigante, algo menos ancha y en negrita para los titulares, siempre con las letras apretadas, y en su anchura normal para los párrafos. Los rótulos pequeños van en mayúsculas muy espaciadas, y el logo es una firma manuscrita en imagen, no una fuente.",
+    copiar: ["Convierte algo del propio local en el fondo de la portada, como unas líneas de luz que se encienden al pasar el ratón.", "Escribe el nombre gigante de lado a lado al pie de la portada y cambia una de sus letras por el símbolo de la marca.", "Mete fotos pequeñas en forma de píldora entre las palabras de un titular grande, con un borde que brille."],
+    secciones: "portada, una cinta con los servicios en movimiento, el local con fotos y cifras, servicios, galería de trabajos, el equipo, opiniones y horario con mapa",
+    pies: ["Al entrar: el panal de luz, el vídeo de un corte y el nombre gigante con el trébol", "Más abajo: el local, con fotos en píldora dentro del titular"],
+  },
+  {
+    slug: "imperio-barber",
+    sector: "nuestras",
+    nombre: "Imperio Barber",
+    url: "https://imperiobarber-logrono.vercel.app/",
+    nivel: "propia",
+    insignias: [["propia", "Hecha por nosotros"]],
+    premio: "Sin premio: la hicimos nosotros con IA (Claude Code) en noviembre de 2026 para una barbería con tienda de productos en Logroño.",
+    meta: "Barbería en Logroño · Web con reserva de cita y tienda por WhatsApp",
+    porque: "Junta en una sola web de barbería la reserva de cita y una tienda pequeña sin pasarela de pago: las dos terminan en un WhatsApp ya escrito.",
+    estilo: "La portada está partida en dos mitades. A la izquierda, fondo negro con un brillo dorado suave y, en el centro, una columna con la foto redonda del barbero dentro de un aro dorado fino, un aviso de si está abierto o cerrado con un punto de color, la nota de Google con estrellas doradas y un enlace subrayado para reservar. Por la parte de abajo de esa mitad pasa sin parar una frase en mayúsculas, repetida y separada por coronas doradas. A la derecha, una foto oscurecida de un barbero cortando bajo un techo de luces hexagonales, con la lista de servicios en letras romanas enormes color marfil. Más abajo, el fondo pasa a dorado liso, con dos etiquetas pequeñas y un párrafo corto, todo en mayúsculas y centrado, el nombre del negocio gigante en negro en dos líneas que se desplazan de lado en sentidos contrarios al hacer scroll y, debajo, asoma una foto vertical del barbero. Los titulares entran subiendo desde una máscara, la barra de arriba se vuelve negra translúcida al bajar y un botón redondo de WhatsApp queda fijo abajo a la derecha.",
+    paleta: ["#0B0A08", "#F3EDE1", "#C9A24B", "#D8B562", "#14110C"],
+    tipografia: "Cinzel, una serif romana de inscripción, solo de mayúsculas, para el nombre de la cabecera, los titulares gigantes, la cinta que pasa y la lista de servicios de la portada; Manrope, palo seco moderna, para los textos y, pequeña, en negrita, en mayúsculas y muy espaciada, para el menú y las etiquetas.",
+    copiar: ["Parte la portada en dos: a un lado una foto redonda, el aviso de abierto o cerrado y la nota de Google; al otro, los servicios en letra enorme sobre una foto del local.", "Pon el nombre gigante en dos líneas que se deslicen en sentidos contrarios al hacer scroll.", "Haz la reserva por pasos (servicio, barbero, día y hora) y termínala en un WhatsApp con la cita ya escrita."],
+    secciones: "portada, la barbería con tres reseñas destacadas, especialidades y el equipo, servicios y precios, galería de trabajos, avance de la tienda, opiniones, horario con mapa, reserva de cita por pasos y una página aparte de tienda con carrito",
+    pies: ["Al entrar: la foto redonda con la nota de Google a la izquierda y los servicios sobre la foto del local a la derecha", "Más abajo: la sección dorada con el nombre gigante"],
+  },
+  {
+    slug: "magic-barber-shop",
+    sector: "nuestras",
+    nombre: "Magic Barber Shop",
+    url: "https://magicbarbershop-logrono.vercel.app/",
+    nivel: "propia",
+    insignias: [["propia", "Hecha por nosotros"]],
+    premio: "Sin premio: la hicimos nosotros con IA (Claude Code) en noviembre de 2026 para una barbería de Logroño.",
+    meta: "Barbería en Logroño · Web de una página con cita por WhatsApp o por teléfono",
+    porque: "Una portada partida en dos que contesta lo que busca el cliente nada más entrar: qué servicios hay, si el local está abierto ahora y qué nota tiene en Google.",
+    estilo: "La portada está partida en dos mitades. A la izquierda va una foto del interior del local, oscurecida y con un velo azul marino, con los servicios en lista, uno por línea, en mayúsculas crema enormes y muy estrechas; al entrar, la foto se aleja un poco y cada línea sube desde abajo, y al pasar el ratón por un servicio los demás se apagan. A la derecha, sobre fondo crema, hay una ficha pequeña centrada: una foto vertical de un corte visto desde atrás, un punto de color con un texto que dice si la barbería está abierta o cerrada en ese momento, la nota de Google con estrellas y un enlace subrayado a los servicios y precios; abajo pasa sin parar una cinta de letras anchas en mayúsculas. Un poco más abajo, la sección siguiente es de fondo gris azulado y la cabecera se vuelve una barra clara translúcida; en el centro van dos etiquetas pequeñas, un párrafo corto en mayúsculas y el nombre gigante en dos líneas: «Magic» en letra de rótulo inclinada y «BARBER SHOP» en mayúsculas anchas. Al hacer scroll, esas dos líneas se desplazan de lado en sentidos contrarios, debajo asoma una foto vertical y abajo a la derecha aparece un botón redondo verde de WhatsApp.",
+    paleta: ["#ECEBE3", "#111322", "#8088A0", "#2A2E4C", "#C8312F"],
+    tipografia: "Archivo, una palo seco que cambia de anchura: muy estrecha y alta en mayúsculas para la lista de servicios de la portada, muy ancha en mayúsculas para las etiquetas, el menú, los botones y los titulares gigantes, y normal para los párrafos. Lobster, una letra de rótulo gruesa e inclinada, solo para la palabra «Magic» del logo y del nombre gigante (la web carga únicamente esas cinco letras).",
+    copiar: ["Parte la portada en dos: a un lado una foto del local con los servicios en lista, en letra muy estrecha y enorme, y al otro una ficha pequeña con una foto, la nota de Google y si el negocio está abierto o cerrado en ese momento.", "Usa para casi todo una misma letra de anchura variable: muy estrecha para la lista de servicios y muy ancha en mayúsculas para etiquetas, botones y titulares.", "Escribe el nombre gigante en dos líneas, una en letra de rótulo y otra en mayúsculas anchas, y haz que se desplacen en sentidos contrarios al hacer scroll."],
+    secciones: "portada con los servicios y una ficha del local, presentación con tres opiniones destacadas, especialidades y foto de la fachada, servicios y precios, galería de trabajos, nota media y opiniones en carrusel, horario con mapa y pedir cita con un formulario que se envía por WhatsApp o por teléfono",
+    pies: ["Al entrar: los servicios en letra enorme sobre la foto del local y, a la derecha, la ficha con la nota de Google", "Más abajo: el nombre en grande, «Magic» en letra de rótulo sobre «BARBER SHOP»"],
+  },
+  {
+    slug: "terra-origen",
+    sector: "nuestras",
+    nombre: "Terra Origen",
+    url: "https://terraorigen-fruteria.vercel.app/",
+    nivel: "propia",
+    insignias: [["propia", "Hecha por nosotros"]],
+    premio: "Sin premio: la hicimos nosotros con IA (Claude Code) en noviembre de 2026 para una frutería de barrio de Córdoba.",
+    meta: "Frutería en Córdoba · Web de una página con pedidos por WhatsApp",
+    porque: "Cómo llenar de color la web de una tienda de barrio: un solo color de marca que manda, fotos reales del mostrador, frutas dibujadas que se mueven y el pedido por WhatsApp siempre a mano.",
+    estilo: "Al entrar, la cabecera y el fondo son verdes: arriba, el menú en mayúsculas a los dos lados de un disco crema con el logo, que se encoge al bajar. A la izquierda, una etiqueta pequeña en mayúsculas con una raya delante, un titular enorme en blanco con una palabra en amarillo, cuyas líneas suben al cargar, y dos botones: uno relleno en blanco roto con el icono de WhatsApp y otro solo con borde. A la derecha, una foto real del mostrador recortada en un círculo algo irregular, rodeada de frutas dibujadas (naranja, limón, granada y una rama de olivo) que aparecen girando y luego flotan, y de un sello amarillo con un texto en círculo que gira. Abajo queda fija una cinta negra con frases en mayúsculas que pasan solas y cambian de sentido según subas o bajes, y en la esquina una pegatina roja, con su texto girando, para pedir por WhatsApp. Más abajo, el fondo pasa a crema: a la izquierda, otra foto del mostrador, inclinada y con esquinas redondeadas, con un sello amarillo encima y una rodaja de naranja dibujada en la esquina; a la derecha, la nota de Google en una cifra verde enorme que cuenta hasta su valor, con una estrella naranja al lado, y debajo un titular verde, un párrafo y un botón con borde.",
+    paleta: ["#2A7A2E", "#F6EDD6", "#1C1F17", "#F6C945", "#B3243A"],
+    tipografia: "Bricolage Grotesque, una palo seco gruesa y algo apretada con aire desenfadado, para los titulares y la cifra grande; Figtree, palo seco geométrica y limpia, para el texto, y en mayúsculas espaciadas para el menú, los botones y la cinta de abajo.",
+    copiar: ["Recorta la foto principal en un círculo algo irregular y rodéala de dibujos de tu producto que floten y de un sello redondo con un texto que gira.", "Deja fija abajo una cinta oscura con frases cortas en mayúsculas que pasan solas, y una pegatina en la esquina que lleve directo a pedir por WhatsApp.", "Enseña tu nota de Google como una cifra enorme que cuenta hasta su valor, al lado de una foto inclinada con un sello redondo encima."],
+    secciones: "portada, la nota en Google, lo de temporada, productos en franjas de color, una foto de la tienda a todo lo ancho, pedidos por WhatsApp, quiénes somos con una pila de fotos que se pasan al pulsar, formulario de pedido que abre WhatsApp, opiniones, galería de fotos y dónde estamos con horario y plano",
+    pies: ["Al entrar: el titular sobre verde y la foto redonda del mostrador con frutas dibujadas", "Más abajo: la nota de Google en una cifra enorme, sobre crema"],
+  },
+  {
+    slug: "carniceria-al-amir",
+    sector: "nuestras",
+    nombre: "Carnicería Halal Al-Amir",
+    url: "https://alamir-carniceriahalal.vercel.app/",
+    nivel: "propia",
+    insignias: [["propia", "Hecha por nosotros"]],
+    premio: "Sin premio: la hicimos nosotros con IA (Claude Code) en noviembre de 2026 para una carnicería halal con dos tiendas en Granada.",
+    meta: "Carnicería halal en Granada · Web de una página para sus dos tiendas, con pedido por WhatsApp",
+    porque: "Cómo convertir las fotos reales de una tienda de barrio en una web elegante: la carne a pantalla completa, titulares serif grandes y un formulario que deja el pedido escrito en WhatsApp.",
+    estilo: "Arriba corre sola una cinta oscura con frases cortas en mayúsculas separadas por puntos rojos y, debajo, el menú va sobre la foto: enlaces a la izquierda, el logo del toro en el centro y un botón de solo borde a la derecha. La portada es una foto a pantalla completa de un lomo de ternera con hueso sobre el mostrador, con un velo oscuro encima. En el centro hay un toro pequeño, una línea en mayúsculas pequeñas con el nombre en árabe en medio, un titular serif enorme en crema con dos palabras en cursiva, un párrafo corto y un enlace en cursiva subrayado para pedir por WhatsApp. Al pie de la portada, tras una línea fina, van las dos tiendas a los lados y la nota de Google en el centro. Al bajar, la cinta se pliega y la cabecera pasa a crema con el toro en granate; el fondo es crema liso, con el titular a la izquierda (la segunda línea en cursiva), un párrafo a la derecha y dos fotos de los mostradores una al lado de la otra, cada una con el nombre de su tienda en una etiqueta crema. Los titulares suben palabra a palabra desde una máscara, las fotos se descubren con una cortinilla de abajo arriba y, en el ordenador, la galería se queda fija y avanza en horizontal con el scroll.",
+    paleta: ["#F7F0E3", "#1C1514", "#211312", "#7F1518", "#9E1C20"],
+    tipografia: "Instrument Serif, una serif estrecha de trazo fino, para los titulares, y su cursiva para resaltar palabras y para el enlace de pedir; Instrument Sans, palo seco limpia, para el texto, el menú y las etiquetas en mayúsculas pequeñas y espaciadas. Amiri, una letra árabe clásica, solo para las pocas palabras en árabe.",
+    copiar: ["Abre con una foto real de tu producto a pantalla completa, un velo oscuro encima y un titular serif enorme centrado con dos palabras en cursiva.", "Pon arriba una cinta fina que corra sola con los datos prácticos (cómo pedir, reparto, qué días abres) y que se pliegue al bajar.", "Pon un formulario de pedido corto que abra WhatsApp con el mensaje ya escrito, sin guardar nada en la web."],
+    secciones: "portada, la casa y sus tiendas, lo que nos distingue, una frase grande sobre foto, productos, galería del mostrador, opiniones de Google, tiendas con horario y cómo llegar, y pedido por WhatsApp",
+    pies: ["Al entrar: la carne a pantalla completa con el titular en serif", "Más abajo: la cabecera ya en crema y una foto del mostrador de cada tienda"],
+  },
+  {
+    slug: "fusion-taller-mecanico",
+    sector: "nuestras",
+    nombre: "Taller Mecánico Fusión",
+    url: "https://fusion-tallermecanico.vercel.app/",
+    nivel: "propia",
+    insignias: [["propia", "Hecha por nosotros"]],
+    premio: "Sin premio: la hicimos nosotros con IA (Claude Code) en noviembre de 2026 para un taller mecánico de Molina de Segura (Murcia).",
+    meta: "Taller mecánico en Molina de Segura · Web de una página con cita por WhatsApp",
+    porque: "Cómo hacer de la persiana del taller la entrada de la web: sube con el scroll, se encienden las luces y aparece la nave de verdad por dentro.",
+    estilo: "Al entrar, casi toda la pantalla es una persiana metálica roja de lamas con su cajón oscuro arriba, sobre un fondo gris carbón con una rejilla de líneas finas; en el centro lleva una placa negra con el logo, una etiqueta blanca pequeña en una esquina y abajo el aviso «Desliza para abrir el taller» con una flecha que sube y baja. Al hacer scroll la persiana sube, la nave se queda a oscuras hasta que tres tubos fluorescentes del techo parpadean y se encienden, y la foto real del taller, que empieza ampliada, se va alejando. Más abajo ya se ve el local por dentro (pared roja, coches en fila y suelo a cuadros rojos y negros) con un velo oscuro, y el titular blanco gigante en letra ancha sube línea a línea, con una etiqueta pequeña encima y un párrafo corto debajo. Solo entonces baja la cabecera: cajas gris claro con borde fino para el logo y el menú en letra de máquina, un indicador de abierto o cerrado según la hora, un cuadrado oscuro para el menú y el botón rojo de pedir cita, más una columna fija de iconos a la derecha para llamar, escribir por WhatsApp y ver cómo llegar. Pasada la portada, la página es gris claro y se monta como una ficha técnica, con cajas de borde fino en rejilla, tramas de rayas diagonales y una sección oscura con un coche dibujado a línea.",
+    paleta: ["#E6EBEF", "#1C2228", "#15191D", "#E31B23", "#B7C2CB"],
+    tipografia: "Saira, palo seco muy ancha y gruesa, para el titular gigante y los títulos de sección; Geist, palo seco limpia, para los párrafos, y Geist Mono, letra de máquina de ancho fijo, en mayúsculas para el menú y los botones y en minúscula para las etiquetas pequeñas.",
+    copiar: ["Abre con una persiana de lamas cerrada que suba al hacer scroll, encienda unas luces que parpadeen y deje ver una foto real del local.", "Monta el resto como una ficha técnica: cajas de borde fino pegadas en rejilla, tramas de rayas y etiquetas en letra de máquina.", "Enseña los servicios sobre un dibujo a línea de lo que arreglas, con un punto que se marca en la pieza de cada servicio."],
+    secciones: "portada, ficha rápida con la nota en Google y la fachada, cómo trabajamos, servicios, cifras, el local por dentro en fotos, opiniones, dónde estamos (mapa y horario) y pedir cita o presupuesto",
+    pies: ["Al entrar: la persiana roja todavía bajada, con la placa del logo y el aviso para deslizar", "Más abajo: la persiana ya subida, las luces encendidas y el titular entrando sobre la foto del taller"],
+  },
+  {
+    slug: "autorreparacion-doval",
+    sector: "nuestras",
+    nombre: "Autorreparación Doval",
+    url: "https://autorreparacion-doval.vercel.app/",
+    nivel: "propia",
+    insignias: [["propia", "Hecha por nosotros"]],
+    premio: "Sin premio: la hicimos nosotros con IA (Claude Code) en noviembre de 2026 para un taller de coches de Lugo.",
+    meta: "Taller de coches en Lugo · Web de una página con cita por teléfono o correo",
+    porque: "Convierte la entrada en el propio taller: al bajar sube la persiana, se encienden las luces y aparece la nave, y después los servicios se señalan sobre un coche dibujado a línea.",
+    estilo: "Al entrar, casi toda la pantalla es una persiana metálica gris de lamas finas, bajada en el hueco de una pared oscura con una rejilla de líneas tenues y con su cajón oscuro arriba. En el centro va el logo en azul, un poco inclinado, con el nombre debajo; arriba a la derecha hay una placa blanca pequeña con el número del portal, y abajo el aviso «Desliza para abrir el taller» en letra tipo máquina de escribir, con una flecha que se mueve. Al hacer scroll la persiana sube, tres fluorescentes parpadean antes de quedarse encendidos y, en el mismo hueco, aparece una foto real de la nave vista desde arriba, con un mecánico en el motor de un coche entre dos elevadores. A la izquierda sube línea a línea un titular blanco enorme en letra ancha, con una etiqueta oscura y un punto azul encima. Con la persiana abierta llega la cabecera (el logo y el menú en mayúsculas en cajas gris claro con borde fino, una píldora que dice si está abierto o cerrado según la hora, un botón oscuro para el menú y un botón azul de esquinas rectas para pedir cita) y, a la derecha, una columna de tres botones para llamar, mandar un correo y ver cómo llegar.",
+    paleta: ["#E6EBEF", "#1C2228", "#14181B", "#2F6FD0", "#C3C9CE"],
+    tipografia: "Saira, palo seco ancha y de formas algo cuadradas, en negrita, para el titular de la portada, los títulos y las cifras; Geist, palo seco limpia, para el texto. Geist Mono, tipo máquina de escribir, va en mayúsculas pequeñas y espaciadas en el menú y los botones, y en minúscula en las etiquetas.",
+    copiar: ["Abre con la persiana del local bajada y haz que suba al hacer scroll para descubrir una foto real del interior.", "Al abrir la persiana, haz que las luces parpadeen como un fluorescente antes de quedarse encendidas y que el titular suba línea a línea.", "Señala cada servicio con un punto sobre un dibujo a línea de lo que arreglas y, al elegirlo, enciende ese punto y pon encima su nombre en una etiqueta con una línea guía."],
+    secciones: "portada con la persiana, nota media y años del taller, cómo trabajamos, servicios señalados sobre un coche dibujado, cifras, fotos del taller por dentro, opiniones de clientes, dónde estamos con mapa y horario, y pedir cita con un formulario",
+    pies: ["Al entrar: la persiana bajada con el logo en el centro", "Más abajo: la persiana ya subida, las luces encendidas y el titular entrando sobre la nave"],
+  },
+  {
+    slug: "elena-fontecha",
+    sector: "nuestras",
+    nombre: "Elena Fontecha",
+    url: "https://elenafontecha-black.vercel.app/",
+    nivel: "propia",
+    insignias: [["propia", "Hecha por nosotros"]],
+    premio: "Sin premio: la hicimos nosotros con IA (Claude Code) en noviembre de 2026 para una mentora de desarrollo personal y liderazgo.",
+    meta: "Mentora de desarrollo personal y liderazgo · Web de una página con autodiagnóstico por pasos",
+    porque: "Enseña cómo montar en una sola página la web de una profesional: una pregunta como titular, su foto y su trayectoria arriba y, en lugar de un formulario de contacto, un autodiagnóstico por pasos cuyas preguntas cambian según sea para ti o para tu empresa.",
+    estilo: "Al entrar, el fondo es blanco y la portada va a dos columnas. A la izquierda hay una etiqueta pequeña en mayúsculas espaciadas con una raya fina delante, una pregunta enorme en letra fina que termina en negrita burdeos y un párrafo gris; debajo van dos botones de esquinas rectas, uno relleno con flecha y otro solo con borde y un triángulo de play. A la derecha, un retrato vertical de la mentora contra una pared rosa, con un bloque rosa pálido desplazado detrás que lleva un filete fino dentro, y una frase corta en blanco sobre una cinta burdeos que sobresale de la foto por abajo a la izquierda. Al bajar, la cabecera se queda fija en blanco translúcido con una sombra suave y aparece una franja crema con la trayectoria en mayúsculas pequeñas; debajo, una sección burdeos casi negra con un brillo más claro arriba, un titular centrado en letra fina blanca con la última palabra en rosa y en negrita, y la portada de un vídeo con un botón de play blanco y redondo rodeado de un halo. Los bloques entran subiendo un poco y apareciendo poco a poco al hacer scroll, y más abajo hay una rueda de seis estaciones numeradas: al pulsar una, se abre su explicación en la lista de al lado.",
+    paleta: ["#FFFFFF", "#1E1618", "#4F1828", "#F6EAE6", "#2A0B14"],
+    tipografia: "Una sola familia, Montserrat, palo seco geométrica, en varios grosores: fina y enorme para los titulares, con el final en seminegrita y en color. Para el nombre de la cabecera, las etiquetas y la franja de trayectoria va en mayúsculas pequeñas, seminegrita y muy espaciadas; los párrafos van en peso normal y gris, y los botones en seminegrita.",
+    copiar: ["Abre con una pregunta enorme como titular, en letra fina, y escribe en negrita solo su final.", "Pon un retrato vertical con un bloque de un tono pálido desplazado detrás y una frase corta en una cinta que se salga de la foto por una esquina.", "En lugar de un formulario de contacto, pon un autodiagnóstico de una pregunta por pantalla, con barra de progreso, que adapte las preguntas a la primera respuesta y pida los datos al final."],
+    secciones: "portada, franja de trayectoria, vídeo de presentación, para quién es y para quién no, la idea explicada con un caso, frase sobre una foto a todo lo ancho, el método en una rueda de seis estaciones, quién está detrás con cifras y formación, cómo empezar en tres pasos con el autodiagnóstico, preguntas frecuentes y llamada final",
+    pies: ["Al entrar: la pregunta como titular y su retrato con una frase en una cinta", "Más abajo: la franja de trayectoria y la portada del vídeo sobre fondo burdeos oscuro"],
+  },
+  {
+    slug: "santi-sanchez-estilistas",
+    sector: "nuestras",
+    nombre: "Santi Sánchez Estilistas",
+    url: "https://santi-sanchez-estilistas-alcantaril.vercel.app/",
+    nivel: "propia",
+    insignias: [["propia", "Hecha por nosotros"]],
+    premio: "Sin premio: la hicimos nosotros con IA (Claude Code) en noviembre de 2026 para una peluquería de Alcantarilla (Murcia).",
+    meta: "Peluquería en Alcantarilla (Murcia) · Web de una página con cita por WhatsApp o por teléfono",
+    porque: "Enseña cómo llevar el estilo de una web premiada (Marsea, en este mismo banco) a una peluquería de verdad con sus propias fotos: fondo crema, el nombre gigante sobre una foto real y los servicios en carrusel.",
+    estilo: "Arriba, una barra fija de fondo crema con el nombre en serif a la izquierda y, a la derecha, tres casillas separadas por líneas finas (teléfono, pedir cita y menú) en mayúsculas pequeñas. La portada es una foto real a pantalla completa de un recogido adornado con rosas blancas y rosadas, con un velo oscuro por abajo y por la derecha, el nombre enorme en serif crema abajo a la izquierda y tres datos pequeños en mayúsculas en fila debajo; a la derecha, una frase corta y la nota de Google subrayada. Al cargar, la foto se destapa de abajo arriba como una cortina mientras se aleja un poco y las letras del nombre suben una a una; al bajar, el texto de la portada sube y se desvanece, y la foto se mueve más despacio que la página. Más abajo el fondo pasa a crema liso, con un rótulo pequeño numerado («01 — Servicios»), un titular en palo seco ancha y fina en mayúsculas y dos flechas redondas de borde fino a la derecha. Debajo va un carrusel de fotos verticales de los servicios (novias, recogidos, color y mechas), cada una con su nombre en mayúsculas debajo; el carrusel también se puede arrastrar con el ratón.",
+    paleta: ["#F3EBE0", "#1C1A17", "#FBF5EC", "#26392F", "#B86A45"],
+    tipografia: "Gloock, una serif de titular con mucho contraste entre trazos gruesos y finos, para el logo y el nombre gigante de la portada y del pie. Archivo, una palo seco de anchura variable: ensanchada al máximo, fina y en mayúsculas para la barra, las etiquetas, los botones y los titulares de sección, y menos ensanchada y en minúsculas para los párrafos.",
+    copiar: ["Abre con una foto real de tu trabajo a pantalla completa y el nombre gigante en serif abajo a la izquierda, con tres datos pequeños en fila debajo.", "Al cargar, destapa la foto de portada de abajo arriba como una cortina y haz subir las letras del nombre una a una.", "Pon una barra fija con casillas separadas por líneas finas para llamar, pedir cita y abrir el menú."],
+    secciones: "portada, frase de presentación, servicios en carrusel, el equipo, el local, opiniones y pedir cita con horario y dirección",
+    pies: ["Al entrar: el recogido con rosas a pantalla completa y el nombre enorme encima", "Más abajo: los servicios en un carrusel de fotos con flechas redondas"],
+  },
+  {
+    slug: "dona-eva-peluqueria-canina",
+    sector: "nuestras",
+    nombre: "Doña Eva",
+    url: "https://donaeva-peluqueriacanina.vercel.app/",
+    nivel: "propia",
+    insignias: [["propia", "Hecha por nosotros"]],
+    premio: "Sin premio: la hicimos nosotros con IA (Claude Code) en noviembre de 2026 para una peluquería canina de Murcia.",
+    meta: "Peluquería canina en Murcia · Web de una página con cita por WhatsApp",
+    porque: "Cómo hacer cercana la web de un negocio de barrio: una foto real en un marco de arco, la nota de Google a la vista y WhatsApp como botón principal.",
+    estilo: "Al entrar, el fondo es color avena con dos manchas difuminadas, una terracota arriba a la derecha y otra caramelo abajo a la izquierda. A la izquierda va un titular serif enorme en tres líneas, con las dos últimas palabras en cursiva terracota y subrayadas con un trazo a mano; debajo, un párrafo corto, un botón en píldora terracota para WhatsApp, otro solo con borde para llamar y tres etiquetas redondeadas, una de ellas dice si está abierto o cerrado en ese momento. A la derecha, la foto de un perro envuelto en una toalla va dentro de un marco en forma de arco con borde crema, y encima flotan una tarjeta con la nota de Google y una etiqueta verde inclinada. Un poco más abajo, una cinta terracota inclinada cruza la pantalla con dos filas que corren en sentidos contrarios, los servicios en cursiva grande y las razas en mayúsculas pequeñas, y se tuerce con la velocidad del scroll. Después vienen los servicios en tarjetas crema de esquinas redondeadas, cada una con un icono de línea sobre un cuadrado terracota pálido, bajo un titular centrado con la segunda línea en cursiva. Más abajo, en el ordenador, la galería se queda fija y las fotos pasan de lado con el scroll.",
+    paleta: ["#F4EBDB", "#2A1C12", "#BC5A34", "#9B4524", "#E3A45A"],
+    tipografia: "Fraunces, una serif de remates suaves con una cursiva muy marcada, para el logo y los titulares, con las palabras destacadas en cursiva; Hanken Grotesk, palo seco limpia, para el texto, el menú, los botones y los rótulos pequeños en mayúsculas espaciadas.",
+    copiar: ["Enmarca la foto principal en un arco redondeado arriba y ponle encima una tarjeta flotante con la nota de Google.", "Escribe las últimas palabras del titular en cursiva de otro color y subráyalas con un trazo hecho a mano.", "Cruza la página con una cinta inclinada que repita los servicios y se tuerza con la velocidad del scroll."],
+    secciones: "portada con foto y botón de WhatsApp, cinta con los servicios, servicios, cómo trabajamos, galería de trabajos, opiniones, preguntas frecuentes y dónde estamos con horario",
+    pies: ["Al entrar: el titular grande y el perro en un marco de arco", "Más abajo: la cinta inclinada y los servicios en tarjetas"],
+  },
+  {
+    slug: "zinnia-elegans",
+    sector: "nuestras",
+    nombre: "Zinnia Elegans",
+    url: "https://zinnia-elegans.vercel.app/",
+    nivel: "propia",
+    insignias: [["propia", "Hecha por nosotros"]],
+    premio: "Sin premio: la hicimos nosotros con IA (Claude Code) en noviembre de 2026 para una barbería y peluquería de Alcantarilla (Murcia).",
+    meta: "Barbería y peluquería en Alcantarilla · Web de una página con reserva de cita por pasos",
+    porque: "Toma el estilo de CRISP Barbershop, la de este mismo banco, y lo lleva a una barbería de barrio: sirve para ver cómo se pasa de una referencia premiada a una web propia, con reserva de cita por pasos.",
+    estilo: "La portada es una foto a pantalla completa de un barbero peinando a un cliente con degradado, con un velo oscuro y un poco de grano encima, y abajo a la izquierda el titular «EL ARTE DEL BUEN CORTE» en blanco, en mayúsculas estrechas, muy gruesas y enormes. Debajo van un botón blanco relleno, otro solo con borde y las estrellas de Google, y al pie una franja fina con la dirección, un aviso de «Desliza» y el horario; arriba, el menú, el logo centrado con las letras muy separadas y «Reservar» con un punto granate que late. Al cargar, la foto se aleja un poco y las dos líneas del titular suben desde abajo; al bajar, la foto se mueve más despacio que la página. Más abajo el fondo pasa a crema: «La casa» en cursiva pequeña, el titular «CORTE, BARBA Y BUEN GUSTO.» en negro gigante a la izquierda y, a la derecha, un párrafo, la nota 4,8 con una estrella dorada entre dos líneas finas y un botón negro. Un botón oscuro y translúcido con un punto verde, para reservar, flota abajo a la derecha en toda la página, y el menú se abre a pantalla completa en crema con las secciones en palabras negras gigantes.",
+    paleta: ["#F2EEE6", "#141210", "#B7B3A8", "#8A2F2A", "#C9A24B"],
+    tipografia: "Anton, palo seco muy estrecha y gruesa, en mayúsculas para los titulares gigantes, el logo y las cifras; Inter para el texto, los botones y los rótulos pequeños en mayúsculas muy espaciadas. Instrument Serif, una serif fina en cursiva, para las etiquetas de cada sección («La casa», «Lo que hacemos») y alguna frase suelta, como el pie de una foto.",
+    copiar: ["Abre con una foto de tu trabajo a pantalla completa, un velo oscuro encima y un titular gigante en mayúsculas estrechas abajo a la izquierda.", "Encabeza cada sección con una frase corta en cursiva a la izquierda y un rótulo diminuto en mayúsculas a la derecha, y pon debajo un titular enorme.", "Monta la reserva en pasos (servicio, profesional, día y hora) con el resumen de la cita al lado y un botón flotante para reservar siempre a mano."],
+    secciones: "portada, presentación del local con la nota media de las reseñas, servicios y tarifas, el equipo, galería de trabajos, opiniones, reserva de cita por pasos y pie con contacto, horario y mapa",
+    pies: ["Al entrar: la foto del barbero a pantalla completa con el titular gigante", "Más abajo: la presentación en fondo crema con la nota de las reseñas"],
+  },
+  {
+    slug: "abc-descanso",
+    sector: "nuestras",
+    nombre: "ABC Descanso",
+    url: "https://colchones-abc.vercel.app/",
+    nivel: "propia",
+    insignias: [["propia", "Hecha por nosotros"]],
+    premio: "Sin premio: la hicimos nosotros con IA (Claude Code) en octubre de 2026 para una tienda de colchones de Lorca.",
+    meta: "Tienda de colchones en Lorca · Web de una página con el colchón en 3D",
+    porque: "Cómo enseñar lo que no se ve de un producto: al bajar, el colchón en 3D se separa en sus capas, y un test de cinco preguntas orienta al cliente antes de ir a la tienda.",
+    estilo: "Al entrar, el fondo es un gris cálido muy claro con arcos finos concéntricos (uno en azul) y puntitos que se mueven en ondas, y arriba flota una píldora blanca con el logo y un único botón negro de «Llamar». En el centro van una etiqueta diminuta en mayúsculas muy espaciadas, el nombre enorme con la primera palabra en negrita y el resto en fino, y una frase gris de dos líneas. Debajo, un colchón en 3D sobre un somier negro, apoyado en un gran disco claro con el borde iluminado que asoma por abajo. Al bajar, el texto se va y el colchón se separa capa a capa en el aire por encima del somier, que se queda abajo: la funda acolchada, el acolchado, los muelles y la base. Después aparece junto a cada capa su nombre numerado, unido con una línea fina, y más abajo, en el ordenador, las fotos de montajes pasan de lado con el scroll.",
+    paleta: ["#F0EFEB", "#141412", "#53534C", "#FFFFFF", "#1A86CC"],
+    tipografia: "Geist, una palo seco moderna y limpia, para casi todo: enorme y apretada para el nombre (una palabra en negrita y el resto en fino) y fina y gris para las frases. Geist Mono, de ancho fijo tipo máquina de escribir, en mayúsculas diminutas y muy espaciadas para las etiquetas, el «Desliza» y los nombres de las capas.",
+    copiar: ["Enseña el producto en 3D montado al entrar y, al bajar, sepáralo capa a capa con el nombre de cada pieza al lado.", "Escribe el nombre enorme con una palabra en negrita y el resto en fino, sobre un fondo claro con arcos finos concéntricos.", "Añade un test corto de cinco preguntas que oriente al cliente antes de ir a la tienda a probarlo."],
+    secciones: "portada con el producto en 3D que se despieza al bajar, una frase sobre la tienda, productos en cuatro tarjetas con foto, test de cinco preguntas para orientar la compra, fotos de trabajos en casa de clientes, ficha de la tienda en datos, preguntas frecuentes y visita con horario y mapa",
+    pies: ["Al entrar: el nombre enorme y el colchón en 3D sobre el somier", "Más abajo: el colchón separado en capas, de la funda a los muelles"],
+  },
+  {
+    slug: "guarderia-lubilu",
+    sector: "nuestras",
+    nombre: "Guardería Lubilú",
+    url: "https://www.guarderialubilu.com/",
+    nivel: "propia",
+    insignias: [["propia", "Hecha por nosotros"]],
+    premio: "Sin premio: la hicimos nosotros con IA (Claude Code) en octubre de 2026 para una guardería de 0 a 3 años en Lorca.",
+    meta: "Guardería en Lorca · Web de una página con contacto por teléfono y WhatsApp",
+    porque: "Cómo dar a una web infantil un aire de juego sin fotos de niños: una ilustración plana propia con una mascota que se mueve, colores de juguete y un titular con letras de pegatina.",
+    estilo: "La portada es un panel amarillo a toda pantalla, con las esquinas de abajo muy redondeadas y salpicado de nubes, estrellas y puntos de colores, más dos globos y un sol que suben y bajan despacio. Arriba, fijo al bajar, el menú va en una tarjeta blanca flotante con el logo y, al lado, en otra tarjeta, un botón coral en forma de píldora con una flecha dentro de un círculo blanco. En el centro hay una etiqueta en píldora, el titular «Crecer felices» enorme y muy apretado en casi negro y, debajo, «jugando» con cada letra de un color, contorno oscuro y un poco girada, como pegatinas; luego una frase corta y tres etiquetas blancas con un emoji. Más abajo, el amarillo termina en una ilustración plana sobre un césped verde: bloques con las letras A, B y C, dos niños y un elefante amarillo que mueve la trompa, la oreja y la cola. Después el fondo pasa a crema, con un rótulo verde pequeño en mayúsculas espaciadas, un título grande y una rejilla de tarjetas blancas de esquinas redondas, cada una con su icono en un cuadrado de color.",
+    paleta: ["#FFC73C", "#FBF4E6", "#2C2822", "#FF6F5E", "#46AE78"],
+    tipografia: "Una sola familia para todo, Gabarito, una palo seco geométrica alojada en la propia web. Muy gruesa y apretada en el titular y los títulos, en mayúsculas pequeñas y espaciadas para los rótulos de sección, en peso medio para el texto y algo más gruesa en el menú y los botones.",
+    copiar: ["Escribe una palabra del titular con cada letra de un color, con contorno oscuro y un poco girada, como si fueran pegatinas.", "Cierra la portada con una ilustración plana propia y una mascota que se mueva un poco, en bucle.", "Pon el menú en una tarjeta blanca flotante y, en otra tarjeta aparte, un único botón en píldora para la acción principal."],
+    secciones: "portada con ilustración, lo que ofrecemos en tarjetas, sobre nosotros, galería de fotos y vídeos, horario e información práctica, opiniones y contacto",
+    pies: ["Al entrar: el titular con «jugando» en letras de colores sobre el amarillo", "Más abajo: el elefante y los bloques de juguete, y las primeras tarjetas de lo que ofrecen"],
+  },
+  {
+    slug: "clinica-dental-gomez-ubric",
+    sector: "nuestras",
+    nombre: "Clínica Dental Gómez-Ubric y López-Bermúdez",
+    url: "https://clinica-gomez-ubric-lorca.vercel.app/",
+    nivel: "propia",
+    insignias: [["propia", "Hecha por nosotros"]],
+    premio: "Sin premio: la hicimos nosotros con IA (Claude Code) en octubre de 2026 para una clínica dental familiar de Lorca.",
+    meta: "Clínica dental en Lorca · Web con página de tratamientos y cita por WhatsApp",
+    porque: "Cómo dar confianza en una web de salud sin recargarla: una foto real del equipo, los datos que tranquilizan a la vista, un aviso de si la clínica está abierta ahora y la cita por WhatsApp.",
+    estilo: "Arriba hay una franja azul marino con un aviso que dice si la clínica está abierta o cerrada, calculado con su horario real, y al lado la dirección y los contactos; debajo, la cabecera blanca con el logo en dos azules, el menú y un botón celeste en forma de píldora para pedir cita. La portada va sobre un azul muy pálido que se funde en blanco: a la izquierda, un titular enorme en letra fina azul marino con la palabra «familia» en otro azul y subrayada con un trazo como hecho a mano, un párrafo gris, dos botones en píldora (uno celeste relleno y otro blanco con borde) y tres datos con su icono en cajitas azul claro. A la derecha, tres personas del equipo recortadas sin fondo sobre un panel azul claro de esquinas muy redondas con anillos blancos finos detrás, y dos tarjetas blancas flotantes con icono. Más abajo, la cabecera se queda fija con una sombra suave. En «Quiénes somos» va a la izquierda una foto del gabinete con esquinas redondeadas y, a la derecha, una etiqueta pequeña en mayúsculas azules, un titular grande, una frase destacada con una raya azul al lado y una lista de compromisos con icono separados por líneas finas. Los bloques aparecen subiendo suavemente al hacer scroll, y el formulario de cita abre WhatsApp con el mensaje ya escrito.",
+    paleta: ["#FFFFFF", "#0A1F3D", "#42AEEA", "#1A78B4", "#EEF7FD"],
+    tipografia: "Questrial, palo seco geométrica, limpia y de trazo fino, para los titulares, los títulos de cada bloque y la frase destacada; Inter, palo seco neutra, para el texto, el menú, los botones y las etiquetas pequeñas en mayúsculas muy espaciadas.",
+    copiar: ["Resalta una sola palabra del titular en otro tono y subráyala con un trazo como hecho a mano.", "Pon la foto del equipo recortada sobre un panel claro con anillos finos detrás y dos tarjetas flotantes que den confianza.", "Avisa arriba de si estás abierto ahora según tu horario real y haz que el formulario de cita abra WhatsApp con el mensaje ya escrito."],
+    secciones: "portada, quiénes somos, tratamientos en tarjetas, la primera visita en cuatro pasos, tecnología, el equipo, pedir cita con formulario, preguntas frecuentes y contacto con horario",
+    pies: ["Al entrar: el titular y el equipo recortado sobre un panel azul claro", "Más abajo: «Quiénes somos», con la foto del gabinete y sus compromisos"],
+  },
+  {
+    slug: "isabel-lozano-estilista",
+    sector: "nuestras",
+    nombre: "Isabel Lozano Estilista",
+    url: "https://www.isabellozanoestilista.com/",
+    nivel: "propia",
+    insignias: [["propia", "Hecha por nosotros"]],
+    premio: "Sin premio: la hicimos nosotros con IA (Claude Code) en octubre de 2026 para una peluquería de Lorca.",
+    meta: "Peluquería en Lorca · Web de una página con cita por teléfono o WhatsApp",
+    porque: "Enseña a hacer una web de una sola página, ligera y sin fuentes de fuera, en la que todo lleva a llamar o a escribir por WhatsApp, con una barra fija para eso en el móvil.",
+    estilo: "Fondo crema muy claro y, arriba, una cabecera fija y semitransparente con el nombre en mayúsculas finas dentro de un marco, cuatro enlaces y un botón negro en forma de cápsula. La portada va en dos columnas: a la izquierda, una etiqueta pequeña en mayúsculas espaciadas, un titular serif grande de tres líneas con la del medio en cursiva y en color tostado, un párrafo corto, dos botones en cápsula (uno negro relleno con icono de teléfono y otro solo con borde y el icono de WhatsApp) y tres datos en fila, cada uno con una raya vertical fina a su izquierda. A la derecha va una foto de una melena con trenza y ondas recortada en forma de arco, con sombra suave y una tarjeta blanca apoyada sobre su parte de abajo con tres servicios. Más abajo, los servicios van en cuatro tarjetas de esquinas redondeadas, cada una con un icono de línea fino, un título serif y un texto corto: tres son blancas y la cuarta, la de novias, va en negro con un enlace subrayado. Debajo, el fondo pasa a un beige algo más oscuro, con la foto de un recogido en un círculo de borde blanco grueso junto al titular de novias.",
+    paleta: ["#FAF8F5", "#151312", "#6E5B40", "#CCBBA1", "#F1ECE4"],
+    tipografia: "No carga ninguna fuente de fuera: los titulares van en la serif del sistema (Iowan Old Style en Apple; Palatino o Georgia en otros equipos), en seminegrita y con una línea en cursiva, y el texto, el menú y los botones, en la palo seco del sistema. El nombre de la cabecera va en una palo seco fina en mayúsculas (Avenir Next en Apple), con la segunda palabra pequeña y muy espaciada debajo.",
+    copiar: ["Recorta la foto principal en forma de arco y apoya sobre su parte de abajo una tarjeta blanca con tus servicios clave.", "Escribe el titular en serif grande y pon la línea del medio en cursiva para que destaque.", "Muestra los servicios en tarjetas blancas con un icono de línea fino e invierte los colores de la más importante."],
+    secciones: "portada, servicios, novias y eventos, galería de trabajos, el salón, cómo pedir cita en tres pasos, preguntas frecuentes y contacto con el horario",
+    pies: ["Al entrar: el titular serif con la línea del medio en cursiva y la foto en forma de arco", "Más abajo: los servicios en cuatro tarjetas, la de novias en negro, y el principio de la sección de novias con su foto redonda"],
+  },
 ]
 
 const porSlug = new Map(WEBS.map(w => [w.slug, w]))
-// Las que tienen premio y las que eligió Alex sin premio (GTA VI, EVANLITE).
-export const PREMIADAS = WEBS.filter(w => w.nivel !== 'eleccion').length
+// Las que tienen premio, las que eligió Alex sin premio (GTA VI, EVANLITE) y
+// las que hemos hecho nosotros.
+export const PREMIADAS = WEBS.filter(w => w.nivel !== 'eleccion' && w.nivel !== 'propia').length
 export const ELEGIDAS = WEBS.filter(w => w.nivel === 'eleccion')
+export const PROPIAS = WEBS.filter(w => w.nivel === 'propia')
 export const webPorSlug = (slug) => porSlug.get(String(slug)) || null
 export const sectorDe = (k) => SECTORES.find(s => s.key === k) || null
 export const websDe = (sector) => WEBS.filter(w => w.sector === sector)
@@ -660,7 +933,7 @@ export const WEBS_HILOS = WEBS.map(w => ({
 /** El prompt para que la IA haga TU web con el estilo de esta. */
 export function promptDe(w) {
   const s = sectorDe(w.sector)
-  const premiada = w.nivel === 'eleccion' ? 'esta web' : 'esta web premiada'
+  const premiada = w.nivel === 'eleccion' || w.nivel === 'propia' ? 'esta web' : 'esta web premiada'
   return [
     'Quiero una web para [tu negocio] en [tu ciudad].',
     '',
@@ -677,7 +950,7 @@ export function promptDe(w) {
     'No copies sus textos, fotos ni logos: la identidad tiene que ser propia.',
     'Si la haces con código, el movimiento con GSAP y ScrollTrigger y el 3D, solo si hace falta, con Three.js. Que vaya fluida también en el móvil.',
     '',
-    `Secciones: ${s?.secciones || 'portada, servicios, sobre nosotros, opiniones de clientes y contacto'}.`,
+    `Secciones: ${w.secciones || s?.secciones || 'portada, servicios, sobre nosotros, opiniones de clientes y contacto'}.`,
     'Que cargue rápido y se vea perfecta en el móvil.',
     'Empieza solo por la portada y enséñamela antes de seguir.',
   ].join('\n')

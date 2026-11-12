@@ -21,7 +21,7 @@ import { useComunidad } from '../comunidad/datos.js'
 import Puerta from '../comunidad/Puerta.jsx'
 import {
   WEBS, SECTORES, NIVELES, webPorSlug, websDe, sectorDe, numeroDe, promptDe, imagenDe, anfitrion, FUENTES, CAPTURAS_FECHA,
-  CAPTURAS_FECHA_PRODUCTO, ELEGIDAS,
+  CAPTURAS_FECHA_PRODUCTO, CAPTURAS_FECHA_PROPIAS, ELEGIDAS, PROPIAS,
 } from './webs.js'
 import './webs.css'
 
@@ -218,7 +218,7 @@ function TarjetaWeb({ w, acceso, pide }) {
   const [raton] = useState(conRaton)
   const ficha = `${cfg.ruta}/webs/${w.sector}/${w.slug}`
   return (
-    <article className={'aipw-tarjeta' + (w.mejor ? ' mejor' : '') + (w.nivel === 'eleccion' ? ' eleccion' : '')}>
+    <article className={'aipw-tarjeta' + (w.mejor ? ' mejor' : '') + (w.nivel === 'eleccion' ? ' eleccion' : '') + (w.nivel === 'propia' ? ' propia' : '')}>
       <Link className="aipw-captura" to={ficha} aria-label={`Ver la ficha de ${w.nombre}`}>
         <img src={imagenDe(w, 'p')} alt={`Portada de la web de ${w.nombre}`} width="960" height="600" loading="lazy" decoding="async" />
         {raton && !unaCaptura(w) && <img className="aipw-captura-2" src={imagenDe(w, 2)} alt="" width="1440" height="900" loading="lazy" decoding="async" aria-hidden="true" />}
@@ -276,7 +276,8 @@ export function PanelWebs({ acceso, setAcceso }) {
         <p className="aip-sub">
           {sector ? sector.desc : (
             <>La IA sola te devuelve la web media de internet. Dale una de estas como referencia y cambia el resultado.
-              Mira su portada, entra a verla y copia el prompt para que tu IA te haga la tuya con su estilo.</>
+              Mira su portada, entra a verla y copia el prompt para que tu IA te haga la tuya con su estilo.
+              {PROPIAS.length > 0 && <> Al final, <Link to={`${cfg.ruta}/webs/nuestras`}>las {PROPIAS.length} que hemos hecho nosotros con IA</Link>.</>}</>
           )}
         </p>
         <Escalera />
@@ -322,8 +323,9 @@ function Pie() {
       <p className="aipw-regla"><b>Referencia no es copia.</b> Se toma el estilo y la forma de mover las cosas. Los textos, fotos y logos de estas webs tienen dueño.</p>
       <p>
         Solo entran webs con un premio verificado en Awwwards o CSS Design Awards, con fecha y estudio, salvo las que son
-        una elección propia y van marcadas así ({ELEGIDAS.map(w => w.nombre).join(' y ')}). Las capturas son de las webs
-        originales, hechas el {CAPTURAS_FECHA} (las de páginas de producto, el {CAPTURAS_FECHA_PRODUCTO}); pueden haber
+        una elección propia y van marcadas así ({ELEGIDAS.map(w => w.nombre).join(' y ')}) y las que hemos hecho
+        nosotros, que van en su propio apartado. Las capturas son de las webs originales, hechas el {CAPTURAS_FECHA} (las
+        de páginas de producto, el {CAPTURAS_FECHA_PRODUCTO}, y las nuestras, el {CAPTURAS_FECHA_PROPIAS}); pueden haber
         cambiado desde entonces.
       </p>
       <p className="aipw-fuentes">
@@ -423,7 +425,7 @@ export function VitrinaWebs() {
       <div className="aipw-vitrina-txt">
         <p className="aip-kicker">Nuevo · gratis</p>
         <h3>{WEBS.length} webs de referencia para tu IA</h3>
-        <p>Premiadas en Awwwards y CSS Design Awards, más {ELEGIDAS.length} elegidas por Alex. Ve su portada antes de entrar y copia el prompt de cada una.</p>
+        <p>Premiadas en Awwwards y CSS Design Awards, {ELEGIDAS.length} elegidas por Alex y {PROPIAS.length} hechas por nosotros con IA. Ve su portada antes de entrar y copia el prompt de cada una.</p>
         <span className="aip-btn pequeno">Ver las webs <ArrowRight size={14} /></span>
       </div>
       <div className="aipw-vitrina-fotos" aria-hidden="true">
