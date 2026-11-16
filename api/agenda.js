@@ -20,6 +20,12 @@ import { notificar } from './_lib/notificar.js'
 
 // Plantilla por defecto. Es lo que se usa mientras nadie la haya tocado, y está
 // puesta para un negocio español: de lunes a viernes, de 10 a 19, media hora.
+//
+// Para un horario partido, el perfil pone `franjas` y estas mandan sobre
+// desde/hasta, p. ej. de 10 a 14 y de 16 a 20:
+//   franjas: [{ desde: '10:00', hasta: '14:00' }, { desde: '16:00', hasta: '20:00' }]
+// La llamada entera tiene que caber en la franja: con media hora, la última de
+// la mañana sería a las 13:30.
 export const AGENDA_DEFECTO = {
   dias: [1, 2, 3, 4, 5],        // 1 = lunes … 7 = domingo
   desde: '10:00',
@@ -71,14 +77,59 @@ const hhmm = (fecha, zona) => new Intl.DateTimeFormat('es-ES', {
   timeZone: zona, hour: '2-digit', minute: '2-digit', hour12: false,
 }).format(fecha)
 
+const aMinutos = (v) => {
+  const [h, m] = String(v).split(':').map(Number)
+  return h * 60 + (m || 0)
+}
+
+// Las franjas del día, en minutos desde medianoche y por orden. Sin `franjas`
+// en el perfil hay una sola, la de siempre: desde–hasta. Una franja mal escrita
+// se ignora en vez de tumbar la agenda entera.
+export function franjasDe(cfg) {
+  const a = { ...AGENDA_DEFECTO, ...cfg }
+  const lista = Array.isArray(a.franjas) && a.franjas.length
+    ? a.franjas
+    : [{ desde: a.desde, hasta: a.hasta }]
+  return lista
+    .map(f => ({ desde: aMinutos(f?.desde), hasta: aMinutos(f?.hasta) }))
+    .filter(f => Number.isFinite(f.desde) && Number.isFinite(f.hasta) && f.hasta > f.desde)
+    .sort((x, y) => x.desde - y.desde)
+}
+
+// Inicio y fin, en UTC, de una franja en un día local concreto.
+const limites = (y, m, d, f, zona) => [
+  instante(y, m, d, Math.floor(f.desde / 60), f.desde % 60, zona).getTime(),
+  instante(y, m, d, Math.floor(f.hasta / 60), f.hasta % 60, zona).getTime(),
+]
+
+/**
+ * ¿Cabe una llamada de `inicio` a `fin` en la plantilla? Tiene que caer en un
+ * día de la semana permitido y entera dentro de una de sus franjas.
+ *
+ * Es lo que se comprueba al reservar (api/formularios.js): lo que la agenda no
+ * ofrecería tampoco se acepta, aunque alguien lo mande a mano saltándose la
+ * landing.
+ */
+export function dentroDeAgenda(cfg, inicio, fin) {
+  const { dias, zona } = { ...AGENDA_DEFECTO, ...cfg }
+  const a = new Date(inicio).getTime()
+  const b = new Date(fin).getTime()
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return false
+  const { y, m, d, dow } = partesLocales(new Date(a), zona)
+  if (!dias.includes(dow)) return false
+  return franjasDe(cfg).some(f => {
+    const [abre, cierra] = limites(y, m, d, f, zona)
+    return a >= abre && b <= cierra
+  })
+}
+
 /**
  * Genera los huecos de la plantilla y tacha los que pisan algo ocupado.
  * `ocupado` es una lista de [inicioMs, finMs].
  */
 export function construirDias(cfg, ocupado, ahora = new Date()) {
-  const { dias, desde, hasta, duracion, diasVista, avisoHoras, zona } = { ...AGENDA_DEFECTO, ...cfg }
-  const [h1, m1] = String(desde).split(':').map(Number)
-  const [h2, m2] = String(hasta).split(':').map(Number)
+  const { dias, duracion, diasVista, avisoHoras, zona } = { ...AGENDA_DEFECTO, ...cfg }
+  const franjas = franjasDe(cfg)
   const minimo = ahora.getTime() + avisoHoras * 3600_000
   const salida = []
 
@@ -87,22 +138,26 @@ export function construirDias(cfg, ocupado, ahora = new Date()) {
     const { y, m, d, dow } = partesLocales(base, zona)
     if (!dias.includes(dow)) continue
 
-    const abre = instante(y, m, d, h1, m1, zona)
-    const cierra = instante(y, m, d, h2, m2, zona)
     const slots = []
+    const vistos = new Set()   // dos franjas que se pisan no repiten hueco
 
-    for (let t = abre.getTime(); t + duracion * 60000 <= cierra.getTime(); t += duracion * 60000) {
-      const fin = t + duracion * 60000
-      // Un hueco solo vale si va con suficiente antelación y no pisa nada.
-      const libre = t >= minimo && !ocupado.some(([a, b]) => t < b && fin > a)
-      if (!libre) continue
-      slots.push({
-        start: new Date(t).toISOString(),
-        end: new Date(fin).toISOString(),
-        time: hhmm(new Date(t), zona),
-        available: true,
-      })
+    for (const f of franjas) {
+      const [abre, cierra] = limites(y, m, d, f, zona)
+      for (let t = abre; t + duracion * 60000 <= cierra; t += duracion * 60000) {
+        const fin = t + duracion * 60000
+        // Un hueco solo vale si va con suficiente antelación y no pisa nada.
+        const libre = t >= minimo && !ocupado.some(([a, b]) => t < b && fin > a)
+        if (!libre || vistos.has(t)) continue
+        vistos.add(t)
+        slots.push({
+          start: new Date(t).toISOString(),
+          end: new Date(fin).toISOString(),
+          time: hhmm(new Date(t), zona),
+          available: true,
+        })
+      }
     }
+    slots.sort((x, y) => x.start.localeCompare(y.start))
 
     // Un día sin huecos no se manda: en el selector de la landing sería una
     // pestaña que no lleva a ninguna parte.

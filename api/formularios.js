@@ -20,6 +20,7 @@ import {
   getGoogleConfig, getAccessToken, crearEventoEnCalendar, puedeEscribirEnAgenda,
 } from './_lib/google.js'
 import { notificar } from './_lib/notificar.js'
+import { AGENDA_DEFECTO, dentroDeAgenda } from './agenda.js'
 
 const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i
 const RE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -265,6 +266,16 @@ export default async function handler(req, res) {
     // El 409 es el código que la landing ya sabe interpretar: recarga los
     // huecos y le pide que elija otro, en vez de dar un error genérico.
     if (meta.slot_start) {
+      // Y la hora tiene que estar dentro del horario del perfil (días y
+      // franjas de su agenda). La landing solo ofrece eso, pero el POST se
+      // puede mandar a mano: un sábado a las 23:00 acabaría en su calendario.
+      const agenda = { ...AGENDA_DEFECTO, ...((await getGoogleConfig(supabase, client.id))?.config?.agenda || {}) }
+      const inicio = new Date(meta.slot_start)
+      const fin = meta.slot_end ? new Date(meta.slot_end) : new Date(inicio.getTime() + agenda.duracion * 60000)
+      if (!dentroDeAgenda(agenda, inicio, fin)) {
+        return res.status(409).json({ error: 'Esa hora está fuera del horario de llamadas. Elige otra.' })
+      }
+
       const { data: pillado } = await supabase
         .from('helm_form_responses').select('id')
         .eq('client_id', client.id)
