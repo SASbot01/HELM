@@ -24,6 +24,7 @@ import { withRole } from '../equipo/roles'
 import { sesionHelm } from '../permisos'
 import { pipelinesVisibles, veTodos } from '../crm/visibilidadMiembro'
 import Adjuntos from '../Adjuntos'
+import Oportunidades from '../crm/Oportunidades'
 
 // WebSeller: el campo «Cambios para la web» y el ladder de niveles son suyos.
 const WEBSELLER_ID = 'eac2511a-3dda-47a5-88d4-a5550596b53f'
@@ -500,6 +501,8 @@ export default function Crm({ clientId }) {
           people={people}
           sales={sales}
           webSeller={clientId === WEBSELLER_ID}
+          clientId={clientId}
+          esSuperadmin={sesion.esSuperadmin}
           onClose={() => setActive(null)}
           onMove={moveTo}
           onSaved={(patch) => { setRows(rs => rs.map(r => r.id === active.id ? { ...r, ...patch } : r)); setActive(a => ({ ...a, ...patch })) }}
@@ -567,7 +570,7 @@ function NewContactModal({ rows, stages, services, onClose, onCreate }) {
 // ── Ficha ──────────────────────────────────────────────────────────────────
 function ContactDrawer({
   contact, rows, stages, substages, services, people, sales, pipelines,
-  onClose, onMove, onMovePipeline, onSaved, onDelete, webSeller = false,
+  onClose, onMove, onMovePipeline, onSaved, onDelete, webSeller = false, clientId, esSuperadmin = false,
 }) {
   const [form, setForm] = useState(() => toForm(contact, stages))
   const [touched, setTouched] = useState(false)
@@ -841,6 +844,11 @@ function ContactDrawer({
           </a>
         ))}
       </div>
+
+      {/* WebSeller: qué problemas suele tener este tipo de negocio y qué
+          venderle, antes de llamar. Va encima de los campos: es lo primero
+          que mira el cold caller. */}
+      {webSeller && <Oportunidades clientId={clientId} contactId={contact.id} puedeRehacer={esSuperadmin} />}
 
       <ContactFields form={form} errors={shown} set={set} showStage={false} stages={stages} services={services} />
 

@@ -1,0 +1,27 @@
+/* «Oportunidades de venta» en la ficha de un lead (Oportunidades.jsx). */
+.helm-oport { margin: 4px 0 8px; }
+.helm-oport-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.helm-oport-head > span { display: inline-flex; align-items: center; gap: 6px; }
+.helm-oport-senales { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.helm-oport-senales li { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text-dim); }
+.helm-oport-error { color: var(--red); font-size: 13px; }
+.helm-oport-top { margin: 0 0 10px; padding-left: 20px; display: grid; gap: 6px; }
+.helm-oport-top li b { display: block; font-size: 13.5px; }
+.helm-oport-top li span { display: block; font-size: 12.5px; color: var(--text-dim); }
+.helm-oport-llamada { border: 1px solid var(--border-2); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 10px; background: var(--panel-2); display: grid; gap: 6px; }
+.helm-oport-linea { display: grid; grid-template-columns: 96px 1fr; gap: 8px; font-size: 13px; line-height: 1.4; }
+.helm-oport-linea small { color: var(--text-mut); font-size: 11.5px; padding-top: 1px; }
+.helm-oport-linea.aviso span { color: var(--amber); }
+.helm-oport-bloque { border-top: 1px solid var(--border); padding: 8px 0; font-size: 13px; }
+.helm-oport-bloque > summary { cursor: pointer; font-weight: 600; color: var(--text-dim); padding: 2px 0; }
+.helm-oport-bloque p, .helm-oport-bloque ul { margin: 6px 0; line-height: 1.45; }
+.helm-oport-bloque ul { padding-left: 18px; }
+.helm-oport-card { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; margin: 8px 0; display: grid; gap: 4px; }
+.helm-oport-card > b { font-size: 13.5px; }
+.helm-oport-dim { color: var(--text-dim); margin: 0 !important; }
+.helm-oport-preg { margin: 8px 0; }
+.helm-oport-preg > small { color: var(--text-mut); text-transform: uppercase; letter-spacing: .5px; font-size: 11px; }
+.helm-oport-pie { font-size: 11.5px; color: var(--text-mut); margin: 8px 0 0; }
+@media (max-width: 520px) {
+  .helm-oport-linea { grid-template-columns: 1fr; gap: 2px; }
+}

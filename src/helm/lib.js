@@ -358,6 +358,14 @@ export const usersApi = {
   guideDone: () => apiFetch('/api/users?action=guide-done', { method: 'POST' }),
 }
 
+// Oportunidades de venta de un lead (CRM de WebSeller): análisis por sector.
+export const oportunidadesApi = {
+  lead: (clientId, contactId) =>
+    apiFetch(`/api/oportunidades?action=lead&clientId=${clientId}&contactId=${encodeURIComponent(contactId)}`),
+  regenerar: (clientId, contactId) =>
+    apiFetch(`/api/oportunidades?action=regenerar&clientId=${clientId}`, { method: 'POST', body: { contactId } }),
+}
+
 export const chatApi = {
   history: (clientId) => apiFetch(`/api/chat?action=history&clientId=${clientId}`),
   knowledge: (clientId) => apiFetch(`/api/chat?action=knowledge&clientId=${clientId}`),
