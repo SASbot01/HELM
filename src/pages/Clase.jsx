@@ -4,10 +4,11 @@
 // enlace y aterriza aquí. Desde el 22-10-2026 va toda en una sola tarjeta, al
 // estilo de las bios de creadores (a partir de una de referencia que pasó Alex):
 //
-//   1. HELM Academy — el héroe: «skool» enorme con los colores del logo de
-//      Skool y Alex recortado (sin fondo) delante. Toda la tarjeta es el
-//      enlace a la landing de HELM Academy (/helm-academy), que lleva al quiz
-//      de la academia: de ahí sale el lead al CRM (embudo «School»).
+//   1. HELM Academy — el héroe: «HELM» enorme, en blanco, y Alex recortado
+//      (sin fondo) delante. Toda la tarjeta es el enlace a la landing de HELM
+//      Academy (/helm-academy), que lleva al quiz de la academia: de ahí sale
+//      el lead al CRM (embudo «School»). Hasta el 27-11-2026 la palabra era
+//      «skool», de cuando la landing llevaba a la comunidad en Skool.
 //   2. ¿En qué puedo ayudarte? — YouTube y «¿Eres una empresa o negocio?»
 //      (/empresas, Socio IA).
 //
@@ -30,9 +31,6 @@ const INSTAGRAM = `https://www.instagram.com/${HANDLE}`
 const TITULO = 'Alex Silvestre — Aprende a dirigir la IA, no solo a usarla'
 const DESCRIPCION = 'IA aplicada en español, sin humo y con datos. Entra gratis en HELM Academy.'
 
-// «skool», cada letra con el color que lleva en el logo de Skool.
-const SKOOL = [['s', 'azul'], ['k', 'rojo'], ['o', 'oro'], ['o', 'azul'], ['l', 'rojo']]
-
 export default function Clase() {
   useCabeceraPublica({
     titulo: TITULO, descripcion: DESCRIPCION,
@@ -52,20 +50,19 @@ export default function Clase() {
           <a className="bio-arroba" href={INSTAGRAM} target="_blank" rel="noopener noreferrer">@{HANDLE}</a>
         </header>
 
-        {/* El héroe entero es el enlace: se pincha en la foto, en «skool» o en
+        {/* El héroe entero es el enlace: se pincha en la foto, en «HELM» o en
             el botón y se va a la landing de HELM Academy. */}
         <Link
           className="bio-heroe"
           to="/helm-academy"
-          aria-label="Unirme gratis a HELM Academy, la comunidad de Alex en Skool"
-          onClick={() => track('clic_cta', { donde: 'bio-skool' })}
+          aria-label="Unirme gratis a HELM Academy, la academia de Alex"
+          onClick={() => track('clic_cta', { donde: 'bio-academy' })}
         >
           <span className="bio-escena">
-            <span className="bio-skool" aria-hidden="true">
-              {SKOOL.map(([letra, color], i) => <span key={i} className={`bio-letra ${color}`}>{letra}</span>)}
-            </span>
+            {/* La marca va en blanco; el oro, solo para acentos. */}
+            <span className="bio-marca" aria-hidden="true">HELM</span>
             {/* La foto va por encima de las letras: así la cabeza tapa el pie
-                de «skool», como en una portada de estudio. */}
+                de «HELM», como en una portada de estudio. */}
             <img
               className="bio-foto"
               src="/inicio/alex-sinfondo.webp?v=2"
