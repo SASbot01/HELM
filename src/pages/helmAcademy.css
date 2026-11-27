@@ -181,6 +181,8 @@
 .ha-video--portada:focus-visible, .ha-btn:focus-visible { outline: 2px solid var(--granate-claro); outline-offset: 2px; }
 
 .ha-btn--enlace { width: 100%; margin-top: 12px; box-sizing: border-box; text-decoration: none; }
+.ha-paso .ha-pdf { margin-top: 10px; font-size: 13px; text-align: center; }
+.ha-pdf a { display: inline-flex; align-items: center; gap: 5px; color: var(--granate-claro); }
 
 .ha-contado { list-style: none; margin: 10px 0 0; padding: 10px 12px; display: grid; gap: 6px; border-radius: 10px; background: rgba(14, 5, 9, 0.55); }
 .ha-contado li { display: grid; grid-template-columns: 84px 1fr; gap: 8px; font-size: 13px; line-height: 1.4; color: var(--papel); }

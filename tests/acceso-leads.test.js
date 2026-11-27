@@ -44,8 +44,14 @@ vi.mock('../api/_lib/notificar.js', () => ({ notificar }))
 const correo = vi.hoisted(() => ({ hay: false, enviar: vi.fn(async () => ({ enviado: true })) }))
 vi.mock('../api/_lib/correo.js', () => ({ hayCorreo: () => correo.hay, enviarCorreo: correo.enviar }))
 
+// El puente con la academia (academy.helmm.app): la única salida a la red de
+// api/leads.js. Aquí nunca sale: `fetch` es este simulacro, y sin secreto ni se
+// le llama.
+const puente = vi.fn()
+vi.stubGlobal('fetch', puente)
+
 const { default: leads } = await import('../api/leads.js')
-const { CONTACTO, NOTA_VIDEO, NOTA_GUIA } = await import('../src/pages/helmAcademy/entrega.js')
+const { CONTACTO, NOTA_VIDEO, NOTA_ABRE, NOTA_GUIA } = await import('../src/pages/helmAcademy/entrega.js')
 const { verifyJwt } = await import('../api/_lib/auth.js')
 
 function respuesta() {
@@ -65,7 +71,11 @@ const pide = async (action, body) => {
 const inserts = () => ops.filter(o => o.op === 'insert' && o.tabla === 'crm_contacts').map(o => o.fila)
 const updates = () => ops.filter(o => o.op === 'update' && o.tabla === 'crm_contacts').map(o => o.cambios)
 
-beforeEach(() => { ops.length = 0; existente = null; notificar.mockClear(); correo.hay = false; correo.enviar.mockClear() })
+beforeEach(() => {
+  ops.length = 0; existente = null; notificar.mockClear(); correo.hay = false; correo.enviar.mockClear()
+  delete process.env.ACADEMY_PUENTE_SECRETO
+  puente.mockReset(); puente.mockRejectedValue(new Error('sin red en los tests'))
+})
 
 describe('solicitar-acceso · a qué embudo va', () => {
   const pideAcceso = () => pide('solicitar-acceso', { comunidad: 'aiparatodo', nombre: 'Marta', email: 'marta@example.com' })
@@ -255,16 +265,140 @@ describe('school · la promesa de contacto', () => {
     expect(correo.enviar.mock.calls[0][0].html).toContain('Hola &lt;b&gt;Noa&lt;/b&gt;:')
   })
 
-  it('la pantalla de gracias puede anotar «vio el vídeo» y «descargó la guía», y nada más', async () => {
+  it('la pantalla de gracias puede anotar «vio el vídeo», «abrió la guía» y «descargó la guía», y nada más', async () => {
     const { body } = await pide('school', noa)
     existente = { id: 'contacto-nuevo', notes: 'HELM Academy · se apuntó' }
     ops.length = 0
     expect((await pide('nota', { id: body.id, texto: NOTA_VIDEO })).statusCode).toBe(200)
+    expect((await pide('nota', { id: body.id, texto: NOTA_ABRE })).statusCode).toBe(200)
     expect((await pide('nota', { id: body.id, texto: NOTA_GUIA })).statusCode).toBe(200)
     expect(updates().map(u => u.notes)).toEqual([
       `HELM Academy · se apuntó\n${NOTA_VIDEO}`,
+      `HELM Academy · se apuntó\n${NOTA_ABRE}`,
       `HELM Academy · se apuntó\n${NOTA_GUIA}`,
     ])
     expect((await pide('nota', { id: body.id, texto: 'HELM Academy · cualquier otra cosa' })).statusCode).toBe(400)
+  })
+})
+
+// Con el lead ya guardado, se le pide a la academia (academy.helmm.app) un
+// enlace de entrada a su guía, para que no tenga que crear otra cuenta. Lo que
+// importa aquí: que la academia nunca pueda tirar el alta ni perder un lead.
+describe('school · la guía en la academia (el puente)', () => {
+  const noa = { nombre: 'Noa Ruiz', email: 'noa@example.com', dedico: 'diseño', edad: '28', residencia: 'Lorca', telefono: '600111222', quiero: 'Crear contenido y vivir de ello', ingreso: '2.000 – 3.000 €/mes', usa_ia: 'Un poco, a veces' }
+  const GUIA = 'que-ningun-lead-se-enfrie'
+  const NORMAL = `https://academy.helmm.app/guia/${GUIA}`
+  const ENTRADA = `https://academy.helmm.app/entrar?t=${'a'.repeat(43)}`
+  const SECRETO = 'secreto-del-puente-solo-para-esta-prueba'
+  const conSecreto = () => { process.env.ACADEMY_PUENTE_SECRETO = SECRETO }
+  const contesta = (cuerpo, status = 200) => ({ ok: status < 400, status, json: async () => cuerpo })
+
+  it('sin secreto no llama a la academia: guarda el lead y da la dirección normal', async () => {
+    const r = await pide('school', { ...noa, guia: GUIA })
+    expect(r.statusCode).toBe(200)
+    expect(inserts()).toHaveLength(1)
+    expect(r.body.academia).toEqual({ url: NORMAL, unUso: false })
+    expect(puente).not.toHaveBeenCalled()
+  })
+
+  it('con secreto: primero guarda el lead (con su guía) y después pide la entrada a esa guía y la devuelve', async () => {
+    conSecreto()
+    let guardadosAlPedir = null
+    puente.mockImplementation(async () => { guardadosAlPedir = inserts().length; return contesta({ entrar: false, url: ENTRADA }) })
+    const r = await pide('school', { ...noa, guia: GUIA })
+    expect(r.statusCode).toBe(200)
+    expect(r.body.academia).toEqual({ url: ENTRADA, unUso: true })
+    expect(await verifyJwt(r.body.id)).toMatchObject({ kind: 'lead', sub: 'contacto-nuevo' })
+    expect(guardadosAlPedir).toBe(1)
+
+    const [fila] = inserts()
+    expect(fila.custom_fields.school.guia).toBe(GUIA)
+    expect(fila.notes).toContain(`guía: ${GUIA}`)
+    expect(notificar.mock.calls[0][2].cuerpo).toContain('Pidió la guía: Que ningún lead se enfríe')
+
+    expect(puente).toHaveBeenCalledTimes(1)
+    const [url, peticion] = puente.mock.calls[0]
+    expect(url).toBe('https://academy.helmm.app/api/puente')
+    expect(peticion.method).toBe('POST')
+    expect(peticion.headers).toEqual({ Authorization: `Bearer ${SECRETO}`, 'X-Aula': '1', 'Content-Type': 'application/json' })
+    expect(JSON.parse(peticion.body)).toEqual({ email: 'noa@example.com', nombre: 'Noa Ruiz', destino: `/guia/${GUIA}` })
+    expect(peticion.signal).toBeInstanceOf(AbortSignal)   // con tiempo máximo
+    expect(peticion.redirect).toBe('error')               // el secreto no viaja a otra dirección
+    // El secreto no sale del servidor.
+    expect(JSON.stringify(r.body)).not.toContain(SECRETO)
+  })
+
+  it('sin ?guia=, o con una que no tiene forma de guía, va a la parte gratuita entera y no se guarda', async () => {
+    conSecreto()
+    puente.mockResolvedValue(contesta({ entrar: false, url: ENTRADA }))
+    const malas = [undefined, '', 'ab', 'Que-Ningun-Lead', '../../admin', '/guia/x', 'x'.repeat(81), 42, { a: 1 }]
+    for (const [i, guia] of malas.entries()) {
+      ops.length = 0
+      const r = await pide('school', { ...noa, email: `sin-guia-${i}@example.com`, guia })
+      expect(r.statusCode).toBe(200)
+      expect(JSON.parse(puente.mock.calls.at(-1)[1].body).destino).toBe('/aiparatodo')
+      expect(inserts()[0].custom_fields.school).not.toHaveProperty('guia')
+      expect(inserts()[0].notes).not.toContain('guía:')
+    }
+  })
+
+  it('si el puente falla, tarda o contesta cualquier cosa rara, el lead se guarda igual y se da la dirección normal', async () => {
+    conSecreto()
+    const aviso = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const fallos = [
+      () => Promise.reject(new Error('ECONNREFUSED')),
+      () => Promise.reject(Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' })),
+      async () => contesta({ error: 'Secreto no válido' }, 401),
+      async () => contesta({ error: 'Eso no existe' }, 404),
+      async () => contesta({ error: 'Demasiadas entradas seguidas' }, 429),
+      async () => contesta({ error: 'roto' }, 500),
+      async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError('no es JSON') } }),
+      async () => contesta({ entrar: false }),
+      async () => contesta({ entrar: false, url: 'no es una dirección' }),
+      async () => contesta({ entrar: false, url: 'https://academy.helmm.app.malo.example/entrar?t=x' }),
+      async () => contesta({ entrar: false, url: 'javascript:alert(1)' }),
+      async () => contesta(null),
+    ]
+    for (const [i, fallo] of fallos.entries()) {
+      ops.length = 0; notificar.mockClear(); puente.mockReset(); puente.mockImplementation(fallo)
+      const r = await pide('school', { ...noa, email: `fallo-${i}@example.com`, guia: GUIA })
+      expect(r.statusCode).toBe(200)
+      expect(r.body.ok).toBe(true)
+      expect(inserts()).toHaveLength(1)
+      expect(notificar).toHaveBeenCalledTimes(1)
+      expect(r.body.academia).toEqual({ url: NORMAL, unUso: false })
+    }
+    // Lo que queda en el registro no lleva ni el secreto ni el correo.
+    expect(aviso).toHaveBeenCalledTimes(fallos.length)
+    expect(JSON.stringify(aviso.mock.calls)).not.toMatch(new RegExp(`${SECRETO}|@example\\.com`))
+    aviso.mockRestore()
+  })
+
+  it('«entrar: true» (ese correo ya tiene cuenta con contraseña): se usa la dirección que manda, sin enlace de un solo uso', async () => {
+    conSecreto()
+    puente.mockResolvedValue(contesta({ entrar: true, url: NORMAL }))
+    const r = await pide('school', { ...noa, guia: GUIA })
+    expect(r.statusCode).toBe(200)
+    expect(inserts()).toHaveLength(1)
+    expect(r.body.academia).toEqual({ url: NORMAL, unUso: false })
+  })
+
+  it('quien ya estaba y reenvía con la promesa viva: no se repite el aviso, pero sí se le da su entrada', async () => {
+    conSecreto()
+    puente.mockResolvedValue(contesta({ entrar: false, url: ENTRADA }))
+    existente = { id: 'c1', name: 'Noa', notes: '', custom_fields: { school: { guia: 'los-mods-de-claude', contactar_antes: new Date(Date.now() + 5 * 3_600_000).toISOString() } } }
+    const r = await pide('school', { ...noa, guia: GUIA })
+    expect(notificar).not.toHaveBeenCalled()
+    expect(r.body.academia).toEqual({ url: ENTRADA, unUso: true })
+    expect(await verifyJwt(r.body.id)).toMatchObject({ sub: 'c1' })
+    expect(updates()[0].custom_fields.school.guia).toBe(GUIA)   // la última que pidió
+  })
+
+  it('el correo lleva a su pantalla de gracias, con su guía', async () => {
+    correo.hay = true
+    await pide('school', { ...noa, guia: GUIA })
+    const c = correo.enviar.mock.calls[0][0]
+    expect(c.texto).toContain(`https://s4sf.net/helm-academy/gracias?guia=${GUIA}\n`)
+    expect(c.html).toContain(`<a href="https://s4sf.net/helm-academy/gracias?guia=${GUIA}">`)
   })
 })

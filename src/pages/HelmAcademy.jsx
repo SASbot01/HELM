@@ -5,16 +5,20 @@
 // teléfono, edad, dónde vive), a qué se dedica y tres preguntas de
 // cualificación (a qué se quiere dedicar, cuánto quiere ganar, si ya usa la IA).
 // Se guarda en el CRM de Silvestre AI (embudo «School», api/leads · school) y
-// en ese momento recibe lo que ha pedido —el vídeo y la guía en PDF— en la
-// pantalla de gracias (helmAcademy/Gracias.jsx), donde se le dice cuál es su
-// siguiente paso: esperar el mensaje que alguien del equipo le manda en menos
-// de 24 horas. Ya no se redirige al Skool. Qué se entrega y para qué se le
-// escribe, en helmAcademy/entrega.js.
+// en ese momento recibe lo que ha pedido —la guía del vídeo del que viene,
+// dentro de la parte gratuita de la academia— en la pantalla de gracias
+// (helmAcademy/Gracias.jsx), donde se le dice cuál es su siguiente paso:
+// esperar el mensaje que alguien del equipo le manda en menos de 24 horas. Ya
+// no se redirige al Skool. Qué se entrega y para qué se le escribe, en
+// helmAcademy/entrega.js.
+//
+// Cada vídeo enlaza aquí con su guía: /helm-academy?guia=que-ningun-lead-se-enfrie.
+// Sin ?guia=, se entrega la parte gratuita entera.
 //
 // Apuntarse sigue dando el acceso a AI para todo al momento: aquí ya se deja
 // abierto en este navegador, y en cualquier otro basta con poner el mismo correo.
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowRight, Check } from 'lucide-react'
 import { pideLead } from './leads.js'
 import { origen } from './inicio/socio/origen.js'
@@ -22,7 +26,9 @@ import { track } from './inicio/socio/track.js'
 import { useCabeceraPublica } from './inicio/cabecera.js'
 import AIPT from './aiparatodo/config.jsx'
 import Gracias from './helmAcademy/Gracias.jsx'
-import { VSL, PDF, CONTACTO, RUTA_GRACIAS, queEntrega, guardaEntrega, leeEntrega } from './helmAcademy/entrega.js'
+import {
+  VSL, CONTACTO, guiaDe, tituloGuia, rutaGracias, queEntrega, guardaEntrega, leeEntrega,
+} from './helmAcademy/entrega.js'
 import './helmAcademy.css'
 
 // Las preguntas de cualificación son de seleccionar: así el equipo y los
@@ -61,10 +67,15 @@ export default function HelmAcademy({ gracias = false }) {
 
 function Formulario() {
   const navegar = useNavigate()
+  // La guía del vídeo del que viene, si la landing llega con ?guia=.
+  const [params] = useSearchParams()
+  const guia = guiaDe(params.get('guia'))
+  const titulo = tituloGuia(guia)
   // Quien ya se apuntó desde este navegador tiene el atajo a lo suyo.
   const [yaApuntado] = useState(() => Boolean(leeEntrega()))
-  // La promesa sale de lo que hay subido: sin vídeo ni guía, la de siempre.
-  const entrega = queEntrega(VSL, PDF)
+  // La promesa sale de lo que se entrega: su guía (o las guías) y, si está
+  // subido, el vídeo.
+  const entrega = queEntrega(guia, VSL)
   useCabeceraPublica({
     titulo: 'HELM Academy — aprende a dirigir la IA y vive de ello',
     descripcion: 'Entra gratis a la comunidad de Alex Silvestre. Sistemas de IA en español para crear, facturar y crecer.',
@@ -91,17 +102,19 @@ function Formulario() {
         nombre: f.nombre.trim(), email: f.email.trim(), telefono: f.telefono.trim(),
         edad: f.edad.trim(), residencia: f.residencia.trim(), dedico: f.dedico.trim(),
         quiero: f.quiero, ingreso: f.ingreso, usa_ia: f.usa_ia,
-        website: f.website, origen: origen(),
+        website: f.website, origen: origen(), ...(guia ? { guia } : {}),
       })
       track('lead', { donde: 'helm-academy' })
       // AI para todo, ya abierto en este navegador (la misma llave que la puerta).
       if (r?.id) {
         try { localStorage.setItem(AIPT.llave, JSON.stringify({ id: r.id, nombre: f.nombre.trim(), at: new Date().toISOString() })) } catch { /* incógnito */ }
       }
-      // A la pantalla de gracias: lo que ha pedido y su siguiente paso.
+      // A la pantalla de gracias: lo que ha pedido y su siguiente paso. El
+      // enlace de entrada a la academia que viene con el alta se queda en este
+      // navegador, para el botón de la guía.
       // (replace: que el «atrás» del navegador no vuelva al formulario.)
-      guardaEntrega(f)
-      navegar(RUTA_GRACIAS, { replace: true })
+      guardaEntrega(f, { guia, academia: r?.academia })
+      navegar(rutaGracias(guia), { replace: true })
     } catch (err) {
       setError(err.message); setEstado(null)
     }
@@ -132,14 +145,12 @@ function Formulario() {
             ))}
           </ul>
           <p className="ha-gratis">
-            {entrega
-              ? <>Es <b>gratis</b>. Déjanos tus datos y te damos {entrega} al momento.</>
-              : <>Entrar es <b>gratis</b>. Déjanos tus datos y te llevamos dentro.</>}
+            Es <b>gratis</b>. Déjanos tus datos y te damos {entrega}{titulo && <> <b>«{titulo}»</b></>} al momento.
           </p>
         </div>
 
         {yaApuntado && (
-          <p className="ha-ya">¿Ya te apuntaste? <Link to={RUTA_GRACIAS}>Vuelve a lo tuyo</Link></p>
+          <p className="ha-ya">¿Ya te apuntaste? <Link to={rutaGracias(guia)}>Vuelve a lo tuyo</Link></p>
         )}
 
         <form className="ha-form" onSubmit={enviar}>
@@ -162,7 +173,7 @@ function Formulario() {
           <button className="ha-btn" disabled={estado === 'enviando' || !completo}>
             {estado === 'enviando'
               ? 'Enviando…'
-              : <>{entrega ? `Quiero ${entrega}` : 'Entrar gratis a HELM Academy'} <ArrowRight size={18} /></>}
+              : <>Quiero {entrega} <ArrowRight size={18} /></>}
           </button>
           {error && <p className="ha-error" role="alert">{error}</p>}
           {/* Antes de enviar ya sabe lo que viene después: que le escribimos. */}
