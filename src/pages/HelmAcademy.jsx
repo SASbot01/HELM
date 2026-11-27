@@ -1,20 +1,28 @@
-// HELM ACADEMY — s4sf.net/helm-academy.
+// HELM ACADEMY — s4sf.net/helm-academy y s4sf.net/helm-academy/gracias.
 //
-// El funnel de entrada al Skool. Antes de ir a la comunidad, la persona ve qué
-// va a aprender y cómo puede vivir de ello, y deja sus datos: contacto (nombre,
-// correo, teléfono, edad, dónde vive), a qué se dedica y tres preguntas de
+// El embudo: alguien ve un vídeo de YouTube, llega aquí, ve qué va a aprender y
+// cómo puede vivir de ello, y deja sus datos: contacto (nombre, correo,
+// teléfono, edad, dónde vive), a qué se dedica y tres preguntas de
 // cualificación (a qué se quiere dedicar, cuánto quiere ganar, si ya usa la IA).
 // Se guarda en el CRM de Silvestre AI (embudo «School», api/leads · school) y
-// después se la redirige al Skool. Apuntarse da el acceso a AI para todo al
-// momento: aquí ya se deja abierto en este navegador, y en cualquier otro basta
-// con poner el mismo correo.
+// en ese momento recibe lo que ha pedido —el vídeo y la guía en PDF— en la
+// pantalla de gracias (helmAcademy/Gracias.jsx), donde se le dice cuál es su
+// siguiente paso: esperar el mensaje que alguien del equipo le manda en menos
+// de 24 horas. Ya no se redirige al Skool. Qué se entrega y para qué se le
+// escribe, en helmAcademy/entrega.js.
+//
+// Apuntarse sigue dando el acceso a AI para todo al momento: aquí ya se deja
+// abierto en este navegador, y en cualquier otro basta con poner el mismo correo.
 import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Check } from 'lucide-react'
 import { pideLead } from './leads.js'
 import { origen } from './inicio/socio/origen.js'
 import { track } from './inicio/socio/track.js'
 import { useCabeceraPublica } from './inicio/cabecera.js'
-import AIPT, { SKOOL_URL } from './aiparatodo/config.jsx'
+import AIPT from './aiparatodo/config.jsx'
+import Gracias from './helmAcademy/Gracias.jsx'
+import { VSL, PDF, CONTACTO, RUTA_GRACIAS, queEntrega, guardaEntrega, leeEntrega } from './helmAcademy/entrega.js'
 import './helmAcademy.css'
 
 // Las preguntas de cualificación son de seleccionar: así el equipo y los
@@ -45,7 +53,18 @@ const APRENDES = [
   'En español, sin humo y con datos encima de la mesa.',
 ]
 
-export default function HelmAcademy() {
+// Las dos pantallas van en la misma página (y en el mismo trozo del build): del
+// formulario a las gracias no hay nada que descargar por el camino.
+export default function HelmAcademy({ gracias = false }) {
+  return gracias ? <Gracias /> : <Formulario />
+}
+
+function Formulario() {
+  const navegar = useNavigate()
+  // Quien ya se apuntó desde este navegador tiene el atajo a lo suyo.
+  const [yaApuntado] = useState(() => Boolean(leeEntrega()))
+  // La promesa sale de lo que hay subido: sin vídeo ni guía, la de siempre.
+  const entrega = queEntrega(VSL, PDF)
   useCabeceraPublica({
     titulo: 'HELM Academy — aprende a dirigir la IA y vive de ello',
     descripcion: 'Entra gratis a la comunidad de Alex Silvestre. Sistemas de IA en español para crear, facturar y crecer.',
@@ -79,8 +98,10 @@ export default function HelmAcademy() {
       if (r?.id) {
         try { localStorage.setItem(AIPT.llave, JSON.stringify({ id: r.id, nombre: f.nombre.trim(), at: new Date().toISOString() })) } catch { /* incógnito */ }
       }
-      // Al Skool. (replace: que el "atrás" del navegador no vuelva al formulario.)
-      window.location.replace(SKOOL_URL)
+      // A la pantalla de gracias: lo que ha pedido y su siguiente paso.
+      // (replace: que el «atrás» del navegador no vuelva al formulario.)
+      guardaEntrega(f)
+      navegar(RUTA_GRACIAS, { replace: true })
     } catch (err) {
       setError(err.message); setEstado(null)
     }
@@ -110,8 +131,16 @@ export default function HelmAcademy() {
               <li key={i}><Check size={16} aria-hidden="true" /> <span>{t}</span></li>
             ))}
           </ul>
-          <p className="ha-gratis">Entrar es <b>gratis</b>. Déjanos tus datos y te llevamos dentro.</p>
+          <p className="ha-gratis">
+            {entrega
+              ? <>Es <b>gratis</b>. Déjanos tus datos y te damos {entrega} al momento.</>
+              : <>Entrar es <b>gratis</b>. Déjanos tus datos y te llevamos dentro.</>}
+          </p>
         </div>
+
+        {yaApuntado && (
+          <p className="ha-ya">¿Ya te apuntaste? <Link to={RUTA_GRACIAS}>Vuelve a lo tuyo</Link></p>
+        )}
 
         <form className="ha-form" onSubmit={enviar}>
           <input aria-label="Nombre" placeholder="Tu nombre" required value={f.nombre} maxLength={80} autoComplete="name" onChange={pon('nombre')} />
@@ -131,13 +160,20 @@ export default function HelmAcademy() {
           <input className="ha-trampa" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" value={f.website} onChange={pon('website')} />
 
           <button className="ha-btn" disabled={estado === 'enviando' || !completo}>
-            {estado === 'enviando' ? 'Entrando…' : <>Entrar gratis a HELM Academy <ArrowRight size={18} /></>}
+            {estado === 'enviando'
+              ? 'Enviando…'
+              : <>{entrega ? `Quiero ${entrega}` : 'Entrar gratis a HELM Academy'} <ArrowRight size={18} /></>}
           </button>
           {error && <p className="ha-error" role="alert">{error}</p>}
+          {/* Antes de enviar ya sabe lo que viene después: que le escribimos. */}
+          <p className="ha-despues">
+            Después, en menos de {CONTACTO.plazo}, te escribe por {CONTACTO.canal} una persona del equipo con {CONTACTO.motivo}.
+          </p>
         </form>
 
         <p className="ha-legal">
-          Usamos tus datos para darte acceso a la comunidad y enviarte contenido de Silvestre AI.
+          Usamos tus datos para darte lo que has pedido, para que una persona del equipo de {CONTACTO.equipo} te
+          escriba o te llame con {CONTACTO.motivo} y para enviarte contenido de {CONTACTO.equipo}.
           Puedes darte de baja cuando quieras. <a href="/privacidad" target="_blank" rel="noopener noreferrer">Privacidad</a>
         </p>
       </main>

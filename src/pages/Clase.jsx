@@ -7,7 +7,8 @@
 //   1. HELM Academy — el héroe: «skool» enorme con los colores del logo de
 //      Skool y Alex recortado (sin fondo) delante. Toda la tarjeta es el
 //      enlace al formulario de entrada (/helm-academy), que guarda el lead en
-//      el CRM (embudo «School») y redirige al Skool.
+//      el CRM (embudo «School») y le da el vídeo, la guía y el aviso de que
+//      el equipo le escribe en 24 h.
 //   2. ¿En qué puedo ayudarte? — YouTube y «¿Eres una empresa o negocio?»
 //      (/empresas, Socio IA).
 //

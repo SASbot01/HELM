@@ -1,4 +1,5 @@
-/* HELM Academy — el funnel de entrada al Skool (/helm-academy). Nuestros
+/* HELM Academy — el formulario (/helm-academy) y su pantalla de gracias
+   (/helm-academy/gracias: el vídeo, la guía y el aviso del contacto). Nuestros
    colores: granate y rojo sobre fondo oscuro (los de la landing, src/pages/
    inicio/inicio.css: --marca #7E1F35, --marca-claro #FF8FA3, papel cálido). */
 .ha {
@@ -107,4 +108,86 @@
 .ha-select select:focus { outline: none; border-color: var(--granate-claro); box-shadow: 0 0 0 3px rgba(166, 43, 70, 0.28); }
 .ha-select option { color: #15060c; }
 
-@media (prefers-reduced-motion: reduce) { .ha-btn, .ha-select select { transition: none; } }
+/* ── Bajo el botón: lo que pasa después, y el atajo de quien ya se apuntó ──── */
+.ha-despues { margin: 2px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--papel-dim); text-align: center; }
+.ha-ya { margin: 0 0 14px; padding: 10px 12px; border-radius: 10px; background: rgba(166, 43, 70, 0.16); font-size: 13px; color: var(--papel-dim); text-align: center; }
+.ha-ya a { color: var(--granate-claro); font-weight: 700; }
+
+/* ── La pantalla de gracias (/helm-academy/gracias) ───────────────────────────
+   Lo que se entrega (vídeo y guía) y el siguiente paso: esperar el mensaje del
+   equipo. El aviso va arriba y el último paso lo repite con el detalle. */
+.ha--gracias { align-items: flex-start; }
+.ha--gracias .ha-card { max-width: 560px; }
+
+.ha-hecho { text-align: center; margin-bottom: 18px; }
+.ha-hecho-ok {
+  display: inline-grid; place-items: center; width: 42px; height: 42px; margin-bottom: 10px;
+  border-radius: 50%; border: 1px solid rgba(255, 77, 46, 0.45);
+  background: rgba(255, 77, 46, 0.14); color: var(--rojo);
+}
+.ha-hecho h1 { font-size: 26px; line-height: 1.12; }
+.ha-hecho h1 em { font-style: normal; color: var(--granate-claro); }
+.ha-hecho .ha-lead { margin: 8px 0 0; }
+
+.ha-aviso {
+  display: grid; grid-template-columns: 20px 1fr; gap: 10px; align-items: start;
+  margin: 0 0 18px; padding: 13px 14px; border-radius: 12px;
+  border: 1px solid rgba(255, 77, 46, 0.42); background: rgba(255, 77, 46, 0.1);
+  font-size: 14.5px; line-height: 1.45; color: var(--papel-dim);
+}
+.ha-aviso svg { color: var(--rojo); margin-top: 2px; }
+.ha-aviso b { color: var(--papel); }
+
+.ha-pasos { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; counter-reset: paso; }
+.ha-paso {
+  counter-increment: paso; padding: 16px; border-radius: 14px;
+  border: 1px solid rgba(166, 43, 70, 0.3); background: rgba(14, 5, 9, 0.55);
+}
+.ha-paso h2 { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 17px; font-weight: 800; letter-spacing: -0.2px; }
+.ha-paso h2::before {
+  content: counter(paso); flex-shrink: 0;
+  display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--granate); color: #fff; font-size: 13px;
+}
+.ha-paso h2 small { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--papel-mut); }
+.ha-paso p { margin: 9px 0 0; font-size: 14px; line-height: 1.55; color: var(--papel-dim); }
+.ha-paso p b { color: var(--papel); }
+.ha-paso--espera { border-color: rgba(255, 77, 46, 0.45); background: linear-gradient(180deg, rgba(255, 77, 46, 0.1) 0%, rgba(14, 5, 9, 0.55) 100%); }
+.ha-paso--espera h2::before { background: var(--rojo); }
+
+.ha-video {
+  position: relative; display: block; width: 100%; aspect-ratio: 16 / 9;
+  margin-top: 12px; padding: 0; overflow: hidden;
+  border: 1px solid rgba(166, 43, 70, 0.4); border-radius: 12px; background: #0b0306;
+}
+.ha-video iframe, .ha-video video, .ha-video img {
+  position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; object-fit: cover;
+}
+.ha-video--portada { cursor: pointer; font: inherit; color: #fff; }
+.ha-video--portada img { filter: brightness(0.7); transition: filter .15s; }
+.ha-video--portada:hover img { filter: brightness(0.85); }
+.ha-play {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: grid; place-items: center; width: 66px; height: 66px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--rojo) 0%, var(--rojo-hondo) 100%);
+  box-shadow: 0 12px 30px -8px rgba(255, 77, 46, 0.75);
+}
+.ha-play svg { margin-left: 3px; }
+.ha-video-pie {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 24px 12px 10px;
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.82) 100%);
+  font-size: 13px; font-weight: 700; text-align: left;
+}
+.ha-video--portada:focus-visible, .ha-btn:focus-visible { outline: 2px solid var(--granate-claro); outline-offset: 2px; }
+
+.ha-btn--enlace { width: 100%; margin-top: 12px; box-sizing: border-box; text-decoration: none; }
+
+.ha-contado { list-style: none; margin: 10px 0 0; padding: 10px 12px; display: grid; gap: 6px; border-radius: 10px; background: rgba(14, 5, 9, 0.55); }
+.ha-contado li { display: grid; grid-template-columns: 84px 1fr; gap: 8px; font-size: 13px; line-height: 1.4; color: var(--papel); }
+.ha-contado li span { color: var(--papel-mut); }
+.ha-numero { font-size: 13px !important; }
+
+.ha-mientras { margin: 16px 0 0; font-size: 13px; color: var(--papel-mut); text-align: center; }
+.ha-mientras a { color: var(--granate-claro); display: inline-flex; align-items: center; gap: 3px; }
+
+@media (prefers-reduced-motion: reduce) { .ha-btn, .ha-select select, .ha-video--portada img { transition: none; } }

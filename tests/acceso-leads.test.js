@@ -28,6 +28,8 @@ function consulta(tabla) {
           : [{ key: 'lead_nuevo' }]
         return Promise.resolve({ data: { id: `${v.client_id}/${v.name}`, stages }, error: null })
       }
+      // El contacto de una ficha firmada (las notas de la pantalla de gracias).
+      if (tabla === 'crm_contacts') return Promise.resolve({ data: existente, error: null })
       return Promise.resolve({ data: null, error: null })
     },
     then(ok) { return Promise.resolve({ data: tabla === 'crm_contacts' && existente ? [existente] : [], error: null }).then(ok) },
@@ -38,8 +40,12 @@ function consulta(tabla) {
 vi.mock('../api/lib/supabase.js', () => ({ supabase: { from: (t) => consulta(t) } }))
 const notificar = vi.hoisted(() => vi.fn(async () => null))
 vi.mock('../api/_lib/notificar.js', () => ({ notificar }))
+// El correo saliente: apagado salvo en el test que lo enciende.
+const correo = vi.hoisted(() => ({ hay: false, enviar: vi.fn(async () => ({ enviado: true })) }))
+vi.mock('../api/_lib/correo.js', () => ({ hayCorreo: () => correo.hay, enviarCorreo: correo.enviar }))
 
 const { default: leads } = await import('../api/leads.js')
+const { CONTACTO, NOTA_VIDEO, NOTA_GUIA } = await import('../src/pages/helmAcademy/entrega.js')
 const { verifyJwt } = await import('../api/_lib/auth.js')
 
 function respuesta() {
@@ -59,7 +65,7 @@ const pide = async (action, body) => {
 const inserts = () => ops.filter(o => o.op === 'insert' && o.tabla === 'crm_contacts').map(o => o.fila)
 const updates = () => ops.filter(o => o.op === 'update' && o.tabla === 'crm_contacts').map(o => o.cambios)
 
-beforeEach(() => { ops.length = 0; existente = null; notificar.mockClear() })
+beforeEach(() => { ops.length = 0; existente = null; notificar.mockClear(); correo.hay = false; correo.enviar.mockClear() })
 
 describe('solicitar-acceso · a qué embudo va', () => {
   const pideAcceso = () => pide('solicitar-acceso', { comunidad: 'aiparatodo', nombre: 'Marta', email: 'marta@example.com' })
@@ -184,5 +190,81 @@ describe('school (formulario de HELM Academy)', () => {
     expect((await pide('school', { nombre: 'Bot', email: 'b@b.com', website: 'x', dedico: 'x', edad: '1', residencia: 'x', telefono: '1' })).statusCode).toBe(400)
     expect((await pide('school', { nombre: 'X', email: 'nop' })).statusCode).toBe(400)
     expect(inserts()).toHaveLength(0)
+  })
+})
+
+// Al apuntarse, la pantalla de gracias le dice que alguien del equipo le
+// escribe en menos de 24 horas. Aquí, lo que hace que esa promesa se cumpla.
+describe('school · la promesa de contacto', () => {
+  const noa = { nombre: 'Noa Ruiz', email: 'noa@example.com', dedico: 'diseño', edad: '28', residencia: 'Lorca', telefono: '600111222', quiero: 'Crear contenido y vivir de ello', ingreso: '2.000 – 3.000 €/mes', usa_ia: 'Un poco, a veces' }
+  const horas = (iso) => (Date.parse(iso) - Date.now()) / 3_600_000
+
+  it('nuevo: deja en la ficha hasta cuándo hay que escribirle y avisa al equipo con lo que contó', async () => {
+    await pide('school', noa)
+    const [fila] = inserts()
+    expect(horas(fila.custom_fields.school.contactar_antes)).toBeGreaterThan(CONTACTO.horas - 0.1)
+    expect(horas(fila.custom_fields.school.contactar_antes)).toBeLessThanOrEqual(CONTACTO.horas)
+    expect(fila.notes).toContain('se le dijo que le escribimos en menos de 24 horas con su ruta de inicio')
+    expect(notificar).toHaveBeenCalledTimes(1)
+    const [, clientId, aviso] = notificar.mock.calls[0]
+    expect(clientId).toBe('id-de-silvestre')
+    expect(aviso).toMatchObject({ tipo: 'lead', titulo: 'HELM Academy: escribe a Noa Ruiz antes de 24 h', destino: 'crm' })
+    expect(aviso.cuerpo).toContain('600111222')
+    expect(aviso.cuerpo).toContain('Quiere: Crear contenido y vivir de ello · meta: 2.000 – 3.000 €/mes · IA: Un poco, a veces')
+    expect(aviso.cuerpo).toMatch(/por WhatsApp con su ruta de inicio\. Límite: /)
+  })
+
+  it('quien reenvía con la promesa viva no reinicia el reloj ni repite el aviso', async () => {
+    const antes = new Date(Date.now() + 5 * 3_600_000).toISOString()
+    existente = { id: 'c1', name: 'Noa', notes: '', custom_fields: { school: { apuntado: 'ayer', contactar_antes: antes } } }
+    await pide('school', noa)
+    expect(updates()[0].custom_fields.school.contactar_antes).toBe(antes)
+    expect(notificar).not.toHaveBeenCalled()
+    expect(correo.enviar).not.toHaveBeenCalled()
+  })
+
+  it('quien vuelve con el plazo vencido (o se apuntó antes de que existiera) tiene plazo y aviso nuevos', async () => {
+    existente = { id: 'c1', name: 'Noa', notes: '', custom_fields: { school: { contactar_antes: new Date(Date.now() - 3_600_000).toISOString() } } }
+    await pide('school', noa)
+    expect(horas(updates()[0].custom_fields.school.contactar_antes)).toBeGreaterThan(CONTACTO.horas - 0.1)
+    expect(notificar).toHaveBeenCalledTimes(1)
+    ops.length = 0; notificar.mockClear()
+    existente = { id: 'c2', name: 'Leo', notes: 'HELM Academy · se apuntó', custom_fields: { school: { apuntado: 'hace un mes' } } }
+    await pide('school', { ...noa, email: 'leo@example.com' })
+    expect(updates()[0].notes).toContain('se le dijo que le escribimos')
+    expect(notificar).toHaveBeenCalledTimes(1)
+  })
+
+  it('con correo saliente, le manda lo suyo y su siguiente paso; sin él, no pasa nada', async () => {
+    await pide('school', noa)
+    expect(correo.enviar).not.toHaveBeenCalled()
+    correo.hay = true
+    await pide('school', { ...noa, email: 'otra@example.com' })
+    expect(correo.enviar).toHaveBeenCalledTimes(1)
+    const c = correo.enviar.mock.calls[0][0]
+    expect(c.para).toBe('otra@example.com')
+    expect(c.texto).toContain('Hola Noa:')
+    expect(c.texto).toContain('https://s4sf.net/helm-academy/gracias')
+    expect(c.texto).toContain('Tu siguiente paso: esperar nuestro WhatsApp. En menos de 24 horas')
+    expect(c.html).toContain('<a href="https://s4sf.net/helm-academy/gracias">')
+  })
+
+  it('el nombre no se cuela como HTML en el correo', async () => {
+    correo.hay = true
+    await pide('school', { ...noa, nombre: '<b>Noa</b>' })
+    expect(correo.enviar.mock.calls[0][0].html).toContain('Hola &lt;b&gt;Noa&lt;/b&gt;:')
+  })
+
+  it('la pantalla de gracias puede anotar «vio el vídeo» y «descargó la guía», y nada más', async () => {
+    const { body } = await pide('school', noa)
+    existente = { id: 'contacto-nuevo', notes: 'HELM Academy · se apuntó' }
+    ops.length = 0
+    expect((await pide('nota', { id: body.id, texto: NOTA_VIDEO })).statusCode).toBe(200)
+    expect((await pide('nota', { id: body.id, texto: NOTA_GUIA })).statusCode).toBe(200)
+    expect(updates().map(u => u.notes)).toEqual([
+      `HELM Academy · se apuntó\n${NOTA_VIDEO}`,
+      `HELM Academy · se apuntó\n${NOTA_GUIA}`,
+    ])
+    expect((await pide('nota', { id: body.id, texto: 'HELM Academy · cualquier otra cosa' })).statusCode).toBe(400)
   })
 })
