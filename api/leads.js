@@ -32,6 +32,11 @@ import { supabase } from './lib/supabase.js'
 import { applyCors, rateLimit, getClientIp, signJwt, verifyJwt } from './_lib/auth.js'
 import { comunidadPorClave } from './_lib/comunidades.js'
 import { notificar } from './_lib/notificar.js'
+import { hayCorreo, enviarCorreo } from './_lib/correo.js'
+import {
+  ACADEMIA, CONTACTO, NOTA_VIDEO, NOTA_ABRE, NOTA_GUIA,
+  guiaDe, tituloGuia, destinoAcademia, enlaceAcademia, rutaGracias,
+} from '../src/pages/helmAcademy/entrega.js'
 
 // El perfil de todas las landings propias (silvestre). Si mañana hay otra
 // landing de otro perfil, se añade a mano: que el slug venga del navegador
@@ -56,6 +61,11 @@ const NOTAS = {
   'Socio IA: reservó la auditoría en el calendario': { status: 'llamada_agendada' },
   'AI para todo · descargó la guía Mis 8 no negociables (PDF)': {},
   'AI para todo · descargó la guía Los Mods de Claude (PDF)': {},
+  // La pantalla de gracias de HELM Academy: por dónde va quien se apuntó, para
+  // quien le escribe después.
+  [NOTA_VIDEO]: {},
+  [NOTA_ABRE]: {},
+  [NOTA_GUIA]: {},
 }
 
 // Los dos formularios de dos pasos (puerta y completar): qué clave ocupan en
@@ -404,16 +414,112 @@ async function miembro(b, { ip } = {}) {
   return { id: await ficha(clientId, await crear(fila)) }
 }
 
-// ── HELM Academy (Skool): el formulario de entrada ──────────────────────────
-// Antes de ir al Skool, la gente pasa por un formulario (nombre, correo, a qué
-// se dedica, edad, dónde vive, teléfono). Se guarda en el CRM de silvestre, en
-// el embudo «School», y después el navegador redirige al Skool. Así Alex sabe
-// quién se ha apuntado y puede cruzarlo con las solicitudes de /accesos.
+// ── HELM Academy: el formulario de entrada ──────────────────────────────────
+// La gente llega de un vídeo de YouTube y deja sus datos (nombre, correo, a qué
+// se dedica, edad, dónde vive, teléfono y tres preguntas). Se guarda en el CRM
+// de silvestre, en el embudo «School», y el navegador pasa a la pantalla de
+// gracias (src/pages/helmAcademy/): la guía del vídeo del que viene, dentro de
+// la academia, y el aviso de que alguien del equipo le escribe en menos de 24
+// horas con su ruta de inicio.
+//
+// Esa promesa hay que cumplirla, así que aquí queda para el equipo: en la
+// ficha, hasta cuándo hay que escribirle (custom_fields.school.contactar_antes
+// y una línea en las notas), y un aviso (campana + Telegram) con lo que contó.
+// A la persona, si hay correo saliente, se le manda además lo suyo por correo:
+// la pantalla se cierra y el correo se queda.
+const WEB = 'https://s4sf.net'
+// El motivo, dicho de él para el equipo: «tu ruta de inicio» → «su ruta de inicio».
+const SU_MOTIVO = CONTACTO.motivo.replace(/^tu /, 'su ')
+const LINEA_PROMESA = `HELM Academy · se le dijo que le escribimos en menos de ${CONTACTO.plazo} con ${SU_MOTIVO}`
+
+const escapaHtml = (s) => String(s || '').replace(/[&<>"']/g, (ch) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
+))
+// «viernes, 27 nov, 14:30», en hora de Madrid, que es donde está el equipo.
+const cuandoMadrid = (iso) => new Intl.DateTimeFormat('es-ES', {
+  timeZone: 'Europe/Madrid', weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+}).format(new Date(iso))
+
+async function prometeContacto(clientId, { nombre, correo, extra }) {
+  await notificar(supabase, clientId, {
+    tipo: 'lead', nivel: 'info',
+    titulo: `HELM Academy: escribe a ${nombre} antes de ${CONTACTO.horas} h`,
+    cuerpo: [
+      `${nombre} · ${extra.telefono || 'sin teléfono'} · ${correo}`,
+      `Quiere: ${extra.quiero || '—'} · meta: ${extra.ingreso || '—'} · IA: ${extra.usa_ia || '—'}`,
+      extra.guia && `Pidió la guía: ${tituloGuia(extra.guia) || extra.guia}`,
+      `Se le ha dicho que le escribimos por ${CONTACTO.canal} con ${SU_MOTIVO}. Límite: ${cuandoMadrid(extra.contactar_antes)}.`,
+    ].filter(Boolean).join('\n'),
+    destino: 'crm',
+    clave: 'school:contactar',
+  })
+
+  if (!hayCorreo()) return
+  const pila = nombre.split(/\s+/)[0]
+  // Su pantalla de gracias, con su guía: desde ahí entra en la academia.
+  const webGracias = `${WEB}${rutaGracias(extra.guia)}`
+  const parrafos = [
+    `Hola ${pila}:`,
+    `Aquí tienes lo que has pedido, para verlo cuando quieras:\n${webGracias}`,
+    `Tu siguiente paso: esperar nuestro ${CONTACTO.canal}. En menos de ${CONTACTO.plazo} te escribe una persona del equipo de ${CONTACTO.equipo}, al teléfono que nos has dejado. ${CONTACTO.explica}`,
+    'No tienes que hacer nada más. Solo contestar cuando te escribamos.',
+    'Alex Silvestre\nHELM Academy',
+  ]
+  await enviarCorreo({
+    para: correo,
+    asunto: 'Lo tuyo de HELM Academy, y tu siguiente paso',
+    texto: parrafos.join('\n\n'),
+    html: parrafos.map(p => `<p>${escapaHtml(p).replace(/\n/g, '<br>').replace(webGracias, `<a href="${webGracias}">${webGracias}</a>`)}</p>`).join(''),
+  })
+}
+
+// La guía, dentro de la academia (academy.helmm.app). Con el lead ya guardado,
+// se le pide a la academia un enlace de entrada para esa persona (el «puente»,
+// de servidor a servidor y con un secreto compartido): de un solo uso, le abre
+// la sesión y la deja en su guía sin crear otra cuenta. Devuelve
+// { url, unUso }: lo que abre el botón «Abrir la guía» de la pantalla de gracias.
+//
+// Nunca falla: sin secreto, si la academia no contesta a tiempo o contesta
+// cualquier cosa rara, se devuelve la dirección normal de la guía (allí entra
+// con su cuenta o se crea una gratis). El alta del lead no depende de esto.
+// Cuando ese correo ya tiene una cuenta de verdad (con contraseña, alumno o del
+// equipo) la academia no da enlace de entrada: manda la dirección normal, y
+// allí pone su contraseña.
+const PUENTE_MS = 5_000
+
+async function entradaAcademia({ correo, nombre, guia }) {
+  const normal = { url: enlaceAcademia(guia), unUso: false }
+  const secreto = process.env.ACADEMY_PUENTE_SECRETO
+  if (!secreto) return normal
+  try {
+    const r = await fetch(`${ACADEMIA.web}/api/puente`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${secreto}`, 'X-Aula': '1', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: correo, nombre, destino: destinoAcademia(guia) }),
+      // El secreto va a esa dirección y a ninguna otra: no se siguen redirecciones.
+      redirect: 'error',
+      signal: AbortSignal.timeout(PUENTE_MS),
+    })
+    if (!r.ok) throw new Error(`contesta ${r.status}`)
+    const d = await r.json()
+    // Al navegador solo se le manda una dirección de la academia.
+    const url = new URL(String(d?.url || ''))
+    if (url.origin !== ACADEMIA.web) throw new Error('enlace de otro sitio')
+    return { url: url.href, unUso: d.entrar === false }
+  } catch (e) {
+    console.warn('[leads] puente de la academia:', e?.message || e)
+    return normal
+  }
+}
+
 async function school(b, { ip } = {}) {
   if (txt(b.website, 200)) throw fallo(400, 'No se ha podido enviar')
   const correo = correoDe(b.email)
   const nombre = txt(b.nombre, 80)
   if (!nombre) throw fallo(400, 'Dinos cómo te llamas')
+  // La guía del vídeo del que viene (?guia= en la landing), si tiene forma de
+  // guía. Queda en la ficha: quien le escribe sabe qué pidió.
+  const guia = guiaDe(b.guia)
   const extra = {
     dedico: txt(b.dedico, 120),
     quiero: txt(b.quiero, 120),
@@ -422,12 +528,19 @@ async function school(b, { ip } = {}) {
     edad: txt(b.edad, 12),
     residencia: txt(b.residencia, 120),
     telefono: txt(b.telefono, 40),
+    ...(guia ? { guia } : {}),
     apuntado: ahora(),
   }
   const c = comunidadPorClave('aiparatodo')
   const clientId = await perfil(c.perfil)
-  const linea = ['HELM Academy · se apuntó', extra.dedico && `dedica: ${extra.dedico}`, extra.quiero && `quiere: ${extra.quiero}`, extra.ingreso && `meta: ${extra.ingreso}`, extra.usa_ia && `IA: ${extra.usa_ia}`, extra.residencia && `de ${extra.residencia}`, extra.edad && `${extra.edad} años`].filter(Boolean).join(' · ')
+  const linea = ['HELM Academy · se apuntó', guia && `guía: ${guia}`, extra.dedico && `dedica: ${extra.dedico}`, extra.quiero && `quiere: ${extra.quiero}`, extra.ingreso && `meta: ${extra.ingreso}`, extra.usa_ia && `IA: ${extra.usa_ia}`, extra.residencia && `de ${extra.residencia}`, extra.edad && `${extra.edad} años`].filter(Boolean).join(' · ')
   const previo = await buscar(clientId, correo, 'id, name, notes, phone, custom_fields, pipeline_id, status')
+  // Hasta cuándo hay que escribirle. Si ya se le dio un plazo y no ha vencido,
+  // la promesa sigue viva: quien reenvía el formulario no reinicia el reloj ni
+  // vuelve a avisar al equipo. Vencido (volvió otro día), plazo y aviso nuevos.
+  const antes = previo?.custom_fields?.school?.contactar_antes
+  const promesaViva = Boolean(antes && Date.parse(antes) > Date.now())
+  extra.contactar_antes = promesaViva ? antes : new Date(Date.now() + CONTACTO.horas * 3_600_000).toISOString()
   // Apuntarse a HELM Academy da el acceso a AI para todo al momento (Alex,
   // 27-oct): para entrar basta con poner este mismo correo. Sin solicitud ni
   // aprobación. La ficha va en la respuesta para abrirlo ya en este navegador.
@@ -442,7 +555,7 @@ async function school(b, { ip } = {}) {
     await actualizar(previo.id, {
       ...(previo.name ? {} : { name: nombre }),
       ...(previo.phone || !extra.telefono ? {} : { phone: extra.telefono }),
-      notes: sumaNota(previo.notes, linea),
+      notes: sumaNota(sumaNota(previo.notes, linea), LINEA_PROMESA),
       custom_fields: {
         ...(previo.custom_fields || {}),
         school: { ...(previo.custom_fields?.school || {}), ...extra },
@@ -451,7 +564,8 @@ async function school(b, { ip } = {}) {
       ...(mover ? { pipeline_id: school.id, status: etapa } : {}),
       last_activity_at: ahora(), updated_at: ahora(),
     })
-    return { ok: true, id: await ficha(clientId, previo.id) }
+    if (!promesaViva) await prometeContacto(clientId, { nombre, correo, extra })
+    return { ok: true, id: await ficha(clientId, previo.id), academia: await entradaAcademia({ correo, nombre, guia }) }
   }
   if (!rateLimit({ key: `school:${ip || 'anon'}`, max: ALTAS_POR_IP_HORA, windowMs: 3_600_000 }).ok) {
     throw fallo(429, 'Ahora mismo hay muchas altas. Prueba en un rato.')
@@ -460,13 +574,14 @@ async function school(b, { ip } = {}) {
   const id = await crear({
     client_id: clientId, name: nombre, email: correo,
     ...(extra.telefono ? { phone: extra.telefono } : {}),
-    source: 'HELM Academy', notes: linea,
+    source: 'HELM Academy', notes: `${linea}\n${LINEA_PROMESA}`,
     pipeline_id: school.id, status: etapa,
     utm_source: 'helm-academy', utm_medium: 'skool',
     custom_fields: { school: extra, [c.clave]: acceso(null) },
     last_activity_at: ahora(), updated_at: ahora(),
   })
-  return { ok: true, id: await ficha(clientId, id) }
+  await prometeContacto(clientId, { nombre, correo, extra })
+  return { ok: true, id: await ficha(clientId, id), academia: await entradaAcademia({ correo, nombre, guia }) }
 }
 
 // ── AI para todo: acceso con aprobación ─────────────────────────────────────

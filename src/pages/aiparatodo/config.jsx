@@ -27,7 +27,8 @@ import { PanelWebs, FichaWeb, VitrinaWebs } from './Webs.jsx'
 import { PREMIADAS, ELEGIDAS, PROPIAS } from './webs.js'
 
 // HELM Academy (Skool): la comunidad a la que se entra antes de AI para todo.
-// Lo usa el formulario de /helm-academy para redirigir allí tras recoger los datos.
+// El formulario de /helm-academy ya no redirige allí: lo enlaza su pantalla de
+// gracias («mientras esperas»), si helmAcademy/entrega.js lo deja puesto.
 export const SKOOL_URL = 'https://www.skool.com/helm-academy-4887/about'
 
 const COBRO_ACTIVO = false
