@@ -6,9 +6,8 @@
 //
 //   1. HELM Academy — el héroe: «skool» enorme con los colores del logo de
 //      Skool y Alex recortado (sin fondo) delante. Toda la tarjeta es el
-//      enlace al formulario de entrada (/helm-academy), que guarda el lead en
-//      el CRM (embudo «School») y le da el vídeo, la guía y el aviso de que
-//      el equipo le escribe en 24 h.
+//      enlace a la landing de HELM Academy (/helm-academy), que lleva al quiz
+//      de la academia: de ahí sale el lead al CRM (embudo «School»).
 //   2. ¿En qué puedo ayudarte? — YouTube y «¿Eres una empresa o negocio?»
 //      (/empresas, Socio IA).
 //
@@ -54,7 +53,7 @@ export default function Clase() {
         </header>
 
         {/* El héroe entero es el enlace: se pincha en la foto, en «skool» o en
-            el botón y se va al formulario de HELM Academy. */}
+            el botón y se va a la landing de HELM Academy. */}
         <Link
           className="bio-heroe"
           to="/helm-academy"
