@@ -184,12 +184,10 @@ createRoot(document.getElementById('root')).render(
               formulario. Públicas, así que ANTES de /:slug/*. */}
           <Route path="/clase" element={<Clase />} />
           <Route path="/empresas" element={<SocioIA />} />
-          {/* HELM Academy: el formulario (guarda en el CRM) y su pantalla de
-              gracias, con el vídeo, la guía y el aviso de que el equipo
-              escribe en 24 h. Y /accesos: la solicitud de acceso a AI para
+          {/* HELM Academy: la landing que lleva al quiz de la academia
+              (academy.helmm.app). Y /accesos: la solicitud de acceso a AI para
               todo (nombre y correo) que aprueba Alex. Públicas. */}
           <Route path="/helm-academy" element={<Suspense fallback={null}><HelmAcademy /></Suspense>} />
-          <Route path="/helm-academy/gracias" element={<Suspense fallback={null}><HelmAcademy gracias /></Suspense>} />
           <Route path="/accesos" element={<Suspense fallback={null}><Accesos /></Suspense>} />
           {/* AI para todo: la comunidad gratis de la bio, con sus rutas dentro. */}
           <Route path="/aiparatodo/*" element={<AIParaTodo />} />

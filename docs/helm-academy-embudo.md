@@ -1,38 +1,36 @@
 # HELM Academy · el embudo de entrada
 
-Vídeo de YouTube → `s4sf.net/helm-academy?guia=…` (el formulario) → en el
-momento, el lead magnet: **la guía de ese vídeo, dentro de la parte gratuita de
-la academia** (`academy.helmm.app`, «AI para todo»), y un vídeo de 5–7 min si se
-sube → en menos de 24 horas, el mensaje de una persona del equipo.
+Vídeo de YouTube → `s4sf.net/helm-academy?guia=…` (la landing) → **el quiz de la
+academia** (`academy.helmm.app`): seis preguntas y sus datos de contacto → entra
+gratis en «AI para todo» con **«Tu plan»** (la guía por la que empezar) → en
+menos de 24 horas, el mensaje de una persona del equipo.
 
-Lo que tiene que quedar claro al terminar el formulario es **el siguiente paso:
-esperar ese mensaje**. Todo lo demás acompaña.
+Lo que tiene que quedar claro al terminar es **el siguiente paso: esperar ese
+mensaje**. Se lo dicen la landing (antes de pulsar), el quiz y «Tu plan».
 
 ## 1. Lo que ve la persona
 
-1. **El formulario** (`/helm-academy`). Bajo el botón ya lo dice: «Después, en
-   menos de 24 horas, te escribe por WhatsApp una persona del equipo con tu ruta
-   de inicio». Así el mensaje no le llega de sorpresa. El texto legal dice
-   también para qué se usa el teléfono.
-2. **Las gracias** (`/helm-academy/gracias`). Ya no se va al Skool. Arriba, el
-   aviso («Tu siguiente paso: esperar nuestro WhatsApp»); debajo, los pasos
-   numerados: mira el vídeo (si lo hay), **abre tu guía**, espera nuestro
-   mensaje. El último le devuelve lo que nos contó y el final del teléfono al
-   que le escribimos.
-3. **La guía**, en la academia. El botón «Abrir la guía» la abre en otra pestaña
-   (la de las gracias se queda, con el aviso) y entra directamente, sin crear
-   otra cuenta.
-4. **El correo** (si hay correo saliente en el servidor). El mismo mensaje y el
-   enlace a su página, para que lo tenga aunque cierre la pestaña.
+1. **La landing** (`/helm-academy`). Qué va a aprender y un botón. **No tiene
+   formulario**: el botón lleva al quiz. Debajo, en tres pasos, lo que viene:
+   contestas el quiz, entras con tu plan, te escribimos por WhatsApp en menos de
+   24 horas para ayudarte con el primer paso.
+2. **El quiz**, en la academia. Seis preguntas, una por pantalla, y después
+   nombre, correo, WhatsApp y privacidad. Al enviarlo se crea su cuenta gratis.
+3. **«Tu plan»**, dentro de AI para todo: la guía por la que empezar y el aviso
+   de que en menos de 24 horas le escribe el equipo.
 
-### Qué guía se entrega: `?guia=`
+El quiz y «Tu plan» viven en la plataforma de la academia (otro repositorio).
+Aquí está solo la landing y lo que recibe el CRM.
+
+### Qué guía se abre: `?guia=`
 
 Cada vídeo de YouTube enlaza a la landing con su guía:
 
     https://s4sf.net/helm-academy?guia=que-ningun-lead-se-enfrie
 
-El valor es el «enlace legible» de la guía en la academia
-(`academy.helmm.app/guia/<esto>`): minúsculas, números y guiones. Las de hoy:
+El botón lleva entonces a `academy.helmm.app/guia/<esa guía>`: la academia pone
+su título sobre el quiz y la abre al terminarlo. El valor es el «enlace legible»
+de la guía en la academia: minúsculas, números y guiones. Las de hoy:
 
 | `?guia=` | Guía |
 |---|---|
@@ -45,128 +43,101 @@ El valor es el «enlace legible» de la guía en la academia
 | `mis-8-no-negociables-con-claude` | Mis 8 no negociables con Claude |
 | `los-mods-de-claude` | Los Mods de Claude |
 
-Sin `?guia=` (el enlace de la bio, por ejemplo) se entrega la parte gratuita
-entera: «las guías». Una guía nueva funciona en cuanto exista en la academia;
-para que la landing diga su título hay que añadirla a `GUIAS` en
-`src/pages/helmAcademy/entrega.js`.
+Sin `?guia=` (el enlace de la bio, por ejemplo) el botón lleva a la parte
+gratuita entera (`academy.helmm.app/aiparatodo`). Una guía nueva funciona en
+cuanto exista en la academia; para que la landing diga su título hay que
+añadirla a `GUIAS` en `src/pages/helmAcademy/entrega.js`.
 
-### Cómo entra en la academia sin crear otra cuenta (el puente)
+### La campaña: de dónde viene cada lead
 
-Con el lead **ya guardado** en el CRM, el servidor (`api/leads.js · school`) le
-pide a la academia un enlace de entrada para ese correo (`POST
-academy.helmm.app/api/puente`, de servidor a servidor, con un secreto
-compartido). El botón «Abrir la guía» lleva ese enlace: es de un solo uso y
-caduca a los 15 minutos. Usado o caducado, el botón pasa a la dirección normal
-de la guía.
+Lo que traiga la dirección de la landing de `utm_source`, `utm_medium`,
+`utm_campaign`, `utm_content`, `utm_term` y `fbclid` viaja en el enlace al quiz.
+Si alguien entró por otra página de s4sf.net con sus UTM (la bio) y llegó a la
+landing pulsando, viajan las de esa visita. Nada más pasa a la dirección: ningún
+dato personal.
 
-- **Si la academia no contesta en 5 segundos, falla o no hay secreto**, el alta
-  sale bien igual y el botón lleva a la dirección normal de la guía (allí entra
-  con su cuenta o crea una gratis con su correo). El puente nunca tira un alta.
-- **Si ese correo ya tiene una cuenta de verdad** en la academia (con
-  contraseña, alumno o del equipo), no hay enlace de entrada: va a la dirección
-  normal y pone su contraseña. Nadie entra en la cuenta de otro por saberse su
-  correo.
-- Una cuenta gratuita que todavía no tiene contraseña sí se abre con solo el
-  correo (es lo que permite entrar sin registrarse): dentro solo hay contenido
-  gratuito, y la academia invita a ponerle contraseña en «Mi perfil».
-- El secreto es `ACADEMY_PUENTE_SECRETO` en el servidor de HELM, con el mismo
-  valor que `PUENTE_SECRETO` en la plataforma de la academia.
+La academia las lee al llegar y las manda con el alta. En el CRM quedan en las
+columnas de UTM del contacto (si es nuevo; a quien ya estaba solo se le rellenan
+los huecos, porque de las suyas cuelga la atribución de los anuncios) y siempre
+en `custom_fields.school.utm`. Ejemplo de enlace para la descripción de un vídeo:
+
+    https://s4sf.net/helm-academy?guia=que-ningun-lead-se-enfrie&utm_source=youtube&utm_medium=video&utm_campaign=leads
 
 ## 2. El motivo del contacto
 
-**Elegido: su ruta de inicio.** En el formulario nos cuenta a qué se quiere
-dedicar, cuánto quiere ganar y si ya usa la IA. Lo natural es devolverle algo
-hecho con eso: por dónde empezar según su punto de partida y qué se puede
-saltar. No suena a venta porque no lo es: es lo primero que se le manda. Y abre
-la conversación sola, porque para afinar la ruta hay que preguntarle.
+**«Para ayudarte con el primer paso.»** Es lo que le dicen la landing, el quiz y
+«Tu plan», con las mismas palabras: si se cambia, se cambia en los tres sitios
+(aquí, `CONTACTO.para` en `src/pages/helmAcademy/entrega.js`).
 
-Lo que se promete se cumple: el primer mensaje **lleva la ruta**, no una
+No suena a venta porque no lo es. En el quiz nos cuenta a qué se quiere dedicar,
+cuánto quiere ganar, si ya usa la IA y por dónde quiere empezar; lo natural es
+devolverle algo hecho con eso: su ruta de inicio, empezando por el primer paso.
+Y abre la conversación sola, porque para afinarla hay que preguntarle.
+
+Lo que se promete se cumple: el primer mensaje **lleva la ayuda**, no una
 propuesta de llamada.
 
-Alternativas, por si se quiere cambiar (se cambia en
-`src/pages/helmAcademy/entrega.js` · `CONTACTO`, y aquí):
+Alternativas, por si se quiere cambiar:
 
 | Motivo | Cuándo encaja | Pega |
 |---|---|---|
-| **Bienvenida y acceso**: «te damos de alta y te pasamos tu acceso» | Si el acceso deja de ser automático (plataforma propia, alta a mano). Poner `SKOOL_EN_GRACIAS = false`. | Si el acceso ya es inmediato, no hay nada que entregar. |
-| **Un extra por WhatsApp**: la plantilla o los prompts que acompañan a la guía | El que más respuestas da: tiene que contestar para recibirlo. Se puede sumar a la ruta. | Hace falta un tercer recurso. |
-| **Dudas del vídeo**: «para ver qué te ha parecido y resolverte dudas» | Solo si no hay nada mejor. | Es el que más suena a seguimiento comercial. |
+| **Un extra por WhatsApp**: la plantilla o los prompts que acompañan a la guía | El que más respuestas da: tiene que contestar para recibirlo. Se puede sumar. | Hace falta un recurso más. |
+| **Dudas de la guía**: «para ver qué te ha parecido y resolverte dudas» | Solo si no hay nada mejor. | Es el que más suena a seguimiento comercial. |
 
 ## 3. Lo que queda en HELM para el equipo
 
+Cada alta del quiz la manda la academia, desde su servidor, a
+`api/leads.js · school`. Con ella:
+
 - **Aviso** (campana del panel y Telegram) por cada persona nueva: «HELM
   Academy: escribe a Noa Ruiz antes de 24 h», con su teléfono, su correo, lo que
-  contestó y la hora límite (hora de Madrid).
+  contestó, la guía por la que entró y la hora límite (hora de Madrid).
 - **En la ficha** (embudo «School»): la línea «se le dijo que le escribimos en
-  menos de 24 horas con su ruta de inicio» y, en `custom_fields.school`, la
-  fecha `contactar_antes` y la guía que pidió (`guia`, que también sale en el
-  aviso y en la línea «se apuntó · guía: …»). Con eso se sabe de qué vídeo viene.
-- **Por dónde va**: «abrió la guía en la academia», «empezó a ver el vídeo» y
-  «descargó la guía (PDF)» se anotan solas en la ficha cuando lo hace. Antes de
-  escribirle, mirarlo: no es lo mismo quien ha abierto la guía que quien no.
-- Quien reenvía el formulario con el plazo aún abierto no genera otro aviso ni
-  reinicia el reloj. Si vuelve pasado el plazo, sí.
+  menos de 24 horas para ayudarle con el primer paso» y, en
+  `custom_fields.school`, la fecha `contactar_antes`, la guía (`guia`) y la
+  campaña (`utm`).
+- Quien repite el quiz con el plazo aún abierto (o un reintento de la academia)
+  no genera otro aviso ni reinicia el reloj. Si vuelve pasado el plazo, sí.
+- HELM no manda ningún correo a la persona: su sitio es la academia.
 
-## 4. El correo de confirmación (sale solo)
+Las altas llegan todas desde la misma dirección (la del servidor de la
+academia), así que el tope de altas nuevas por IP y hora de `school()` puede
+frenarlas. No se pierden: la academia las reintenta.
 
-> **Asunto:** Lo tuyo de HELM Academy, y tu siguiente paso
->
-> Hola Noa:
->
-> Aquí tienes lo que has pedido, para verlo cuando quieras:
-> https://s4sf.net/helm-academy/gracias?guia=que-ningun-lead-se-enfrie
->
-> Tu siguiente paso: esperar nuestro WhatsApp. En menos de 24 horas te escribe
-> una persona del equipo de Silvestre AI, al teléfono que nos has dejado. Con lo
-> que nos has contado te preparamos tu ruta de inicio: por dónde empezar según
-> tu punto de partida y qué te puedes saltar.
->
-> No tienes que hacer nada más. Solo contestar cuando te escribamos.
->
-> Alex Silvestre
-> HELM Academy
-
-Sale de `api/leads.js` (`prometeContacto`) y solo si el servidor tiene
-`RESEND_API_KEY` y `CORREO_DESDE`. Sin eso no se manda nada y el alta funciona
-igual.
-
-## 5. WhatsApp de confirmación (a mano, o el día que se automatice)
+## 4. WhatsApp de confirmación (a mano, o el día que se automatice)
 
 Para mandar nada más apuntarse, si se quiere que el número del equipo ya le
-suene cuando llegue la ruta:
+suene cuando llegue el mensaje de verdad:
 
-> Hola Noa 👋 Soy [nombre], del equipo de Alex Silvestre. Ya tienes tu guía de
-> HELM Academy: https://s4sf.net/helm-academy/gracias
-> Guarda este número: en menos de 24 horas te escribo por aquí con tu ruta de
-> inicio.
+> Hola Noa 👋 Soy [nombre], del equipo de Alex Silvestre. Ya tienes tu plan en
+> HELM Academy: https://academy.helmm.app/aiparatodo
+> Guarda este número: en menos de 24 horas te escribo por aquí para ayudarte con
+> el primer paso.
 
-## 6. El mensaje del equipo (el contacto de las 24 horas)
+## 5. El mensaje del equipo (el contacto de las 24 horas)
 
-**Antes de escribir**, en la ficha: qué guía pidió, qué quiere, su meta, si usa
-la IA, a qué se dedica, y si ha abierto la guía y visto el vídeo.
+**Antes de escribir**, en la ficha: por qué guía entró, qué quiere, su meta, si
+usa la IA, a qué se dedica y por dónde quiere empezar (va junto a lo que se
+dedica: «… · empieza por: …»).
 
-**Apertura** (una pregunta fácil de contestar, y la ruta ya preparada):
+**Apertura** (una pregunta fácil de contestar, y la ayuda ya preparada):
 
-> Hola Noa, soy [nombre], del equipo de Alex (Silvestre AI). Ayer nos dejaste
-> tus datos en HELM Academy.
+> Hola Noa, soy [nombre], del equipo de Alex (Silvestre AI). Ayer entraste en
+> HELM Academy.
 > He visto que quieres **crear contenido y vivir de ello** y que la IA la usas
-> **un poco, a veces**. Con eso te he preparado tu ruta de inicio: son 3 pasos.
-> ¿Te la paso en un audio o la prefieres escrita?
+> **un poco, a veces**. Con eso te he preparado por dónde empezar: son 3 pasos.
+> ¿Te los paso en un audio o los prefieres escritos?
 
-**La ruta** (tres pasos, en un audio de 1–2 min o un mensaje corto). Siempre con
-esta forma, adaptada a lo que contestó:
+**Los tres pasos** (en un audio de 1–2 min o un mensaje corto). Siempre con esta
+forma, adaptada a lo que contestó:
 
-1. **Esta semana** — lo primero, pequeño y concreto, que sale de su punto de
+1. **Esta semana** — el primer paso, pequeño y concreto, que sale de su punto de
    partida («todavía no usa la IA» no empieza donde «es su herramienta
-   principal»).
+   principal»). Normalmente, la guía de su plan: «empieza por el punto X».
 2. **Este mes** — lo que le acerca a su meta (contenido, servicio o negocio).
 3. **Lo que se salta** — lo que no necesita todavía. Es lo que más se agradece.
 
-Si no ha abierto la guía (o no ha visto el vídeo), el paso 1 es ese: «empieza
-por la guía, el punto X es el tuyo».
-
-**Después de la ruta**, una pregunta para afinarla (y para saber a quién tenemos
-delante):
+**Después**, una pregunta para afinar (y para saber a quién tenemos delante):
 
 > Para ajustarte el paso 2: ¿cuántas horas a la semana le puedes dedicar ahora
 > mismo?
@@ -176,33 +147,20 @@ en el primer mensaje.
 
 **Si no contesta:**
 
-- A las 24 h: «Noa, te dejo aquí la ruta por escrito para que la tengas» (y se
-  le manda: la promesa se cumple conteste o no).
+- A las 24 h: «Noa, te dejo aquí los pasos por escrito para que los tengas» (y
+  se le mandan: la promesa se cumple conteste o no).
 - A los 3 días: «¿Pudiste empezar por el paso 1? Si te atascas en algo, dímelo».
 - Después, nada más. Se queda en el embudo para el contenido.
 
-## 7. Lo que falta para publicarlo
+## 6. Lo que se puede cambiar
 
-**En el servidor de HELM** (minipc, `~/helm/.env.server`): la variable
-`ACADEMY_PUENTE_SECRETO`, con el valor de `PUENTE_SECRETO` de la plataforma de
-la academia, y reiniciar `helm-api`. Sin ella todo funciona, pero la persona
-llega a la guía sin sesión y tiene que crear su cuenta gratis allí.
+En `src/pages/helmAcademy/entrega.js`:
 
-**En cada vídeo de YouTube**: el enlace a la landing con su `?guia=`.
+- **Las guías** (`GUIAS`): los títulos que la landing sabe decir.
+- **El vídeo** (opcional): `VSL.youtube` (enlace de YouTube, mejor «oculto») o
+  `VSL.mp4` (archivo en `public/helm-academy/`), con su título y sus minutos.
+  Sale encima del botón. Vacío, la landing no enseña vídeo.
+- **El contacto** (`CONTACTO`): plazo, canal y para qué se le escribe. Tiene que
+  decir lo mismo que el quiz y «Tu plan» de la academia.
 
-En `src/pages/helmAcademy/entrega.js`, lo opcional:
-
-- **El vídeo**: `VSL.youtube` (enlace de YouTube, mejor «oculto») o `VSL.mp4`
-  (archivo en `public/helm-academy/`). Y su título, los minutos y la frase de
-  debajo. Mientras falte, su bloque no se pinta y el formulario no lo promete
-  (el botón dice «Quiero la guía»; con vídeo, «Quiero el vídeo y la guía»).
-- **Un PDF propio**: la guía ya lleva el suyo dentro de la academia. Si además
-  se quiere dar un archivo desde aquí, su ruta en `PDF.href` y sale como
-  «O descárgala en PDF» debajo del botón.
-- **El número** desde el que escribe el equipo (`CONTACTO.numero`), si se quiere
-  enseñar para que lo guarden.
-- **La comunidad**: `SKOOL_EN_GRACIAS` deja o quita el enlace «mientras
-  esperas» al Skool.
-
-Y dos cosas que decide Alex: si el contacto es por WhatsApp o también por
-llamada (`CONTACTO.canal`), y quién del equipo recibe el aviso de Telegram.
+Y una cosa que decide Alex: quién del equipo recibe el aviso de Telegram.

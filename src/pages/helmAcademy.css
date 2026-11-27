@@ -1,7 +1,7 @@
-/* HELM Academy — el formulario (/helm-academy) y su pantalla de gracias
-   (/helm-academy/gracias: el vídeo, la guía y el aviso del contacto). Nuestros
-   colores: granate y rojo sobre fondo oscuro (los de la landing, src/pages/
-   inicio/inicio.css: --marca #7E1F35, --marca-claro #FF8FA3, papel cálido). */
+/* HELM Academy — la landing (/helm-academy) que lleva al quiz de la academia.
+   Nuestros colores: granate y rojo sobre fondo oscuro (los de la landing,
+   src/pages/inicio/inicio.css: --marca #7E1F35, --marca-claro #FF8FA3, papel
+   cálido). */
 .ha {
   --granate:       #7E1F35;
   --granate-alto:  #A62B46;
@@ -39,42 +39,8 @@
 .ha-cab b { display: block; font-size: 16px; font-weight: 800; }
 .ha-cab small { display: block; font-size: 12px; color: var(--papel-mut); margin-top: 1px; }
 
-.ha-card h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; margin: 0; }
-.ha-lead { margin: 6px 0 20px; color: var(--papel-dim); font-size: 14px; }
-
-.ha-form { display: flex; flex-direction: column; gap: 11px; }
-.ha-fila { display: grid; grid-template-columns: 90px 1fr; gap: 11px; }
-.ha-form input {
-  width: 100%; padding: 13px 14px;
-  background: rgba(14, 5, 9, 0.7);
-  border: 1px solid rgba(166, 43, 70, 0.3);
-  border-radius: 12px;
-  color: var(--papel); font: inherit; font-size: 15px;
-  transition: border-color .15s, box-shadow .15s;
-}
-.ha-form input::placeholder { color: #9a6f79; }
-.ha-form input:focus { outline: none; border-color: var(--granate-claro); box-shadow: 0 0 0 3px rgba(166, 43, 70, 0.28); }
-.ha-trampa { position: absolute !important; left: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-
-.ha-btn {
-  margin-top: 5px;
-  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  padding: 14px 18px; border: none; border-radius: 12px;
-  background: linear-gradient(135deg, var(--rojo) 0%, var(--rojo-hondo) 52%, var(--granate) 100%);
-  color: #fff;
-  font: inherit; font-weight: 800; font-size: 15px; cursor: pointer;
-  box-shadow: 0 12px 26px -10px rgba(255, 77, 46, 0.6);
-  transition: filter .15s, transform .12s;
-}
-.ha-btn:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
-.ha-btn:disabled { opacity: 0.5; cursor: default; }
-
-.ha-error { margin: 2px 0 0; color: #ffb0a8; font-size: 13px; }
-.ha-legal { margin: 16px 0 0; font-size: 11.5px; line-height: 1.6; color: var(--papel-mut); }
-.ha-legal a { color: var(--granate-claro); }
-
 /* ── El funnel: foto, titular, qué aprendes y cómo vivir de ello ──────────── */
-.ha-funnel { text-align: center; margin-bottom: 22px; }
+.ha-funnel { text-align: center; }
 .ha-foto {
   width: 128px; height: 128px; object-fit: contain;
   margin: 0 auto 4px; display: block;
@@ -82,82 +48,15 @@
 }
 .ha-funnel h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.12; margin: 0; }
 .ha-funnel h1 em { font-style: normal; color: var(--granate-claro); }
-.ha-funnel .ha-lead { margin: 10px 0 0; }
+.ha-lead { margin: 10px 0 0; color: var(--papel-dim); font-size: 14px; }
 .ha-aprendes { list-style: none; margin: 16px 0 0; padding: 0; text-align: left; display: grid; gap: 9px; }
 .ha-aprendes li { display: grid; grid-template-columns: 20px 1fr; gap: 9px; align-items: start; font-size: 13.5px; line-height: 1.45; color: #e2c3ca; }
 .ha-aprendes li svg { color: var(--rojo); margin-top: 2px; }
-.ha-gratis { margin: 16px 0 0; font-size: 14px; color: var(--papel-dim); }
-.ha-gratis b { color: var(--rojo); }
 
-/* ── Los desplegables de cualificación (etiqueta flotante) ────────────────── */
-.ha-select { position: relative; display: block; }
-.ha-select-lab {
-  position: absolute; left: 14px; top: 8px;
-  font-size: 11px; color: #b58a94; pointer-events: none;
-}
-.ha-select select {
-  width: 100%; padding: 22px 38px 8px 14px; appearance: none; -webkit-appearance: none;
-  background-color: rgba(14, 5, 9, 0.7);
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23c98a97' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
-  background-repeat: no-repeat; background-position: right 14px center;
-  border: 1px solid rgba(166, 43, 70, 0.3); border-radius: 12px;
-  color: #9a6f79; font: inherit; font-size: 15px; cursor: pointer;
-  transition: border-color .15s, box-shadow .15s;
-}
-.ha-select.lleno select { color: var(--papel); }
-.ha-select select:focus { outline: none; border-color: var(--granate-claro); box-shadow: 0 0 0 3px rgba(166, 43, 70, 0.28); }
-.ha-select option { color: #15060c; }
-
-/* ── Bajo el botón: lo que pasa después, y el atajo de quien ya se apuntó ──── */
-.ha-despues { margin: 2px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--papel-dim); text-align: center; }
-.ha-ya { margin: 0 0 14px; padding: 10px 12px; border-radius: 10px; background: rgba(166, 43, 70, 0.16); font-size: 13px; color: var(--papel-dim); text-align: center; }
-.ha-ya a { color: var(--granate-claro); font-weight: 700; }
-
-/* ── La pantalla de gracias (/helm-academy/gracias) ───────────────────────────
-   Lo que se entrega (vídeo y guía) y el siguiente paso: esperar el mensaje del
-   equipo. El aviso va arriba y el último paso lo repite con el detalle. */
-.ha--gracias { align-items: flex-start; }
-.ha--gracias .ha-card { max-width: 560px; }
-
-.ha-hecho { text-align: center; margin-bottom: 18px; }
-.ha-hecho-ok {
-  display: inline-grid; place-items: center; width: 42px; height: 42px; margin-bottom: 10px;
-  border-radius: 50%; border: 1px solid rgba(255, 77, 46, 0.45);
-  background: rgba(255, 77, 46, 0.14); color: var(--rojo);
-}
-.ha-hecho h1 { font-size: 26px; line-height: 1.12; }
-.ha-hecho h1 em { font-style: normal; color: var(--granate-claro); }
-.ha-hecho .ha-lead { margin: 8px 0 0; }
-
-.ha-aviso {
-  display: grid; grid-template-columns: 20px 1fr; gap: 10px; align-items: start;
-  margin: 0 0 18px; padding: 13px 14px; border-radius: 12px;
-  border: 1px solid rgba(255, 77, 46, 0.42); background: rgba(255, 77, 46, 0.1);
-  font-size: 14.5px; line-height: 1.45; color: var(--papel-dim);
-}
-.ha-aviso svg { color: var(--rojo); margin-top: 2px; }
-.ha-aviso b { color: var(--papel); }
-
-.ha-pasos { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; counter-reset: paso; }
-.ha-paso {
-  counter-increment: paso; padding: 16px; border-radius: 14px;
-  border: 1px solid rgba(166, 43, 70, 0.3); background: rgba(14, 5, 9, 0.55);
-}
-.ha-paso h2 { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 17px; font-weight: 800; letter-spacing: -0.2px; }
-.ha-paso h2::before {
-  content: counter(paso); flex-shrink: 0;
-  display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
-  background: var(--granate); color: #fff; font-size: 13px;
-}
-.ha-paso h2 small { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--papel-mut); }
-.ha-paso p { margin: 9px 0 0; font-size: 14px; line-height: 1.55; color: var(--papel-dim); }
-.ha-paso p b { color: var(--papel); }
-.ha-paso--espera { border-color: rgba(255, 77, 46, 0.45); background: linear-gradient(180deg, rgba(255, 77, 46, 0.1) 0%, rgba(14, 5, 9, 0.55) 100%); }
-.ha-paso--espera h2::before { background: var(--rojo); }
-
+/* ── El vídeo (opcional), encima del botón ────────────────────────────────── */
 .ha-video {
   position: relative; display: block; width: 100%; aspect-ratio: 16 / 9;
-  margin-top: 12px; padding: 0; overflow: hidden;
+  margin-top: 18px; padding: 0; overflow: hidden;
   border: 1px solid rgba(166, 43, 70, 0.4); border-radius: 12px; background: #0b0306;
 }
 .ha-video iframe, .ha-video video, .ha-video img {
@@ -178,18 +77,38 @@
   background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.82) 100%);
   font-size: 13px; font-weight: 700; text-align: left;
 }
+
+/* ── La llamada a la acción: lleva al quiz de la academia ─────────────────── */
+.ha-gratis { margin: 18px 0 0; font-size: 14px; line-height: 1.5; color: var(--papel-dim); text-align: center; }
+.ha-gratis b { color: var(--rojo); }
+.ha-btn {
+  margin-top: 12px; width: 100%; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 14px 18px; border: none; border-radius: 12px;
+  background: linear-gradient(135deg, var(--rojo) 0%, var(--rojo-hondo) 52%, var(--granate) 100%);
+  color: #fff; text-decoration: none;
+  font: inherit; font-weight: 800; font-size: 15px; cursor: pointer;
+  box-shadow: 0 12px 26px -10px rgba(255, 77, 46, 0.6);
+  transition: filter .15s, transform .12s;
+}
+.ha-btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
 .ha-video--portada:focus-visible, .ha-btn:focus-visible { outline: 2px solid var(--granate-claro); outline-offset: 2px; }
 
-.ha-btn--enlace { width: 100%; margin-top: 12px; box-sizing: border-box; text-decoration: none; }
-.ha-paso .ha-pdf { margin-top: 10px; font-size: 13px; text-align: center; }
-.ha-pdf a { display: inline-flex; align-items: center; gap: 5px; color: var(--granate-claro); }
+/* ── Cómo funciona: el quiz, su plan y el mensaje del equipo ──────────────── */
+.ha-pasos { list-style: none; margin: 22px 0 0; padding: 0; display: grid; gap: 10px; counter-reset: paso; }
+.ha-paso {
+  counter-increment: paso; padding: 13px 14px; border-radius: 14px;
+  border: 1px solid rgba(166, 43, 70, 0.3); background: rgba(14, 5, 9, 0.55);
+}
+.ha-paso h2 { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 15px; font-weight: 800; letter-spacing: -0.2px; }
+.ha-paso h2::before {
+  content: counter(paso); flex-shrink: 0;
+  display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--granate); color: #fff; font-size: 12px;
+}
+.ha-paso p { margin: 7px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--papel-dim); }
+.ha-paso p b { color: var(--papel); }
+.ha-paso--espera { border-color: rgba(255, 77, 46, 0.45); background: linear-gradient(180deg, rgba(255, 77, 46, 0.1) 0%, rgba(14, 5, 9, 0.55) 100%); }
+.ha-paso--espera h2::before { background: var(--rojo); }
 
-.ha-contado { list-style: none; margin: 10px 0 0; padding: 10px 12px; display: grid; gap: 6px; border-radius: 10px; background: rgba(14, 5, 9, 0.55); }
-.ha-contado li { display: grid; grid-template-columns: 84px 1fr; gap: 8px; font-size: 13px; line-height: 1.4; color: var(--papel); }
-.ha-contado li span { color: var(--papel-mut); }
-.ha-numero { font-size: 13px !important; }
-
-.ha-mientras { margin: 16px 0 0; font-size: 13px; color: var(--papel-mut); text-align: center; }
-.ha-mientras a { color: var(--granate-claro); display: inline-flex; align-items: center; gap: 3px; }
-
-@media (prefers-reduced-motion: reduce) { .ha-btn, .ha-select select, .ha-video--portada img { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .ha-btn, .ha-video--portada img { transition: none; } }
